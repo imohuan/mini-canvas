@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "服务注入演示",
     "description": "跟着服务篇学：上架 greeter 服务 + 硬依赖 + 可选探测 + 卸载连坐",
     "pluginName": "services-demo",
@@ -15,7 +15,7 @@
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
   },
   "dependencies": {
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/kernel": "workspace:*"
   }
 }
 

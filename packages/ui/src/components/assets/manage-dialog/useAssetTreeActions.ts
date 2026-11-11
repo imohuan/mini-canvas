@@ -71,7 +71,8 @@ export function useAssetTreeActions(ctx: ManageDialogTreeContext) {
 
   function onTreeAddAgent(row: AssetTreeRow): void {
     if (row.kind === 'folder') ui.addFolderToAgent({ id: row.id, name: row.name })
-    else ui.addAssetToAgent({ name: row.name, url: row.url ?? '', ...(row.path ? { path: row.path } : {}), ...(row.parentId ? { folderId: row.parentId } : {}) })
+    // assetKind 一起给：资产名可能是 UUID、没有扩展名，Agent 标签要靠它选对类型图标
+    else ui.addAssetToAgent({ name: row.name, url: row.url ?? '', ...(row.path ? { path: row.path } : {}), ...(row.parentId ? { folderId: row.parentId } : {}), ...(row.assetKind ? { kind: row.assetKind } : {}) })
   }
   function onTreeAddCanvas(row: AssetTreeRow): void {
     if (row.kind === 'folder') void folderAddToCanvas(row)

@@ -4,7 +4,7 @@
  * 为什么单独一层：项目页与画布工作台都要读同一批数据（项目清单、某项目的画布清单），
  * 集中在这里，两边不各写一份 fetch（地址、错误处理、形状只维护一处）。
  */
-import { withAdminToken } from '@mini-canvas/canvas-base'
+import { withAdminToken } from '@plume-canvas/canvas-base'
 
 export interface ProjectSummary {
   id: string

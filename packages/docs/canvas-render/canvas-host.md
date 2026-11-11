@@ -46,7 +46,7 @@ CanvasHost 把这些收进一个组件，并给了三条硬保证：**数据一�
 | handleVisual | CanvasParams | DEFAULT_HANDLE_VISUAL | 浮动端口尺寸覆盖。**要传含全部字段的响应式对象**（BaseNode 读它不做逐字段回落） |
 | debugVisual | CanvasDebug | DEFAULT_DEBUG_VISUAL | 调试可视化开关（端口调试 / 吸附调试） |
 | snapZoneVisual | SnapZoneConfig | DEFAULT_SNAP_ZONE_CONFIG | 吸附带配置（高占节点比例 / 宽 / 偏移 / 形状） |
-| windowKey | string | 无（不挂） | 挂到 window 的调试 key（如 MiniCanvasUI） |
+| windowKey | string | 无（不挂） | 挂到 window 的调试 key（如 PlumeUI） |
 | persistViewport | boolean | true | 是否把视口（zoom + 平移）也落盘并在下次启动恢复 |
 | dev | boolean | false | 落到 ctx.isDev：能力缺项 dev 抛错 / prod 只 warn。**必须由宿主显式传**（见坑 4） |
 
@@ -65,7 +65,7 @@ CanvasHost 把这些收进一个组件，并给了三条硬保证：**数据一�
   :debug-visual="ui.cfg.debug"
   :snap-zone-visual="ui.cfg.snapZone"
   :dev="DEV"
-  window-key="MiniCanvasUI"
+  window-key="PlumeUI"
   @ready="onCanvasReady"
 />
 ```
@@ -87,7 +87,7 @@ CanvasHost 把这些收进一个组件，并给了三条硬保证：**数据一�
 // 片段：父级用 ref 拿宿主组件实例
 const canvas = ref()
 canvas.value.host          // CanvasHostHandle | undefined（boot 前是 undefined）
-canvas.value.api           // MiniCanvasApi | undefined
+canvas.value.api           // PlumeApi | undefined
 canvas.value.manager       // PluginManager | undefined（统一安装句柄）
 canvas.value.ready         // boolean：!booting && !bootError
 canvas.value.bootErrorText // string：启动失败原因
@@ -121,7 +121,7 @@ CanvasHost 渲染出来的结构（缩进代表示层级）：
      格式：Vue 单文件组件
      位置：应用层 —— 用 #ui 插槽挂业务 UI，用 @ready 接住宿主 -->
 <script setup lang="ts">
-import { CanvasHost, SettingsHost, SlotHost } from '@mini-canvas/canvas-render'
+import { CanvasHost, SettingsHost, SlotHost } from '@plume-canvas/canvas-render'
 import { APP_PLUGINS, createDefaultStorageAdapter, seedDefaultCanvas } from './assembly'
 import { ref } from 'vue'
 
@@ -141,7 +141,7 @@ function onCanvasReady(host: unknown) {
       :adapter="adapter"
       :seed="seedDefaultCanvas"
       :dev="import.meta.env.DEV"
-      window-key="MiniCanvasUI"
+      window-key="PlumeUI"
       @ready="onCanvasReady"
     >
       <!-- ② 业务 UI 放 #ui：这里在渲染子树内，组件拿得到 ctx -->
@@ -218,7 +218,7 @@ CanvasSurface 是 CanvasHost 的**内层**组件，它只做四件事：**接住
 
 ```ts
 // 片段：手动调纯函数（测试 / 自定义宿主用；官方宿主已在内部调好）
-import { edgesFromStore, nodesFromStore, assembleTheme } from '@mini-canvas/canvas-render'
+import { edgesFromStore, nodesFromStore, assembleTheme } from '@plume-canvas/canvas-render'
 
 const alive = new Set(host.nodeStore.getNodes().map((n) => n.id))
 const flowNodes = nodesFromStore(host.nodeStore, host.selection.ids)        // ① 带上选中标记
@@ -262,7 +262,7 @@ canvas-host-demo/
 // 格式：TypeScript 模块（导出响应式对象）
 // 位置：外观参数的唯一住址；交给 CanvasHost 后改属性即实时生效
 import { reactive } from 'vue'
-import type { CanvasParams, EdgeVisual } from '@mini-canvas/canvas-render'
+import type { CanvasParams, EdgeVisual } from '@plume-canvas/canvas-render'
 
 // ① 边外观：Partial 即可，没给的字段用宿主默认值
 export const edge: Partial<EdgeVisual> = reactive({
@@ -292,11 +292,11 @@ export const handle: CanvasParams = reactive({
      位置：应用装配层 —— 挂画布 + 用 @ready 拿到的句柄驱动业务 -->
 <script setup lang="ts">
 import { ref, shallowRef } from 'vue'
-import { CanvasHost, type CanvasHostHandle } from '@mini-canvas/canvas-render'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { CanvasHost, type CanvasHostHandle } from '@plume-canvas/canvas-render'
+import { LocalStorageAdapter } from '@plume-canvas/canvas-data'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 import { edge, handle } from './uiState'
 
 // ① 装配清单：顺序即装载顺序（皮在前，业务节点在后）
@@ -340,7 +340,7 @@ function toggleEdgeColor() {
       :edge-visual="edge"
       :handle-visual="handle"
       :dev="import.meta.env.DEV"
-      window-key="MiniCanvasHostDemo"
+      window-key="PlumeHostDemo"
       @ready="onReady"
       @plugin-issue="(p) => console.warn('插件出问题了：', p.name, p.lifecycle)"
     >
@@ -383,7 +383,7 @@ createApp(App).mount('#app')
 2. 点「加文本节点」：画布上出现一个文本节点（走 command:create-node）。
 3. 点「撤销」：节点消失（命令走的是 graph.undo()，一次操作一条历史）。
 4. 点「换连线颜色」：从节点圆点拖出一条连线，颜色跟着按钮变（响应式外观对象生效）。
-5. 控制台敲 MiniCanvasHostDemo.listPlugins()：应看到 ['theme-components', 'text']（不含被隐藏的 canvas-base）。
+5. 控制台敲 PlumeHostDemo.listPlugins()：应看到 ['theme-components', 'text']（不含被隐藏的 canvas-base）。
 
 ## 常见坑
 

@@ -8,7 +8,7 @@
  * 关闭：nodeBar.exitMode（顶栏的「退出」也调同一句，两边永远同步）。
  */
 import { computed } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 import { closeDemoMode, demoMode } from './demoMode'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()

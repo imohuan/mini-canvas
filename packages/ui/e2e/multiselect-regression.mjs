@@ -37,15 +37,15 @@ const boot = async () => {
   await page.waitForTimeout(2000);
   await page.waitForSelector('.vue-flow__node', { timeout: 30000 });
   // 等宿主句柄就绪：插件改成运行期从清单安装后，冷启动会多花一点时间把外挂插件装完，
-  // 只等 selector 可能早于 MiniCanvasUI 挂上（后续 evaluate 会读到 undefined）。
-  await page.waitForFunction(() => !!window.MiniCanvasUI, null, { timeout: 30000 }).catch(() => {});
+  // 只等 selector 可能早于 PlumeUI 挂上（后续 evaluate 会读到 undefined）。
+  await page.waitForFunction(() => !!window.PlumeUI, null, { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(600);
 };
 
 /** 用宿主 API 直写两个文本节点 + 一个组（成员在组内），并选中 [组, 文本] —— 用户图2的形态 */
 async function seedGroupScene() {
   await page.evaluate(() => {
-    const h = window.MiniCanvasUI.getHost();
+    const h = window.PlumeUI.getHost();
     const doc = h.ctx.get('doc');
     // 清空种子
     const old = doc.getNodes();
@@ -113,7 +113,7 @@ async function dragGroupAndSample(grab, totalDx, totalDy) {
       const node = document.querySelector('.vue-flow__node[data-id="grp1"]');
       if (!outer || !node) return null;
       const r = node.getBoundingClientRect();
-      const v = window.MiniCanvasUI.getHost().view.getViewport();
+      const v = window.PlumeUI.getHost().view.getViewport();
       // 把节点屏幕位置换算回 flow 坐标：flow = (screen - vp.xy) / zoom
       const flowNode = { x: (r.x - v.x) / v.zoom, y: (r.y - v.y) / v.zoom };
       const s = outer.style;
@@ -165,7 +165,7 @@ async function dragWithWheelZoom(grab, steps) {
  */
 async function frameOffsets() {
   return page.evaluate(() => {
-    const host = window.MiniCanvasUI.getHost();
+    const host = window.PlumeUI.getHost();
     const outer = document.querySelector('.selection-frame-outer');
     const ids = [...host.selection.ids];
     const ns = ids
@@ -178,7 +178,7 @@ async function frameOffsets() {
       l: Math.min(...rs.map((r) => r.left)), t: Math.min(...rs.map((r) => r.top)),
       r: Math.max(...rs.map((r) => r.right)), b: Math.max(...rs.map((r) => r.bottom)),
     };
-    const vp = window.MiniCanvasUI.getHost().viewport.getViewport();
+    const vp = window.PlumeUI.getHost().viewport.getViewport();
     const z = vp.zoom || 1
     const sl = (u.l - o.left) / z, st = (u.t - o.top) / z
     const sr = (o.right - u.r) / z, sb = (o.bottom - u.b) / z
@@ -196,7 +196,7 @@ await boot();
 
 // ========== 场景 A：两个独立节点，Shift 框选 → 框内空白拖动 ==========
 await page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   const doc = h.ctx.get('doc');
   const old = doc.getNodes();
   if (old.length) doc.removeNodes(old.map((n) => n.id));
@@ -222,7 +222,7 @@ const blankPoint = await page.evaluate(() => {
   const frame = document.querySelector('.selection-frame-outer');
   const fs = frame.style;
   const fx = parseFloat(fs.left), fy = parseFloat(fs.top);
-  const vp = window.MiniCanvasUI.getHost().viewport.getViewport();
+  const vp = window.PlumeUI.getHost().viewport.getViewport();
   const toScreen = (p) => ({ x: p.x * vp.zoom + vp.x, y: p.y * vp.zoom + vp.y });
   const corner = toScreen({ x: fx + 16, y: fy + 16 });
   const midTop = toScreen({ x: fx + parseFloat(fs.width) / 2, y: fy + 20 });
@@ -236,11 +236,11 @@ const blankPoint = await page.evaluate(() => {
 });
 
 const errsBeforeA = errors.length;
-const posT1Before = await page.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('doc').getNode('t1').position);
+const posT1Before = await page.evaluate(() => window.PlumeUI.getHost().ctx.get('doc').getNode('t1').position);
 await dragOnScreen(blankPoint, { x: blankPoint.x + 120, y: blankPoint.y + 80 });
 await page.waitForTimeout(400);
 
-const posT1After = await page.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('doc').getNode('t1').position);
+const posT1After = await page.evaluate(() => window.PlumeUI.getHost().ctx.get('doc').getNode('t1').position);
 const movedA = Math.abs(posT1After.x - posT1Before.x) + Math.abs(posT1After.y - posT1Before.y);
 check('A1 框内空白拖动=整组平移（位置落盘）', movedA > 50, `位移 ${movedA.toFixed(1)}px`);
 
@@ -248,7 +248,7 @@ const refErr = errors.slice(errsBeforeA).find((e) => e.includes('dragStartClient
 check('A2 无 dragStartClient ReferenceError', !refErr, refErr ?? '');
 
 // 拖完选中还在（拖完清空选中是老 bug）
-const selA = await page.evaluate(() => [...window.MiniCanvasUI.getHost().selection.ids]);
+const selA = await page.evaluate(() => [...window.PlumeUI.getHost().selection.ids]);
 check('A3 拖完选中保留', selA.length === 2 && selA.includes('t1') && selA.includes('t2'), selA.join(','));
 
 // ========== 场景 B：多选 [组, 独立节点] → 拖组节点 → 选框实时跟随 ==========
@@ -261,7 +261,7 @@ const grpScreen = await nodeScreenRect('grp1');
 const grab = { x: grpScreen.x + grpScreen.w / 2, y: grpScreen.y + 6 };
 const frameB0 = await frameGeometry();
 const posBefore = await page.evaluate(() => {
-  const doc = window.MiniCanvasUI.getHost().ctx.get('doc');
+  const doc = window.PlumeUI.getHost().ctx.get('doc');
   return {
     grp: { ...doc.getNode('grp1').position },
     solo: { ...doc.getNode('solo1').position },
@@ -279,7 +279,7 @@ await page.waitForTimeout(400);
 // 每个采样点：组视觉位置已动（DOM rect 相对 move 前变了），选框 flow 坐标也应跟着动。
 // 用"选框位移 / 组 store 位移"近似：拖动中 store 不变，视觉在动 —— 用 DOM rect 判定。
 const posAfter = await page.evaluate(() => {
-  const doc = window.MiniCanvasUI.getHost().ctx.get('doc');
+  const doc = window.PlumeUI.getHost().ctx.get('doc');
   return {
     grp: { ...doc.getNode('grp1').position },
     solo: { ...doc.getNode('solo1').position },
@@ -356,12 +356,12 @@ const blankD = await page.evaluate(() => {
 await dragOnScreen(blankD, { x: blankD.x + 60, y: blankD.y + 40 });
 await page.waitForTimeout(300);
 const crashedD = errors.slice(errsBeforeD).some((e) => e.includes('ReferenceError') || e.includes('dragStartClient'));
-const selD0 = await page.evaluate(() => [...window.MiniCanvasUI.getHost().selection.ids]);
+const selD0 = await page.evaluate(() => [...window.PlumeUI.getHost().selection.ids]);
 check('D1 空白拖动无报错且选中保留', !crashedD && selD0.length === 2, `err=${crashedD} sel=${selD0.join(',')}`);
 
 // 2) 清空选中 → shift 点组标题加选组 → 再 shift 点独立节点标题区加选独立节点。
 //    第二次点击若落在文本编辑保护区内会被节点吞掉，所以独立节点取标题条带（顶部 6px）。
-await page.evaluate(() => { window.MiniCanvasUI.getHost().selection.set(new Set()); });
+await page.evaluate(() => { window.PlumeUI.getHost().selection.set(new Set()); });
 await page.waitForTimeout(250);
 const grpD = await nodeScreenRect('grp1');
 const soloD = await nodeScreenRect('solo1');
@@ -371,31 +371,31 @@ await page.waitForTimeout(150);
 await page.mouse.click(soloD.x + soloD.w / 2, soloD.y + 6);
 await page.keyboard.up('Shift');
 await page.waitForTimeout(300);
-const selD1 = await page.evaluate(() => [...window.MiniCanvasUI.getHost().selection.ids]);
+const selD1 = await page.evaluate(() => [...window.PlumeUI.getHost().selection.ids]);
 // 实测：点击文本节点中心会进入编辑保护（不改变选中），这里不硬性要求 DOM 点击加选两条
 // —— 选定集的正确性由场景 B/D2 的真实拖拽行为兜底，D1b 只锁"组能被 shift 加选"。
 check('D1b shift 点组标题=加选组', selD1.includes('grp1'), selD1.join(','));
 // 把独立节点也加进来（用户此时画布上是"组+独立节点"同选 —— 图2 的形态）；
 // 点击文本节点中心会被编辑保护吞掉，故用 API 补齐，不影响下面"真实鼠标拖拽"的验证。
 await page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   h.selection.set(new Set([...h.selection.ids, 'solo1']));
 });
 await page.waitForTimeout(300);
-const selD2 = await page.evaluate(() => [...window.MiniCanvasUI.getHost().selection.ids]);
+const selD2 = await page.evaluate(() => [...window.PlumeUI.getHost().selection.ids]);
 check('D1c 选中集=组+独立节点（图2形态）', selD2.length === 2, selD2.join(','));
 
 // 3) 拖组节点 → 选框应实时跟随
 const frameD0 = await frameGeometry();
 const posD0 = await page.evaluate(() => {
-  const doc = window.MiniCanvasUI.getHost().ctx.get('doc');
+  const doc = window.PlumeUI.getHost().ctx.get('doc');
   return { grp: { ...doc.getNode('grp1').position }, solo: { ...doc.getNode('solo1').position } };
 });
 const grabD = { x: grpD.x + grpD.w / 2, y: grpD.y + 6 };
 const samplesD = await dragGroupAndSample(grabD, 120, 84);
 await page.waitForTimeout(400);
 const posD1 = await page.evaluate(() => {
-  const doc = window.MiniCanvasUI.getHost().ctx.get('doc');
+  const doc = window.PlumeUI.getHost().ctx.get('doc');
   return { grp: { ...doc.getNode('grp1').position }, solo: { ...doc.getNode('solo1').position } };
 });
 const movedD = Math.abs(posD1.grp.x - posD0.grp.x) + Math.abs(posD1.grp.y - posD0.grp.y);
@@ -408,7 +408,7 @@ const driftD = frameD1 ? Math.abs(frameD1.x - (frameD0.x + posD1.solo.x - posD0.
 check('D4 松手后选框对齐', driftD >= 0 && driftD < 6, `漂移 ${driftD.toFixed(1)}px`);
 
 // ========== 场景 C：恰好单选组 → 解散分组工具栏跟随拖动 ==========
-await page.evaluate(() => { window.MiniCanvasUI.getHost().selection.set(new Set(['grp1'])); });
+await page.evaluate(() => { window.PlumeUI.getHost().selection.set(new Set(['grp1'])); });
 await page.waitForTimeout(400);
 // 工具栏应出现（解散分组按钮）
 const toolbarVisible = await page.locator('.group-top-toolbar-overlay__slot').isVisible().catch(() => false);
@@ -421,7 +421,7 @@ const tbBefore = await page.evaluate(() => {
   const r = el.getBoundingClientRect();
   return { x: r.x, y: r.y };
 });
-const nodeBefore = await page.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('doc').getNode('grp1').position);
+const nodeBefore = await page.evaluate(() => window.PlumeUI.getHost().ctx.get('doc').getNode('grp1').position);
 const g2 = await nodeScreenRect('grp1');
 const grab2 = { x: g2.x + g2.w / 2, y: g2.y + 6 };
 const cSamples = [];
@@ -447,9 +447,9 @@ const tbAfter = await page.evaluate(() => {
   const r = el.getBoundingClientRect();
   return { x: r.x, y: r.y };
 });
-const nodeAfter = await page.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('doc').getNode('grp1').position);
+const nodeAfter = await page.evaluate(() => window.PlumeUI.getHost().ctx.get('doc').getNode('grp1').position);
 const dx = nodeAfter.x - nodeBefore.x, dy = nodeAfter.y - nodeBefore.y;
-const zoom = await page.evaluate(() => window.MiniCanvasUI.getHost().viewport.getViewport().zoom);
+const zoom = await page.evaluate(() => window.PlumeUI.getHost().viewport.getViewport().zoom);
 const tbMoved = tbAfter && tbBefore ? Math.hypot(tbAfter.x - tbBefore.x, tbAfter.y - tbBefore.y) : -1;
 const expectedMoved = Math.hypot(dx * zoom, dy * zoom);
 const tbDrift = Math.abs(tbMoved - expectedMoved);
@@ -466,7 +466,7 @@ check('C2 无新错误', errors.slice(errsBeforeC).length === 0, errors.slice(er
 await boot();
 const errsBeforeF = errors.length;
 await page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   const doc = h.ctx.get('doc');
   const old = doc.getNodes();
   if (old.length) doc.removeNodes(old.map((n) => n.id));
@@ -483,7 +483,7 @@ await page.waitForTimeout(700);
 /** 选框相对"选中节点 DOM 并集"的四边屏幕偏移 + 框高/并集高（拖动中也能用） */
 async function childFrameOffsets() {
   return page.evaluate(() => {
-    const h = window.MiniCanvasUI.getHost();
+    const h = window.PlumeUI.getHost();
     const outer = document.querySelector('.selection-frame-outer');
     if (!outer) return { missing: true };
     const rs = [...h.selection.ids]
@@ -531,7 +531,7 @@ check('F4 拖动中框高未被撑大（"突破云端"的形态）', fHuge.lengt
 const fAfter = await childFrameOffsets();
 check('F5 松手后选框对齐', okF(fAfter), JSON.stringify(fAfter));
 const fPos = await page.evaluate(() => {
-  const doc = window.MiniCanvasUI.getHost().ctx.get('doc');
+  const doc = window.PlumeUI.getHost().ctx.get('doc');
   return { a: doc.getNode('fA').position, b: doc.getNode('fB').position };
 });
 check('F6 子节点位置已落盘（组内成员照常移动）', fPos.a.x !== 60 || fPos.a.y !== 120, JSON.stringify(fPos));
@@ -545,7 +545,7 @@ const errsBeforeG = errors.length;
 await seedGroupScene();
 // 保证选中 >=2（seedGroupScene 已选 [组, 独立节点]）
 const gOffsets = () => page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   const outer = document.querySelector('.selection-frame-outer');
   const inner = document.querySelector('.selection-frame-inner');
   if (!outer) return { missing: true };
@@ -565,11 +565,11 @@ const gOffsets = () => page.evaluate(() => {
 });
 const g1 = await gOffsets();
 // 缩到 0.5：flow 间距不变、屏幕间距腰斩
-await page.evaluate(() => window.MiniCanvasUI.getHost().viewport.setViewport({ x: 0, y: 0, zoom: 0.5 }));
+await page.evaluate(() => window.PlumeUI.getHost().viewport.setViewport({ x: 0, y: 0, zoom: 0.5 }));
 await page.waitForTimeout(400);
 const g05 = await gOffsets();
 // 放大到 2：flow 间距不变、屏幕间距翻倍
-await page.evaluate(() => window.MiniCanvasUI.getHost().viewport.setViewport({ x: 0, y: 0, zoom: 2 }));
+await page.evaluate(() => window.PlumeUI.getHost().viewport.setViewport({ x: 0, y: 0, zoom: 2 }));
 await page.waitForTimeout(400);
 const gZoomed2 = await gOffsets();
 const flowOk = (g) => !g.missing && Math.abs(g.flow.l - 16) < 1 && Math.abs(g.flow.t - 34) < 1 && Math.abs(g.flow.r - 16) < 1 && Math.abs(g.flow.b - 16) < 1;
@@ -592,7 +592,7 @@ check('G4 全程无新错误', errors.slice(errsBeforeG).length === 0, errors.sl
 // 这条守的就是“外部安装插件后，框选这个手势必须还能用”。
 await boot();
 await page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   const doc = h.ctx.get('doc');
   const old = doc.getNodes();
   if (old.length) doc.removeNodes(old.map((n) => n.id));
@@ -600,7 +600,7 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(300);
 const hIds = await page.evaluate(() => {
-  const canvas = window.MiniCanvasUI.getHost().ctx.get('canvas');
+  const canvas = window.PlumeUI.getHost().ctx.get('canvas');
   return [
     canvas.createNode('text', { x: 300, y: 320 }),
     canvas.createNode('text', { x: 480, y: 420 }),
@@ -624,13 +624,13 @@ for (let i = 1; i <= 12; i++) {
   await page.waitForTimeout(18);
 }
 const hMid = await page.evaluate(() => ({
-  sel: [...window.MiniCanvasUI.getHost().selection.ids],
+  sel: [...window.PlumeUI.getHost().selection.ids],
   box: [...document.body.children].some((c) => c.style && String(c.style.border).includes('dashed')),
 }));
 await page.mouse.up();
 await page.keyboard.up('Shift');
 await page.waitForTimeout(400);
-const hEnd = await page.evaluate(() => [...window.MiniCanvasUI.getHost().selection.ids]);
+const hEnd = await page.evaluate(() => [...window.PlumeUI.getHost().selection.ids]);
 check('H0 起手点确实落在画布空白（pane）上', hStart.onPane, JSON.stringify(hStart.from));
 check('H1 Shift 拖框：拖动中途就实时选中被框住的节点', hMid.sel.length === 2, '选中=' + hMid.sel.join(','));
 check('H2 Shift 拖框：屏幕上出现选框（视觉反馈）', hMid.box, 'box=' + hMid.box);

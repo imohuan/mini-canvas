@@ -9,7 +9,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { Hono } from 'hono'
-import { Context, setDefaultCapabilityLayerFactory } from '@mini-canvas/kernel'
+import { Context, setDefaultCapabilityLayerFactory } from '@plume-canvas/kernel'
 import { createServerCapabilityLayer } from '../serverFramework/capabilityLayer.js'
 
 let root: string

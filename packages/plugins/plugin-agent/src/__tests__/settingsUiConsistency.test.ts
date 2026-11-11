@@ -181,9 +181,9 @@ describe('模型 / MCP 的检测与自定义模型（用户 2026-11-11 续）', 
     expect(models).toContain('#16a34a')
     expect(models).toContain('#dc2626')
     expect(models).toContain('ap-probe-desc')
-    // 结果卡片不再用主题强调色当边框
+    // 结果卡片不再用主题强调色当边框：边框读私有状态色变量（亮色块里就是 #16a34a）
     const resultRule = /\.ap-probe-result\.is-ok\s*\{([^}]*)\}/.exec(models)?.[1] ?? ''
-    expect(resultRule).toContain('#16a34a')
+    expect(resultRule).toContain('--ap-state-ok')
     expect(resultRule).not.toContain('--ui-accent')
   })
 

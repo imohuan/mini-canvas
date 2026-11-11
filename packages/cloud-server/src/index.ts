@@ -1,9 +1,9 @@
 /**
- * @mini-canvas/cloud-server —— 画布云端服务（`npx mini-canvas-cloud serve`）。
+ * @plume-canvas/cloud-server —— 画布云端服务（`npx plume-canvas serve`）。
  *
  * 定位：一套**自托管**的后台，同时提供画布数据接口、资源上传、外部插件清单与画布界面托管。
  *
- * 数据全在本机 `.mini-canvas/` 下，一个画布一个文件夹：
+ * 数据全在本机 `.plume/` 下，一个画布一个文件夹：
  *   canvases/<id>/canvas.json    画布本体（节点 + 边 + 画布信息）
  *   canvases/<id>/view.json      视图状态（视口）
  *   canvases/<id>/history.json   任务记录 / 生成历史

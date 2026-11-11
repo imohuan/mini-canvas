@@ -15,10 +15,10 @@
 `BaseNode` 是 VueFlow 渲染每个节点时套上的壳，**离开画布宿主渲染不出来** —— 所以下面嵌一块真画布（装了默认主题 + 示例节点），你在真环境里看它：
 
 <script setup>
-import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
+import PlumeStage from '../../.vitepress/theme/demos/PlumeStage.vue'
 </script>
 
-<MiniCanvasStage :height="360" />
+<PlumeStage :height="360" />
 
 > 从任一节点的圆点往外拖 —— 那根跟手的临时线就是它（与落成的正式边长得一模一样）。
 
@@ -57,7 +57,7 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 <!-- 格式：Vue 单文件组件 -->
 <!-- 位置：插件包里的浮层 —— 它自己画一根与画布同款的拖线预览线 -->
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 // 按名取（不依赖主题包），换主题时这根线跟着一起换
 const ConnectionLine = useUiComponent('connectionLine')

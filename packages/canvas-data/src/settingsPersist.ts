@@ -14,8 +14,8 @@
  * 零 Vue、纯逻辑、Node 可单测。
  */
 import type { SaveService } from './storage/types'
-import type { SettingsStore } from '@mini-canvas/kernel'
-import type { Disposable } from '@mini-canvas/kernel'
+import type { SettingsStore } from '@plume-canvas/kernel'
+import type { Disposable } from '@plume-canvas/kernel'
 
 /** 配置持久化的裸 key（type='config' 下的物理 key 由 SaveService 加前缀） */
 export const SETTINGS_SAVE_KEY = 'settings'

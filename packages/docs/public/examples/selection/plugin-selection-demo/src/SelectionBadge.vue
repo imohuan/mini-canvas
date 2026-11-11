@@ -3,7 +3,7 @@
 // 格式：Vue 单文件组件（setup 语法糖）
 // 位置：注册进 overlay 槽的 UI 组件，跟着选中名单显示数量
 import { onBeforeUnmount, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 // ① 组件在 CanvasHost 渲染子树里，用 useCanvasRender() 拿上下文；
 //    这里的 ctx 是根 Context，所以要用 ctx.get(...)（没有插件代理糖）

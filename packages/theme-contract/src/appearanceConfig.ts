@@ -4,7 +4,7 @@
  * 纯数据（零 .vue）。画布那部分（端口 / 标题 / 吸附带 / 连线）在 canvasConfig.ts；
  * 两份合起来就是拆分前的 Config（见 index.ts 的 Config 并集，键不允许重复）。
  */
-import type { ConfigSchema } from "@mini-canvas/canvas-base";
+import type { ConfigSchema } from "@plume-canvas/canvas-base";
 import {
   THEME_FONT_CHOICES,
   THEME_FONT_LABELS,

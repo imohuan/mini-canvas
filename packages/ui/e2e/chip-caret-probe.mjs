@@ -29,7 +29,7 @@ await page.waitForTimeout(5000)
 
 // 空白新画布没有节点：自己造一个图片节点（与 canvas-e2e 同款 API）
 await page.evaluate(() => {
-  const doc = window.MiniCanvasUI?.getHost?.()?.ctx?.get?.('doc')
+  const doc = window.PlumeUI?.getHost?.()?.ctx?.get?.('doc')
   if (!doc) return
   if (doc.getNodes().some((n) => n.type === 'image')) return
   doc.addNodes([{ id: 'probe-image-1', type: 'image', position: { x: 120, y: 140 }, data: {} }])

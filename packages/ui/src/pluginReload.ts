@@ -9,26 +9,26 @@
  * const s = document.createElement('script')             // 重新拉产物
  * s.src = '/plugins/plugin-style-library/plugin-style-library.js?t=' + Date.now()  // 破缓存
  * document.head.appendChild(s)
- * ctx.installPlugin(window.MiniCanvasPluginStyleLibrary)  // 装新
+ * ctx.installPlugin(window.PlumePluginStyleLibrary)  // 装新
  * ```
  * 每一步都要人记住插件 id、产物路径、全局名 —— 现在收成一个调用：
  * ```js
- * await window.MiniCanvasPlugin.reload('style-library')
- * window.MiniCanvasPlugin.reload('style-library', { then: 'style-library:open' })  // 装完顺手打开面板
+ * await window.PlumePlugin.reload('style-library')
+ * window.PlumePlugin.reload('style-library', { then: 'style-library:open' })  // 装完顺手打开面板
  * ```
  *
  * ## 为什么 id → 地址要查清单
  *
  * 插件 id（目录名 `plugin-style-library`）、运行时名（`style-library`）、产物地址
  * （`/plugins/plugin-style-library/plugin-style-library.js`）、UMD 全局名
- * （`MiniCanvasPluginStyleLibrary`）**四者都不一样**，写死在脚本里必然漂移。
+ * （`PlumePluginStyleLibrary`）**四者都不一样**，写死在脚本里必然漂移。
  * 清单（cloud-server 的 `/plugin-catalog.json`）已经把这份对应关系列好，所以按 id/名字
  * 现查即可；清单本身带缓存，且可 `?t=` 主动刷新。
  *
  * ## 为什么走 UMD 加载器而不是 manager.reload({url})
  *
  * `manager.install({ url })` 会把产物当 **ESM** 用 `import(data:text/javascript,…)` 执行；
- * 而仓库里可装卸的插件打的是 **UMD**（靠 window 全局取 Vue / MiniCanvas*），那样加载必炸。
+ * 而仓库里可装卸的插件打的是 **UMD**（靠 window 全局取 Vue / Plume*），那样加载必炸。
  * 所以这里复用「插件管理」同一个 UMD 加载器（`createUmdLoader` + `pickPluginModule`）——
  * 它跟插件管理页装插件是**同一条路**，行为一致。
  *
@@ -59,7 +59,7 @@ export interface LoadedPluginLike {
   setup?: unknown
 }
 
-/** 宿主插件门面（window.MiniCanvasUI 的最小用面） */
+/** 宿主插件门面（window.PlumeUI 的最小用面） */
 export interface PluginFacadeLike {
   reloadPlugin(name: string, nextMod?: unknown): void
   /** 取宿主 ctx；get 用**非泛型**签名 —— 泛型方法会让注入假依赖的测试类型不兼容 */
@@ -166,12 +166,12 @@ export interface ReloaderDeps {
 /** 清单缓存时长（ms）：够短以便改完立刻看到，够长以免每次 reload 都打一次网络 */
 const CATALOG_TTL = 5000
 
-import { DEFAULT_CATALOG_URL } from '@mini-canvas/plugin-manager'
+import { DEFAULT_CATALOG_URL } from '@plume-canvas/plugin-manager'
 /** 默认清单地址：单一来源在插件管理包，这里只转发，避免两处漂移。 */
 export { DEFAULT_CATALOG_URL }
 
 /** 默认挂到 window 的 key */
-export const DEFAULT_RELOADER_KEY = 'MiniCanvasPlugin'
+export const DEFAULT_RELOADER_KEY = 'PlumePlugin'
 
 /** 默认的插件变更 SSE 端点（同源 cloud-server；见 cloud-server 的 pluginWatch.ts） */
 export const DEFAULT_WATCH_URL = '/api/plugin-events'
@@ -207,12 +207,12 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
   function facadeOf(): PluginFacadeLike | undefined {
     if (deps.facade) return deps.facade()
     const w = globalThis as Record<string, unknown>
-    return w.MiniCanvasUI as PluginFacadeLike | undefined
+    return w.PlumeUI as PluginFacadeLike | undefined
   }
 
   async function reload(target: string, opts: ReloadOptions = {}): Promise<{ name: string; url: string }> {
     const facade = facadeOf()
-    if (!facade) throw new Error('[plugin-reload] 宿主还没就绪（window.MiniCanvasUI 不在）')
+    if (!facade) throw new Error('[plugin-reload] 宿主还没就绪（window.PlumeUI 不在）')
 
     // ① 定地址，三种入参都认（优先级从高到低）：
     //    · opts.url 显式指定
@@ -235,7 +235,7 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
     if (!url) throw new Error('[plugin-reload] 插件没有可加载的产物地址：' + target)
 
     // 只给了地址、没给全局名 → 拿地址去清单里**反查**全局名。
-    // 为什么必要：UMD 加载器没有全局名提示时会"扫 window 上所有 MiniCanvasPlugin*"，
+    // 为什么必要：UMD 加载器没有全局名提示时会"扫 window 上所有 PlumePlugin*"，
     // 多个插件并存时可能挑到别的那个（挑错 = 卸错了插件）。反查能拿到就不走那条兜底。
     if (!globalName) {
       try {
@@ -252,12 +252,12 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
     }
 
     // 兜底推导：热重载走 KV 上报地址（不在清单里）时没有全局名提示。
-    // UMD 全局名有稳定约定 MiniCanvasPlugin<PascalCase(插件名)>，按 opts.name（卸旧依据，
+    // UMD 全局名有稳定约定 PlumePlugin<PascalCase(插件名)>，按 opts.name（卸旧依据，
     // 上报方给出，最权威）推导。有提示时加载器按名取件，绝不会扫 window 挑错
     // （实测踩过：重装 bottom-bar 时扫到 align-guide → 卸旧装新 → Duplicate plugin name）。
     if (!globalName && opts.name) {
       globalName =
-        'MiniCanvasPlugin' +
+        'PlumePlugin' +
         opts.name
           .split(/[-_]/)
           .filter(Boolean)
@@ -273,7 +273,7 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
      * 纠错兜底（无清单提示的路径）：加载器没拿到全局名时会扫 window 猜，
      * 多个插件并存时可能挑到别的那个（实测踩过：重装 bottom-bar 挑到 align-guide，
      * 卸旧装新 → "[core] Duplicate plugin name: align-guide"）。
-     * UMD 全局名有稳定约定 MiniCanvasPlugin<PascalCase(插件名)> —— 按加载出的 mod.name
+     * UMD 全局名有稳定约定 PlumePlugin<PascalCase(插件名)> —— 按加载出的 mod.name
      * 推导真名再 load 一次，对得上才替换，对不上保留首次结果。
      */
     if (!globalName && mod?.name) {
@@ -282,8 +282,8 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
         .filter(Boolean)
         .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
         .join('')
-      const guessed = 'MiniCanvasPlugin' + pascal
-      if (guessed !== 'MiniCanvasPlugin') {
+      const guessed = 'PlumePlugin' + pascal
+      if (guessed !== 'PlumePlugin') {
         try {
           const retry = await loadUmd(url, guessed)
           if (retry && retry.name === mod.name) {
@@ -400,7 +400,7 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
  * 真正调 reload 时才取，避免顶层 import 就把浏览器依赖拉进来。
  */
 async function defaultLoadUmd(url: string, globalName?: string): Promise<LoadedPluginLike> {
-  const { createUmdLoader, bustCache } = await import('@mini-canvas/plugin-manager')
+  const { createUmdLoader, bustCache } = await import('@plume-canvas/plugin-manager')
   const loader = createUmdLoader({
     document,
     win: globalThis as unknown as Record<string, unknown>,
@@ -412,7 +412,7 @@ async function defaultLoadUmd(url: string, globalName?: string): Promise<LoadedP
 /**
  * 把重装器挂到 window（幂等：已有就不重复挂）。
  *
- * 在 `main.ts` 里于应用启动前调用一次即可。函数内部**调用时才**去取 window.MiniCanvasUI，
+ * 在 `main.ts` 里于应用启动前调用一次即可。函数内部**调用时才**去取 window.PlumeUI，
  * 所以"挂函数的时刻宿主还没就绪"完全没问题。
  */
 export function exposePluginReloader(

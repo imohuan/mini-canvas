@@ -1,6 +1,9 @@
 /** 引用资源标签：技能/MCP/节点的标记（ref）必须带对的 kind 与载荷 */
 import { describe, it, expect } from 'vitest'
-import { skillResources, mcpResources, nodeResources, assetResource, assetExtOf } from '../ui/shared/agentResources'
+import {
+  skillResources, mcpResources, nodeResources, assetResource, assetExtOf,
+  resolveRefIcon, ICON_ASSET, ICON_KIND, ICON_NODE,
+} from '../ui/shared/agentResources'
 
 describe('技能标签', () => {
   it('带 skill 标记，载荷 = SKILL.md 路径', () => {
@@ -137,5 +140,52 @@ describe('节点标签的缩略图', () => {
     const [without] = nodeResources([{ id: 'n5', name: '文本 1', type: 'text', kind: 'text' }], 'c')
     expect(hasThumb(withThumb.renderItem?.(withThumb))).toBe(true)
     expect(hasThumb(without.renderItem?.(without))).toBe(false)
+  })
+})
+
+/**
+ * 标签图标的取法（用户 2026-11-11）：
+ *   ① 拿得到真实图标（节点类型注册的 icon）就用它；
+ *   ② 拿不到就按类型（图片 / 视频 / 音频 / 文本）兜底；
+ *   ③ 类型也没有，才用「节点 / 资产」的默认图标。
+ *
+ * 以前节点永远画通用方块、资产永远画图片图标 —— 音频标签显示成图片、
+ * 图片节点标签显示成一块面板，都是这里少了两轮。
+ */
+describe('标签图标：真实图标 → 类型 → 默认', () => {
+  it('第一轮：有真实图标就用真实图标', () => {
+    expect(resolveRefIcon('image', '<svg data-own="1"></svg>', ICON_NODE)).toBe('<svg data-own="1"></svg>')
+  })
+
+  it('第二轮：没有真实图标时按类型兜底', () => {
+    expect(resolveRefIcon('audio', undefined, ICON_ASSET)).toBe(ICON_KIND.audio)
+    expect(resolveRefIcon('image', '', ICON_NODE)).toBe(ICON_KIND.image)
+  })
+
+  it('第三轮：类型也认不出才用默认图标', () => {
+    expect(resolveRefIcon('', undefined, ICON_NODE)).toBe(ICON_NODE)
+    expect(resolveRefIcon('other', undefined, ICON_ASSET)).toBe(ICON_ASSET)
+  })
+
+  it('节点行：带上类型图标后，菜单与标签都用它', () => {
+    const [r] = nodeResources([
+      { id: 'n1', name: '图片 2', type: 'image', kind: 'image', icon: '<svg data-own="node"></svg>' },
+    ], 'c')
+    expect(JSON.stringify(r.renderItem?.(r))).toContain('data-own')
+  })
+
+  it('资产行：音频资产不再画成图片图标', () => {
+    const r = assetResource({ name: 'd4b974cd-44c5-48fa-b4f9-0c', url: '/api/assets/files/ab.mp3', path: 'D:/d/assets/files/ab.mp3' })
+    expect(r.chipKind).toBe('audio')
+    expect(JSON.stringify(r.renderItem?.(r))).toContain('M9 18V6l10-2v12')
+  })
+
+  /** 资产名是 UUID、没有扩展名时，靠调用方给的 kind 认类型（用户截图里的那条音频） */
+  it('资产行：UUID 名字 + kind=audio 也画音频图标', () => {
+    const r = assetResource({
+      name: 'd4b974cd-44c5-48fa-b4f9-0c', url: '/api/assets/files/ab', kind: 'audio',
+    })
+    expect(r.chipKind).toBe('audio')
+    expect(JSON.stringify(r.renderItem?.(r))).toContain('M9 18V6l10-2v12')
   })
 })

@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-cloud-client",
+  "name": "@plume-canvas/plugin-cloud-client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "云端连接",
     "description": "连上 cloud-server 后台：画布存档 / 生成动作 / 生成历史 / 实时跟随（不装它则画布只有本地能力）",
     "pluginName": "cloud-client",
@@ -23,16 +23,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
   },
   "devDependencies": {
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/bar-contract": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/bar-contract": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",

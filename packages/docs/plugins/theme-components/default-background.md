@@ -11,10 +11,10 @@
 `BaseNode` 是 VueFlow 渲染每个节点时套上的壳，**离开画布宿主渲染不出来** —— 所以下面嵌一块真画布（装了默认主题 + 示例节点），你在真环境里看它：
 
 <script setup>
-import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
+import PlumeStage from '../../.vitepress/theme/demos/PlumeStage.vue'
 </script>
 
-<MiniCanvasStage :height="360" />
+<PlumeStage :height="360" />
 
 > 画布里那层跟着平移缩放走的点状网格就是它（背后是 canvas 绘制，不是几千个 SVG 圆点）。
 
@@ -50,7 +50,7 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 // 文件：packages/my-plugin/src/myBackground.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：一个换皮插件 —— 把点状网格换成方格背景
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import GridBackground from './GridBackground.vue'
 
 export const name = 'my-background'

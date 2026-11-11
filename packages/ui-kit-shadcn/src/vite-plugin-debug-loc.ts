@@ -30,7 +30,7 @@ interface ElementLike {
 /** dev 与 build 都挂载（构建版打开开关后同样能看到标记） */
 export function uiKitDebugLocPlugin(options: { root: string }): VitePluginLike {
   return {
-    name: 'mini-canvas:ui-kit-debug-loc',
+    name: 'plume-canvas:ui-kit-debug-loc',
     enforce: 'pre',
     transform(code, id) {
       const file = id.replace(/\\/g, '/').split('?')[0] ?? ''
@@ -94,7 +94,7 @@ export function injectUiKitDebugLoc(code: string, filename: string, root: string
 /** 本地组件名 → 组件库里导出的名字（支持多行 import 与 `Button as UiButton`） */
 function uiKitImports(script: string, setup: string): Map<string, string> {
   const out = new Map<string, string>()
-  const pattern = /(?:from\s+)?['"]@mini-canvas\/ui-kit-shadcn['"]/g
+  const pattern = /(?:from\s+)?['"]@plume-canvas\/ui-kit-shadcn['"]/g
   for (const source of [script, setup]) {
     for (const match of source.matchAll(pattern)) {
       // 从模块名回到最近的 import 关键字；中间不能再出现别的 import。

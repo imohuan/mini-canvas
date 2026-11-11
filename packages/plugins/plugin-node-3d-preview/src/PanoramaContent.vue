@@ -34,7 +34,7 @@
  * 资源回收：three 的场景/几何/材质/贴图/渲染器在卸载时逐个 dispose，避免 WebGL 上下文泄漏。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RenderEvents, useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { RenderEvents, useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 import { isFullscreen, isInteracting, endInteract, resetViewToken } from './panoramaSession'
 import { resolvePanoramaSpec } from './panoramaMode'
 import { shouldClearTexture, shouldShowTexture } from './textureLifecycle'

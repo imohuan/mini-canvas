@@ -15,9 +15,9 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { NodeRegistry } from '@mini-canvas/canvas-data'
-import { RegistryImpl } from '@mini-canvas/kernel'
-import { RENDER_CONTEXT_KEY, useVueFlow, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { NodeRegistry } from '@plume-canvas/canvas-data'
+import { RegistryImpl } from '@plume-canvas/kernel'
+import { RENDER_CONTEXT_KEY, useVueFlow, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import BaseNode from '../BaseNode.vue'
 
 // BaseNode setup 会挂/摘 document 键盘监听（F2 改名）；Node 环境给最小桩。

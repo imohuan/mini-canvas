@@ -1,7 +1,7 @@
 /**
  * canvasBasePlugin —— 画布基础装配插件（设计文档 §九 步骤 4「建基础插件，收编 15 行装配」）。
  *
- * 解决什么：createMiniCanvasHost 里原先有 15 行 ctx.inject(...)，把「画布有哪些基础服务」写死在
+ * 解决什么：createPlumeHost 里原先有 15 行 ctx.inject(...)，把「画布有哪些基础服务」写死在
  * 渲染宿主里 —— 换个宿主就得抄一遍，宿主也成了「什么服务都知道」的大杂烩。本插件把这一坨搬进
  * 自己的 apply(ctx)：谁装它，谁就得到一整套画布基础服务（数据层 + 画布语义层）。宿主于是只剩
  * 「建 ctx → 装基础插件 → 装业务插件 → start」。
@@ -20,8 +20,8 @@
  * 归属：src/canvas（画布语义层）。零件全在 canvas-data 内，本文件只做「建 + 注入」；
  * 它不认识 Vue、不认识渲染层 —— nodeLayout / viewport 由宿主注入（那两个要量 DOM / attach 后端）。
  */
-import { CommandRegistry } from '@mini-canvas/kernel'
-import type { CommandDef, CommandService, PluginModule, PluginScope, SettingsStore } from '@mini-canvas/kernel'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import type { CommandDef, CommandService, PluginModule, PluginScope, SettingsStore } from '@plume-canvas/kernel'
 import { NodeStore } from '../nodeStore'
 import type { CanvasNode } from '../nodeStore'
 import { EdgeStore } from '../edgeStore'

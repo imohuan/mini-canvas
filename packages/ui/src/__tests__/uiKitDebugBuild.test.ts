@@ -43,7 +43,7 @@ describe('组件库使用标记：构建版可用', () => {
 
   it('Vite 插件不再只在 serve 生效', () => {
     expect(PLUGIN_CODE).not.toMatch(/apply:\s*'serve'/)
-    expect(PLUGIN_CODE).toMatch(/name:\s*'mini-canvas:ui-kit-debug-loc'/)
+    expect(PLUGIN_CODE).toMatch(/name:\s*'plume-canvas:ui-kit-debug-loc'/)
   })
 
   it('默认主题登记 shadcn 组件时始终包透明标记（不按 DEV 分支）', () => {

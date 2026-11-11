@@ -459,7 +459,7 @@ check('底栏有「技能」按钮', (await skillTb.count()) > 0)
   const authTb = page.locator('.ac-toolbar button[aria-label^="授权方式"]').first()
   check('底栏有「授权方式」下拉', (await authTb.count()) > 0)
   if ((await authTb.count()) > 0) {
-    const before = await page.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('agent').state.policy.enabled)
+    const before = await page.evaluate(() => window.PlumeUI.getHost().ctx.get('agent').state.policy.enabled)
     await authTb.click()
     await page.waitForTimeout(500)
     const menu = await page.evaluate(() => {
@@ -478,7 +478,7 @@ check('底栏有「技能」按钮', (await skillTb.count()) > 0)
     await page.locator('.ac-menu-item', { hasText: target }).click()
     await page.waitForTimeout(1200)
     const after = await page.evaluate(() => ({
-      enabled: window.MiniCanvasUI.getHost().ctx.get('agent').state.policy.enabled,
+      enabled: window.PlumeUI.getHost().ctx.get('agent').state.policy.enabled,
       label: document.querySelector('.ac-toolbar button[aria-label^="授权方式"]').getAttribute('aria-label'),
     }))
     check('切换授权方式真的改了后端策略', after.enabled === !before, 'before=' + before + ' after=' + after.enabled)
@@ -489,7 +489,7 @@ check('底栏有「技能」按钮', (await skillTb.count()) > 0)
     await page.waitForTimeout(400)
     await page.locator('.ac-menu-item', { hasText: before ? '接受审核' : '完全自动授权' }).click()
     await page.waitForTimeout(1200)
-    check('授权方式已复原（不影响后续审批用例）', (await page.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('agent').state.policy.enabled)) === before)
+    check('授权方式已复原（不影响后续审批用例）', (await page.evaluate(() => window.PlumeUI.getHost().ctx.get('agent').state.policy.enabled)) === before)
   }
 }
 await skillTb.click()
@@ -825,7 +825,7 @@ check('历史下拉里有会话', histItems > 0, 'count=' + histItems)
   check('历史下拉整块在视口内', !!widths && widths.inside, JSON.stringify(widths))
   // 面板最小宽度：拖到极窄也夹在 360，保证下拉（320）仍装得下
   const minW = await page.evaluate(async () => {
-    const st = window.MiniCanvasUI.getHost().ctx.get('agent').state
+    const st = window.PlumeUI.getHost().ctx.get('agent').state
     const before = st.width
     st.width = 200 // 故意拖得极小
     await new Promise((r) => setTimeout(r, 400))
@@ -1003,7 +1003,7 @@ await snap('docked')
     await page.keyboard.type(q)
     await page.locator('.ac-send').click()
     for (let i = 0; i < 120; i++) {
-      const running = await page.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('agent').state.running)
+      const running = await page.evaluate(() => window.PlumeUI.getHost().ctx.get('agent').state.running)
       if (!running) break
       await page.waitForTimeout(700)
     }
@@ -1031,7 +1031,7 @@ await snap('docked')
     await page.waitForTimeout(1400)
     await page.evaluate(() => { document.querySelector('.ac-scroll').scrollTop = 0 })
     for (let i = 0; i < 120; i++) {
-      const running = await page.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('agent').state.running)
+      const running = await page.evaluate(() => window.PlumeUI.getHost().ctx.get('agent').state.running)
       if (!running) break
       await page.waitForTimeout(700)
     }

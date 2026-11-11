@@ -5,9 +5,9 @@
  * 清单、NPM 市场、安装/更新/卸载仍按原来的顺序执行。
  */
 import { computed, onMounted, ref } from 'vue'
-import { getAdminToken, setAdminToken } from '@mini-canvas/canvas-base'
-import { useCanvasContextOrRender } from '@mini-canvas/canvas-render'
-import type { FeedbackService } from '@mini-canvas/canvas-render'
+import { getAdminToken, setAdminToken } from '@plume-canvas/canvas-base'
+import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
+import type { FeedbackService } from '@plume-canvas/canvas-render'
 import { usePluginManager } from '../../../usePluginManager'
 import type { PluginRow } from '../../../pluginManagerService'
 import type {

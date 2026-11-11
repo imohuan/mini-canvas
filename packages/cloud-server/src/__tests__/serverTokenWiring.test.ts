@@ -49,10 +49,10 @@ describe('服务端接线：本机打开托管页时带上令牌', () => {
     const res = await fetch('http://127.0.0.1:' + port + '/')
     expect(res.status).toBe(200)
     const html = await res.text()
-    expect(html).toContain('__MC_ADMIN_TOKEN__')
+    expect(html).toContain('__PLUME_ADMIN_TOKEN__')
     expect(html).toContain(TOKEN)
     // 宿主标记仍在（cloud-client 靠它开机直接启动）
-    expect(html).toContain('mini-canvas-host')
+    expect(html).toContain('plume-host')
   })
 
   it('★ 关掉鉴权时页面里不该有令牌', async () => {
@@ -69,7 +69,7 @@ describe('服务端接线：本机打开托管页时带上令牌', () => {
     })
     const { port } = await srv.start()
     const html = await (await fetch('http://127.0.0.1:' + port + '/')).text()
-    expect(html).not.toContain('__MC_ADMIN_TOKEN__')
+    expect(html).not.toContain('__PLUME_ADMIN_TOKEN__')
   })
 })
 

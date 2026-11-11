@@ -17,7 +17,7 @@
  *      这里**不碰管理令牌**：调试页是用户代码，管理令牌一旦落进它就等于全开。
  */
 export const SDK_JS_TEMPLATE = [
-"/* 由 mini-canvas 自动生成 —— 调试窗口的 CanvasUI 桥。 */",
+"/* 由 plume-canvas 自动生成 —— 调试窗口的 CanvasUI 桥。 */",
 "(function(){",
 "  var CONTEXT_URL = \"__CONTEXT_URL__\";",
 "  var seq = 0;",

@@ -9,10 +9,10 @@
  * 只测纯函数（resolveCommandTarget）看不出"when 有没有真的接上分发"，所以这里走真分发。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry, findCommandByKeys } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry, findCommandByKeys } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry } from '@plume-canvas/canvas-data'
 import { node3dPreviewPlugin, PANORAMA_NODE_TYPE } from '../node3dPreviewPlugin'
 import { isFullscreen, resetInteractSessions, resetViewToken } from '../panoramaSession'
 

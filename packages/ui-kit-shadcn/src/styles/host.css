@@ -2,7 +2,7 @@
  * 宿主接入用的 shadcn 样式。
  *
  * 使用方在自己的 Tailwind 入口里引入一次：
- *   @import "@mini-canvas/ui-kit-shadcn/styles.css";
+ *   @import "@plume-canvas/ui-kit-shadcn/styles.css";
  *   @source "../../ui-kit-shadcn/src";
  *
  * 颜色直接映射到项目现有的 `--ui-*` 变量，所以亮暗主题跟着 `<html class="dark">` 走，
@@ -174,7 +174,7 @@
  *
  * 背景：组件库预览页（src/App.vue）里那套「base color / theme / chart / font / heading / radius」
  * 原本只在预览页临时写 `<html>` 内联变量，真实应用里读不到。现在改成：
- *   - 主题插件把选择落成 `--mct-*` 变量（见 plugin-theme-canvas 的 themeBridge）；
+ *   - 主题插件把选择落成 `--plume-*` 变量（见 plugin-theme-canvas 的 themeBridge）；
  *   - 这里把组件库要用的形状 / 字体接过去，值缺省时回到项目原有 token。
  * 这样换主题插件、改设置面板，组件库跟着变，业务插件仍然只 import 组件、不 import 主题。
  */
@@ -183,7 +183,7 @@
  *
  * 实测（2026-11-02）：写 `@theme inline { --radius-4xl: … }` 不会让已编译的
  * `rounded-4xl` 读这个值 —— 工具类在构建期就把 rem 写死了，主题里改变量对它是空气。
- * 所以这里对组件本体写 `border-radius: var(--mct-radius, <项目 token>)`。
+ * 所以这里对组件本体写 `border-radius: var(--plume-radius, <项目 token>)`。
  *
  * **不能写 revert-layer**：这几条是无层样式，revert-layer 会一路退到浏览器默认，
  * 把组件自己的 rounded-3xl（下拉 24px）也丢掉 —— 实测下拉变成近乎方角，
@@ -207,29 +207,29 @@
  */
 [data-slot='button'] {
   /* 默认档 = 项目控件圆角（8px）；选了档位则全站统一成那个值 */
-  border-radius: var(--mct-radius, var(--radius-control, 8px));
+  border-radius: var(--plume-radius, var(--radius-control, 8px));
 }
 
 [data-slot='input'],
 [data-slot='select-trigger'],
 [data-slot='input-group'] {
-  border-radius: var(--mct-radius, var(--radius-control, 8px));
+  border-radius: var(--plume-radius, var(--radius-control, 8px));
 }
 
 /* 多行文本域封顶 20px：选「全圆」时单行控件是胶囊，高盒子拉成胶囊会畸形 */
 [data-slot='textarea'] {
-  border-radius: min(var(--mct-radius, var(--radius-control, 8px)), 20px);
+  border-radius: min(var(--plume-radius, var(--radius-control, 8px)), 20px);
 }
 
 [data-slot='card'] {
   /* 封顶 24px：主题选「全圆」时控件是胶囊，卡片不该跟着变成药丸 */
-  border-radius: min(var(--mct-radius, var(--radius-panel, 16px)), 24px);
+  border-radius: min(var(--plume-radius, var(--radius-panel, 16px)), 24px);
 }
 
 [data-slot='popover-content'],
 [data-slot='dropdown-menu-content'],
 [data-slot='select-content'] {
-  border-radius: min(var(--mct-radius, var(--radius-open, 12px)), 20px);
+  border-radius: min(var(--plume-radius, var(--radius-open, 12px)), 20px);
 }
 
 /*
@@ -258,10 +258,10 @@
 /*
  * 弹窗 / 弹出面板的圆角：默认跟随全局档位。
  * DialogContent 自带的 rounded-4xl 会把 32px 级别的圆角带进生成历史这类大面板，
- * 即使设置了 --mct-radius 也不生效。这里只覆盖需要统一的那一档。
+ * 即使设置了 --plume-radius 也不生效。这里只覆盖需要统一的那一档。
  */
 [data-slot='dialog-content'] {
-  border-radius: min(var(--mct-radius, var(--radius-panel, 16px)), 24px);
+  border-radius: min(var(--plume-radius, var(--radius-panel, 16px)), 24px);
   /*
    * 应用内弹窗的外层不留内边距（2026-11-02 用户实测：全局设置顶部、生成历史标题与卡片区都多了一圈）。
    *
@@ -299,7 +299,7 @@
  * 规则单独写一份，不动上面那条已经被其它弹窗依赖的契约。
  */
 [data-slot='alert-dialog-content'] {
-  border-radius: min(var(--mct-radius, var(--radius-panel, 16px)), 24px);
+  border-radius: min(var(--plume-radius, var(--radius-panel, 16px)), 24px);
   padding: 0 !important;
   gap: 0 !important;
   display: flex !important;
@@ -317,7 +317,7 @@
 [data-slot='dropdown-menu-sub-content'],
 [data-slot='context-menu-content'],
 [data-slot='menubar-content'] {
-  border-radius: min(var(--mct-radius, var(--radius-row, 10px)), 8px);
+  border-radius: min(var(--plume-radius, var(--radius-row, 10px)), 8px);
 }
 
 /*
@@ -388,22 +388,22 @@
 }
 
 /*
- * 字体：主题插件把选中的字体写到 --mct-font-*，这里让**全站**跟随，
+ * 字体：主题插件把选中的字体写到 --plume-font-*，这里让**全站**跟随，
  * 不只组件库这几类元素。用户口径（2026-11-02）：改字体只变组件库、页面其它地方没变。
  *
  * 为什么落在 html 而不是每个组件：外壳 / 画布 / 插件面板里大量元素是
  * font-family: inherit，只要根上换了，它们自动跟着换；而写死系统字体栈的几处
- * （CanvasShell / SettingsShell / BaseNode）已改成 var(--mct-font-body, 原栈)。
+ * （CanvasShell / SettingsShell / BaseNode）已改成 var(--plume-font-body, 原栈)。
  *
  * 兜底必须指回 Tailwind preflight 的 --default-font-family：写 inherit 会把
  * html 的字体退成浏览器默认的衬线体（没选字体时整站变样）。
  */
 html {
-  font-family: var(--mct-font-body, var(--default-font-family, system-ui, sans-serif));
+  font-family: var(--plume-font-body, var(--default-font-family, system-ui, sans-serif));
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--mct-font-heading, inherit);
+  font-family: var(--plume-font-heading, inherit);
 }
 
 /* 组件库自己的文字：跟主题插件选的正文 / 标题字体走（没选就用宿主字体栈） */
@@ -415,13 +415,13 @@ h1, h2, h3, h4, h5, h6 {
 [data-slot='popover-content'],
 [data-slot='dialog-content'],
 [data-slot='switch'] {
-  font-family: var(--mct-font-body, inherit);
+  font-family: var(--plume-font-body, inherit);
 }
 
 /* 设置页的二级小标题走标题字体 */
 .shadcn-settings-section__title,
 [data-slot='dialog-title'] {
-  font-family: var(--mct-font-heading, inherit);
+  font-family: var(--plume-font-heading, inherit);
 }
 
 /*
@@ -430,5 +430,5 @@ h1, h2, h3, h4, h5, h6 {
  * 于是这些标题的字体一直是浏览器缺省值。这里统一指到主题插件写的标题字体。
  */
 .cn-font-heading {
-  font-family: var(--mct-font-heading, inherit);
+  font-family: var(--plume-font-heading, inherit);
 }

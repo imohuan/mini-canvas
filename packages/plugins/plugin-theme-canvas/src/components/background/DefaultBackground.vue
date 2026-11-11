@@ -5,7 +5,7 @@
 // 画法：canvas 尺寸 = 宿主可视区(×DPR)，每帧用 transform 把可视区内的内容系格点直接绘出，
 //       圆点随 viewport(x,y,zoom) 平移缩放，与内容坐标对齐。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 // T05：背景不再直接 import VueFlow，改从渲染上下文取视口（同一份来源，宿主已 provide 的响应式 ref）。
 // 这样背景只依赖画布渲染契约，不绑 VueFlow 的组合式 API。

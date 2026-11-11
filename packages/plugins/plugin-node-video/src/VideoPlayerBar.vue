@@ -13,7 +13,7 @@
  */
 import { computed, ref } from 'vue'
 import { Play, Pause, Volume2, VolumeX } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
 

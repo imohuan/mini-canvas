@@ -14,7 +14,7 @@
  * 依赖方向：demo-kit → canvas-render（useCanvasRender 拿 ctx）→ canvas-data → kernel。
  */
 import { markRaw } from 'vue'
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import ThemeGalleryOverlay from './ThemeGalleryOverlay.vue'
 
 export function apply(ctx: Context): void {

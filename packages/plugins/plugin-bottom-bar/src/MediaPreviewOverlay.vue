@@ -12,7 +12,7 @@ defineOptions({ inheritAttrs: false })
  *   1. 把 mediaPreview 会话状态翻译成 item prop；
  *   2. 删除 = 断开「素材节点 → 发起节点」这条连线（这是底栏自己的业务语义）。
  */
-import { useCanvasRender } from "@mini-canvas/canvas-render"
+import { useCanvasRender } from "@plume-canvas/canvas-render"
 import {
   closePreview,
   currentPreview,
@@ -24,7 +24,7 @@ import {
 // MediaViewer 是主题注册件（useUiComponent("mediaViewer")，换主题时跟着换）——
 // 这样也避开 T08 依赖方向守卫：业务插件不得把默认主题当组件库 import。
 import { computed } from "vue"
-import { useUiComponent } from "@mini-canvas/canvas-render"
+import { useUiComponent } from "@plume-canvas/canvas-render"
 const MediaViewer = useUiComponent("mediaViewer")
 
 const { ctx, renderEdges } = useCanvasRender()

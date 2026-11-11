@@ -3,7 +3,7 @@
  *
  * 为什么单文件：cloud-server 的外挂加载器按「目录里一个 .js = 一个插件」扫描
  * （serverFramework/pluginLoader.ts），产物必须自包含（data: URL import 没有相对解析）。
- * @mini-canvas/kernel 打进产物（它 private，npm 装不到）；hono 保持 external
+ * @plume-canvas/kernel 打进产物（它 private，npm 装不到）；hono 保持 external
  * （宿主一定有；塞进来会双实例、类型不兼容）。
  */
 import { build } from 'esbuild'

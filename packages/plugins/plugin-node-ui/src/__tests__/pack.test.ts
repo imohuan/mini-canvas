@@ -12,7 +12,7 @@ import { buildNodePack, readNodePack, PACK_FORMAT } from '../task/pack'
 let dir = ''
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-pack-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-pack-'))
   await fs.writeFile(path.join(dir, 'scale.mjs'), 'export const run = (n) => n * 2\n')
   await fs.writeFile(path.join(dir, 'crop.mjs'), 'export const run = () => "crop"\n')
   // 机器上有、但节点**没有声明**的脚本 —— 绝不该被打进包

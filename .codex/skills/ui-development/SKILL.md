@@ -1,9 +1,9 @@
 ---
 name: ui-development
-description: 在 mini-canvas 里开发 UI、补 shadcn-vue 组件、把组件注册进默认主题、从插件上下文取件，以及统一使用 ScrollArea / Dialog / notify 的完整流程。适用于 packages/ui 和 packages/plugins 下的界面改动。
+description: 在 plume-canvas 里开发 UI、补 shadcn-vue 组件、把组件注册进默认主题、从插件上下文取件，以及统一使用 ScrollArea / Dialog / notify 的完整流程。适用于 packages/ui 和 packages/plugins 下的界面改动。
 ---
 
-# mini-canvas UI 开发
+# plume-canvas UI 开发
 
 这个项目所有界面都使用同一套 shadcn-vue 组件。组件只有一个来源：
 `packages/ui-kit-shadcn`。组件只在一个地方登记：默认主题插件
@@ -20,6 +20,8 @@ description: 在 mini-canvas 里开发 UI、补 shadcn-vue 组件、把组件注
 组件不存在 → 补进 `packages/ui-kit-shadcn`，再确认登记表自动带上它，然后用。
 
 想弹通知 → 用上下文里的 `notify`，不要 import `vue-sonner`，也不要自己挂 Toaster。
+
+要确认 / 要输入 / 要告知 → 用应用级 `feedback` 服务，**禁止** `window.confirm` / `alert` / `prompt`。
 
 容器会滚动 → 用组件库的 `ScrollArea`（`packages/ui` 里统一用现成的 `ScrollPane`）。
 
@@ -52,9 +54,9 @@ flowchart LR
 ```vue
 <!-- 文件：packages/plugins/my-plugin/src/Panel.vue -->
 <script setup lang="ts">
-import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContext, useUiComponent } from '@plume-canvas/canvas-render'
 import { ref } from 'vue'
-import type { NotifyContract } from '@mini-canvas/canvas-base'
+import type { NotifyContract } from '@plume-canvas/canvas-base'
 
 // 解构：名字与 shadcn-vue 的 import 完全一致，不带 shadcn 前缀。
 const {
@@ -222,6 +224,7 @@ pnpm -C packages/ui typecheck
 | 下拉选择 | `Select`、`SelectTrigger`、`SelectContent`、`SelectItem`、`SelectValue` |
 | 菜单 | `DropdownMenu`、`DropdownMenuTrigger`、`DropdownMenuContent`、`DropdownMenuItem`、`DropdownMenuSeparator` |
 | 弹窗 | `Dialog`、`DialogContent`、`DialogHeader`、`DialogTitle`、`DialogDescription`、`DialogFooter` |
+| 确认 / 告知 | `AlertDialog` 家族，由 `feedback` 服务统一驱动（业务侧不自己拼） |
 | 滚动容器 | `ScrollArea`、`ScrollBar` |
 | 开关 / 滑块 / 页签 / 标签 | `Switch` / `Slider` / `Tabs` / `Badge` |
 | 卡片 | `Card`、`CardHeader`、`CardTitle`、`CardContent`、`CardFooter` |
@@ -244,7 +247,7 @@ pnpm -C packages/ui typecheck
 `DropdownMenu`、`Select`、`Popover`、`Tooltip`、`ContextMenu`、`Combobox` 都读同一组变量。
 新增浮层不要再手写 `arrow` 或 `side-offset`，除非是在做这个配置适配本身。
 
-这组默认值可以被「设置 → 外观 → 浮层」覆盖；实现时统一读 `--mct-popup-*`，不要把数字再写进各调用点。
+这组默认值可以被「设置 → 外观 → 浮层」覆盖；实现时统一读 `--plume-popup-*`，不要把数字再写进各调用点。
 
 具体做法：
 
@@ -306,6 +309,98 @@ import ScrollPane from './ScrollPane.vue'
 
 弹窗内容长到会滚动时，正文用 `ScrollPane`，不要给面板加裸滚动。
 
+## 确认 / 输入 / 告知：一律用 feedback 服务
+
+**硬性规矩（2026-11-06 用户口径）**：`packages` 下禁止出现浏览器原生弹窗 ——
+`window.confirm`、`window.alert`、`window.prompt`，以及裸调用 `confirm()` / `alert()` / `prompt()`。
+包括删除、卸载、新建、改名、发布新增这些「先问一句」的地方，全部换成项目自己的组件。
+
+为什么不能各写一套：确认框在项目页、画布、设置面板里都要用，分别活在根 Provider 与
+画布 Provider 下；各拼一遍会出现两套观感（一个原生、一个自制），也容易漏掉取消语义。
+
+### 三层各管一件事
+
+| 层 | 位置 | 职责 |
+| --- | --- | --- |
+| 服务 | `packages/vue-render/src/contracts/feedback.ts` | 排队、Promise、`current` 响应式状态；不 import 组件 |
+| 渲染 | 默认主题里的 `FeedbackHost.vue` | 用 `AlertDialog`（确认 / 告知）与 `Dialog`（输入）画面板 |
+| 调用 | 业务组件 / 插件 | `ctx.get('feedback')`，不自己拼弹窗 |
+
+分支 `codex/app-shell-layering` 上，渲染件住在
+`packages/plugins/plugin-theme-components/src/components/ui/FeedbackHost.vue`，
+由主题插件 `ctx.provide('feedback', createFeedbackService())` 并登记 `ui.add('feedbackHost', …)`，
+再在 `packages/ui/src/Root.vue` 挂一次。
+
+### 怎么调用
+
+组件里（树内、树外都行，走 ctx）：
+
+```ts
+// 文件：packages/ui/src/components/ProjectsPage.vue
+import { useCanvasContextOrRender, type FeedbackService } from '@plume-canvas/canvas-render'
+
+const { ctx } = useCanvasContextOrRender()
+const feedback = ctx.get<FeedbackService>('feedback')
+
+async function removeProject(name: string): Promise<void> {
+  const ok = await feedback.confirm({
+    title: '删除项目',
+    description: '删除「' + name + '」及其全部画布？\n\n这个操作不能撤销。',
+    confirmText: '删除',
+    cancelText: '取消',
+    tone: 'destructive',
+  })
+  if (!ok) return
+  await reallyDelete()
+}
+```
+
+输入框（取代 `window.prompt`）：
+
+```ts
+const name = await feedback.prompt({
+  title: '新建项目',
+  label: '项目名字',
+  defaultValue: '未命名项目',
+  confirmText: '创建',
+  validate: (value) => (value.trim() ? '' : '项目名字不能为空'),
+})
+if (name === null) return // 用户取消
+```
+
+告知（取代 `window.alert`）：
+
+```ts
+await feedback.alert({ title: '导入失败', description: 'JSON 格式无效，请检查文件内容。' })
+```
+
+拿不到 ctx 的模块级单例（例如快捷键面板的 hook）用 `feedbackService()`；
+它是主题 `setFeedbackService()` 时登记的同一份服务，不会多出第二个实例。
+
+### 语义约定
+
+- 返回 Promise，调用方必须 `await`；`confirm` 取消返回 `false`，`prompt` 取消返回 `null`。
+- 同时来两条时**排队**，不能互相覆盖；覆盖会让前一个 Promise 永远悬空。
+- 删除 / 卸载用 `tone: 'destructive'`（红色按钮）；普通确认不传 tone。
+- 正文用空行分段（`\n\n`），宿主按段落渲染；不要塞一大段无换行的字。
+- 业务代码不自己 `Dialog` + 按钮拼确认框；重复的「标题 + 说明 + 取消/确认」都归宿主。
+
+### 宿主外观的一条坑
+
+组件库的 `host.css` 会把 `[data-slot='dialog-content']` 的 `padding` / `gap` 强制清成 0。
+统一宿主里必须**再包一层自己的内边距**（`FeedbackHost.vue` 的 `.fb-body`），
+否则标题、输入框、按钮会挤在一起（2026-11-06 真机截图）。
+危险按钮的颜色用 `var(--ui-danger)` + `var(--ui-primary-ink)`，不要写死 `#fff`，
+颜色规范测试会拦。
+
+### 已有回归测试
+
+- `packages/ui/src/__tests__/noNativeDialogs.test.ts`：全仓扫描原生弹窗，测试 / 注释 / 构建产物跳过。
+- `packages/vue-render/src/__tests__/feedback.test.ts`：排队、取消返回 false / null、`current` 响应式。
+
+新增页面或插件时，如果确实需要新的交互类型（例如多选确认），先补到 feedback 服务与宿主，
+不要在调用点另起一套。
+
 ## 通知：统一用上下文里的 notify
 
 ### 同屏只开一个浮层
@@ -324,7 +419,7 @@ import ScrollPane from './ScrollPane.vue'
 
 ```ts
 // 文件：packages/plugins/my-plugin/src/run.ts
-import type { Context, NotifyContract } from '@mini-canvas/canvas-base'
+import type { Context, NotifyContract } from '@plume-canvas/canvas-base'
 
 export function runGeneration(ctx: Context): void {
   const notify = ctx.get<NotifyContract>('notify')
@@ -366,7 +461,7 @@ notify?.success('已保存')
 
 ## 样式规矩
 
-- 颜色、圆角、字号只读 `--ui-*` / `--mct-*` token，不自造色值。写 UI 前读 `docs/design/ui-style-guide.md`。
+- 颜色、圆角、字号只读 `--ui-*` / `--plume-*` token，不自造色值。写 UI 前读 `docs/design/ui-style-guide.md`。
 - 用 Tailwind class 排布局；组件外观优先靠 `variant` / `size` prop，不靠覆盖内部样式。
 - `class` 只用于位置、大小、间距。不要用 `:deep()` 改公共组件的内部结构，除非是在改组件库本身。
 - 图标用 `lucide-vue-next`，按钮里图标尺寸交给 Button 的 `[&_svg]` 规则，别手写一大套。
@@ -375,13 +470,17 @@ notify?.success('已保存')
 
 1. 用 codegraph 查你改过的组件，确认取件名仍是源码导出名（`Button`、`DropdownMenuContent`），
    没有新写出 `shadcnButton` 这类前缀名。
-2. 渲染业务代码没有 import `@mini-canvas/ui-kit-shadcn`；只有默认主题、组件库自己和
+2. 渲染业务代码没有 import `@plume-canvas/ui-kit-shadcn`；只有默认主题、组件库自己和
    `packages/ui/src/sharedGlobals.ts`（给 UMD 插件暴露全局，属基础设施）可以 import。
 3. 滚动容器是 `ScrollArea` / `ScrollPane`。
 4. 通知走 `notify`，页面里没有第二个 Toaster。
-5. 运行：`pnpm -C packages/ui typecheck`、相关插件 test、组件库 typecheck。
-6. 用 @Chrome 实测页面，确认亮色 / 暗色、窄容器、空数据都正常。
-7. 浮层的可见间距符合规范：默认子菜单与父菜单相距 8px，箭头尖端到触发器相距 8px；如果改了全局浮层配置，以设置值为准。翻转后重新量一次，不能只检查默认方向。
+5. 页面里没有 `window.confirm` / `alert` / `prompt`，也没有裸 `confirm()` / `alert()` / `prompt()`；
+   删除、卸载、新建、改名、发布新增都先走 `feedback`。
+6. 运行：`pnpm -C packages/ui typecheck`、相关插件 test、组件库 typecheck；
+   有原生弹窗改动时再跑 `pnpm -C packages/ui exec vitest run src/__tests__/noNativeDialogs.test.ts`。
+7. 用 @Chrome 实测页面，确认亮色 / 暗色、窄容器、空数据都正常；
+   确认框至少实测「取消不执行」与「确认真的执行」两条。
+8. 浮层的可见间距符合规范：默认子菜单与父菜单相距 8px，箭头尖端到触发器相距 8px；如果改了全局浮层配置，以设置值为准。翻转后重新量一次，不能只检查默认方向。
 
 ## 去哪里对照源码
 
@@ -390,6 +489,10 @@ notify?.success('已保存')
 - 取件实现：`packages/canvas-render/src/contracts/uiCatalog.ts`
 - 现成滚动容器：`packages/ui/src/components/ScrollPane.vue`
 - 现成弹窗：`packages/ui/src/components/AppDialog.vue`
+- 统一确认 / 输入 / 告知：`packages/vue-render/src/contracts/feedback.ts`
+- 反馈面板宿主：`packages/plugins/plugin-theme-components/src/components/ui/FeedbackHost.vue`
+  （主工作区 `main` 上对应主题包名是 `plugin-theme-default`，以实际分支为准）
+- 原生弹窗扫描：`packages/ui/src/__tests__/noNativeDialogs.test.ts`
  - 浮层箭头与默认偏移：`packages/ui-kit-shadcn/src/components/ui/dropdown-menu/DropdownMenuArrow.vue`、`DropdownMenuContent.vue`、`DropdownMenuSubContent.vue`
 - 通知服务：`packages/plugins/plugin-theme-default/src/notifyService.ts`
 - 真实插件示例：`packages/plugins/plugin-manager/src/components/settings/PluginManagerPage.vue`

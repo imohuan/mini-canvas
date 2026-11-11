@@ -11,7 +11,7 @@
  *  - 拖出卡片就是自由节点，尺寸还原成进组前的值（存在 data._storyboardSize 里）。
  */
 import { reactive } from 'vue'
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import {
   decideSnap, normalizeSlots, readStoryboard, readStoryboardLayout, removeFromSlots, slotRects,
   slotIndexByOverlapOrCenter, placeDetachedFromBoard, type SlotRect, type SnapBoard,

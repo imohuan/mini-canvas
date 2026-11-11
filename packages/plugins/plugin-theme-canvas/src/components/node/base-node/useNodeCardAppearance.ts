@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import {
   CULLED_RENDERING_DEFAULT,
   culledPolicy,
@@ -9,7 +9,7 @@ import {
   resolveMultiRadio,
   applyMultiRadioChange,
   MULTI_RADIO_KEY_SET,
-} from '@mini-canvas/theme-contract'
+} from '@plume-canvas/theme-contract'
 
 type SettingsStoreLike = {
   get(key: string): unknown

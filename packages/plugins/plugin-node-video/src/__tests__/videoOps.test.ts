@@ -15,8 +15,8 @@ import {
   NodeStore,
   Selection,
   type CanvasEdge,
-} from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
+} from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import {
   captureFrameNode,
   clipVideo,

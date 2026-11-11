@@ -16,25 +16,25 @@ pnpm install                                  # 仓库根目录执行一次
 pnpm -C packages/cloud-server serve --trusted-origin http://localhost:5288
 ```
 
-看到「mini-canvas-cloud 已启动」就起来了。后台同时托管画布界面，手动打开
+看到「plume-canvas 已启动」就起来了。后台同时托管画布界面，手动打开
 `http://127.0.0.1:8865/`（默认不自动弹浏览器）。
 
 `--trusted-origin` 不能省：后台默认只信任自己的 :8865，开发页（:5288）的保存 /
 删除等写操作会被来源边界挡下，返回 `403 请求来源不受信任`。启动日志会打印
 「额外 Origin:」，可以据此确认有没有写进去。换成别的开发端口（例如 :5289）时，
-把这条改成对应地址，或设环境变量 `MINI_CANVAS_TRUSTED_ORIGINS=http://localhost:5289`。
+把这条改成对应地址，或设环境变量 `PLUME_TRUSTED_ORIGINS=http://localhost:5289`。
 
 ### 端口被占用
 
 CLI 会**自动往后找**下一个可用端口（8866、8867…），以启动时打印的地址为准。
-想钉死端口：`npx mini-canvas-cloud serve -p 8865`。
+想钉死端口：`npx plume-canvas serve -p 8865`。
 
 ### 数据落在哪
 
-默认在仓库根的 `.mini-canvas/`（可用 `-d` 换）:
+默认在仓库根的 `.plume/`（可用 `-d` 换）:
 
 ```
-.mini-canvas/
+.plume/
 ├── canvases/         画布本体（节点+边+视口）
 ├── assets/           资源库（上传的图/视频字节）
 ├── kv/               小数据（设置、快捷键映射）
@@ -60,7 +60,7 @@ pnpm -C packages/ui dev                       # :5288，画布界面热更新
 | --- | --- |
 | `pnpm -C packages/cloud-server serve --trusted-origin http://localhost:5288` | 起后台 + 画布，并放行开发页（**日常就用这个**） |
 | `pnpm -C packages/ui dev` | 前端热更新（改 ui 时用） |
-| `npx mini-canvas-cloud list-tools` | 列出 MCP 暴露的工具 |
+| `npx plume-canvas list-tools` | 列出 MCP 暴露的工具 |
 | `pnpm -C packages/cloud-server test` | 后台测试 |
 | `pnpm -C packages/ui test` | 前端应用测试 |
 

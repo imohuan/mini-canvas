@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
+import { AgentSessionStore } from '@plume-canvas/plugin-agent/server/agent/sessionStore.js'
 
 let dir: string
 let store: AgentSessionStore

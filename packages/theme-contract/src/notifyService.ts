@@ -8,7 +8,7 @@
  * Toaster 由宿主从 ui 目录取 `Toaster` 挂一次；这里只负责把调用转给 vue-sonner。
  */
 import { toast, type ExternalToast } from 'vue-sonner'
-import type { NotifyContract, NotifyOptions } from '@mini-canvas/canvas-data'
+import type { NotifyContract, NotifyOptions } from '@plume-canvas/canvas-data'
 
 /** 把项目选项转成 vue-sonner 的选项；undefined 保持 undefined，免得覆盖底层默认。 */
 function toSonnerOptions(options?: NotifyOptions): ExternalToast | undefined {

@@ -10,7 +10,7 @@
  *
  * 纯逻辑、零 Vue（.vue 面板经同包 shortcutState.getShortcutManager() 拿到本实例调用）；可单测。
  */
-import type { CommandService } from '@mini-canvas/kernel'
+import type { CommandService } from '@plume-canvas/kernel'
 import { normalizeKeyForPlatform } from './keyLabels'
 
 /** 帮助列表一条（v1 ShortcutHelpItem 形状：command/keys/group/priority；多 keys 命令拆成多条） */

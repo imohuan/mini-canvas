@@ -2,7 +2,7 @@
  * 步骤 4 宿主侧验收 —— canvas-base 是核心插件（决策 1）+ 15 行装配已搬走。
  *
  * 锁三件事：
- * 1. **搬窝真搬走了**：createMiniCanvasHost.ts 里的 `ctx.inject` 只剩 view / canvas /
+ * 1. **搬窝真搬走了**：createPlumeHost.ts 里的 `ctx.inject` 只剩 view / canvas /
  *    nodeToolbar 三个真属于渲染层的服务；
  * 2. **对外契约一个没变**：CanvasHostHandle 字段、api 面、默认清单、持久化恢复行为照旧；
  * 3. **四条 manager 路径各自处理"被拦"**（决策 1 表格逐条）。
@@ -10,14 +10,14 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
-import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter, CANVAS_BASE_PLUGIN_NAME } from '@mini-canvas/canvas-data'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import type { PluginModule } from '@mini-canvas/kernel'
+import { createPlumeHost } from '../createPlumeHost'
+import { MemoryStorageAdapter, CANVAS_BASE_PLUGIN_NAME } from '@plume-canvas/canvas-data'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
+import type { PluginModule } from '@plume-canvas/kernel'
 
 describe('步骤 4 完成标准① —— 宿主只注入渲染层服务', () => {
-  it('createMiniCanvasHost.ts 只剩 view / canvas / nodeToolbar', () => {
-    const src = readFileSync(fileURLToPath(new URL('../createMiniCanvasHost.ts', import.meta.url)), 'utf8')
+  it('createPlumeHost.ts 只剩 view / canvas / nodeToolbar', () => {
+    const src = readFileSync(fileURLToPath(new URL('../createPlumeHost.ts', import.meta.url)), 'utf8')
     // 只看代码行（注释里的说明文字不算"装配点"）
     const code = src
       .split('\n')
@@ -33,7 +33,7 @@ describe('步骤 4 完成标准① —— 宿主只注入渲染层服务', () =>
   })
 
   it('基础七名与渲染层辅助服务都取得到（业务插件照样可用）', async () => {
-    const { host } = await createMiniCanvasHost({
+    const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: [nodeTextPlugin],
     })
@@ -57,7 +57,7 @@ describe('步骤 4 完成标准① —— 宿主只注入渲染层服务', () =>
 describe('步骤 4 完成标准② —— uninstallPlugin(canvas-base) 返回 false 且画布功能不受影响', () => {
   it('拒卸后建节点 / 撤销 / 落盘仍然照常（服务一个没少）', async () => {
     const storage = new MemoryStorageAdapter()
-    const { host } = await createMiniCanvasHost({
+    const { host } = await createPlumeHost({
       adapter: storage,
       coldPlugins: [nodeTextPlugin],
     })
@@ -81,7 +81,7 @@ describe('步骤 4 完成标准② —— uninstallPlugin(canvas-base) 返回 fa
 
 describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、pluginManager.list', () => {
   it('api.listPlugins() 默认仍是空清单（canvas-base 是环境不是清单项）', async () => {
-    const { host, api, manager } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { host, api, manager } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     expect(api.listPlugins()).toEqual([])
     expect(manager.list()).toEqual([])
     // 内核层看得见（诊断用），只是应用层门面不列
@@ -92,7 +92,7 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
   })
 
   it('CanvasHostHandle 的字段一个不少（新入口 view / canvas / manager / doc 全在）', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     for (const key of [
       'ctx',
       'manager',
@@ -121,7 +121,7 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
   })
 
   it('业务插件的装/卸/热重载照常（守卫不误伤）', async () => {
-    const { host, api } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { host, api } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     const demo: PluginModule = { name: 'demo', apply(c) { c.inject('demoSvc', { v: 1 }) } }
     api.installPlugin(demo)
     expect(api.listPlugins()).toEqual(['demo'])
@@ -134,7 +134,7 @@ describe('步骤 4 对外契约不变 —— 默认清单、handle 字段、plug
 
 describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
   it('manager.uninstall(core) 明确抛错（含 not-found/not-started 也抛），且不动配置快照', async () => {
-    const { manager, host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { manager, host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     expect(() => manager.uninstall(CANVAS_BASE_PLUGIN_NAME)).toThrow(/\(core\) during uninstall/)
     // not-found 也必须带原因抛（严格审查 H2：三态不压扁成二值静默）
     expect(() => manager.uninstall('ghost-plugin')).toThrow(/\(not-found\) during uninstall/)
@@ -149,14 +149,14 @@ describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
   })
 
   it('manager.reload(core) 无 next：抛错而不是静默删配置', async () => {
-    const { manager, host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { manager, host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     await expect(manager.reload(CANVAS_BASE_PLUGIN_NAME)).rejects.toThrow(/\(core\) during reload/)
     expect(host.ctx.fiber(CANVAS_BASE_PLUGIN_NAME)?.stateName).toBe('active')
     host.stop()
   })
 
   it('manager.reload(core, next)：抛"核心插件不可热替换"，不是重名错误（旧硬 bug）', async () => {
-    const { manager, host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { manager, host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     const next: PluginModule = { name: CANVAS_BASE_PLUGIN_NAME, apply() {} }
     await expect(manager.reload(CANVAS_BASE_PLUGIN_NAME, next)).rejects.toThrow(/\(core\) during reload/)
     // 旧实现会"卸失败后继续 installPlugin" → 抛 [core] Duplicate plugin name；此处必须不是它
@@ -168,7 +168,7 @@ describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
   })
 
   it('manager.install(同名实现) 覆盖核心插件：抛"不能被同名实现覆盖"', async () => {
-    const { manager, host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { manager, host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     await expect(
       manager.install({ name: CANVAS_BASE_PLUGIN_NAME, apply() {} }),
     ).rejects.toThrow(/cannot be replaced by another implementation of the same name/)
@@ -177,7 +177,7 @@ describe('决策 1 表格：manager 四条路径各自处理"被拦"', () => {
   })
 
   it('api.reloadPlugin(core) 同一条虫也不留：明确抛错而不是"卸失败还继续装"撞重名', async () => {
-    const { api, host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { api, host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     expect(() => api.reloadPlugin(CANVAS_BASE_PLUGIN_NAME)).toThrow(/core plugin cannot be uninstalled/)
     expect(() => api.reloadPlugin(CANVAS_BASE_PLUGIN_NAME, { name: CANVAS_BASE_PLUGIN_NAME, apply() {} })).toThrow(
       /core plugin cannot be uninstalled/,

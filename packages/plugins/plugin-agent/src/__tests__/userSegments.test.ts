@@ -7,7 +7,8 @@
 import { describe, expect, it } from 'vitest'
 import { parseUserSegments, segClickable, segTitle, assetRefInputOf } from '../model/userSegments'
 
-const tags = (text: string) => parseUserSegments(text).filter((s) => s.type === 'tag')
+const tags = (text: string, lookup?: Parameters<typeof parseUserSegments>[1]) =>
+  parseUserSegments(text, lookup).filter((s) => s.type === 'tag')
 
 describe('parseUserSegments', () => {
   it('没有引用标记时就是单个文字片段', () => {
@@ -92,5 +93,38 @@ describe('点标签的判定', () => {
       .toEqual({ name: 'a.png', path: '/a.png', ext: 'png' })
     expect(assetRefInputOf(tags('<ref type="asset" name="F" folderId="f1" />')[0]))
       .toEqual({ name: 'F', folderId: 'f1' })
+  })
+})
+
+/**
+ * 气泡标签的图标（用户 2026-11-11）：解析时用当前画布回查节点真实图标。
+ * 拿不到真实图标就按类型兜底，最后才用默认图标。
+ */
+describe('气泡标签图标：真实图标 → 类型 → 默认', () => {
+  const audioRef = '<ref type="node" name="音频 1" canvasId="c" nodeId="a1" />'
+
+  it('第一轮：节点类型注册了图标就用它', () => {
+    const [t] = tags(audioRef, { node: () => ({ kind: 'audio', icon: '<svg data-own="audio"></svg>' }) })
+    expect(t.icon).toContain('data-own="audio"')
+  })
+
+  it('第二轮：没有真实图标时按类型（音频不再画通用方块）', () => {
+    const [t] = tags(audioRef, { node: () => ({ kind: 'audio' }) })
+    expect(t.icon).toContain('M9 18V6l10-2v12')
+  })
+
+  it('第三轮：节点已删 / 类型也没有才用默认图标', () => {
+    const [t] = tags(audioRef, { node: () => undefined })
+    expect(t.icon).toContain('<rect x="3" y="3" width="18" height="18" rx="2"/>')
+  })
+
+  /**
+   * 标记里自带的内容类型（kind="audio"）优先于清单：
+   * 重开会话 / 节点已删时，气泡标签仍能画对图标（用户 2026-11-11）。
+   */
+  it('重开会话：标记里的 kind 也能画对图标', () => {
+    const [t] = tags('<ref type="node" name="音频 1" canvasId="c" nodeId="a1" kind="audio" />', { node: () => undefined })
+    expect(t.kind).toBe('audio')
+    expect(t.icon).toContain('M9 18V6l10-2v12')
   })
 })

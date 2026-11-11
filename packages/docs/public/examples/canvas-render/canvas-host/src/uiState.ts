@@ -2,7 +2,7 @@
 // 格式：TypeScript 模块（导出响应式对象）
 // 位置：外观参数的唯一住址；交给 CanvasHost 后改属性即实时生效
 import { reactive } from 'vue'
-import type { CanvasParams, EdgeVisual } from '@mini-canvas/canvas-render'
+import type { CanvasParams, EdgeVisual } from '@plume-canvas/canvas-render'
 
 // ① 边外观：Partial 即可，没给的字段用宿主默认值
 export const edge: Partial<EdgeVisual> = reactive({

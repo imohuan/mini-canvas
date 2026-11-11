@@ -5,7 +5,7 @@
  * 页面要"实时反映当前值"，就得订阅它、拿一个本地 tick 驱动重渲染。
  */
 import { onBeforeUnmount, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import { DEFAULTS, type CursorEffectConfig } from './catalog'
 
 /** 内核 settings 的最小读写面 */

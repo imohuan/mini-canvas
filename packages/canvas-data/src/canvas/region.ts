@@ -14,7 +14,7 @@
  * 同一条目经两条写路径（contribute 糖 / attach 场）出现时以**注册 id 去重**，NodeRegistry 侧优先 ——
  * 两者同 id 的条目是同一次注册，重复渲染会让同一区域组件挂两份。
  */
-import type { Registry } from '@mini-canvas/kernel'
+import type { Registry } from '@plume-canvas/kernel'
 import type { NodeRegistry } from './registry/nodeRegistry'
 import type { NodeSegmentEntry } from './registry/nodeRenderer'
 

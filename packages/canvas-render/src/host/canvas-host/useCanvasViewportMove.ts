@@ -1,7 +1,7 @@
 import { beginViewportMove, endViewportMove } from '../../contracts/interactionContext'
 import { RenderEvents } from '../renderEvents'
 import type { CanvasInteractionState } from '../../contracts/interactionContext'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 import type { CanvasSurfaceHandle } from './types'
 
 export function useCanvasViewportMove(opts: {

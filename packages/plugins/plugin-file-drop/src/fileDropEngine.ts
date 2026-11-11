@@ -46,7 +46,7 @@ import {
   DEFAULT_VIDEO_CARD_LIMITS,
   fitMediaCard,
   type MediaCardLimits,
-} from '@mini-canvas/canvas-base'
+} from '@plume-canvas/canvas-base'
 
 /** image 节点没有真实尺寸时的默认卡片（与 type defaultSize 不同，这是"尺寸未知"的兜底） */
 export const DEFAULT_IMAGE_SIZE = { cardWidth: 420, cardHeight: 300 }

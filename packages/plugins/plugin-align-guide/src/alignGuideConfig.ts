@@ -12,7 +12,7 @@
  * 故本插件 key 加 alignGuide 前缀 —— 不能叫裸 enabled，那个已被 plugin-edge-cutting 占用。
  * 独立成文件避免 alignGuidePlugin ↔ 浮层组件循环 import。
  */
-import type { ConfigSchema, InferConfig, Context } from '@mini-canvas/canvas-base'
+import type { ConfigSchema, InferConfig, Context } from '@plume-canvas/canvas-base'
 
 /** 模块级 Config schema（P4：随插件模块导出，内核装配时校验 + 补默认 + 登记设置面板） */
 export const Config = {

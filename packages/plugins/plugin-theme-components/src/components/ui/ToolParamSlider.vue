@@ -15,7 +15,7 @@
  * （黑白两套主题各有一格），与右键菜单「只用灰阶 + 黑/白」同一口径。
  */
 import { computed } from 'vue'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import { Minus, Plus } from 'lucide-vue-next'
 import ToolParamHint from './ToolParamHint.vue'
 import {
@@ -25,7 +25,7 @@ import {
   NumberFieldIncrement,
   NumberFieldInput,
   Slider,
-} from '@mini-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit-shadcn'
 
 const props = withDefaults(
   defineProps<{

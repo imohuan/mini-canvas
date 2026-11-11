@@ -8,7 +8,7 @@
  *  3. 订阅 settings → 改设置立刻落 DOM，且不误触别的键。
  */
 import { describe, it, expect } from 'vitest'
-import { SettingsStore } from '@mini-canvas/kernel'
+import { SettingsStore } from '@plume-canvas/kernel'
 import {
   THEME_MODE_KEY,
   THEME_MODE_GROUP,

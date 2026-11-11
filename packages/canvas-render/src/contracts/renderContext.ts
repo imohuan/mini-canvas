@@ -23,9 +23,9 @@
  * - 仅限 CanvasSurface(渲染子树) 内调用；不在宿主内会抛清晰错误。
  */
 import { inject, type InjectionKey, type Ref } from 'vue'
-import type { Context } from '@mini-canvas/canvas-data'
-import type { NodeRegistry } from '@mini-canvas/canvas-data'
-import type { CanvasHostHandle } from '../host/createMiniCanvasHost'
+import type { Context } from '@plume-canvas/canvas-data'
+import type { NodeRegistry } from '@plume-canvas/canvas-data'
+import type { CanvasHostHandle } from '../host/createPlumeHost'
 import type { NodeWrite } from './nodeRegistryKey'
 import type { CanvasParams } from './canvasParamKey'
 import type { EdgeVisual, EdgeSelection } from './edgeContext'
@@ -89,7 +89,7 @@ export interface CanvasRenderContext {
  * 单令牌：CanvasSurface provide、消费方经 useCanvasRender() 取。
  *
  * 用 Symbol.for 固定名而不是裸 Symbol：通用件（uiCatalog / SlotComposer / SettingsHost）
- * 已搬进 @mini-canvas/vue-render，那里按同一个名字回退读取渲染上下文，
+ * 已搬进 @plume-canvas/vue-render，那里按同一个名字回退读取渲染上下文，
  * 不允许反向 import 本包。裸 Symbol 会让两边各建一个键，永远对不上。
  */
 export const RENDER_CONTEXT_KEY: InjectionKey<CanvasRenderContext> = Symbol.for(

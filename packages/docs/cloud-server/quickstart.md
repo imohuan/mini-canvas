@@ -23,13 +23,13 @@ pnpm -C packages/cloud-server serve        # ① 仓库里开发用这条
 如果你不是在仓库里，而是把工具装成了 npm 包，等价命令是：
 
 ```bash
-npx mini-canvas-cloud serve                # ② npm 包形态，一样的效果
+npx plume-canvas serve                # ② npm 包形态，一样的效果
 ```
 
 服务启动后会打印类似这样的一段（真实输出里的端口、路径以你机器为准）：
 
 ```text
-  mini-canvas-cloud 已启动
+  plume-canvas 已启动
 
   画布   http://127.0.0.1:8865/
   数据   <数据根目录>
@@ -37,7 +37,7 @@ npx mini-canvas-cloud serve                # ② npm 包形态，一样的效果
 ```
 
 - ① `serve` 脚本跑的是 `node ./dist/cli.js serve`（见 `packages/cloud-server/package.json` 的 scripts 段），先把仓库跑起来。
-- ② `mini-canvas-cloud` 是这个包对外发布的命令名（package.json 的 bin 段），两种形态行为完全一致。
+- ② `plume-canvas` 是这个包对外发布的命令名（package.json 的 bin 段），两种形态行为完全一致。
 
 ### 第 2 步 · 认识启动日志里的三行
 
@@ -52,12 +52,12 @@ npx mini-canvas-cloud serve                # ② npm 包形态，一样的效果
 | 参数 | 缺省值 | 干什么 |
 | --- | --- | --- |
 | `-p, --port` | `8865` | 监听端口；被占用时自动往后找（你显式写了 `-p` 就不找，直接报错） |
-| `-d, --dir` | `./.mini-canvas/` | 数据根目录，画布 / 资源 / 插件数据都落在它下面 |
+| `-d, --dir` | `./.plume/` | 数据根目录，画布 / 资源 / 插件数据都落在它下面 |
 
 比如想换个数据目录：
 
 ```bash
-npx mini-canvas-cloud serve -d D:/my-canvas-data --no-open
+npx plume-canvas serve -d D:/my-canvas-data --no-open
 ```
 
 ### 第 3 步 · 发出第一个请求
@@ -90,7 +90,7 @@ curl http://127.0.0.1:8865/api/showcase/hello
 仓库自带的样板插件 plugin-showcase 装上后，会多出一条 `GET /api/showcase/hello`。装法二选一：
 
 1. **浏览器里点**：打开画布网页 → 插件管理 → 找到「插件展示」→ 安装（后台半需要你确认一次「以服务端权限运行」——这是安全设计，不是卡你）；
-2. **NPM 装**：同样在插件管理里，搜 `mini-canvas-plugin-showcase` 装上。
+2. **NPM 装**：同样在插件管理里，搜 `@plume-canvas/plugin-showcase` 装上。
 
 装完立刻再发一次 curl（不用重启服务，路由热装即时生效）：
 
@@ -103,7 +103,7 @@ curl http://127.0.0.1:8865/api/showcase/hello
 ### 第 5 步（可选）· 看 MCP 暴露了什么工具
 
 ```bash
-npx mini-canvas-cloud list-tools
+npx plume-canvas list-tools
 ```
 
 它会**不启服务**、直接打印 MCP 暴露的工具清单（一条一行）。配置 AI 客户端前，先用它看看后台给 AI 开了哪些能力。
@@ -130,7 +130,7 @@ npx mini-canvas-cloud list-tools
 | 这篇里的说法 | 真实文件 | 真实行为 |
 | --- | --- | --- |
 | `pnpm serve` 跑 cli.js | `packages/cloud-server/package.json` | `"serve": "node ./dist/cli.js serve"` |
-| `npx mini-canvas-cloud serve` | 同上 bin 段 | `"bin": { "mini-canvas-cloud": "./dist/cli.js" }` |
+| `npx plume-canvas serve` | 同上 bin 段 | `"bin": { "plume-canvas": "./dist/cli.js" }` |
 | 端口被占用自动后移 | `packages/cloud-server/src/cli.ts`（`startWithPortFallback`） | 最多往后试 10 个端口；你显式写了 `-p` 就只试那一个 |
 | `-d` 数据根、启动日志打印访问地址与数据落点 | `cli.ts` `main()` | 解析参数 → 起 `createCloudServer` → 逐行打印 `info.url` 与 `srv.paths.*` |
 | `list-tools` 子命令 | `cli.ts` `parseArgs()` | 不启服务，直接 `listTools()` 打印 MCP 工具名与描述后退出 |

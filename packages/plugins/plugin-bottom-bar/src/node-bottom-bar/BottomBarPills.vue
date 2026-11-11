@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { ICON_PLUS, ICON_TAG } from './icons'
 
 defineProps<{

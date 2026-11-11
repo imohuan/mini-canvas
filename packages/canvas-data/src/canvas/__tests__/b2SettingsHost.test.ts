@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { ThemeRegistry } from '../registry/themeRegistry'
-import type { PluginScope, PluginModule } from '@mini-canvas/kernel'
+import type { PluginScope, PluginModule } from '@plume-canvas/kernel'
 
 /**
  * 目标 B2 验收级宿主测试（无 Vue，纯内核）：

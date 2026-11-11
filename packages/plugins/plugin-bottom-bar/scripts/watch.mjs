@@ -24,19 +24,19 @@ const PKG_ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SRC_DIR = join(PKG_ROOT, 'src')
 const BACKEND = (process.argv.includes('--backend')
   ? process.argv[process.argv.indexOf('--backend') + 1]
-  : process.env.MINI_CANVAS_BACKEND) || 'http://127.0.0.1:8865'
+  : process.env.PLUME_BACKEND) || 'http://127.0.0.1:8865'
 
 /** 前端产物地址覆盖（产物不在后台插件目录里时用） */
 const FRONT_OVERRIDE = process.argv.includes('--front')
   ? process.argv[process.argv.indexOf('--front') + 1]
-  : process.env.MINI_CANVAS_PLUGIN_FRONT
+  : process.env.PLUME_PLUGIN_FRONT
 /** 后台产物路径覆盖（跨机器调试时不要带） */
 const SERVER_OVERRIDE = process.argv.includes('--server')
   ? process.argv[process.argv.indexOf('--server') + 1]
-  : process.env.MINI_CANVAS_PLUGIN_SERVER
+  : process.env.PLUME_PLUGIN_SERVER
 
 const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf8'))
-const PLUGIN_NAME = pkg.miniCanvas?.pluginName || String(pkg.name || '').replace(/^@[^/]+\//, '')
+const PLUGIN_NAME = pkg.plume?.pluginName || String(pkg.name || '').replace(/^@[^/]+\//, '')
 const PKG_DIR = PKG_ROOT.split(/[\\/]/).filter(Boolean).pop() || PLUGIN_NAME
 const KV_URL = BACKEND + '/api/kv/config/plugin-watch:' + encodeURIComponent(PLUGIN_NAME)
 const HEARTBEAT_URL = BACKEND + '/api/plugin-presence/heartbeat'
@@ -93,7 +93,7 @@ function beat(state, message) {
         console.error(
           '[watch] 心跳被后台拒绝（HTTP ' + res.status + '）：' +
             (res.status === 404
-              ? '后台没开启调试在场通道。启动后台前设置 $env:MINI_CANVAS_DEBUG_PRESENCE=1 并重启。'
+              ? '后台没开启调试在场通道。启动后台前设置 $env:PLUME_DEBUG_PRESENCE=1 并重启。'
               : '后台返回异常。'),
         )
       }

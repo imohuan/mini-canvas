@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from 'vitest'
-import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@mini-canvas/canvas-base'
+import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@plume-canvas/canvas-base'
 import { CloudApi } from '../api'
 import type { FetchLike } from '../apiTypes'
 
@@ -252,7 +252,7 @@ describe('实时通道', () => {
   /**
    * 复用宿主的**共享连接** —— 用户报的"后台怎么这么卡"的直接原因锁。
    *
-   * 背景：宿主（@mini-canvas/ui）把一条 /api/kv/events 共享给全应用。本插件是独立
+   * 背景：宿主（@plume-canvas/ui）把一条 /api/kv/events 共享给全应用。本插件是独立
    * 打包的外部 bundle，拿不到宿主的模块导出，所以约定走全局键取共享订阅。
    * 不复用它就会多一条**永不关闭**的长连接；浏览器对单个域名的并发上限是 6 条，
    * 占满之后页面里所有普通请求只能排队（用户看到"请求停在待处理"）。
@@ -261,7 +261,7 @@ describe('实时通道', () => {
    */
   it('有宿主共享连接时复用它，不再自己开一条（避免占满浏览器并发额度）', () => {
     const bag = globalThis as unknown as Record<string, unknown>
-    const key = '__miniCanvasKvEvents'
+    const key = '__plumeKvEvents'
     const prev = bag[key]
     try {
       const subs: Array<{ path: string; fn: (e: { type: string; key: string }) => void }> = []
@@ -291,7 +291,7 @@ describe('实时通道', () => {
 
   it('宿主没挂共享连接时退回自己开（别的宿主 / 单测照样能跑）', () => {
     const bag = globalThis as unknown as Record<string, unknown>
-    const key = '__miniCanvasKvEvents'
+    const key = '__plumeKvEvents'
     const prev = bag[key]
     delete bag[key]
     try {

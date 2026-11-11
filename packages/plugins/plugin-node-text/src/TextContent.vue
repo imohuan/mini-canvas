@@ -32,7 +32,7 @@
  * 经 onChange 订阅实时生效；读不到时回落默认（0.18 / 0.5）。
  */
 import { ref, computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 import type { TextNodeService } from './nodeTextPlugin'
 import { isSkeletonMode, resolveLodThresholds, resolveTextContentSpec } from './textViewMode'
 import { beginEdit, endEdit, isTextEditing } from './textEditSession'

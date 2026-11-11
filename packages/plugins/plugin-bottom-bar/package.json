@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-bottom-bar",
+  "name": "@plume-canvas/plugin-bottom-bar",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "底部状态栏",
     "description": "节点底部状态栏：可替换底栏 + 注册式动作 + 任务进度",
     "pluginName": "bottom-bar",
@@ -25,11 +25,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/bar-contract": "workspace:*",
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
+    "@plume-canvas/bar-contract": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "prosemirror-editor-bundle": "workspace:*",
     "vue-draggable-plus": "^0.6.1"
   },
@@ -44,6 +44,6 @@
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34",
-    "@mini-canvas/plugin-theme-components": "workspace:*"
+    "@plume-canvas/plugin-theme-components": "workspace:*"
   }
 }

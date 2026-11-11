@@ -9,7 +9,7 @@
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { apiUrl, resolveApiBase, showcaseHeaders } from '../apiBase'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 
 interface Endpoint {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE'
@@ -170,11 +170,11 @@ const startedAt = computed(() => {
 onMounted(async () => {
   // ① 前端自测（**真检测**，不是写死 true —— 审查指出旧版两盏灯是假的）：
   //  - scriptLoaded：UMD 全局对象挂上了没（挂上说明当初的 <script> 真的执行了）
-  //  - globalPresent：宿主全局（Vue / MiniCanvasRender）在不在（缺了插件根本跑不到这里）
+  //  - globalPresent：宿主全局（Vue / PlumeRender）在不在（缺了插件根本跑不到这里）
   //  - mounted：面板挂载（进 onMounted 本身就是证据；这里再校验一次 DOM 真的渲染了）
   const g = window as unknown as Record<string, unknown>
-  selfTest.scriptLoaded = typeof g.MiniCanvasPluginShowcase !== 'undefined'
-  selfTest.globalPresent = typeof g.MiniCanvasRender !== 'undefined' || typeof g.MiniCanvasBase !== 'undefined'
+  selfTest.scriptLoaded = typeof g.PlumePluginShowcase !== 'undefined'
+  selfTest.globalPresent = typeof g.PlumeRender !== 'undefined' || typeof g.PlumeBase !== 'undefined'
   // 挂载自测要等一帧（rootEl 的 ref 绑定与 DOM 插入发生在渲染后）
   await nextTick()
   selfTest.mounted = rootEl.value !== null && document.contains(rootEl.value)

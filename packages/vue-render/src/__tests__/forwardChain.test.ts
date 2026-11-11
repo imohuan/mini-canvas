@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { defineComponent, h, type InjectionKey } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { createSSRApp } from 'vue'
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { useCanvasContextOrRender } from '../context'
 
 /** 注入键在本包是 Symbol.for 的名字；这里是照名字取同一个键（与 context.ts 同源）。 */
@@ -17,7 +17,7 @@ const RENDER_KEY = Symbol.for('canvas-v2-render-context') as unknown as Injectio
   ctx: Context
   host?: unknown
 }>
-const BASE_KEY = Symbol.for('mini-canvas-context') as unknown as InjectionKey<{ ctx: Context }>
+const BASE_KEY = Symbol.for('plume-canvas-context') as unknown as InjectionKey<{ ctx: Context }>
 
 function renderProbe(provideRender: boolean): Promise<string> {
   const ctx = new Context()

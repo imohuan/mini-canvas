@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-flow-badge",
+  "name": "@plume-canvas/plugin-flow-badge",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：流光徽章",
     "description": "SVG 表现属性吃不到 var()，用 useThemeColor 取色板当前值",
     "pluginName": "flow-badge",
@@ -19,9 +19,9 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

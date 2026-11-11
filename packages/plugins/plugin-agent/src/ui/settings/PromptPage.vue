@@ -9,10 +9,10 @@
  * 数据仍住后台 KV；整包写回，避免半个列表。
  */
 import { computed, onMounted, ref } from 'vue'
-import { useCanvasContextOrRender } from '@mini-canvas/canvas-render'
-import type { FeedbackService } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
+import type { FeedbackService } from '@plume-canvas/canvas-render'
 import { AlertTriangle, Check, Plus, RotateCcw, Save, Trash2, Wrench } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import type { PromptPreset } from '../../service/agentService.js'
 import SettingsDetailHeader from './components/SettingsDetailHeader.vue'

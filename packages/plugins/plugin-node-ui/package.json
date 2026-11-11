@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-node-ui",
+  "name": "@plume-canvas/plugin-node-ui",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "可视化节点",
     "description": "一块空白画布：内容由 Agent 生成（HTML 就地渲染，可调画布接口）",
     "pluginName": "node-ui",
@@ -29,10 +29,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
@@ -46,6 +46,6 @@
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34",
-    "@mini-canvas/plugin-theme-components": "workspace:*"
+    "@plume-canvas/plugin-theme-components": "workspace:*"
   }
 }

@@ -1,7 +1,7 @@
 /**
  * 外壳插槽演示（demo-kit 的一间展台）。
  *
- * 目的：验证 @mini-canvas/ui 新增的外壳插槽真的可用（注册 → 渲染 → 卸载回收），
+ * 目的：验证 @plume-canvas/ui 新增的外壳插槽真的可用（注册 → 渲染 → 卸载回收），
  * 并演示**四种注册/形态**（含同槽多 occupant 与复用主题 UI）：
  *   插槽：shell.status.end / shell.dock.start / shell.dock.end / shell.drawer.tabs
  *   形态：A 复用主题按钮（图标）/ B 复用主题按钮（带文案）/ C 自绘组件 / D 同槽多条
@@ -9,14 +9,14 @@
  * 上下文边界（2026-10-28 用户口径）：
  * - apply(ctx) 只负责注册：往 slots 里放组件，不预先读 ui/doc/command；
  * - 组件各自 useCanvasContext() 拿 ctx，再取 ui/doc/command；
- * - 不 import 主题包 / @mini-canvas/ui；不读 window.MiniCanvasUI。
+ * - 不 import 主题包 / @plume-canvas/ui；不读 window.PlumeUI。
  *
  * 注册进本插件 scope，卸载时 occupant 自动回收（由内核保证）。
  *
  * 装载方式：随 demo-kit 的 UMD 产物一起装（pnpm build → dist/plugin-demo-kit.js）。
  */
 import { markRaw } from 'vue'
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import StatusBadge from './StatusBadge.vue'
 import DockEndButton from './DockEndButton.vue'
 import DrawerTabButton from './DrawerTabButton.vue'

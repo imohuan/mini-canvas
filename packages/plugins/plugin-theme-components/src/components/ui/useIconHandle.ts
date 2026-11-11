@@ -5,7 +5,7 @@
  * 判定复用内核的 iconRenderMode，保证与节点类型图标是同一套规则，不各写一份。
  */
 import { computed, type Component } from 'vue'
-import { iconRenderMode } from '@mini-canvas/kernel'
+import { iconRenderMode } from '@plume-canvas/kernel'
 
 export interface IconHandleParts {
   mode: 'html' | 'component' | 'none'

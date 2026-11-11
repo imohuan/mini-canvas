@@ -12,7 +12,7 @@
 
 ## 插件长什么样
 
-一个后台插件 = **导出 `name` 和 `apply(ctx)` 的普通 JS 对象**，与前端插件同一形状（都来自 `@mini-canvas/kernel` 的 `PluginModule`）。判定函数 `isValidServerPlugin` 的要求就是这两条：`name` 是非空字符串，`apply` 或旧式 `setup` 是函数。
+一个后台插件 = **导出 `name` 和 `apply(ctx)` 的普通 JS 对象**，与前端插件同一形状（都来自 `@plume-canvas/kernel` 的 `PluginModule`）。判定函数 `isValidServerPlugin` 的要求就是这两条：`name` 是非空字符串，`apply` 或旧式 `setup` 是函数。
 
 ```js
 // 文件：<数据根>/server-plugins/my-first.js
@@ -209,7 +209,7 @@ flushRoutes()：注册场里已有 path             ↓ 卸载（POST /uninstall
 | --- | --- | --- |
 | 插件形状 `{ name, inject?, apply(ctx) }` | `packages/cloud-server/src/serverFramework/pluginLoader.ts` | `isValidServerPlugin(v)`：name 非空字符串 + apply/setup 是函数 |
 | data: URL import、必须单文件 | 同上文件头注释 | `import('data:text/javascript,' + encodeURIComponent(text))`；注释解释打包/测试运行器里路径 import 会被改写 |
-| 五能力段类型声明 | `packages/cloud-server/src/serverFramework/capabilityTypes.ts` | `declare module '@mini-canvas/kernel'` 给 PluginCapabilities 补 routes/agent/store/jobs/mcp |
+| 五能力段类型声明 | `packages/cloud-server/src/serverFramework/capabilityTypes.ts` | `declare module '@plume-canvas/kernel'` 给 PluginCapabilities 补 routes/agent/store/jobs/mcp |
 | 每作用域一套注册器 | `packages/cloud-server/src/serverFramework/capabilityLayer.ts` | `buildSegments(ctx, scopeName)` 逐段 `createXxxRegistrar(ctx, scopeName)` |
 | routes 方法集 | `packages/cloud-server/src/serverFramework/routes.ts` | `RouteRegistrar`：get/post/put/patch/delete/all/use/mount/adopt |
 | store 命名空间五方法 | `packages/cloud-server/src/serverFramework/store.ts` | `namespace(name)` → get/set/delete/keys/clear；文件 `<root>/plugin-data/<ns>.json`；卸载即清 |

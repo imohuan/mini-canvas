@@ -122,6 +122,16 @@ export const mySchema: Schema = new Schema({
         if (isRefChip) {
           const legacy = chipId.startsWith('ref-slot:')
           /**
+           * 内容类型（用户 2026-11-11）：文档属性里记住的 chipKind 是**硬兜底**。
+           *
+           * 以前只从注册表取 —— 重开会话 / 换标签页时注册表是空的，
+           * 音频节点的标签就退回节点通用图标。现在先看文档自己存的类型。
+           */
+          const attrKind =
+            chipKindAttr === 'image' || chipKindAttr === 'video' || chipKindAttr === 'audio' || chipKindAttr === 'text'
+              ? chipKindAttr
+              : ''
+          /**
            * 注册表里已有的条目 = 调用方刚登记过的最新外观与交互（onIconClick / onReplaceClick / hoverPreview）。
            * 用它当底，再用文档属性补 url/value —— 绝不能反过来让兜底条目覆盖注册表：
            * 那会把交互回调全丢掉（真机踩过：标签左侧图标点不动、hover 不换编辑图标）。
@@ -141,6 +151,8 @@ export const mySchema: Schema = new Schema({
             ...(registered ?? {}),
             // 名字以文档为准（文档是用户看得见的那份），其余外观/交互以注册表为准
             name: registered?.name || fallback.name,
+            // 文档里记着的类型 & 图标：注册表是空的也能画对
+            ...(attrKind ? { chipKind: attrKind as 'image' | 'video' | 'audio' | 'text' } : {}),
             ...(url ? { url: String(url) } : {}),
             ...(node.attrs.value ? { value: String(node.attrs.value) } : {}),
           }

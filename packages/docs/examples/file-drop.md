@@ -23,7 +23,7 @@ my-drop-image/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "拖图建卡",
     "description": "把图片文件拖进画布，落点处建图片节点",
     "pluginName": "drop-image",
@@ -36,15 +36,15 @@ my-drop-image/
     "./*": "./src/*"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*"
   }
 }
 ```
 
 ```ts
 // 文件：my-drop-image/src/dropImagePlugin.ts
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 
 export const name = 'drop-image'
 

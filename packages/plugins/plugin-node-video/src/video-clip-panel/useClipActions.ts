@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { clampClipRange } from '../videoClip'
 import type { ClipPrefs } from '../videoClipStore'
 

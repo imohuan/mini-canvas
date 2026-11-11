@@ -2,11 +2,11 @@
  * umdLoader —— 把一个 UMD 插件 js 加载成插件模块。
  *
  * 为什么用 <script> 而不是 fetch + import()：
- * 仓库里多数插件打的是 **UMD**（`external: ['vue', '@mini-canvas/canvas-data', …]`）。
- * UMD 产物靠 window 上的全局（Vue / MiniCanvasCore / MiniCanvasRender / MiniCanvasBase）取依赖，
+ * 仓库里多数插件打的是 **UMD**（`external: ['vue', '@plume-canvas/canvas-data', …]`）。
+ * UMD 产物靠 window 上的全局（Vue / PlumeCore / PlumeRender / PlumeBase）取依赖，
  * 不是 ES 模块 —— 用 `import(url)` 加载会直接抛错。`<script>` 才是 UMD 该走的路。
  *
- * 代价（说清楚）：脚本一执行就把插件对象挂到全局（如 `MiniCanvasPluginNodeImageCompare`），
+ * 代价（说清楚）：脚本一执行就把插件对象挂到全局（如 `PlumePluginNodeImageCompare`），
  * 且**撤不掉**（script 无法卸载已执行的代码）；所以「卸载插件」靠的是内核的 uninstallPlugin
  * 回收注册，而不是把脚本删掉。重复装同一地址时给 url 加 `?t=` 破缓存。
  */
@@ -22,7 +22,7 @@ export interface LoadedPluginModule {
 }
 
 /** window 上 UMD 产物全局名的候选前缀 —— 用来在脚本执行后找出它新挂了什么 */
-export const PLUGIN_GLOBAL_PREFIX = 'MiniCanvasPlugin'
+export const PLUGIN_GLOBAL_PREFIX = 'PlumePlugin'
 
 /**
  * 从一个全局值（UMD 导出对象）里挑出插件模块。
@@ -80,7 +80,7 @@ export function createUmdLoader(opts: {
             return
           }
         }
-        // ③ 兜底：扫一遍全部 MiniCanvasPlugin* 全局 —— 只在清单没给 globalName、且脚本没挂新全局时走到这。
+        // ③ 兜底：扫一遍全部 PlumePlugin* 全局 —— 只在清单没给 globalName、且脚本没挂新全局时走到这。
         //    注意这里是**有意的最后手段**：多个插件并存时可能挑错（谁先在前挑谁），所以①②能走通就不走这。
         for (const key of Object.keys(opts.win)) {
           if (!key.startsWith(PLUGIN_GLOBAL_PREFIX)) continue

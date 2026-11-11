@@ -13,19 +13,19 @@
 import { beforeAll, describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry } from '@plume-canvas/canvas-data'
 import {
   CANVAS_CONTEXT_KEY,
   RENDER_CONTEXT_KEY,
   type CanvasRenderContext,
-} from '@mini-canvas/canvas-render'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
+} from '@plume-canvas/canvas-render'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { pluginBottomBar } from '@plume-canvas/plugin-bottom-bar'
 import SettingsSchemaField from '../../../plugins/plugin-theme-components/src/components/settings/SettingsSchemaField.vue'
-import PromptActionSettings from '@mini-canvas/plugin-bottom-bar/PromptActionSettings.vue'
+import PromptActionSettings from '@plume-canvas/plugin-bottom-bar/PromptActionSettings.vue'
 
 /** 与宿主同形的真内核（底栏的 inject 依赖都在） */
 async function boot(): Promise<Context> {

@@ -8,8 +8,8 @@
  * 若推导失效会直接编译报错（canvas-base 的 typecheck 覆盖 src）。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import type { DocService, SelectionService, ResourceService } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import type { DocService, SelectionService, ResourceService } from '@plume-canvas/canvas-data'
 import type { ViewContract, FitToOptions } from '../index'
 
 describe('T03 · 按服务名推导类型', () => {

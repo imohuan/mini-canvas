@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/topo-demo/src/manifest.ts
 // 格式：TypeScript 模块（装配清单 + 依赖声明）
 // 位置：一个静态插件清单，预检用
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 
 /** 一份清单，故意把「依赖方」写在「提供方」前面，看 topoSort 能不能排对 */
 export const manifest: Array<Pick<PluginModule, 'name' | 'inject'>> = [

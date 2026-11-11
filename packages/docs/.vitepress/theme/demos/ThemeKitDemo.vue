@@ -9,14 +9,14 @@
  *
  * 用法（MD 里）：<ThemeKitDemo name="slider" />
  */
-import '@mini-canvas/ui-kit-shadcn/styles.css'
+import '@plume-canvas/ui-kit-shadcn/styles.css'
 import { ref } from 'vue'
 import {
   PrecisionSlider,
   ColorField,
   ToolParamField,
   MediaViewer,
-} from '@mini-canvas/plugin-theme-default'
+} from '@plume-canvas/plugin-theme-components'
 import {
   Button,
   DropdownMenu,
@@ -32,13 +32,13 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
-import ToolParamGroup from '@mini-canvas/plugin-theme-components/src/components/ui/ToolParamGroup.vue'
+} from '@plume-canvas/ui-kit-shadcn'
+import ToolParamGroup from '@plume-canvas/plugin-theme-components/components/ui/ToolParamGroup.vue'
 // 三个参数预设件没有从包根导出 → 从组件子路径取（同一份实现）
-import ToolOptionGrid from '@mini-canvas/plugin-theme-components/src/components/ui/ToolOptionGrid.vue'
-import ToolRatioGrid from '@mini-canvas/plugin-theme-components/src/components/ui/ToolRatioGrid.vue'
-import ToolParamSlider from '@mini-canvas/plugin-theme-components/src/components/ui/ToolParamSlider.vue'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import ToolOptionGrid from '@plume-canvas/plugin-theme-components/components/ui/ToolOptionGrid.vue'
+import ToolRatioGrid from '@plume-canvas/plugin-theme-components/components/ui/ToolRatioGrid.vue'
+import ToolParamSlider from '@plume-canvas/plugin-theme-components/components/ui/ToolParamSlider.vue'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 
 withDefaults(
   defineProps<{

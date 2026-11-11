@@ -14,7 +14,7 @@
  * 主题无关：只认内核 ToolParamDef 类型 + 本包自家 token。
  */
 import { computed } from 'vue'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import ToolParamHint from './ToolParamHint.vue'
 
 const props = withDefaults(

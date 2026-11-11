@@ -5,9 +5,9 @@ import { X, Grid2x2, LayoutGrid, ChevronDown, ArrowDownUp, ListChecks, Video, Im
 import AppDialog from '../../AppDialog.vue'
 import { scrollViewportOf } from '../../scrollPane'
 // 浮层里的控件从画布 ctx 的 ui 注册表按名取（默认主题插件登记）。
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { CANVAS_CONTEXT_KEY, useUiComponent } from '@plume-canvas/canvas-render'
 import { useMasonry } from '../../../composables/useMasonry'
-import { uiComponentOf, useUi, useUiComponentOutside } from '../../../composables/ui'
+import { readyHost, uiComponentOf, useUi, useUiComponentOutside } from '../../../composables/ui'
 import { historySignatureOf } from '../../../composables/historySignature'
 import { esc, formatBytes, formatDuration, mediaAspect } from './historyCardText'
 import { useHistoryZoom } from './useHistoryZoom'
@@ -20,6 +20,15 @@ import { createHistoryCard, type HistItem } from './createHistoryCard'
 import { createApp, h, type App as VueApp, type Component } from 'vue'
 
 const ui = useUi()
+/**
+ * 卡片预览件跑在各自的 createApp 里，不会继承页面的 provide。
+ * 这里把宿主 ctx 补进去 —— 否则 AudioPreview / VideoPreview 的 useUiComponent 直接抛
+ * 「缺少应用上下文」，整面墙挂不上（2026-11-11 真机：音频页签空白）。
+ */
+function provideCardContext(app: VueApp): void {
+  const ctx = readyHost.ctx
+  if (ctx) app.provide(CANVAS_CONTEXT_KEY, { ctx } as never)
+}
 const Button = useUiComponent('Button')
 const Tabs = useUiComponent('Tabs')
 const TabsList = useUiComponent('TabsList')
@@ -51,7 +60,7 @@ function onHistTypeTabs(value: unknown): void {
 
 const kindIcon = (k: string) => (k === '视频' ? Video : k === '音频' ? AudioLines : ImageIcon)
 
-const { thumbOf, previewableUrl, historyPreviewGroup, previewItem, openHistoryItem } = useHistoryPreview(ui)
+const { thumbOf, previewableUrl, historyPreviewGroup, previewItem, openHistoryItem, openHistoryPreview } = useHistoryPreview(ui)
 
 /** 点开「详情」的那一条历史（生成参数弹窗的数据源） */
 const detailItem = ref<HistoryDetailItem | null>(null)
@@ -312,6 +321,7 @@ const { buildMediaCard, createMasonryElement } = createHistoryCard({
   openHistoryItem,
   droppedHistoryIds,
   uiComponentOf,
+  provideCardContext,
   finishCard,
   buildErrorCard,
   buildDetailButton,
@@ -910,7 +920,7 @@ onBeforeUnmount(() => {
              现在改成独立 v-if，用自己的条件判断。 -->
         <p v-if="!ui.histVisible.value.length && !s.historyReady" class="pt-24 text-center text-[13px] text-ink/50">
           未连接云端服务 —— 生成历史由后台记录<br />
-          <span class="text-[11px] text-ink-mute">用 <code>npx mini-canvas-cloud serve</code> 起服务后即可看到</span>
+          <span class="text-[11px] text-ink-mute">用 <code>npx plume-canvas serve</code> 起服务后即可看到</span>
         </p>
         <p v-else-if="!ui.histVisible.value.length" class="pt-24 text-center text-[13px] text-ink/50">暂无历史记录</p>
       </div>
@@ -934,7 +944,7 @@ onBeforeUnmount(() => {
        视频/音频/文本的预览件由 MediaViewer 自己按名取（树外也能取，见 canvas-render 的 uiCatalog）。 -->
     <component :is="MediaViewer" v-if="previewItem && MediaViewer" :item="previewItem" @close="previewItem = null" />
 
-  <HistoryDetailDialog :item="detailItem" @close="detailItem = null" />
+  <HistoryDetailDialog :item="detailItem" @close="detailItem = null" @preview="openHistoryPreview" />
 </template>
 
 <style scoped src="./HistoryModal.css"></style>

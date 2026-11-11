@@ -18,7 +18,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { CheckCircle2, Plus, XCircle } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import type { ModelProbeView } from '../../api/agentApi.js'
 import SettingsDetailHeader from './components/SettingsDetailHeader.vue'

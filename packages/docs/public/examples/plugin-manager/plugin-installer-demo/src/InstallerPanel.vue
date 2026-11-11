@@ -3,7 +3,7 @@
 // 格式：Vue 单文件组件（setup 语法糖）
 // 位置：overlay 槽上的管理小面板：列已装插件 + 装卸演示插件
 import { onBeforeUnmount, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import { demoTargetPlugin } from './demoTarget'
 
 // ① 槽位组件不接收自定义 props：自己经 useCanvasRender() 拿宿主句柄，

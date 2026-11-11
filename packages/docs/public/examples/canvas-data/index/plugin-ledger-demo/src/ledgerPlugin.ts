@@ -2,8 +2,8 @@
 // 格式：TypeScript 模块（插件入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口；这里故意**不注册任何组件**（数据层不认识屏幕）
 
-import type { Context } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { Context } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 
 export const name = 'ledger-demo'
 // ① 硬依赖：doc 没就绪，本插件停在 PENDING（而不是跑起来后拿到 undefined）

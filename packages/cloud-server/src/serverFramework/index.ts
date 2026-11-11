@@ -21,7 +21,7 @@
  * （防止有人在装配未完成时 fetch，把路由表冻在半成品状态）。
  */
 import { Hono } from 'hono'
-import { Context, setDefaultCapabilityLayerFactory } from '@mini-canvas/kernel'
+import { Context, setDefaultCapabilityLayerFactory } from '@plume-canvas/kernel'
 import { createServerCapabilityLayer } from './capabilityLayer.js'
 // 声明合并：让 `ctx.routes` 在类型上存在（纯类型，运行时无副作用）
 import './capabilityTypes.js'

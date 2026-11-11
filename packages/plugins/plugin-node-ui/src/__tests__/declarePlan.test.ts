@@ -17,7 +17,7 @@ import { planDeclared } from '../task/declarePlan'
 let dir = ''
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-plan-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-plan-'))
   await fs.writeFile(path.join(dir, 'scale.mjs'), 'export const run = () => 1\n')
   await fs.writeFile(path.join(dir, 'crop.mjs'), 'export const run = () => 1\n')
 })

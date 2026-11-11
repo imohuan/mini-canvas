@@ -15,8 +15,8 @@ defineOptions({ inheritAttrs: false })
  *   3. **默认收起**：只在左下角留一个小按钮，不打扰画布使用。
  */
 import { computed, ref } from 'vue'
-import { useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import { useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import GalleryCanvasStage from './GalleryCanvasStage.vue'
 
 const open = ref(false)

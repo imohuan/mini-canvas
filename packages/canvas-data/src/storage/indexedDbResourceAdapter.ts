@@ -18,7 +18,7 @@ interface StoredResource {
   resource: Blob
 }
 
-const DB_NAME = 'mini-canvas-resources'
+const DB_NAME = 'plume-canvas-resources'
 const STORE_NAME = 'blobs'
 
 /** IndexedDB 可用的环境才建本地资源后端；Node / SSR 返回 undefined。 */

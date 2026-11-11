@@ -10,7 +10,7 @@
  *   这里只负责提供画板、执行绘制循环与自动取景。
  */
 import { onMounted } from 'vue'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 import { ColorField } from '../ui'
 import { BookmarkPlus, Check, Copy, Moon, Palette, Plus, RotateCcw, SlidersHorizontal, Sun, X } from 'lucide-vue-next'
 import { isPresetTheme } from './storage'

@@ -8,12 +8,12 @@ export default defineConfig({
   plugins: [vue()],
   optimizeDeps: {
     exclude: [
-      '@mini-canvas/kernel',
-      '@mini-canvas/canvas-data',
-      '@mini-canvas/canvas-render',
-      '@mini-canvas/plugin-theme-components',
-      '@mini-canvas/plugin-theme-canvas',
-      '@mini-canvas/plugin-node-text',
+      '@plume-canvas/kernel',
+      '@plume-canvas/canvas-data',
+      '@plume-canvas/canvas-render',
+      '@plume-canvas/plugin-theme-components',
+      '@plume-canvas/plugin-theme-canvas',
+      '@plume-canvas/plugin-node-text',
     ],
   },
 })

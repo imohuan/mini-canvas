@@ -9,7 +9,7 @@
  *   4. 插件卸载 → 退订 + detach（不残留，不误触别的插件配置变化）。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { Config } from '../alignGuideConfig'
 import { bindAlignGuideToggle } from '../alignGuideToggle'
 

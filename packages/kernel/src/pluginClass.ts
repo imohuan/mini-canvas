@@ -3,7 +3,7 @@
  *
  * 目标：docs/plan/plugin-cordis-migration-plan.md P2b + 路线A能力①。让作者能**照 cordis 原文逐字抄**：
  * ```ts
- * import { Service, type Context } from '@mini-canvas/kernel'
+ * import { Service, type Context } from '@plume-canvas/kernel'
  * export class GreeterService extends Service {
  *   static inject = [] as string[]
  *   static Config = { greeting: { type: 'string', default: 'Hi' } }

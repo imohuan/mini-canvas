@@ -42,9 +42,9 @@ packages/mcp-server/workspace
 # 真机检查脚本的临时截图 / 临时探针（e2e 的正式脚本仍然入库）
 packages/ui/e2e/_*.png
 packages/ui/e2e/_tmp-*.mjs
-.mini-canvas/
+.plume/
 # cloud-server 数据目录的备份（手动/脚本备份出来的运行时快照，可能几百 MB，不入库）
-.mini-canvas-backup-*/
+.plume-backup-*/
 
 # cloud-server 打包时收集的随包产物（由 scripts/bundle-assets.mjs 生成，不入库）
 packages/cloud-server/assets/
@@ -55,9 +55,9 @@ packages/cloud-server/.build-stamp.json
 packages/canvas-core-v2/demo-web/plugins/
 
 # 经「插件管理 → NPM 市场」安装的插件副本（安装路由落盘，运行时产物，不入库）。
-# 仓库内源码插件目录一律叫 plugin-<名字>；而 NPM 装的用发布包名 mini-canvas-plugin-<名字>，
+# 仓库内源码插件目录一律叫 plugin-<名字>；而 NPM 装的用发布包名 @plume-canvas/plugin-<名字>，
 # 两者命名不重叠，所以这条不会误伤源码包。
-packages/plugins/mini-canvas-plugin-*
+packages/plugins/plume-canvas-plugin-*
 
 # 分析 VueFlow 源码用(浅克隆, 不入库); 用 codegraph 索引查询
 vendor/
@@ -93,8 +93,9 @@ packages/ui/ui-test.json
 packages/docs/--port/
 
 packages/docs/.vitepress/data/plugins.data.ts.timestamp-*.mjs
+packages/docs/.vitepress/data/parsed.data.ts.timestamp-*.mjs
 
 # cloud-server 运行时数据目录（本地调试用，含令牌与画布资源，不入库）
-.mini-canvas-test/
-.mini-canvas-e2e/
+.plume-test/
+.plume-e2e/
 .tmp/

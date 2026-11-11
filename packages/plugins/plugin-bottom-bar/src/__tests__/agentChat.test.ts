@@ -10,7 +10,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
-import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@mini-canvas/canvas-base'
+import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@plume-canvas/canvas-base'
 import { useAgentChat, requestAgentChat, readBarModelChoice, choiceStillValid } from '../node-bottom-bar/useAgentChat'
 import { submitAgentChatJob } from '../node-bottom-bar/agentJobSubmit'
 

@@ -28,7 +28,7 @@ const g = globalThis as { localStorage?: unknown }
 beforeEach(() => {
   calls.length = 0
   g.localStorage = {
-    m: new Map<string, string>([['mc_admin_token', 'tok-abc']]),
+    m: new Map<string, string>([['plume_admin_token', 'tok-abc']]),
     getItem(k: string) { return (this as unknown as { m: Map<string, string> }).m.get(k) ?? null },
     setItem(k: string, v: string) { (this as unknown as { m: Map<string, string> }).m.set(k, v) },
     removeItem(k: string) { (this as unknown as { m: Map<string, string> }).m.delete(k) },

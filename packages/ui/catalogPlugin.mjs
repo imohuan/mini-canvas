@@ -21,7 +21,7 @@ import path from 'node:path'
 
 /** 产物运行时可能需要的 window 全局（与 vite-plugin-lib 的 HOST_GLOBALS 对应） */
 const KNOWN_GLOBALS = [
-  'Vue', 'VueFlow', 'MiniCanvasKernel', 'MiniCanvasBase', 'MiniCanvasCore', 'MiniCanvasRender',
+  'Vue', 'VueFlow', 'PlumeKernel', 'PlumeBase', 'PlumeCore', 'PlumeRender',
   'ProseMirrorEditorBundle', 'THREE',
 ]
 
@@ -45,9 +45,9 @@ const MIME = {
 }
 const mimeFor = (f) => MIME[(f.split('.').pop() ?? '').toLowerCase()] ?? 'application/octet-stream'
 
-const parseGlobal = (text) => text.match(/\.(MiniCanvasPlugin[A-Za-z0-9_]+)\s*=\s*\{\}/)?.[1]
+const parseGlobal = (text) => text.match(/\.(PlumePlugin[A-Za-z0-9_]+)\s*=\s*\{\}/)?.[1]
 const parseRequires = (text) => {
-  const a = text.match(/\.MiniCanvasPlugin[A-Za-z0-9_]+\s*=\s*\{\}/)
+  const a = text.match(/\.PlumePlugin[A-Za-z0-9_]+\s*=\s*\{\}/)
   if (!a || a.index === undefined) return []
   const head = text.slice(a.index, a.index + 800)
   return KNOWN_GLOBALS.filter((g) => new RegExp('[,(]\\s*[a-zA-Z_$][\\w$]*\\.' + g + '\\b').test(head))
@@ -67,10 +67,10 @@ async function buildCatalog(pluginsDir) {
     if (!st.isDirectory()) continue
     let pkg = {}
     try { pkg = JSON.parse(await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8')) } catch {}
-    const mc = pkg.miniCanvas ?? {}
+    const mc = pkg.plume ?? {}
     const isInstallable = mc.installable === true
     const isBuiltin = mc.builtin === true
-    if (!isInstallable && !isBuiltin) { skipped.push({ file: pkgName, reason: '未声明 miniCanvas.installable / builtin' }); continue }
+    if (!isInstallable && !isBuiltin) { skipped.push({ file: pkgName, reason: '未声明 plume.installable / builtin' }); continue }
     const base = {
       id: pkgName,
       name: mc.pluginName ?? String(pkg.name ?? pkgName).replace(/^@[^/]+\//, ''),
@@ -196,11 +196,11 @@ async function readTextSafe(file) {
   try { return await fs.readFile(file, 'utf8') } catch { return '' }
 }
 
-/** 该插件目录是不是"冷启动自带件"（package.json 声明 miniCanvas.builtin: true） */
+/** 该插件目录是不是"冷启动自带件"（package.json 声明 plume.builtin: true） */
 async function isBuiltinPlugin(pkgDir) {
   try {
     const pkg = JSON.parse(await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8'))
-    return pkg.miniCanvas?.builtin === true
+    return pkg.plume?.builtin === true
   } catch { return false }
 }
 
@@ -218,8 +218,8 @@ async function readPluginId(pkgDir, fallback) {
  *
  * 这份清单是**应用冷启动**那条路：宿主拿它逐条 install({ url })，而那条路是
  * fetch 文本 → import(data:text/javascript,…)。所以这里只收**能当 URL 模块加载的 ESM 产物**：
- *   · 打包插件（形如 <包>/dist/*.js）在 package.json 声明了 miniCanvas.builtin: true 的跳过 ——
- *     它们由应用源码装配，且产物多 external 掉 @mini-canvas/*，走 data: URL 解析不了裸模块名；
+ *   · 打包插件（形如 <包>/dist/*.js）在 package.json 声明了 plume.builtin: true 的跳过 ——
+ *     它们由应用源码装配，且产物多 external 掉 @plume-canvas/*，走 data: URL 解析不了裸模块名；
  *   · UMD 产物（无顶层 export）跳过 —— 它们靠 <script> 全局注入，data: URL 里会直接抛错。
  * 现状下真正命中的就是 plugin-cloud-client（零 import 的自包含 ESM）。
  *
@@ -262,7 +262,7 @@ export async function buildManifest(pluginsDir) {
 export function catalogPlugin(options = {}) {
   const pluginsDir = path.resolve(options.pluginsDir ?? 'packages/plugins')
   return {
-    name: 'mini-canvas-plugin-catalog',
+    name: '@plume-canvas/plugin-catalog',
     apply: 'serve', // 只在 dev server 生效
     configureServer(server) {
       server.middlewares.use((req, res, next) => {

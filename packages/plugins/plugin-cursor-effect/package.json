@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-cursor-effect",
+  "name": "@plume-canvas/plugin-cursor-effect",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "光标特效",
     "description": "画布光标样式 + 跟随特效 + 点击特效（烟花/星芒/彩纸…），带可视化设置页",
     "pluginName": "cursor-effect",
@@ -22,12 +22,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {

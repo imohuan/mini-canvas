@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-edge-cutting",
+  "name": "@plume-canvas/plugin-edge-cutting",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "连线切割",
     "description": "按住 Alt 拖拽划过连线即可删除",
     "pluginName": "edge-cutting",
@@ -24,9 +24,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

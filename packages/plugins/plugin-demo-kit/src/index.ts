@@ -12,7 +12,7 @@
  * 每套演示保留自己的 id 前缀（demo-kit/gallery、demo-kit/ui-slots…），
  * 卸载插件时内核按归属统一回收，不会留半截浮层。
  */
-import type { PluginModule } from '@mini-canvas/canvas-base'
+import type { PluginModule } from '@plume-canvas/canvas-base'
 import { apply as applyGallery } from './gallery'
 import { apply as applyUiSlots } from './ui-slots'
 import { apply as applyShellSlots } from './shell-slots'

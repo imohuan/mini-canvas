@@ -3,7 +3,7 @@ import {
   beginNodeResize,
   endNodeResize,
   type CanvasRenderContext,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import { useNodeCardSize as useNodeCardSizeBase } from '../../../composables/useNodeCardSize'
 
 export interface NodeCardSizeInput {

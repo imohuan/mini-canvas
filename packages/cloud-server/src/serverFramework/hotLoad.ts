@@ -12,7 +12,7 @@
  */
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import type { PluginScope } from '@mini-canvas/kernel'
+import type { PluginScope } from '@plume-canvas/kernel'
 import { isValidServerPlugin } from './pluginLoader.js'
 
 /** id（文件名）→ 内核真实插件名。装的时候记下，卸的时候按它摘（两者可能不同名）。 */
@@ -109,15 +109,19 @@ export function hotUninstallServerPlugin(ctx: PluginScope, id: string, knownName
   //
   // 为什么需要从包名推导（而不只靠装时记下的真名）：**启动装载**的插件不走热装，
   // hotLoaded/installedNames 里没有它 —— 此时只能从 id 现推。实测（重启后卸载）：
-  // id 是 mini-canvas-plugin-showcase、真名是 showcase，不推就摘不掉，后台变幽灵。
+  // id 是 @plume-canvas/plugin-showcase、真名是 showcase，不推就摘不掉，后台变幽灵。
   // 顺序很关键：先真名（准），再逐步剥离包前缀（-plugin- / 前缀-），最后才用 id 本身。
   const candidates = [
     knownName,
     hotLoaded.get(id), // 热装时记下的真名（最准）
     installedNames.get(id),
-    // 从包名推真名：mini-canvas-plugin-showcase → showcase；@scope/name → name
+    // 从包名推真名：三种落盘形态都要认
+    //   @plume-canvas/plugin-showcase → showcase（scope 包，/ 换成 __ 后是 plume-canvas__plugin-showcase）
+    //   plume-canvas-plugin-showcase  → showcase（普通包）
+    //   @scope/name                  → name（不含 plugin- 段的 scope 包）
+    id.replace(/^[a-z0-9-]+__plugin-/, ""),
     id.replace(/^@?[a-z0-9-]*-plugin-/, ""),
-    id.replace(/^mini-canvas-/, ""),
+    id.replace(/^plume-canvas-/, ""),
     id.replace(/^@/, "").replace(/^[^/]+\//, ""),
     id,
   ].filter((x): x is string => typeof x === "string" && x.length > 0)

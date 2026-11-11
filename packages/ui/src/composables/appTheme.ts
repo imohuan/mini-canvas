@@ -24,7 +24,7 @@ import {
   installThemePalette,
   THEME_MODE_KEY,
   type ThemeMode,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 
 import { subscribeKvEvents } from './kvEvents'
 

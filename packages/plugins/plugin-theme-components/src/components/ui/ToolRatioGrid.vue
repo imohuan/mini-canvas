@@ -14,7 +14,7 @@
    宽高比是几何（按真实比例画的描边小矩形），不是配色。
  */
 import { computed } from 'vue'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import ToolParamHint from './ToolParamHint.vue'
 
 const props = withDefaults(

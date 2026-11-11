@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { createPluginReloader, exposePluginReloader, findEntry, looksLikeUrl, type CatalogEntryLike } from '../pluginReload'
 
 const ENTRIES: CatalogEntryLike[] = [
-  { id: 'plugin-style-library', name: 'style-library', url: '/plugins/plugin-style-library/plugin-style-library.js', globalName: 'MiniCanvasPluginStyleLibrary' },
-  { id: 'plugin-mini-map', name: 'mini-map', url: '/plugins/plugin-mini-map/plugin-mini-map.js', globalName: 'MiniCanvasPluginMiniMap' },
+  { id: 'plugin-style-library', name: 'style-library', url: '/plugins/plugin-style-library/plugin-style-library.js', globalName: 'PlumePluginStyleLibrary' },
+  { id: 'plugin-mini-map', name: 'mini-map', url: '/plugins/plugin-mini-map/plugin-mini-map.js', globalName: 'PlumePluginMiniMap' },
   { id: 'plugin-builtin-x', name: 'builtin-x', url: '', globalName: '' },
 ]
 
@@ -50,7 +50,7 @@ describe('createPluginReloader', () => {
     const res = await r.reload('style-library', { then: 'style-library:open' })
     expect(res).toEqual({ name: 'style-library', url: '/plugins/plugin-style-library/plugin-style-library.js' })
     // 用了清单里声明的全局名（取件更稳）
-    expect(loadUmd).toHaveBeenCalledWith('/plugins/plugin-style-library/plugin-style-library.js', 'MiniCanvasPluginStyleLibrary')
+    expect(loadUmd).toHaveBeenCalledWith('/plugins/plugin-style-library/plugin-style-library.js', 'PlumePluginStyleLibrary')
     // 先卸后装交给 reloadPlugin（它内部做这两步）
     expect(reloadPlugin).toHaveBeenCalledWith('style-library', expect.objectContaining({ name: 'style-library' }))
     expect(runCommand).toHaveBeenCalledWith('style-library:open')
@@ -64,9 +64,9 @@ describe('createPluginReloader', () => {
       loadUmd,
       facade: () => ({ reloadPlugin: () => {}, getContext: () => ({ get: () => undefined }) }),
     })
-    await r.reload('whatever', { url: '/plugins/x/x.js', globalName: 'MiniCanvasPluginX' })
+    await r.reload('whatever', { url: '/plugins/x/x.js', globalName: 'PlumePluginX' })
     expect(fetcher).not.toHaveBeenCalled()
-    expect(loadUmd).toHaveBeenCalledWith('/plugins/x/x.js', 'MiniCanvasPluginX')
+    expect(loadUmd).toHaveBeenCalledWith('/plugins/x/x.js', 'PlumePluginX')
   })
 
   it('直接把 js 地址当 target 也能重装（地址入参）', async () => {
@@ -83,7 +83,7 @@ describe('createPluginReloader', () => {
     // 不查清单定址（但会为反查全局名读一次缓存清单）
     expect(loadUmd).toHaveBeenCalledWith(
       '/plugins/plugin-style-library/plugin-style-library.js',
-      'MiniCanvasPluginStyleLibrary', // 反查清单拿到的全局名
+      'PlumePluginStyleLibrary', // 反查清单拿到的全局名
     )
     expect(reloadPlugin).toHaveBeenCalled()
   })
@@ -102,7 +102,7 @@ describe('createPluginReloader', () => {
   it('完整地址（带 origin / 查询串）也能反查到全局名，不会挑错插件', async () => {
     // 模拟加载器行为：没全局名提示时说“我挑到了别的插件”，给了正确全局名才返回对的
     const loadUmd = vi.fn(async (_url: string, globalName?: string) =>
-      globalName === 'MiniCanvasPluginStyleLibrary'
+      globalName === 'PlumePluginStyleLibrary'
         ? { name: 'style-library', apply() {} }
         : { name: 'align-arrange', apply() {} },
     )
@@ -123,7 +123,7 @@ describe('createPluginReloader', () => {
     const loadUmd = vi.fn(async (_url: string, globalName?: string) => {
       calls++
       // 第一次（无提示）挑错；只有按对齐的全局名才返回正确插件
-      if (globalName === 'MiniCanvasPluginStyleLibrary') return { name: 'style-library', apply() {} }
+      if (globalName === 'PlumePluginStyleLibrary') return { name: 'style-library', apply() {} }
       return { name: 'wrong-plugin', apply() {} }
     })
     const reloadPlugin = vi.fn()
@@ -135,7 +135,7 @@ describe('createPluginReloader', () => {
     })
     // 没有全局名可纠（清单里也是空）→ 只能接受首次结果，但至少不应崩
     const res = await r.reload('/plugins/plugin-style-library/plugin-style-library.js')
-    // 旧约定兜底：mod.name='wrong-plugin' 推导 MiniCanvasPluginWrongPlugin ≠ 对齐名，
+    // 旧约定兜底：mod.name='wrong-plugin' 推导 PlumePluginWrongPlugin ≠ 对齐名，
     // 加载器第二次仍返回 wrong-plugin → 保留首次结果，共 2 次调用
     expect(res.name).toBe('wrong-plugin')
     expect(calls).toBe(2)
@@ -150,7 +150,7 @@ describe('createPluginReloader', () => {
     await expect(r.reload('does-not-exist')).rejects.toThrow(/清单里找不到插件/)
   })
 
-  it('宿主没就绪（没有 MiniCanvasUI）→ 抛清晰错误', async () => {
+  it('宿主没就绪（没有 PlumeUI）→ 抛清晰错误', async () => {
     const r = createPluginReloader({
       fetchCatalog: async () => ENTRIES,
       loadUmd: async () => ({ name: 'z', apply() {} }),
@@ -239,15 +239,15 @@ describe('exposePluginReloader', () => {
   })
   it('挂到 window 指定 key，且幂等（已有不覆盖）', () => {
     const target: Record<string, unknown> = {}
-    vi.stubGlobal('MiniCanvasUI', undefined)
+    vi.stubGlobal('PlumeUI', undefined)
     // 直接把 globalThis 当目标：exposePluginReloader 内部用 globalThis
-    const r1 = exposePluginReloader('MiniCanvasPluginTest')
-    expect((globalThis as Record<string, unknown>).MiniCanvasPluginTest).toBe(r1)
+    const r1 = exposePluginReloader('PlumePluginTest')
+    expect((globalThis as Record<string, unknown>).PlumePluginTest).toBe(r1)
     const sentinel = { marker: true }
-    ;(globalThis as Record<string, unknown>).MiniCanvasPluginTest = sentinel
-    exposePluginReloader('MiniCanvasPluginTest')
-    expect((globalThis as Record<string, unknown>).MiniCanvasPluginTest).toBe(sentinel)
-    delete (globalThis as Record<string, unknown>).MiniCanvasPluginTest
+    ;(globalThis as Record<string, unknown>).PlumePluginTest = sentinel
+    exposePluginReloader('PlumePluginTest')
+    expect((globalThis as Record<string, unknown>).PlumePluginTest).toBe(sentinel)
+    delete (globalThis as Record<string, unknown>).PlumePluginTest
     vi.unstubAllGlobals()
     void target
   })

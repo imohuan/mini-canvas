@@ -7,8 +7,8 @@
  * 本包不依赖 canvas-data：ctx 用最小桩，只提供 get('settings')。
  */
 import { describe, it, expect } from 'vitest'
-import { SettingsStore } from '@mini-canvas/kernel'
-import type { Context } from '@mini-canvas/kernel'
+import { SettingsStore } from '@plume-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 import { settingsSourceFrom } from '../components/settingsSource'
 
 /** 造一个只带 settings 服务的 ctx，并声明一组配置(scope='theme')，模拟插件 Config 自动登记后的状态 */

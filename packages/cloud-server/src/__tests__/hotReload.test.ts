@@ -46,13 +46,13 @@ describe('后台插件热装/热卸（不重启）', () => {
 
   it('启动装载的插件（非热装）也能按 id 推出真名并卸掉', async () => {
     // 场景：服务启动时从目录扫进来（hotLoaded 里没有它），卸载只能从 id 现推真名。
-    // id 是 mini-canvas-plugin-showcase、真名是 showcase —— 不推就摘不掉（实测：卸完后台还在跑）。
+    // 落盘 id 是 plume-canvas__plugin-showcase、真名是 showcase —— 不推就摘不掉（实测：卸完后台还在跑）。
     const host = createServerFramework({ root: dir, hotFallback: true })
     await host.start()
     // 模拟"启动装载"：直接登记（不走 hotInstallServerPlugin，故 hotLoaded 为空）
     host.ctx.installPlugin({ name: 'showcase', apply: () => {} } as never)
-    // 卸：靠 id 推名（mini-canvas-plugin-showcase → showcase）摘掉
-    const un = hotUninstallServerPlugin(host.ctx, 'mini-canvas-plugin-showcase')
+    // 卸：靠 id 推名（plume-canvas__plugin-showcase → showcase）摘掉
+    const un = hotUninstallServerPlugin(host.ctx, 'plume-canvas__plugin-showcase')
     expect(un.ok, '应能从包名推出真名并卸载').toBe(true)
     host.stop()
   }, 30_000)

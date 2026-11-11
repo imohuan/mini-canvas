@@ -63,7 +63,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 参数 | `nodeId`（必填）、`name`（包名）、`folderId` |
-| 干什么 | 把"这个节点 + 它用到的脚本"打成一个 `.mcnode` 包，存进**资产库** |
+| 干什么 | 把"这个节点 + 它用到的脚本"打成一个 `.plumenode` 包，存进**资产库** |
 | 何时用 | 想把这个节点复用到别的画布 |
 
 #### `canvas_ui_describe(canvasId?, nodeId, what, effect?, inputsJson?, outputsJson?)`

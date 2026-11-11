@@ -18,8 +18,8 @@
  */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { Context } from '@mini-canvas/canvas-data'
-import { ThemeRegistry } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { ThemeRegistry } from '@plume-canvas/canvas-data'
 import { themeComponentsPlugin } from '../../../index'
 import PluginSettingsContent from '../PluginSettingsContent.vue'
 

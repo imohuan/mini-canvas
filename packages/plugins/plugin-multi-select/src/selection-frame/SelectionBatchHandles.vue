@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Position, useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { Position, useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 import type { BatchSide } from '../batchConnect'
 
 const props = defineProps<{

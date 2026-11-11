@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-context-menu",
+  "name": "@plume-canvas/plugin-context-menu",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "右键菜单",
     "description": "空白新建节点 / 节点删除 / 边删除",
     "pluginName": "context-menu",
@@ -25,12 +25,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {

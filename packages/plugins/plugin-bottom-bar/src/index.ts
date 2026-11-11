@@ -1,5 +1,5 @@
 /**
- * @mini-canvas/plugin-bottom-bar —— 节点底部状态栏：可替换底栏 + 注册式动作 + 进度覆盖层。
+ * @plume-canvas/plugin-bottom-bar —— 节点底部状态栏：可替换底栏 + 注册式动作 + 进度覆盖层。
  *
  * 作者入口（三条糖都是「落场用调用方 ctx」—— 条目归你，卸载自动摘除）：
  *   registerBarAction(ctx, action)

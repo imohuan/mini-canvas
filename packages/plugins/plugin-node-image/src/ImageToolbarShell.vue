@@ -7,7 +7,7 @@
  * 这样各模式的面板只管「放哪些按钮」，不再各写一份布局样式 ——
  * 之前 ImagePaintPanel 没写布局，按钮按浏览器默认流排成了三行（用户截图报的问题）。
  */
-import { SlotComposer } from '@mini-canvas/canvas-render'
+import { SlotComposer } from '@plume-canvas/canvas-render'
 
 const props = defineProps<{
   /** 槽名（image.topToolbar / image.paintToolbar …） */

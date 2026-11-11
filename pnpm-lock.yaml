@@ -15,7 +15,7 @@ importers:
 
   packages/bar-contract:
     dependencies:
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
     devDependencies:
@@ -28,10 +28,10 @@ importers:
 
   packages/canvas-base:
     dependencies:
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../canvas-data
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
     devDependencies:
@@ -44,7 +44,7 @@ importers:
 
   packages/canvas-data:
     dependencies:
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
     devDependencies:
@@ -60,23 +60,23 @@ importers:
 
   packages/canvas-render:
     dependencies:
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../canvas-data
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@mini-canvas/vue-render':
+      '@plume-canvas/vue-render':
         specifier: workspace:*
         version: link:../vue-render
     devDependencies:
-      '@mini-canvas/plugin-multi-select':
+      '@plume-canvas/plugin-multi-select':
         specifier: workspace:*
         version: link:../plugins/plugin-multi-select
-      '@mini-canvas/plugin-node-image':
+      '@plume-canvas/plugin-node-image':
         specifier: workspace:*
         version: link:../plugins/plugin-node-image
-      '@mini-canvas/plugin-node-text':
+      '@plume-canvas/plugin-node-text':
         specifier: workspace:*
         version: link:../plugins/plugin-node-text
       '@vitejs/plugin-vue':
@@ -106,12 +106,12 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.1
         version: 2.1.1(hono@4.13.5)
-      '@mini-canvas/plugin-agent':
-        specifier: workspace:*
-        version: link:../plugins/plugin-agent
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
         version: 1.30.0(zod@3.25.76)
+      '@plume-canvas/plugin-agent':
+        specifier: workspace:*
+        version: link:../plugins/plugin-agent
       '@prismshadow/penguin-core':
         specifier: 0.2.13
         version: 0.2.13(patch_hash=732ce3309c2455b26bc85ffd1b7868cebfcc732eb1c88a6c67b1ed4873804547)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
@@ -125,7 +125,7 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
       '@types/node':
@@ -146,22 +146,31 @@ importers:
 
   packages/docs:
     devDependencies:
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@mini-canvas/plugin-node-image':
+      '@plume-canvas/plugin-node-image':
         specifier: workspace:*
         version: link:../plugins/plugin-node-image
-      '@mini-canvas/plugin-node-text':
+      '@plume-canvas/plugin-node-text':
         specifier: workspace:*
         version: link:../plugins/plugin-node-text
-      '@mini-canvas/ui-kit-shadcn':
+      '@plume-canvas/plugin-theme-canvas':
+        specifier: workspace:*
+        version: link:../plugins/plugin-theme-canvas
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugins/plugin-theme-components
+      '@plume-canvas/theme-contract':
+        specifier: workspace:*
+        version: link:../theme-contract
+      '@plume-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../ui-kit-shadcn
       '@vue-flow/core':
@@ -194,13 +203,13 @@ importers:
 
   packages/plugins/plugin-agent:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       '@prismshadow/penguin-core':
@@ -231,7 +240,7 @@ importers:
         specifier: ^2.9.1
         version: 2.9.1
     devDependencies:
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
       '@types/node':
@@ -255,13 +264,13 @@ importers:
 
   packages/plugins/plugin-align-arrange:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
@@ -286,13 +295,13 @@ importers:
 
   packages/plugins/plugin-align-guide:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
     devDependencies:
@@ -323,16 +332,16 @@ importers:
       '@dagrejs/dagre':
         specifier: ^3.0.0
         version: 3.0.0
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
@@ -357,10 +366,10 @@ importers:
 
   packages/plugins/plugin-auto-save:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
     devDependencies:
@@ -373,19 +382,19 @@ importers:
 
   packages/plugins/plugin-bottom-bar:
     dependencies:
-      '@mini-canvas/bar-contract':
+      '@plume-canvas/bar-contract':
         specifier: workspace:*
         version: link:../../bar-contract
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       prosemirror-editor-bundle:
@@ -395,7 +404,7 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1(@types/sortablejs@1.15.9)
     devDependencies:
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
@@ -422,13 +431,13 @@ importers:
 
   packages/plugins/plugin-canvas-export:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       html-to-image:
@@ -456,16 +465,16 @@ importers:
 
   packages/plugins/plugin-clipboard:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
@@ -490,20 +499,20 @@ importers:
 
   packages/plugins/plugin-cloud-client:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
-      '@mini-canvas/bar-contract':
+      '@plume-canvas/bar-contract':
         specifier: workspace:*
         version: link:../../bar-contract
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
       '@vitejs/plugin-vue':
@@ -524,16 +533,16 @@ importers:
 
   packages/plugins/plugin-context-menu:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
@@ -561,13 +570,13 @@ importers:
 
   packages/plugins/plugin-cursor-effect:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
       lucide-vue-next:
@@ -601,38 +610,38 @@ importers:
 
   packages/plugins/plugin-demo-kit:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/plugin-align-guide':
+      '@plume-canvas/plugin-align-guide':
         specifier: workspace:*
         version: link:../plugin-align-guide
-      '@mini-canvas/plugin-edge-cutting':
+      '@plume-canvas/plugin-edge-cutting':
         specifier: workspace:*
         version: link:../plugin-edge-cutting
-      '@mini-canvas/plugin-multi-select':
+      '@plume-canvas/plugin-multi-select':
         specifier: workspace:*
         version: link:../plugin-multi-select
-      '@mini-canvas/plugin-theme-canvas':
+      '@plume-canvas/plugin-theme-canvas':
         specifier: workspace:*
         version: link:../plugin-theme-canvas
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
-      '@mini-canvas/ui-kit-shadcn':
+      '@plume-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../../ui-kit-shadcn
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       '@vitejs/plugin-vue':
@@ -665,13 +674,13 @@ importers:
 
   packages/plugins/plugin-edge-cutting:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
     devDependencies:
@@ -696,16 +705,16 @@ importers:
 
   packages/plugins/plugin-file-drop:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
@@ -730,16 +739,16 @@ importers:
 
   packages/plugins/plugin-group:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
@@ -767,13 +776,13 @@ importers:
 
   packages/plugins/plugin-history:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
@@ -786,13 +795,13 @@ importers:
 
   packages/plugins/plugin-hot-reload:
     dependencies:
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       lucide-vue-next:
@@ -817,13 +826,13 @@ importers:
 
   packages/plugins/plugin-image-grid-split:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
     devDependencies:
@@ -845,17 +854,17 @@ importers:
 
   packages/plugins/plugin-manager:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
       '@vitejs/plugin-vue':
@@ -873,10 +882,10 @@ importers:
 
   packages/plugins/plugin-mini-map:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
     devDependencies:
@@ -904,20 +913,20 @@ importers:
 
   packages/plugins/plugin-multi-select:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
       vue:
         specifier: ^3.5.0
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
-      '@mini-canvas/plugin-theme-canvas':
+      '@plume-canvas/plugin-theme-canvas':
         specifier: workspace:*
         version: link:../plugin-theme-canvas
       '@vitejs/plugin-vue':
@@ -941,23 +950,23 @@ importers:
 
   packages/plugins/plugin-node-3d-preview:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       three:
         specifier: ^0.184.0
         version: 0.184.0
     devDependencies:
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
@@ -981,20 +990,20 @@ importers:
 
   packages/plugins/plugin-node-audio:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
@@ -1018,13 +1027,13 @@ importers:
 
   packages/plugins/plugin-node-find:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
     devDependencies:
@@ -1049,23 +1058,23 @@ importers:
 
   packages/plugins/plugin-node-image:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
     devDependencies:
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
@@ -1092,20 +1101,20 @@ importers:
 
   packages/plugins/plugin-node-image-compare:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
@@ -1129,13 +1138,13 @@ importers:
 
   packages/plugins/plugin-node-rotate:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
     devDependencies:
@@ -1157,26 +1166,26 @@ importers:
 
   packages/plugins/plugin-node-text:
     dependencies:
-      '@mini-canvas/bar-contract':
+      '@plume-canvas/bar-contract':
         specifier: workspace:*
         version: link:../../bar-contract
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       prosemirror-editor-bundle:
         specifier: workspace:*
         version: link:../../prosemirror-editor-bundle
     devDependencies:
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
@@ -1203,20 +1212,20 @@ importers:
 
   packages/plugins/plugin-node-ui:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
@@ -1246,29 +1255,29 @@ importers:
 
   packages/plugins/plugin-node-video:
     dependencies:
-      '@mini-canvas/bar-contract':
+      '@plume-canvas/bar-contract':
         specifier: workspace:*
         version: link:../../bar-contract
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/plugin-theme-canvas':
+      '@plume-canvas/plugin-theme-canvas':
         specifier: workspace:*
         version: link:../plugin-theme-canvas
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
@@ -1298,16 +1307,16 @@ importers:
 
   packages/plugins/plugin-shortcut-manager:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
     devDependencies:
@@ -1326,23 +1335,23 @@ importers:
 
   packages/plugins/plugin-showcase:
     dependencies:
-      '@mini-canvas/bar-contract':
+      '@plume-canvas/bar-contract':
         specifier: workspace:*
         version: link:../../bar-contract
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
       '@vitejs/plugin-vue':
@@ -1375,16 +1384,16 @@ importers:
 
   packages/plugins/plugin-style-library:
     dependencies:
-      '@mini-canvas/bar-contract':
+      '@plume-canvas/bar-contract':
         specifier: workspace:*
         version: link:../../bar-contract
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
       lucide-vue-next:
@@ -1427,22 +1436,22 @@ importers:
 
   packages/plugins/plugin-theme-canvas:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/theme-contract':
+      '@plume-canvas/theme-contract':
         specifier: workspace:*
         version: link:../../theme-contract
-      '@mini-canvas/ui-kit-shadcn':
+      '@plume-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../../ui-kit-shadcn
       lucide-vue-next:
@@ -1479,22 +1488,22 @@ importers:
       '@ckpack/vue-color':
         specifier: 1.6.0
         version: 1.6.0(vue@3.5.38(typescript@6.0.3))
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../kernel
-      '@mini-canvas/theme-contract':
+      '@plume-canvas/theme-contract':
         specifier: workspace:*
         version: link:../../theme-contract
-      '@mini-canvas/ui-kit-shadcn':
+      '@plume-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../../ui-kit-shadcn
       lucide-vue-next:
@@ -1504,7 +1513,7 @@ importers:
         specifier: ^2.0.9
         version: 2.0.9
     devDependencies:
-      '@mini-canvas/plugin-shortcut-manager':
+      '@plume-canvas/plugin-shortcut-manager':
         specifier: workspace:*
         version: link:../plugin-shortcut-manager
       '@vitejs/plugin-vue':
@@ -1580,13 +1589,13 @@ importers:
 
   packages/theme-contract:
     dependencies:
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../canvas-data
-      '@mini-canvas/ui-kit-shadcn':
+      '@plume-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../ui-kit-shadcn
       lucide-vue-next:
@@ -1611,121 +1620,121 @@ importers:
       '@floating-ui/vue':
         specifier: ^1.1.11
         version: 1.1.11(vue@3.5.38(typescript@6.0.3))
-      '@mini-canvas/bar-contract':
+      '@plume-canvas/bar-contract':
         specifier: workspace:*
         version: link:../bar-contract
-      '@mini-canvas/canvas-base':
+      '@plume-canvas/canvas-base':
         specifier: workspace:*
         version: link:../canvas-base
-      '@mini-canvas/canvas-data':
+      '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../canvas-data
-      '@mini-canvas/canvas-render':
+      '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../canvas-render
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
-      '@mini-canvas/plugin-agent':
+      '@plume-canvas/plugin-agent':
         specifier: workspace:*
         version: link:../plugins/plugin-agent
-      '@mini-canvas/plugin-align-arrange':
+      '@plume-canvas/plugin-align-arrange':
         specifier: workspace:*
         version: link:../plugins/plugin-align-arrange
-      '@mini-canvas/plugin-align-guide':
+      '@plume-canvas/plugin-align-guide':
         specifier: workspace:*
         version: link:../plugins/plugin-align-guide
-      '@mini-canvas/plugin-auto-layout':
+      '@plume-canvas/plugin-auto-layout':
         specifier: workspace:*
         version: link:../plugins/plugin-auto-layout
-      '@mini-canvas/plugin-bottom-bar':
+      '@plume-canvas/plugin-bottom-bar':
         specifier: workspace:*
         version: link:../plugins/plugin-bottom-bar
-      '@mini-canvas/plugin-canvas-export':
+      '@plume-canvas/plugin-canvas-export':
         specifier: workspace:*
         version: link:../plugins/plugin-canvas-export
-      '@mini-canvas/plugin-clipboard':
+      '@plume-canvas/plugin-clipboard':
         specifier: workspace:*
         version: link:../plugins/plugin-clipboard
-      '@mini-canvas/plugin-cloud-client':
+      '@plume-canvas/plugin-cloud-client':
         specifier: workspace:*
         version: link:../plugins/plugin-cloud-client
-      '@mini-canvas/plugin-context-menu':
+      '@plume-canvas/plugin-context-menu':
         specifier: workspace:*
         version: link:../plugins/plugin-context-menu
-      '@mini-canvas/plugin-demo-kit':
+      '@plume-canvas/plugin-demo-kit':
         specifier: workspace:*
         version: link:../plugins/plugin-demo-kit
-      '@mini-canvas/plugin-edge-cutting':
+      '@plume-canvas/plugin-edge-cutting':
         specifier: workspace:*
         version: link:../plugins/plugin-edge-cutting
-      '@mini-canvas/plugin-file-drop':
+      '@plume-canvas/plugin-file-drop':
         specifier: workspace:*
         version: link:../plugins/plugin-file-drop
-      '@mini-canvas/plugin-group':
+      '@plume-canvas/plugin-group':
         specifier: workspace:*
         version: link:../plugins/plugin-group
-      '@mini-canvas/plugin-hot-reload':
+      '@plume-canvas/plugin-hot-reload':
         specifier: workspace:*
         version: link:../plugins/plugin-hot-reload
-      '@mini-canvas/plugin-image-grid-split':
+      '@plume-canvas/plugin-image-grid-split':
         specifier: workspace:*
         version: link:../plugins/plugin-image-grid-split
-      '@mini-canvas/plugin-manager':
+      '@plume-canvas/plugin-manager':
         specifier: workspace:*
         version: link:../plugins/plugin-manager
-      '@mini-canvas/plugin-mini-map':
+      '@plume-canvas/plugin-mini-map':
         specifier: workspace:*
         version: link:../plugins/plugin-mini-map
-      '@mini-canvas/plugin-multi-select':
+      '@plume-canvas/plugin-multi-select':
         specifier: workspace:*
         version: link:../plugins/plugin-multi-select
-      '@mini-canvas/plugin-node-3d-preview':
+      '@plume-canvas/plugin-node-3d-preview':
         specifier: workspace:*
         version: link:../plugins/plugin-node-3d-preview
-      '@mini-canvas/plugin-node-audio':
+      '@plume-canvas/plugin-node-audio':
         specifier: workspace:*
         version: link:../plugins/plugin-node-audio
-      '@mini-canvas/plugin-node-find':
+      '@plume-canvas/plugin-node-find':
         specifier: workspace:*
         version: link:../plugins/plugin-node-find
-      '@mini-canvas/plugin-node-image':
+      '@plume-canvas/plugin-node-image':
         specifier: workspace:*
         version: link:../plugins/plugin-node-image
-      '@mini-canvas/plugin-node-image-compare':
+      '@plume-canvas/plugin-node-image-compare':
         specifier: workspace:*
         version: link:../plugins/plugin-node-image-compare
-      '@mini-canvas/plugin-node-rotate':
+      '@plume-canvas/plugin-node-rotate':
         specifier: workspace:*
         version: link:../plugins/plugin-node-rotate
-      '@mini-canvas/plugin-node-text':
+      '@plume-canvas/plugin-node-text':
         specifier: workspace:*
         version: link:../plugins/plugin-node-text
-      '@mini-canvas/plugin-node-ui':
+      '@plume-canvas/plugin-node-ui':
         specifier: workspace:*
         version: link:../plugins/plugin-node-ui
-      '@mini-canvas/plugin-node-video':
+      '@plume-canvas/plugin-node-video':
         specifier: workspace:*
         version: link:../plugins/plugin-node-video
-      '@mini-canvas/plugin-shortcut-manager':
+      '@plume-canvas/plugin-shortcut-manager':
         specifier: workspace:*
         version: link:../plugins/plugin-shortcut-manager
-      '@mini-canvas/plugin-style-library':
+      '@plume-canvas/plugin-style-library':
         specifier: workspace:*
         version: link:../plugins/plugin-style-library
-      '@mini-canvas/plugin-theme-canvas':
+      '@plume-canvas/plugin-theme-canvas':
         specifier: workspace:*
         version: link:../plugins/plugin-theme-canvas
-      '@mini-canvas/plugin-theme-components':
+      '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
         version: link:../plugins/plugin-theme-components
-      '@mini-canvas/theme-contract':
+      '@plume-canvas/theme-contract':
         specifier: workspace:*
         version: link:../theme-contract
-      '@mini-canvas/ui-kit-shadcn':
+      '@plume-canvas/ui-kit-shadcn':
         specifier: workspace:*
         version: link:../ui-kit-shadcn
-      '@mini-canvas/vue-render':
+      '@plume-canvas/vue-render':
         specifier: workspace:*
         version: link:../vue-render
       '@vueuse/core':
@@ -1847,7 +1856,7 @@ importers:
 
   packages/vue-render:
     dependencies:
-      '@mini-canvas/kernel':
+      '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../kernel
     devDependencies:

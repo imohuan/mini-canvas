@@ -27,9 +27,9 @@
  * 的时序，而这里只需要单向注一次。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 import { buildPalette, buildSrcdoc, normalizeUpstream, type PaletteToken, type UpstreamItem } from './uiData'
-import { THEME_COLOR_TOKENS } from '@mini-canvas/canvas-render'
+import { THEME_COLOR_TOKENS } from '@plume-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
 import { fetchBackendOrigin } from './uiOrigin'

@@ -1,15 +1,15 @@
 /**
- * image-compare 全链集成：经真实画布宿主(createMiniCanvasHost)装配本插件 + 上游 image 插件。
+ * image-compare 全链集成：经真实画布宿主(createPlumeHost)装配本插件 + 上游 image 插件。
  *
  * 这里要证明的是**真实装配路径**下的两条关键行为（单测 stub 证明不了）：
  * 1. 第 3 张图能真的连进来（说明声明的容量缓冲位确实让内核放行，而不是被 limit-reached 拒掉）；
  * 2. 连进来之后本插件把它收敛回 2 条，并且保留的是"最新两张"（FIFO）。
  */
 import { describe, it, expect } from 'vitest'
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { validateConnection, type PortDef } from '@mini-canvas/canvas-data'
-import type { PluginModule } from '@mini-canvas/kernel'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { validateConnection, type PortDef } from '@plume-canvas/canvas-data'
+import type { PluginModule } from '@plume-canvas/kernel'
 import { nodeImageComparePlugin, IMAGE_COMPARE_NODE_TYPE } from '../nodeImageComparePlugin'
 
 /**
@@ -32,7 +32,7 @@ const upstreamImagePlugin: PluginModule = {
 }
 
 async function boot() {
-  const { host } = await createMiniCanvasHost({
+  const { host } = await createPlumeHost({
     adapter: new MemoryStorageAdapter(),
     coldPlugins: [upstreamImagePlugin, nodeImageComparePlugin],
   })
@@ -94,7 +94,7 @@ describe('image-compare 全链（真实宿主装配）', () => {
 
   it('刷新恢复：对比节点与它保留的两条边一起从存储回来', async () => {
     const adapter = new MemoryStorageAdapter()
-    const first = await createMiniCanvasHost({
+    const first = await createPlumeHost({
       adapter,
       coldPlugins: [upstreamImagePlugin, nodeImageComparePlugin],
     })
@@ -107,7 +107,7 @@ describe('image-compare 全链（真实宿主装配）', () => {
     await first.host.save.flush()
     first.host.stop()
 
-    const second = await createMiniCanvasHost({
+    const second = await createPlumeHost({
       adapter,
       coldPlugins: [upstreamImagePlugin, nodeImageComparePlugin],
     })

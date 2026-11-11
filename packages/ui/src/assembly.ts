@@ -1,69 +1,69 @@
 /**
- * @mini-canvas/ui 的**装配清单** —— 「这一版成品应用装了哪些插件」的唯一住址。
+ * @plume-canvas/ui 的**装配清单** —— 「这一版成品应用装了哪些插件」的唯一住址。
  *
  * 为什么独立成文件：`App.vue` 只该关心「页面长什么样」。换一套插件组合（加减插件、换主题皮）
  * 是**装配决定**，不该去改 UI 组件 —— 宿主组件一行不动，改这里的数组就够了。
  *
  * 数组顺序即装载顺序（`CanvasHost` 按数组顺序冷启动）。
  */
-import type { CanvasNode, StorageAdapter } from '@mini-canvas/canvas-data'
-import type { PluginModule } from '@mini-canvas/kernel'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { canvasRenderPlugin } from '@mini-canvas/canvas-render'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { gridSplitPlugin } from '@mini-canvas/plugin-image-grid-split'
-import { nodeRotatePlugin } from '@mini-canvas/plugin-node-rotate'
-import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
+import type { CanvasNode, StorageAdapter } from '@plume-canvas/canvas-data'
+import type { PluginModule } from '@plume-canvas/kernel'
+import { LocalStorageAdapter } from '@plume-canvas/canvas-data'
+import { canvasRenderPlugin } from '@plume-canvas/canvas-render'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
+import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
+import { gridSplitPlugin } from '@plume-canvas/plugin-image-grid-split'
+import { nodeRotatePlugin } from '@plume-canvas/plugin-node-rotate'
+import { node3dPreviewPlugin } from '@plume-canvas/plugin-node-3d-preview'
 // 下面三个插件改为经「插件管理」插件安装（本地中转后台发清单）—— 故意不冷启动装配。
 // 想恢复成冷启动：取消注释 import 与 APP_PLUGINS 里的对应行即可（见文件尾说明）。
-// import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
-import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
-import { nodeAudioPlugin } from '@mini-canvas/plugin-node-audio'
-import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
+// import { nodeImageComparePlugin } from '@plume-canvas/plugin-node-image-compare'
+import { nodeVideoPlugin } from '@plume-canvas/plugin-node-video'
+import { nodeAudioPlugin } from '@plume-canvas/plugin-node-audio'
+import { pluginBottomBar } from '@plume-canvas/plugin-bottom-bar'
 // —— 以下 6 个「基础交互」插件是**自带件**（2026-10-12 用户要求：作为默认插件安装）——
 // 它们冷启动直接装配，不再经「插件管理」装卸；package.json 相应从 installable 改成 builtin。
-import { clipboardPlugin } from '@mini-canvas/plugin-clipboard'
-import { contextMenuPlugin } from '@mini-canvas/plugin-context-menu'
-import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
-import { groupPlugin } from '@mini-canvas/plugin-group'
-import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
-import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
+import { clipboardPlugin } from '@plume-canvas/plugin-clipboard'
+import { contextMenuPlugin } from '@plume-canvas/plugin-context-menu'
+import { fileDropPlugin } from '@plume-canvas/plugin-file-drop'
+import { groupPlugin } from '@plume-canvas/plugin-group'
+import { multiSelectPlugin } from '@plume-canvas/plugin-multi-select'
+import { edgeCuttingPlugin } from '@plume-canvas/plugin-edge-cutting'
 // 生成动作（web2api / 图片生成 / 文本生成）的前端插件已删除（2026-11-08）：
 // 改成后台 provider（<数据根>/providers/web2api-*.js），底栏动作由 cloud-client 从
 // /api/actions 拉取后注册，前端不再需要这三个包。
 // 下面这批「布局 / 画布工具」类插件改由「插件管理」从云服务清单安装（默认已装）。
 // 它们各自已有 UMD 构建（见各包 vite.config.ts），故可作外部插件装卸。
-// import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
-// import { autoLayoutPlugin } from '@mini-canvas/plugin-auto-layout'
-// import { alignArrangePlugin } from '@mini-canvas/plugin-align-arrange'
-// import { canvasExportPlugin } from '@mini-canvas/plugin-canvas-export'
-// import { nodeFindPlugin } from '@mini-canvas/plugin-node-find'
-// import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
+// import { alignGuidePlugin } from '@plume-canvas/plugin-align-guide'
+// import { autoLayoutPlugin } from '@plume-canvas/plugin-auto-layout'
+// import { alignArrangePlugin } from '@plume-canvas/plugin-align-arrange'
+// import { canvasExportPlugin } from '@plume-canvas/plugin-canvas-export'
+// import { nodeFindPlugin } from '@plume-canvas/plugin-node-find'
+// import { miniMapPlugin } from '@plume-canvas/plugin-mini-map'
 // 热重载：设置面板「热重载」分类（开发工具：登记链接，产物变了自动重装插件）
-import { hotReloadPlugin } from '@mini-canvas/plugin-hot-reload'
+import { hotReloadPlugin } from '@plume-canvas/plugin-hot-reload'
 // 资产入库入口：节点右键 + 多选上控制栏的「加入资产库」（贴进上传弹窗；两个插件零改动）
 import { uiAssetUploadPlugin } from './assetUploadPlugin'
-import { agentPlugin } from '@mini-canvas/plugin-agent'
-import { styleLibraryPlugin } from '@mini-canvas/plugin-style-library'
+import { agentPlugin } from '@plume-canvas/plugin-agent'
+import { styleLibraryPlugin } from '@plume-canvas/plugin-style-library'
 import { projectsApiPlugin } from './projectsApiPlugin'
 // 组件展厅：把默认主题的组件真渲染在画布 UI 上（用户口径 2026-10-13：直观看到样式与行为）
 // 组件展厅等开发演示已合并进 plugin-demo-kit（可安装件，不冷启动）。
 // 插件管理是**独立包**（曾住在 plugin-cloud-client 包内部，2026-10-11 拆出来）：
 // 独立成包后它才是插件目录里的一个正经插件，能在「设置 → 插件 → 自带」里显示出来。
-import { pluginManagerPlugin } from '@mini-canvas/plugin-manager'
+import { pluginManagerPlugin } from '@plume-canvas/plugin-manager'
 // AI 可视化节点：声明「我有哪些数据」→ AI 生成 HTML 在节点里画出来。
 // 生成那一步要后台（cloud-server 提供模型），纯前端模式下节点照常显示、只是生成会失败。
-import { nodeUiPlugin } from '@mini-canvas/plugin-node-ui'
+import { nodeUiPlugin } from '@plume-canvas/plugin-node-ui'
 // 云端连接（cloud-client）：**按运行环境**决定是否随开机自动装配（见 builtinPluginsForUiHost）。
 // 它默认是"可装卸"插件（面板里可选装），但**由 cloud-server 托管界面时**（也就是后台自己发
 // 这一版应用）要直接启动 —— 用户口径：「如果是 cloud-server 启动的服务，cloud-client 应该放在
 // 自带中直接启动」。判据见 CLOUD_HOST_FLAG。
-import { cloudClientPlugin } from '@mini-canvas/plugin-cloud-client'
+import { cloudClientPlugin } from '@plume-canvas/plugin-cloud-client'
 // 设置页「快捷键」配置面板：外壳自带帮助浮层，只需要这个轻量设置页插件。
-import { shortcutSettingsPlugin } from '@mini-canvas/plugin-shortcut-manager'
+import { shortcutSettingsPlugin } from '@plume-canvas/plugin-shortcut-manager'
 
 /**
  * 成品应用的插件清单（顺序即装载序）。
@@ -161,7 +161,7 @@ export const CANVAS_PLUGINS: PluginModule[] = APP_PLUGIN_REGISTRY
  *
  * 注意要用 **document 现读**：单测/SSR 里没有 document，读不到就当"不是托管"（保持本地行为）。
  */
-export const CLOUD_HOST_FLAG = 'mini-canvas-host'
+export const CLOUD_HOST_FLAG = 'plume-host'
 
 /** 读 cloud-server 注入的宿主标记（读不到 = 不是它托管的） */
 export function isCloudServerHosted(): boolean {

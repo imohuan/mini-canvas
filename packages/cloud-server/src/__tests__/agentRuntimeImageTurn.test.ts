@@ -13,8 +13,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { AgentRuntime } from '@mini-canvas/plugin-agent/server/agent/runtime.js'
-import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
+import { AgentRuntime } from '@plume-canvas/plugin-agent/server/agent/runtime.js'
+import { AgentSessionStore } from '@plume-canvas/plugin-agent/server/agent/sessionStore.js'
 
 const IMG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=='
 

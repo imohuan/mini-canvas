@@ -30,13 +30,13 @@ pnpm -C packages/cloud-server serve           # 起后台（:8865，含画布界
 
 ```json
 // 文件：packages/plugins/plugin-stamp/package.json
-// 格式：JSON —— 插件身份证；miniCanvas 段是画布认插件的关键
+// 格式：JSON —— 插件身份证；plume 段是画布认插件的关键
 {
   "name": "@my/plugin-stamp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "留言卡",
     "description": "能盖时间章的留言卡（前后端配合演示）",
     "pluginName": "stamp",
@@ -45,9 +45,9 @@ pnpm -C packages/cloud-server serve           # 起后台（:8865，含画布界
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": { "vue": "^3.5.34" }
 }
@@ -60,7 +60,7 @@ pnpm -C packages/cloud-server serve           # 起后台（:8865，含画布界
 <!-- 格式：Vue 单文件组件 —— 节点卡片「里面」那一层 -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import type { StampService } from './stampService'
 
 // ① 壳注入的两个 props：id = 节点编号，data = 节点存的数据
@@ -108,7 +108,7 @@ async function stamp() {
 ```ts
 // 文件：packages/plugins/plugin-stamp/src/stampService.ts
 // 格式：TypeScript 模块 —— 服务类：new 的时候自动以 'stamp' 名上架
-import { Service, type Context } from '@mini-canvas/canvas-base'
+import { Service, type Context } from '@plume-canvas/canvas-base'
 
 /** 对外能力：别的插件/组件从这里调（类型增强后还能 ctx.stamp 直达） */
 export interface StampService {
@@ -127,7 +127,7 @@ export class StampServiceImpl extends Service implements StampService {
 ```ts
 // 文件：packages/plugins/plugin-stamp/src/index.ts
 // 格式：TypeScript 模块 —— 插件入口（裸导出 name / inject / apply 三样）
-import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
+import { Service, type Context, type PluginModule } from '@plume-canvas/canvas-base'
 import StampContent from './StampContent.vue'
 import { StampServiceImpl, type StampService } from './stampService'
 
@@ -135,7 +135,7 @@ export const name = 'stamp'
 export const inject = ['doc'] as string[]        // ③ 硬依赖：doc 没就绪我就等着
 
 /** 类型增强：让全画布 ctx.stamp 直达（只有类型提示作用，运行时走服务代理） */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context { stamp: StampService }
 }
 
@@ -190,7 +190,7 @@ export const APP_PLUGINS = [
 ## 2 · 后台：盖章接口（8 分钟）
 
 后台插件**不需要进装配清单** —— 丢一个 .js 文件进后台插件目录就行。
-目录是数据根下的 `server-plugins/`（默认 `.mini-canvas/server-plugins/`，没有就建一个）。
+目录是数据根下的 `server-plugins/`（默认 `.plume/server-plugins/`，没有就建一个）。
 
 ### 文件：stamp-server-plugin.js
 

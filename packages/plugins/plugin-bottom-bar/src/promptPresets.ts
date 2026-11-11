@@ -43,7 +43,7 @@ export function presetBucketOf(p: PromptPreset): PresetBucket {
 }
 
 /** 存储键（只属于这个功能，不和其他底栏配置共用） */
-export const PROMPT_PRESETS_KEY = 'mini-canvas:prompt-presets'
+export const PROMPT_PRESETS_KEY = 'plume-canvas:prompt-presets'
 
 /**
  * 按节点类型分开存（用户 2026-11-07：不同平台的提示词预设是分开的）。

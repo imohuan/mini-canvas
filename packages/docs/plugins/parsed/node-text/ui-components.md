@@ -18,7 +18,7 @@
 下面两个都是**真的在跑**的 `TextPreview`（左边有内容、右边空内容）：
 
 <script setup>
-import TextPreview from '@mini-canvas/plugin-node-text/TextPreview.vue'
+import TextPreview from '@plume-canvas/plugin-node-text/TextPreview.vue'
 </script>
 
 <div style="display:flex;gap:12px;flex-wrap:wrap;padding:18px;border-radius:12px;border:1px solid var(--vp-c-divider);background:var(--vp-c-bg-soft)">
@@ -40,7 +40,7 @@ import TextPreview from '@mini-canvas/plugin-node-text/TextPreview.vue'
 <!-- 文件：任意插件里的预览面板 -->
 <!-- 格式：Vue 单文件组件 -->
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 const TextPreview = useUiComponent('textPreview')
 </script>
 

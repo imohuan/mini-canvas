@@ -2,7 +2,7 @@ import { computed, watch, type Ref } from 'vue'
 import {
   createV2Logger,
   type CanvasRenderContext,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import { useNodeDebugOverlay as useNodeDebugGeometry } from '../../../composables/useNodeDebugOverlay'
 
 export interface NodeDebugOverlayInput {

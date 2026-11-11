@@ -6,7 +6,7 @@ import {
   Position,
   useCanvasRender,
   RegionEntryHost,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import MovingHandle from '../MovingHandle.vue'
 import NodeLoadingState from '../NodeLoadingState.vue'
 import { useNodeTaskState } from './useNodeTaskState'
@@ -411,7 +411,7 @@ const {
            纯指示，不接事件 —— 点击行为交给卡片本身（Shift+点节点 = 从选中集里去掉它）。 -->
       <div
         v-if="showMultiRadio && !culledReduced"
-        class="v2-multi-radio nodrag nopan mc-export-ignore"
+        class="v2-multi-radio nodrag nopan plume-export-ignore"
         :style="radioStyle"
         role="presentation"
         aria-hidden="true"
@@ -501,7 +501,7 @@ const {
       <!-- 右下角 resize 拖拽句柄（类型声明 resizable 或 data.resizable === true 时显示；useNodeCardSize 门）。
            反缩放：屏幕大小恒定，transform-origin 在右下角（钉在卡片角上不漂移）。
            只在 pointerdown 起手；move/up 由 useNodeCardSize 绑到全局 document —— 指针移出手柄也不会断。 -->
-      <div v-if="cardResizable && !culledReduced && !covered" class="resize-handle mc-export-ignore" :class="{ 'is-resizing': cardIsResizing }"
+      <div v-if="cardResizable && !culledReduced && !covered" class="resize-handle plume-export-ignore" :class="{ 'is-resizing': cardIsResizing }"
         :style="{ transform: `scale(${resizeHandleScale})` }" @pointerdown="card.onResizePointerDown">
         <svg viewBox="0 0 8 8" fill="none" class="resize-handle-icon">
           <path d="M7 1L1 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
@@ -633,7 +633,7 @@ const {
   flex-direction: column;
   /* 跟随主题插件「外观 → 正文字体」；没选时回落到原来的系统栈。
      这条以前写死 system-ui，于是整站换字体时节点里的文字不跟着变。 */
-  font-family: var(--mct-font-body, system-ui, sans-serif);
+  font-family: var(--plume-font-body, system-ui, sans-serif);
 }
 
 /* —— 视口外节点（culled / culled-linked）骨架态 ——

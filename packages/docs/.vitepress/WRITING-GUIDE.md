@@ -55,7 +55,7 @@
 - **例子开头给目录树**，每个文件旁注释它干什么：
   ```
   my-plugin/
-  ├── package.json   # 插件清单，声明 miniCanvas 元信息
+  ├── package.json   # 插件清单，声明 plume 元信息
   └── src/index.ts   # 插件入口
   ```
 - 涉及清单/配置就给 **JSON 全文**；涉及 import 写清**从哪个包**导入。
@@ -79,7 +79,7 @@
 - 旧服务名 `nodeStore` / `edgeStore` / `graph` / `history` **已下线**，都并进了 `doc`。
 - 注册场 `order` 方向：**越小 = 越在外层 / 优先级越高**；单赢家槽取 order 最小者。
 - **"一个能手"是服务（会换实现才做服务），"一张表"是场** —— 别把注册场写成服务。
-- kernel **不依赖任何其它 `@mini-canvas` 包**；它不认识画布、不认识 Vue。
+- kernel **不依赖任何其它 `@plume-canvas` 包**；它不认识画布、不认识 Vue。
 - 渲染宿主的服务（`nodeLayout` / `viewport` / `pluginManager`）在**纯数据层拿不到**。
 - `ctx` 上的 `nodes` / `theme` / `commands` / `slots` / `settings` 是**语法糖**，落点是对应注册场。
 

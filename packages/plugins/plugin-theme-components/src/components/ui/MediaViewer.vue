@@ -10,7 +10,7 @@
  * 其它资源类型用 #stage 插槽自己画。变换工具只对图片生效；视频/音频交给原生播放器。
  *
  * 注册进 ui 目录的 mediaViewer 名下：插件 useUiComponent("mediaViewer") 按名取用；
- * 成品应用从 @mini-canvas/plugin-theme-components 具名 import。换主题时观感一起换。
+ * 成品应用从 @plume-canvas/plugin-theme-components 具名 import。换主题时观感一起换。
  * 颜色全走 token，不自造数值 —— 配色卫生测试盯着。
  *
  * onDelete：宿主给了才出现删除按钮（悬停显示）。删除动作由宿主定
@@ -20,7 +20,7 @@
  * 换张、下载、键盘、滚动锁、打开关闭接线；模板与 scoped 样式仍留在本入口。
  */
 import { computed } from "vue"
-import { Button } from "@mini-canvas/ui-kit-shadcn"
+import { Button } from "@plume-canvas/ui-kit-shadcn"
 import { useMediaViewerController } from "./media-viewer/useMediaViewerController"
 import type { MediaViewerItem } from "./media-viewer/types"
 

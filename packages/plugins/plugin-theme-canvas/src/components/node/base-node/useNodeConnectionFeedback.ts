@@ -3,7 +3,7 @@ import {
   isConnectionSource,
   type AimedTarget,
   type CanvasRenderContext,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import type { useNodeCapability } from '../../../composables/useNodeCapability'
 import type MovingHandle from '../MovingHandle.vue'
 

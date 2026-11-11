@@ -20,14 +20,14 @@
  *   - 老版布局后移动视口到结果中心（keepZoom）；v2 布局命令只改数据 + 居中视口（viewport.setCenter 保留 zoom）。
  */
 
-import type { Context, PluginModule, ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
-import { resolveConfig } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule, ConfigSchema, InferConfig } from '@plume-canvas/canvas-base'
+import { resolveConfig } from '@plume-canvas/canvas-base'
 import type {
   DocService,
   SelectionService,
   CanvasNode,
   FitToOptions,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import { layoutHierarchy } from './groupHierarchy'
 import type { LayoutNode, LayoutDirection, AutoLayoutConfig } from './types'
 

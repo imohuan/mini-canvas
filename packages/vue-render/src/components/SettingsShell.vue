@@ -584,7 +584,7 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   /* 跟随主题插件「外观 → 正文字体」；没选时回落到原来的系统栈 */
-  font-family: var(--mct-font-body, system-ui, 'Microsoft YaHei', sans-serif);
+  font-family: var(--plume-font-body, system-ui, 'Microsoft YaHei', sans-serif);
 }
 
 /* 浮动模式下：蒙版透明、不可点击、不拦截事件，dialog 自己 fixed 定位 */

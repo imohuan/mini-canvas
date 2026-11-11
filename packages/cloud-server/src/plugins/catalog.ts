@@ -9,15 +9,15 @@
  * | /plugin-catalog.json（本文件） | 「插件管理」插件（用户手动装卸） | **UMD** 产物（能被 script 加载） | script src |
  *
  * 为什么要两套而不是合一：两种产物形态的**加载机制不同**（ESM 靠 import、UMD 靠全局 + script），
- * 判据也不同（UMD 产物里没有顶层 export、但有一个 MiniCanvasPlugin* 全局）。混成一份清单，
+ * 判据也不同（UMD 产物里没有顶层 export、但有一个 PlumePlugin* 全局）。混成一份清单，
  * 加载方必然要猜，猜错就是「列出来了却装不上」。分开之后各管一摊，互不干扰。
  *
  * 收录条件（两条都要满足，宁可少列也不列装不上的）：
- * 1. package.json 显式声明 miniCanvas.installable: true —— 这是「特意留给插件管理安装」的标记。
+ * 1. package.json 显式声明 plume.installable: true —— 这是「特意留给插件管理安装」的标记。
  *    默认不收录：theme-default / node-image 这类是应用**冷启动就装好**的基础件，
  *    列进来会被插件管理装第二遍 → 撞重名。
  * 2. 插件目录下的 dist/ 里有 .js，且它是**能被 script 直接加载的 UMD 产物**
- *    （判据：产物里有 MiniCanvasPlugin* 全局赋值）。
+ *    （判据：产物里有 PlumePlugin* 全局赋值）。
  */
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -27,9 +27,9 @@ import { createHash } from 'node:crypto'
 export interface PluginCatalogEntry {
   /** 稳定身份（目录名）；插件管理用它做「已装/未装」的键 */
   id: string
-  /** 插件在画布里的**真实名字**（源码 export 的 name；可用 package.json 的 miniCanvas.pluginName 声明） */
+  /** 插件在画布里的**真实名字**（源码 export 的 name；可用 package.json 的 plume.pluginName 声明） */
   name: string
-  /** 面板上显示的名字（package.json 的 miniCanvas.title，缺省用 id） */
+  /** 面板上显示的名字（package.json 的 plume.title，缺省用 id） */
   title: string
   description?: string
   /** 浏览器可直接请求的地址（**相对本服务**，如 /plugins/<pkg>/<file>） */
@@ -46,7 +46,7 @@ export interface PluginCatalogEntry {
   format?: 'umd' | 'esm'
   /** UMD 产物在 window 上暴露的全局名（加载后从这里取插件对象） */
   globalName: string
-  /** 该产物运行时需要哪些 window 全局（Vue / MiniCanvasCore / …）；缺了会加载失败 */
+  /** 该产物运行时需要哪些 window 全局（Vue / PlumeCore / …）；缺了会加载失败 */
   requiresGlobals: string[]
   /** 是否默认安装（缺省 true） */
   defaultInstalled: boolean
@@ -55,7 +55,7 @@ export interface PluginCatalogEntry {
    *
    * 为什么要在清单里列出它们：用户要"即使自带的插件也显示出来，但不显示安装/卸载按钮" ——
    * 一个页面能看清"这台画布一共有哪些插件、哪些是我能动的"，比只列可装卸的更完整。
-   * 判据取 package.json 的 miniCanvas.builtin（见文件头）。前端据此**只读展示**。
+   * 判据取 package.json 的 plume.builtin（见文件头）。前端据此**只读展示**。
    */
   builtin?: boolean
   /**
@@ -104,12 +104,12 @@ export interface PluginCatalog {
 export const KNOWN_GLOBALS = [
   'Vue',
   'VueFlow',
-  'MiniCanvasCore',
-  'MiniCanvasKernel',
-  'MiniCanvasBase',
-  'MiniCanvasRender',
-  'MiniCanvasUiKit',
-  'MiniCanvasThemeContract',
+  'PlumeCore',
+  'PlumeKernel',
+  'PlumeBase',
+  'PlumeRender',
+  'PlumeUiKit',
+  'PlumeThemeContract',
   'ProseMirrorEditorBundle',
 ] as const
 
@@ -117,10 +117,10 @@ export const KNOWN_GLOBALS = [
  * 从 UMD 产物文本里读出它的全局名。
  *
  * 打包时 css-injected-by-js 会先插一段很长的 style，真正的 UMD 头被挤到几千字符之后，
- * 所以**不能只看文件开头**；直接全文找那段 e.MiniCanvasPluginXxx={} 。
+ * 所以**不能只看文件开头**；直接全文找那段 e.PlumePluginXxx={} 。
  */
 export function parseUmdGlobalName(text: string): string | undefined {
-  return text.match(/\.(MiniCanvasPlugin[A-Za-z0-9_]+)\s*=\s*\{\}/)?.[1]
+  return text.match(/\.(PlumePlugin[A-Za-z0-9_]+)\s*=\s*\{\}/)?.[1]
 }
 
 /**
@@ -160,7 +160,7 @@ function stripComments(src: string): string {
  * 两个条件都要：
  * 1. 有顶层 export（否则不是模块）；
  * 2. **没有任何裸模块名 import / export-from** —— 加载路是 fetch 文本 → import(data:text/javascript)，
- *    裸模块名（'vue' / '@mini-canvas/...'）在 data: URL 里解析不了，会直接抛
+ *    裸模块名（'vue' / '@plume-canvas/...'）在 data: URL 里解析不了，会直接抛
  *    "Failed to resolve module specifier"。相对路径（./x.js）与 data:/http(s): 地址是允许的
  *    （那种产物不是单文件，走 data: 也会缺兄弟文件，故这里同样按"不安全"处理 —— 只放行真正的单文件自包含件）。
  */
@@ -187,7 +187,7 @@ export function isSelfContainedEsm(text: string): boolean {
  * 锚定到全局名之后 800 字符内，避免正文里的字符串误命中。
  */
 export function parseRequiresGlobals(text: string): string[] {
-  const anchor = text.match(/\.MiniCanvasPlugin[A-Za-z0-9_]+\s*=\s*\{\}/)
+  const anchor = text.match(/\.PlumePlugin[A-Za-z0-9_]+\s*=\s*\{\}/)
   if (!anchor || anchor.index === undefined) return []
   const header = text.slice(anchor.index, anchor.index + 800)
   return KNOWN_GLOBALS.filter((g) => new RegExp('[,(]\\s*[a-zA-Z_$][\\w$]*\\.' + g + '\\b').test(header))
@@ -207,7 +207,7 @@ export function catalogVersion(entries: PluginCatalogEntry[]): number {
 interface PkgJson {
   name?: string
   version?: string
-  miniCanvas?: {
+  plume?: {
     title?: string
     description?: string
     defaultInstalled?: boolean
@@ -219,7 +219,7 @@ interface PkgJson {
      * 这个目录是**从 NPM 安装落盘**的副本（由安装路由写入，作者不会手写）。
      *
      * 为什么要这个显式标记（而不是靠 id 有没有 `scope__` 猜）：包名去掉 scope 后
-     * id 可能不含 `__`（如 mini-canvas-plugin-showcase），旧判据会失效，导致
+     * id 可能不含 `__`（如 @plume-canvas/plugin-showcase），旧判据会失效，导致
      * "源码包与 NPM 副本同时列入"的重复问题复发（审查指出）。
      */
     npmInstalled?: boolean
@@ -323,18 +323,18 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
     // 收录两类（其余跳过，避免把不相干的目录也列进来）：
     //   · installable: true —— 可经插件管理装卸（默认已装）；
     //   · builtin: true     —— 自带（冷启动装配），**只读展示**、不给安装/卸载。
-    const isInstallable = pkg.miniCanvas?.installable === true
-    const isBuiltin = pkg.miniCanvas?.builtin === true
+    const isInstallable = pkg.plume?.installable === true
+    const isBuiltin = pkg.plume?.builtin === true
     if (!isInstallable && !isBuiltin) {
-      skipped.push({ file: pkgName, reason: '未声明 miniCanvas.installable / builtin（不在插件管理里展示）' })
+      skipped.push({ file: pkgName, reason: '未声明 plume.installable / builtin（不在插件管理里展示）' })
       continue
     }
 
     const id = pkgName
-    const name = pkg.miniCanvas?.pluginName ?? (pkg.name ?? pkgName).replace(/^@[^/]+\//, '')
-    const title = pkg.miniCanvas?.title ?? pkgName
+    const name = pkg.plume?.pluginName ?? (pkg.name ?? pkgName).replace(/^@[^/]+\//, '')
+    const title = pkg.plume?.title ?? pkgName
     // 这个目录是不是"NPM 安装落盘的副本"（安装路由写进 package.json 的显式标记）
-    const isNpmCopy = pkg.miniCanvas?.npmInstalled === true
+    const isNpmCopy = pkg.plume?.npmInstalled === true
 
     // 自带插件：**只要 package.json 声明了就能列**（不必构建 UMD —— 它由应用冷启动装配，不靠清单加载）。
     if (isBuiltin) {
@@ -342,12 +342,12 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       // 它的「安装」不是装前端产物，而是把后台半装进 server-plugins（见 routes/serverPlugins.ts）。
       // 这里必须和「非自带」那条路一样算 sha256：安装路由拿清单里的哈希当唯一可信源，
       // 清单不给 → 连自己的自带件都被「未列入清单，拒绝安装」挡掉（2026-10-13 实测踩到）。
-      const builtinServer = await readServerArtifact(pkgDir, pkgName, pkg.miniCanvas?.serverPermissions)
+      const builtinServer = await readServerArtifact(pkgDir, pkgName, pkg.plume?.serverPermissions)
       plugins.push({
         id,
         name,
         title,
-        ...(pkg.miniCanvas?.description ? { description: pkg.miniCanvas.description } : {}),
+        ...(pkg.plume?.description ? { description: pkg.plume.description } : {}),
         url: '', // 自带件不经 URL 加载（前端只读展示，不安装）
         globalName: '',
         requiresGlobals: [],
@@ -358,7 +358,7 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
         // 只声明 serverBuiltin（内置路由）的，仍标一个 url 空的段。
         ...(builtinServer
           ? { server: builtinServer }
-          : pkg.miniCanvas?.serverBuiltin === true
+          : pkg.plume?.serverBuiltin === true
             ? { server: { url: "" } }
             : {}),
         ...(pkg.version ? { version: pkg.version } : {}),
@@ -376,8 +376,8 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       skipped.push({ file: pkgName, reason: '没有 dist（先跑 pnpm -C packages/plugins/' + pkgName + ' build）' })
       continue
     }
-    // 判形态：先看作者有没有在 package.json 里写明（miniCanvas.web.format），
-    // 没写就按产物自己认 —— UMD 有 MiniCanvasPlugin* 全局；否则看是不是**自包含 ESM**。
+    // 判形态：先看作者有没有在 package.json 里写明（plume.web.format），
+    // 没写就按产物自己认 —— UMD 有 PlumePlugin* 全局；否则看是不是**自包含 ESM**。
     // 「自包含」= 有顶层 export 且**没有任何裸模块名 import**（ESM 走 manager.install({ url }) 时，
     // fetch 文本 → import(data:text/javascript)，裸模块名在 data: URL 里解析不了）。
     const candidates = files.sort()
@@ -395,7 +395,7 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       } catch {
         continue
       }
-      const declared = pkg.miniCanvas?.web?.format
+      const declared = pkg.plume?.web?.format
       const isEsm = declared === 'esm' || (declared === undefined && isSelfContainedEsm(candidateText))
       if (isEsm) {
         file = candidate
@@ -413,25 +413,25 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
     if (!file || !format) {
       skipped.push({
         file: pkgName,
-        reason: '产物既不是可脚本加载的 UMD（无 MiniCanvasPlugin* 全局）、也不是自包含 ESM（有裸模块名 import 或没有顶层 export）',
+        reason: '产物既不是可脚本加载的 UMD（无 PlumePlugin* 全局）、也不是自包含 ESM（有裸模块名 import 或没有顶层 export）',
       })
       continue
     }
     const globalName = format === 'umd' ? parseUmdGlobalName(text) : undefined
     // 后台产物：同一个包的 dist/server.js（有就是「前后端成对」的插件）。缺了不报错。
-    const server = await readServerArtifact(pkgDir, pkgName, pkg.miniCanvas?.serverPermissions)
+    const server = await readServerArtifact(pkgDir, pkgName, pkg.plume?.serverPermissions)
     plugins.push({
       id,
       name,
       title,
-      ...(pkg.miniCanvas?.description ? { description: pkg.miniCanvas.description } : {}),
+      ...(pkg.plume?.description ? { description: pkg.plume.description } : {}),
       // 相对地址：与 ui 同源时直接能用；跨源时前端按清单地址的 origin 补全。
       url: '/plugins/' + pkgName + '/' + file,
       format,
       ...(globalName ? { globalName } : { globalName: '' }),
       requiresGlobals: format === 'umd' ? parseRequiresGlobals(text) : [],
       // 默认安装改为**显式 opt-in**（缺省 false）：用户要求面板首次一个都不自动装。
-      defaultInstalled: pkg.miniCanvas?.defaultInstalled === true,
+      defaultInstalled: pkg.plume?.defaultInstalled === true,
       ...(server ? { server } : {}),
         ...(isNpmCopy ? { npmInstalled: true } : {}),
       ...(pkg.version ? { version: pkg.version } : {}),
@@ -439,7 +439,7 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
   }
 
   // 按插件运行时名去重：NPM 装进来的前端半（id 形如 scope__name）与仓库里的源码包
-  // （id 形如 plugin-name）的 miniCanvas.pluginName 相同（如都是 showcase）。内核按插件名
+  // （id 形如 plugin-name）的 plume.pluginName 相同（如都是 showcase）。内核按插件名
   // 索引，装一个会顶掉另一个 —— 清单里列两行是**假的重复项**（用户实测：看到两个一样的
   // 插件展示）。这里只保留一份。
   // 保留谁：优先保留 **NPM 装进来的那份**（id 带 scope__ 前缀）。

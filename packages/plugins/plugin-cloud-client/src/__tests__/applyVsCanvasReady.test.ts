@@ -5,7 +5,7 @@
  * 画布读写（save 适配器、动作清单、实时同步）只能在 onCanvasReady 之后发生。
  */
 import { describe, expect, it, vi } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { cloudClientPlugin, onCanvasReady } from '../plugin'
 
 function docStub() {

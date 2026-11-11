@@ -35,9 +35,9 @@ describe('uploads 上限', () => {
   })
 
   it('环境变量可覆盖，非法值回落默认', () => {
-    expect(maxUploadBytes({ MINI_CANVAS_MAX_UPLOAD_MB: '2' })).toBe(2 * 1024 * 1024)
-    expect(maxUploadBytes({ MINI_CANVAS_MAX_UPLOAD_MB: 'abc' })).toBe(DEFAULT_MAX_UPLOAD_BYTES)
-    expect(maxUploadBytes({ MINI_CANVAS_MAX_UPLOAD_MB: '-3' })).toBe(DEFAULT_MAX_UPLOAD_BYTES)
+    expect(maxUploadBytes({ PLUME_MAX_UPLOAD_MB: '2' })).toBe(2 * 1024 * 1024)
+    expect(maxUploadBytes({ PLUME_MAX_UPLOAD_MB: 'abc' })).toBe(DEFAULT_MAX_UPLOAD_BYTES)
+    expect(maxUploadBytes({ PLUME_MAX_UPLOAD_MB: '-3' })).toBe(DEFAULT_MAX_UPLOAD_BYTES)
   })
 
   it('content-length 超限：不读 body 直接拒', async () => {

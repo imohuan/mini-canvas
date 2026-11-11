@@ -13,8 +13,8 @@
  * 与旧实现（packages/ui/src/themeColorPlugin.ts）的区别：**每个颜色两格**（亮/暗各一个变量），
  * 由 ui-theme.css 的 `:root` / `html.dark` 各挑一个 → 两套主题终于能各配一个值。
  */
-import type { SettingsStore } from '@mini-canvas/kernel'
-import type { SettingSchema } from '@mini-canvas/kernel'
+import type { SettingsStore } from '@plume-canvas/kernel'
+import type { SettingSchema } from '@plume-canvas/kernel'
 import {
   buildThemeColorConfig,
   resolveThemeColorOverrides,

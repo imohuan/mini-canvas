@@ -2,7 +2,7 @@
  * 主题默认皮自带的组合件。
  *
  * 下拉 / 选择 / 提示不再在这里维护第二套实现：一律直接使用
- * `@mini-canvas/ui-kit-shadcn` 的分离件（DropdownMenu / Select / Tooltip …）。
+ * `@plume-canvas/ui-kit-shadcn` 的分离件（DropdownMenu / Select / Tooltip …）。
  */
 /** 插槽调试小点的悬停说明面板（默认主题的调试件） */
 export { default as SlotDebugPopover } from './SlotDebugPopover.vue'

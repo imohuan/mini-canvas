@@ -13,7 +13,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-      name: 'MiniCanvasPluginNodeImage',
+      name: 'PlumePluginNodeImage',
       formats: ['umd'],
       fileName: () => 'plugin-node-image.js',
     },

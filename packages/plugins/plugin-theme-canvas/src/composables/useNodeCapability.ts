@@ -13,7 +13,7 @@
  *   v-if="cap.hasTarget" 渲染 target 口、v-if="cap.hasSource" 渲染 source 口。
  */
 import { computed } from "vue";
-import { useCanvasRender } from "@mini-canvas/canvas-render";
+import { useCanvasRender } from "@plume-canvas/canvas-render";
 
 export function useNodeCapability(type: string) {
   const { ctx } = useCanvasRender();

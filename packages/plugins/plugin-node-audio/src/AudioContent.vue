@@ -20,7 +20,7 @@
  * 播放器内部的播放头 / 进度条由它自己标注（同一套契约）。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { useCanvasRender, useUiComponent } from "@mini-canvas/canvas-render"
+import { useCanvasRender, useUiComponent } from "@plume-canvas/canvas-render"
 import { formatClock } from "./audioPlayback"
 import { isValidWaveform } from "./waveform"
 import { createAudioOps, defaultTransform, ensureAudioMeta, reanalyzeAudio } from "./audioOps"

@@ -2,8 +2,8 @@
 // 格式：TypeScript 模块（宿主装配函数）
 // 位置：把“只装数据层”的最小画布跑起来的入口
 
-import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import type { CanvasBaseAssembly } from '@mini-canvas/canvas-data'
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import type { CanvasBaseAssembly } from '@plume-canvas/canvas-data'
 import * as ledgerPlugin from './ledgerPlugin'
 
 /**

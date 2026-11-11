@@ -9,7 +9,7 @@
  * 结构：触发器 = 工具栏按钮（色块图标）；菜单 = 预置色网格 + 注册的颜色组件。
  */
 import { computed, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const props = defineProps<{
   /** 当前颜色（#rrggbb / #rrggbbaa） */
@@ -130,7 +130,7 @@ function onColorChange(value: string): void {
   gap: 8px;
   width: 232px;
   padding: 12px;
-  border-radius: var(--mct-radius, 16px);
+  border-radius: var(--plume-radius, 16px);
   background: var(--ui-overlay-solid, #fff);
 }
 .pcp-title {

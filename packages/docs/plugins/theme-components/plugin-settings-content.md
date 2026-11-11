@@ -16,10 +16,10 @@
 `BaseNode` 是 VueFlow 渲染每个节点时套上的壳，**离开画布宿主渲染不出来** —— 所以下面嵌一块真画布（装了默认主题 + 示例节点），你在真环境里看它：
 
 <script setup>
-import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
+import PlumeStage from '../../.vitepress/theme/demos/PlumeStage.vue'
 </script>
 
-<MiniCanvasStage :height="360" />
+<PlumeStage :height="360" />
 
 > 这一件不在画布里，它渲染在设置弹窗里：点顶部/右下角打开「设置」，左导航 + 右侧内容就是它画的。
 
@@ -46,7 +46,7 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 ```ts
 // 文件：packages/my-plugin/src/index.ts
 // 位置：插件的 apply 里；三种注册都随本插件卸载自动回收
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 
 export function apply(ctx: Context): void {
   // ① 0 级分类：自己造一个；order 小者排前面（已有分类用它的 id 即可，不必改默认表）
@@ -88,7 +88,7 @@ export function apply(ctx: Context): void {
 没有登记的 `Config.group` 不会消失：注册场会把它补成 `auto` 小节并给出 issue，
 方便开发期发现“配置写了、菜单忘了挂”。
 
-左侧导航、分类标题与右上角的窗口按钮全部用 `@mini-canvas/ui-kit-shadcn` 渲染：
+左侧导航、分类标题与右上角的窗口按钮全部用 `@plume-canvas/ui-kit-shadcn` 渲染：
 导航项是 `Button`（`ghost` + `sm`），滚动条是 `ScrollArea`，窗口按钮是 `Button`
 （`ghost` + `icon-sm`）。尺寸跟主题的「控件尺寸」档位一起变，默认导航行高 32px。
 图标取不到组件时回落到 `Circle`，不会留下空位。
@@ -115,7 +115,7 @@ export function apply(ctx: Context): void {
 // 文件：packages/my-plugin/src/components/MyPreviewPanel.vue
 // 格式：Vue 单文件组件
 // 位置：接管某个设置分组的正文；这里只渲染一个字段 + 自己的预览
-import { injectSettingsFieldRenderer } from '@mini-canvas/canvas-render'
+import { injectSettingsFieldRenderer } from '@plume-canvas/canvas-render'
 
 const FieldRenderer = injectSettingsFieldRenderer()   // 拿到标准字段控件
 ```
@@ -128,7 +128,7 @@ const FieldRenderer = injectSettingsFieldRenderer()   // 拿到标准字段控�
 // 文件：packages/my-plugin/src/myPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：一个插件 —— 往默认设置面板里加菜单项 / 正文
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import MyPreviewPanel from './MyPreviewPanel.vue'
 
 export const name = 'my-settings'

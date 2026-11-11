@@ -224,7 +224,7 @@ export function applyTools(ctx: ServerCtx): void {
         }>('assetStore')
         if (!store || typeof store.saveUpload !== 'function') return { ok: false, error: '宿主没有资产服务，存不进库' }
         const wantedName = typeof args.name === 'string' && args.name ? args.name : built.manifest.name
-        const fileName = wantedName.endsWith('.mcnode') ? wantedName : wantedName + '.mcnode'
+        const fileName = wantedName.endsWith('.plumenode') ? wantedName : wantedName + '.plumenode'
         const folderId = typeof args.folderId === 'string' && args.folderId ? args.folderId : undefined
         const asset = await store.saveUpload(built.bytes, fileName, folderId)
         return {

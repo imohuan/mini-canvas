@@ -7,7 +7,7 @@
  * - 最短边不小于 imageCardMinShortSide；
  * - 两者冲突（20:1 细长图）时最短边优先，最长边允许超上限。
  *
- * 算法本身在 `@mini-canvas/canvas-base` 的 mediaFit（视频、拖入、翻转共用同一份），
+ * 算法本身在 `@plume-canvas/canvas-base` 的 mediaFit（视频、拖入、翻转共用同一份），
  * 这里只保留图片自己的配置键与写回补丁。注意内核 settings 是**全局同一张表、先声明者独占**，
  * 所以键名必须带本包前缀（imageCard…），不能取 "minShortSide" 这种通用名。
  *
@@ -25,7 +25,7 @@ import {
   readMediaCardLimits,
   resolveMediaCardLimits,
   type MediaCardLimits,
-} from '@mini-canvas/canvas-base'
+} from '@plume-canvas/canvas-base'
 
 /** 图片尺寸限制（最短边 / 最长边） */
 export type ImageFitLimits = MediaCardLimits

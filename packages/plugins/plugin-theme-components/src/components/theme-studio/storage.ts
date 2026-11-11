@@ -42,9 +42,9 @@ export function isCustomThemeId(id: string): boolean {
   return id === CUSTOM_THEME_ID
 }
 
-const KEY = 'mini-canvas:plugin-theme-lab:v2'
+const KEY = 'plume-canvas:plugin-theme-lab:v2'
 /** 旧版键（存了预设的那份）。启动时迁移一次，之后不再读写。 */
-const LEGACY_KEY = 'mini-canvas:plugin-theme-lab:v1'
+const LEGACY_KEY = 'plume-canvas:plugin-theme-lab:v1'
 
 /** 预设模板的 id 集合：这些永远只读，不能改名、不能改色、不能删除。 */
 export const PRESET_THEME_IDS: readonly string[] = [

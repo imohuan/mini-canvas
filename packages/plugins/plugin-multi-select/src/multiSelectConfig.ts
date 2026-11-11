@@ -17,7 +17,7 @@
  * 纯逻辑文件（零 Vue / 零 DOM）：schema、默认值、读取、CSS 生成都在这里，可直接单测；
  * 组件只负责把这里算好的样式贴到元素上。
  */
-import type { ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
+import type { ConfigSchema, InferConfig } from '@plume-canvas/canvas-base'
 
 /** 线型：实线 / 虚线 / 点线 */
 export type FrameLineStyle = 'solid' | 'dashed' | 'dotted'

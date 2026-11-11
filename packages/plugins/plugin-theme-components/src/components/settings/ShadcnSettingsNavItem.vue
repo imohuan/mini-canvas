@@ -7,7 +7,7 @@
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { Button } from '@plume-canvas/ui-kit-shadcn'
 import { asSettingsIcon } from './navCategory'
 
 const props = defineProps<{
@@ -52,13 +52,13 @@ const iconComponent = computed<Component>(() => asSettingsIcon(props.icon))
   width: 100%;
   /* 行高跟组件库尺寸档走：默认 32px，紧凑档 28px，大档跟着放大。
      设置侧栏每行是一个可点条目，留出比普通 sm 按钮更松的呼吸感。 */
-  min-height: var(--mct-size-control-h, 2.25rem);
+  min-height: var(--plume-size-control-h, 2.25rem);
   box-sizing: border-box;
   padding: 0 10px;
   border: 0;
-  /* 跟随全局圆角档位（--mct-radius），没选时用项目 8px。
+  /* 跟随全局圆角档位（--plume-radius），没选时用项目 8px。
      只写 --radius-control 会绕开主题设置，改圆角后左导航还是老样子。 */
-  border-radius: var(--mct-radius, var(--radius-control, 8px));
+  border-radius: var(--plume-radius, var(--radius-control, 8px));
   background: transparent;
   /* 未选中统一用弱化的文字色；不靠 opacity，避免和插件自带样式叠加后深浅不一 */
   color: var(--ui-ink-dim, #6b7280);

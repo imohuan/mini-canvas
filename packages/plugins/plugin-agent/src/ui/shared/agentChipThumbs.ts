@@ -12,7 +12,7 @@
  * 为什么要「同步读 + 异步取」两层：chip 由 ProseMirror 直接造 DOM，渲染那一刻只能同步
  * 拿地址；视频首帧要解码，所以先画图标，取到后再补图（补图走 refreshChips）。
  */
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 
 /** 同一视频只取一次：成功记地址，失败记一笔，避免每次重渲染都去解码一遍。 */
 const thumbCache = new Map<string, string>()

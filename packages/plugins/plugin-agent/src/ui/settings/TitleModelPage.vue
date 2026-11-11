@@ -8,7 +8,7 @@
  * 下拉直接用 ui-kit-shadcn（不再经 useUiComponent 转接）。
  */
 import { computed, onMounted, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { Save } from 'lucide-vue-next'
 import { useAgent } from '../../plugin/useAgent.js'
 import './settings.css'

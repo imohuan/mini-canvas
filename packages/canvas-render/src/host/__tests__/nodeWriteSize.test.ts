@@ -9,14 +9,14 @@
  *   一次 resize → 只报 size → node.size 与 data 镜像都更新 → 只记一条历史 → 落盘后刷新仍在。
  */
 import { describe, it, expect } from 'vitest'
-import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter, nodeSizePatch, type CanvasNode } from '@mini-canvas/canvas-data'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
+import { createPlumeHost } from '../createPlumeHost'
+import { MemoryStorageAdapter, nodeSizePatch, type CanvasNode } from '@plume-canvas/canvas-data'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
+import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
 import { splitNodeWritePatch } from '../canvasHostCore'
 
 async function boot(adapter = new MemoryStorageAdapter()) {
-  const { host } = await createMiniCanvasHost({
+  const { host } = await createPlumeHost({
     adapter,
     // 命令由宿主自带（registerCanvasCommands），插件只装节点类型
     coldPlugins: [nodeTextPlugin, nodeImagePlugin],

@@ -19,13 +19,13 @@
  * 依赖方向：只依赖 canvas-base / canvas-data / canvas-render / kernel。
  * 不 import plugin-theme-components（设计系统按钮走 ui 目录按名取，见 T08 守卫）。
  */
-import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import AudioPreview from './AudioPreview.vue'
 import AudioContent from './AudioContent.vue'
 import AudioTopToolbar from './AudioTopToolbar.vue'
 import { createAudioOps, downloadAudioNode, reanalyzeAudio, uploadAudio } from './audioOps'
-import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
+import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@plume-canvas/canvas-render'
 
 /** 节点类型名：web2api 的动作（types: ['audio']）与写入器（kind: 'audio'）都按它对齐 */
 export const AUDIO_NODE_TYPE = 'audio'
@@ -42,7 +42,7 @@ export interface AudioNodeService {
 }
 
 /** 类型增强缝（cordis 声明合并）：宿主/作者 ctx.audio 直访时类型为本服务 */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     audio: AudioNodeService
   }

@@ -68,7 +68,7 @@ depsOf({ name: 'a' })                                // → []
 | **成环** | `[core] Circular dependency detected: a → b → a`（路径由 `buildCyclePath` 算出来） |
 
 ```ts
-import { topoSort } from '@mini-canvas/kernel'
+import { topoSort } from '@plume-canvas/kernel'
 
 topoSort([{ name: 'a' }, { name: 'a' }])            // ✗ Duplicate plugin name: "a"
 topoSort([{ name: 'a', inject: ['a'] }])            // ✗ cannot depend on itself
@@ -158,7 +158,7 @@ topo-demo/
 // 文件：packages\docs\public\examples\kernel\topo-demo/src/manifest.ts
 // 格式：TypeScript 模块（装配清单 + 依赖声明）
 // 位置：一个静态插件清单，预检用
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 
 /** 一份清单，故意把「依赖方」写在「提供方」前面，看 topoSort 能不能排对 */
 export const manifest: Array<Pick<PluginModule, 'name' | 'inject'>> = [
@@ -178,7 +178,7 @@ export const KNOWN_SERVICES = new Set(['tools', 'settings', 'slots', 'view', 'ca
 // 文件：packages\docs\public\examples\kernel\topo-demo/src/main.ts
 // 格式：TypeScript 模块（预检脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：验证清单合法 + 演示四种错误的报错长什么样
-import { topoSort, depsOf } from '@mini-canvas/kernel'
+import { topoSort, depsOf } from '@plume-canvas/kernel'
 import { KNOWN_SERVICES, manifest } from './manifest'
 
 // ① 正常排序：依赖在前

@@ -6,7 +6,7 @@
  * 的判断顺序不变；「上游/自身图片变化」的 watch 也在本模块建立，入口按原顺序调用。
  */
 import { computed, ref, watch, type Ref } from 'vue'
-import { createUpstreamCapability, type CanvasRenderContext, type UpstreamCapability } from '@mini-canvas/canvas-render'
+import { createUpstreamCapability, type CanvasRenderContext, type UpstreamCapability } from '@plume-canvas/canvas-render'
 import { findUpstreamImageRef, resolveUpstreamImageFields, upstreamSourceFields } from '../textureSource'
 import { isDisplayUrl, resolveImageSrc } from '../imageRefs'
 import { buildUpstreamApiUrl, readUpstreamMediaPayload } from '../upstreamApi'

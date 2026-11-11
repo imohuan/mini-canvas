@@ -1,8 +1,8 @@
 /* 画布应用全局样式：Tailwind v4 入口 + 主题 token（暗色优先，亮色可切换） */
 @import "tailwindcss";
-/* shadcn 组件库（@mini-canvas/ui-kit-shadcn）：语义色映射到本项目 --ui-* token。
+/* shadcn 组件库（@plume-canvas/ui-kit-shadcn）：语义色映射到本项目 --ui-* token。
    必须写在 Tailwind 入口里，@theme / @custom-variant 才会被编译。 */
-@import "@mini-canvas/ui-kit-shadcn/styles.css";
+@import "@plume-canvas/ui-kit-shadcn/styles.css";
 /* Tailwind v4 不自动扫描 workspace 包源码：显式登记，否则组件类名会被裁掉。 */
 @source "../../ui-kit-shadcn/src";
 /* Agent 插件本地的 AI Elements 件（vendored shadcn-vue 组件）也要扫到。
@@ -54,7 +54,7 @@
 
 /* ===== 主题变量 =====
    通用 UI token（--ui-* / --sf-* / --ps-* / --dd-*）的唯一真源在
-   @mini-canvas/canvas-render/src/styles/ui-theme.css（随 canvas-render 加载即生效）。
+   @plume-canvas/canvas-render/src/styles/ui-theme.css（随 canvas-render 加载即生效）。
    切换方式 = `<html class="dark">`（Tailwind v4 / shadcn 通行做法）。 */
 
 /* ===== 小地图挂点（2026-10-28：跟随状态栏按钮）=====

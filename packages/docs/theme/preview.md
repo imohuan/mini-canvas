@@ -21,7 +21,7 @@
 
 ```ts
 // 文件：my-plugin/src/config.ts
-import type { ConfigSchema } from '@mini-canvas/canvas-base'
+import type { ConfigSchema } from '@plume-canvas/canvas-base'
 
 export const Config = {
   myOutlineColorLight: {
@@ -52,7 +52,7 @@ export const Config = {
 <!-- 文件：my-plugin/src/ThemePreviewOutline.vue -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue'
-import { useThemePreviewPluginColor, useThemePreviewScene } from '@mini-canvas/canvas-render'
+import { useThemePreviewPluginColor, useThemePreviewScene } from '@plume-canvas/canvas-render'
 
 const scene = useThemePreviewScene()
 // 读自己申报的两格制颜色；空值自动回落主题强调色
@@ -101,7 +101,7 @@ onBeforeUnmount(() => scene.unregisterBounds('my-plugin/outline'))
 
 ```ts
 // 文件：my-plugin/src/index.ts
-import { THEME_PREVIEW_SLOT } from '@mini-canvas/canvas-render'
+import { THEME_PREVIEW_SLOT } from '@plume-canvas/canvas-render'
 import ThemePreviewOutline from './ThemePreviewOutline.vue'
 
 export function apply(ctx: Context) {

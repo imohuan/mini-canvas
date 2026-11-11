@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'
+import { useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
+import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
 import { ICON_CLOSE, ICON_CONFIRM, ICON_KEYBOARD, ICON_LOOP, ICON_MAGNET } from './icons'
 
 defineProps<{

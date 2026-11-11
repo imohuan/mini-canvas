@@ -7,7 +7,7 @@
  * 组件拿到的是根 ctx（没有服务代理），所以这里一律 ctx.get(...)，不直访 ctx.xxx（计划 §0.1）。
  */
 import { markRaw, onBeforeUnmount, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 

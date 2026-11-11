@@ -19,8 +19,8 @@
  * 单值入口（register/get/unregister/set/has/slots）读写"默认 occupant(id='default', order=0)"这一格
  * （register 重复抛错防覆盖、set 覆盖式重设）；多 occupant 用 addOccupant。
  */
-import { SlotRegistry } from '@mini-canvas/kernel'
-import type { SlotEntry } from '@mini-canvas/kernel'
+import { SlotRegistry } from '@plume-canvas/kernel'
+import type { SlotEntry } from '@plume-canvas/kernel'
 
 /** 内置外观槽位（插件也可声明任意字符串新槽） */
 export type ThemeSlot =

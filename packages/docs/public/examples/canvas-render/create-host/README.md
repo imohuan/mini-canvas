@@ -1,6 +1,6 @@
 # canvas-render-host-demo
 
-跟着 [createMiniCanvasHost 用法](/canvas-render/create-host) 那篇写的最小示例：**不需要浏览器、不需要 Vue**，
+跟着 [createPlumeHost 用法](/canvas-render/create-host) 那篇写的最小示例：**不需要浏览器、不需要 Vue**，
 只用宿主句柄把「建宿主 → 建节点 → 撤销 → 热装插件 → 落盘 → 停用」走一遍。
 
 ```bash

@@ -23,7 +23,7 @@ interface OpenEntry {
 const openEntries = new Set<OpenEntry>()
 
 /** 浮层链：谁在谁里面打开的。用来豁免祖先，不让子浮层关掉父浮层。 */
-const POPUP_CHAIN_KEY = Symbol('mini-canvas:popup-chain')
+const POPUP_CHAIN_KEY = Symbol('plume-canvas:popup-chain')
 
 /** 打开自己：先关掉其它还开着的浮层，再登记自己。 */
 export function claimExclusive(entry: OpenEntry): void {

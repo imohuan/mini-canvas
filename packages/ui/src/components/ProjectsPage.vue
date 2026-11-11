@@ -14,7 +14,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
 import { useUiComponentOutside } from '../composables/ui'
-import { useCanvasContextOrRender, type FeedbackService } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender, type FeedbackService } from '@plume-canvas/canvas-render'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
 import ProjectsTabsNav from './projects/ProjectsTabsNav.vue'
@@ -349,7 +349,7 @@ function dateOf(ts: number): string {
     <aside class="projects-side flex w-[200px] flex-none flex-col gap-2 border-r border-line px-3 py-4">
       <div class="projects-brand flex items-center gap-2 px-2 pb-2 text-[15px] font-bold tracking-wide">
         <span class="grid size-6 place-items-center rounded-md bg-brand text-[13px] font-black text-white">M</span>
-        <span class="projects-brand-name">MiniCanvas</span>
+        <span class="projects-brand-name">Plume</span>
       </div>
       <Button size="sm" class="projects-new h-9 w-full gap-2 rounded-lg text-[13px] font-semibold" @click="newProject">
         <Plus :size="15" class="flex-none" /> <span class="projects-label">新建项目</span>
@@ -415,7 +415,7 @@ function dateOf(ts: number): string {
 
         <!-- 首页页签：欢迎语 -->
         <div v-else-if="nav === 'home'" class="py-12">
-          <p class="text-center text-[13px] text-ink/60">欢迎使用 MiniCanvas。选「项目」开始创作，或「资产」查看生成与上传的素材。</p>
+          <p class="text-center text-[13px] text-ink/60">欢迎使用 Plume。选「项目」开始创作，或「资产」查看生成与上传的素材。</p>
         </div>
 
         <!-- 项目页签 -->

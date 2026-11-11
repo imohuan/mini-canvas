@@ -10,8 +10,8 @@
  * 业务规则仍由 agent 服务负责，这里只改展示与提交入口。
  */
 import { computed, onMounted, ref } from 'vue'
-import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
-import type { FeedbackService } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender, useUiComponent } from '@plume-canvas/canvas-render'
+import type { FeedbackService } from '@plume-canvas/canvas-render'
 import { ArrowLeft, Plus, RotateCcw, Save, Trash2 } from 'lucide-vue-next'
 import { useAgent } from '../../plugin/useAgent.js'
 import type { ApprovalRuleRow } from '../../service/agentService.js'

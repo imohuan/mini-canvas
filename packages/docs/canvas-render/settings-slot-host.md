@@ -42,7 +42,7 @@ SettingsHost  = 只提供最外层 Dialog（遮罩 / 居中 / 标题栏 / ✕ / 
 
 ```ts
 // 组件 props（逐字来自 packages/vue-render/src/SlotHost.vue；
-// canvas-render 从 '@mini-canvas/vue-render/SlotHost.vue' 继续转发同名导出）
+// canvas-render 从 '@plume-canvas/vue-render/SlotHost.vue' 继续转发同名导出）
 defineProps<{
   slot: string        // 要渲染的槽名（插件经 ctx.slots.register(同名, …) 往里填）
   itemClass?: string  // 可选：给每个 occupant 的根元素额外加的 class
@@ -119,7 +119,7 @@ defineProps<{
      格式：Vue 单文件组件
      位置：CanvasHost 的 #ui 插槽内；开关由宿主自己的状态决定 -->
 <script setup lang="ts">
-import { CanvasHost, SettingsHost } from '@mini-canvas/canvas-render'
+import { CanvasHost, SettingsHost } from '@plume-canvas/canvas-render'
 import { APP_PLUGINS } from './assembly'
 import { ref } from 'vue'
 
@@ -188,7 +188,7 @@ interface SettingsPanelSource {
   onChange(cb: (key: string, value: unknown) => void): { dispose(): void }
 }
 
-type { SettingSchema, SettingEntry }   // 从 @mini-canvas/kernel 重导出
+type { SettingSchema, SettingEntry }   // 从 @plume-canvas/kernel 重导出
 ```
 
 **关键事实**：内核的 `SettingsStore` **不是响应式的**（plain class）。所以面板侧的刷新方式是：**订阅 `onChange` + 用本地版本号驱动重渲染**。`SettingsHost` 明确**不用 `:key` 重挂赢家组件**（否则输入框每敲一个键就重挂一次，焦点会丢）。
@@ -210,7 +210,7 @@ export function injectSettingsFieldRenderer(): Component | undefined
      格式：Vue 单文件组件
      位置：注册进 settingsGroup/<分组名> 的那个组件 -->
 <script setup lang="ts">
-import { injectSettingsFieldRenderer } from '@mini-canvas/canvas-render'
+import { injectSettingsFieldRenderer } from '@plume-canvas/canvas-render'
 
 const Field = injectSettingsFieldRenderer()   // ① 不在设置面板子树内时是 undefined
 </script>
@@ -261,7 +261,7 @@ plugin-panel-demo/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "面板演示",
     "description": "演示 overlay 浮层 + 设置页导航/正文三处槽位",
     "pluginName": "panel-demo",
@@ -270,8 +270,8 @@ plugin-panel-demo/
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
-  "dependencies": { "@mini-canvas/canvas-base": "workspace:*" },
-  "peerDependencies": { "@mini-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
+  "dependencies": { "@plume-canvas/canvas-base": "workspace:*" },
+  "peerDependencies": { "@plume-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
 }
 ```
 
@@ -283,7 +283,7 @@ plugin-panel-demo/
      位置：插件包内部；它只知道「我在 overlay 槽里」 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { flow } = useCanvasRender()
 // ① 缩放值：flow.viewport 是响应式 Ref，缩放一变这里自动重算
@@ -312,7 +312,7 @@ const zoomPercent = computed(() => Math.round((flow.viewport.value?.zoom ?? 1) *
      位置：插件包内部；它拿到的是统一设置数据源，不自己读内核 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasRender, type SettingsPanelSource } from '@mini-canvas/canvas-render'
+import { useCanvasRender, type SettingsPanelSource } from '@plume-canvas/canvas-render'
 
 // ① 设置面板宿主会把数据源当 prop 传进来（名字固定叫 settings）
 const props = defineProps<{ settings: SettingsPanelSource }>()
@@ -345,7 +345,7 @@ function setDemoText(v: string) {
 // 文件：plugin-panel-demo/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import DemoOverlay from './DemoOverlay.vue'
 import DemoSettingsPage from './DemoSettingsPage.vue'
 
@@ -388,18 +388,18 @@ export const panelDemoPlugin: PluginModule = { name, inject, apply }
 
 ### 怎么验证它真的挂上了
 
-1. 把插件加进装配清单（如 `APP_PLUGINS`），或在控制台热装：`MiniCanvas.installPlugin(panelDemoPlugin)`。
+1. 把插件加进装配清单（如 `APP_PLUGINS`），或在控制台热装：`Plume.installPlugin(panelDemoPlugin)`。
 2. 画布右上角出现缩放角标；缩放画布时数字跟着变。
 3. 打开设置面板：左导航里应出现插件注册的导航项，点进去能看到自己那一页。
 4. 控制台核对槽内容：
 
 ```ts
-const slots = window.MiniCanvas.getContext().get('slots')
+const slots = window.Plume.getContext().get('slots')
 slots.list('overlay').map((e) => ({ id: e.id, order: e.order }))
 // → 除了本插件那条，还有对齐线 / 多选框 / 底栏等一堆 occupant
 ```
 
-5. 卸载插件（`MiniCanvas.uninstallPlugin('panel-demo')`）后，角标与设置页都应立刻消失（注册随作用域自动回收）。
+5. 卸载插件（`Plume.uninstallPlugin('panel-demo')`）后，角标与设置页都应立刻消失（注册随作用域自动回收）。
 
 ## 常见坑
 

@@ -5,9 +5,9 @@
  * 插件包在**自己的仓库里**写代码时拿不到那个合并（它住在宿主包里），所以作者要自备一份。
  * 类型与宿主完全一致（RouteRegistrar 等的真实形状以 kernel 运行时为准 —— 本文件只影响编辑器提示）。
  */
-import type { PluginCapabilities } from '@mini-canvas/kernel'
+import type { PluginCapabilities } from '@plume-canvas/kernel'
 
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface PluginCapabilities {
     // Handler 的 c 参数是 Hono 的最小结构类型（真实运行时由宿主的 hono 提供 —— external）
     routes: {

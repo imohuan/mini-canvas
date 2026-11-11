@@ -1,6 +1,6 @@
 {
     "capturedAt": "2026-10-31T13:15:54.985Z",
-  "source": "window.MiniCanvasUI.getContext().surface()",
+  "source": "window.PlumeUI.getContext().surface()",
   "state": "started",
   "services": [
     {

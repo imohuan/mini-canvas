@@ -2,7 +2,7 @@ import type { Component } from 'vue'
 import DemoCounter from './demos/DemoCounter.vue'
 import ThemeKitProbe from './demos/ThemeKitProbe.vue'
 import ThemeKitDemo from './demos/ThemeKitDemo.vue'
-import MiniCanvasStage from './demos/MiniCanvasStage.vue'
+import PlumeStage from './demos/PlumeStage.vue'
 
 /**
  * 组件预览注册表：把「名字」映射到「可跑的组件」。
@@ -14,7 +14,7 @@ import MiniCanvasStage from './demos/MiniCanvasStage.vue'
  * 依赖完整宿主才能跑的界面，请改用 <ComponentPreviewFrame src="..."/>。
  *
  * 登记方式：
- *   import MyPanel from '@mini-canvas/plugin-xxx/src/components/MyPanel.vue'
+ *   import MyPanel from '@plume-canvas/plugin-xxx/src/components/MyPanel.vue'
  *   'MyPanel': { component: MyPanel, title: '我的面板', description: '...' }
  */
 export interface PreviewEntry {
@@ -32,8 +32,8 @@ export const previewRegistry: Record<string, PreviewEntry> = {
     title: '组件演示台',
   },
   // 真画布：节点壳 / 连线 / 背景 / 浮动端口的活演示
-  MiniCanvasStage: {
-    component: MiniCanvasStage,
+  PlumeStage: {
+    component: PlumeStage,
     title: '真画布（默认主题在跑）',
   },
   // 渲染实验：默认主题的纯 UI 件（验证文档站能否直接跑主题包组件）

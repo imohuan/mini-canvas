@@ -69,7 +69,7 @@ my-stamp-button/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "盖章按钮",
     "description": "往图片节点顶栏装一个「盖章」按钮 + 一个功能模式",
     "pluginName": "stamp-button",
@@ -82,10 +82,10 @@ my-stamp-button/
     "./*": "./src/*"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*"
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5"
   }
 }
@@ -94,7 +94,7 @@ my-stamp-button/
 ```ts
 // 文件：my-stamp-button/src/index.ts
 import { markRaw } from 'vue'
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import StampPanel from './StampPanel.vue'
 
 export const name = 'stamp-button'
@@ -156,7 +156,7 @@ export function apply(ctx: Context): void {
 <!-- 文件：my-stamp-button/src/StampEntry.vue -->
 <!-- 往默认顶栏按钮组里插的一条：按钮从 ui 目录取，配全局工具栏样式 -->
 <script setup lang="ts">
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { openStampMode } from './stampSession'   // 你自己的会话状态（纯内存，不写节点 data）
 
 const Button = useUiComponent('Button')
@@ -189,7 +189,7 @@ function enter(): void {
 <!-- 文件：my-stamp-button/src/StampPanel.vue -->
 <!-- 功能模式的顶栏内容：整格替换默认按钮组 -->
 <script setup lang="ts">
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { closeStampMode } from './stampSession'
 
 const Button = useUiComponent('Button')

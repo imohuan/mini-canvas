@@ -11,7 +11,7 @@
  *
  * 作用域：整个应用常驻（inject: []），不随画布会话装卸；项目数据与画布无关。
  */
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import * as api from './composables/projectsApi'
 import type {
   AssetFolderSummary,

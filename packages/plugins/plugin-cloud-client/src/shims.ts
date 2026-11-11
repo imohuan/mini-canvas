@@ -37,7 +37,7 @@ export interface PluginModule {
   onCanvasReady?(ctx: Context): void | (() => void)
 }
 
-// —— StorageAdapter 的资源形式孔位（与 @mini-canvas/canvas-data 的 storage/types.ts 同形） ——
+// —— StorageAdapter 的资源形式孔位（与 @plume-canvas/canvas-data 的 storage/types.ts 同形） ——
 // 本插件不能 import 工作区包，故就地声明（产物必须自包含）。
 
 export interface StorageAdapterCapability {

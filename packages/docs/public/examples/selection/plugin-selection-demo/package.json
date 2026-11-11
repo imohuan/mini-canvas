@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：选中集",
     "description": "跟着 selection 服务学：订阅名单变化 + 反选命令 + 选中计数徽章",
     "pluginName": "selection-demo",
@@ -15,8 +15,8 @@
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

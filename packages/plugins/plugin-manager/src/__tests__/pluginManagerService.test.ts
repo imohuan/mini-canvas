@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from 'vitest'
-import { Context, SaveServiceImpl, MemoryStorageAdapter, LocalStorageAdapter } from '@mini-canvas/canvas-data'
+import { Context, SaveServiceImpl, MemoryStorageAdapter, LocalStorageAdapter } from '@plume-canvas/canvas-data'
 import {
   createPluginManagerService as createService,
   INSTALLED_KEY,
@@ -7,7 +7,7 @@ import {
   baseOfCatalogUrl,
   type CreateServiceOptions,
 } from '../pluginManagerService'
-import { ADMIN_TOKEN_HEADER, setAdminToken, type PluginModule } from '@mini-canvas/canvas-base'
+import { ADMIN_TOKEN_HEADER, setAdminToken, type PluginModule } from '@plume-canvas/canvas-base'
 
 /** 最小的 localStorage 替身（Node 里没有 DOM；令牌读写走全局 localStorage） */
 class MemoryStorage {
@@ -86,7 +86,7 @@ function fakeDom(win: Record<string, unknown>, opts: { failUrls?: string[] } = {
         }
         const m = src.match(/plugins\/([^/]+)\//)
         const pkg = m?.[1] ?? 'unknown'
-        win['MiniCanvasPlugin' + pkg] = { name: pkg, apply() {} }
+        win['PlumePlugin' + pkg] = { name: pkg, apply() {} }
         queueMicrotask(() => (el.onload as () => void)?.())
       },
     },
@@ -432,7 +432,7 @@ describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
   }
 
   it('searchNpmPlugins 走服务端搜索端点并返回结果', async () => {
-    const results = [{ pkg: '@mini-canvas/plugin-demo', title: 'Demo', description: '', version: '1.0.0', date: '', hasServer: true }]
+    const results = [{ pkg: '@plume-canvas/plugin-demo', title: 'Demo', description: '', version: '1.0.0', date: '', hasServer: true }]
     const { svc } = bootNpm({
       '/api/npm-plugins/search': { body: { ok: true, results } },
     })
@@ -444,15 +444,15 @@ describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
     const { svc } = bootNpm({
       '/api/npm-plugins/install': { body: { ok: false, error: '需要 confirm: true' }, status: 400 },
     })
-    await expect(svc.installFromNpm('@mini-canvas/plugin-demo', { serverConfirm: false })).rejects.toThrow('需要 confirm: true')
+    await expect(svc.installFromNpm('@plume-canvas/plugin-demo', { serverConfirm: false })).rejects.toThrow('需要 confirm: true')
   })
 
   it('updateFromNpm 返回 updated/to；listNpmInstalled 返回记录', async () => {
     const { svc } = bootNpm({
       '/api/npm-plugins/update': { body: { ok: true, updated: true, to: '1.1.0' } },
-      '/api/npm-plugins/installed': { body: { ok: true, plugins: [{ pkg: '@mini-canvas/plugin-demo', version: '1.1.0', installedAt: 't' }] } },
+      '/api/npm-plugins/installed': { body: { ok: true, plugins: [{ pkg: '@plume-canvas/plugin-demo', version: '1.1.0', installedAt: 't' }] } },
     })
-    const r = await svc.updateFromNpm('@mini-canvas/plugin-demo')
+    const r = await svc.updateFromNpm('@plume-canvas/plugin-demo')
     expect(r).toEqual({ updated: true, to: '1.1.0' })
     const list = await svc.listNpmInstalled()
     expect(list[0].version).toBe('1.1.0')
@@ -819,11 +819,11 @@ describe('plugin-manager 服务：从 NPM 卸载只调一次后台卸载（用�
       ok: true,
       plugins: [
         {
-          id: 'mini-canvas-plugin-demo',
+          id: '@plume-canvas/plugin-demo',
           name: 'demo',
           title: 'Demo',
-          url: '/plugins/mini-canvas-plugin-demo/demo.js',
-          server: { url: '/plugins/mini-canvas-plugin-demo/server.js', sha256: 'abc' },
+          url: '/plugins/@plume-canvas/plugin-demo/demo.js',
+          server: { url: '/plugins/@plume-canvas/plugin-demo/server.js', sha256: 'abc' },
         },
       ],
     }
@@ -843,9 +843,9 @@ describe('plugin-manager 服务：从 NPM 卸载只调一次后台卸载（用�
       win,
     })
     await svc.refresh()
-    await svc.install('mini-canvas-plugin-demo', { serverConfirm: true })
+    await svc.install('@plume-canvas/plugin-demo', { serverConfirm: true })
     calls.length = 0 // 只看卸载阶段的请求
-    await svc.uninstallFromNpm('mini-canvas-plugin-demo')
+    await svc.uninstallFromNpm('@plume-canvas/plugin-demo')
     const serverUninstallCalls = calls.filter((u) => u.includes('/api/server-plugins/uninstall'))
     expect(serverUninstallCalls, '不该再调 /api/server-plugins/uninstall（NPM 卸载已删过后台文件）').toEqual([])
     expect(calls.some((u) => u.includes('/api/npm-plugins/uninstall'))).toBe(true)
@@ -902,11 +902,11 @@ describe('plugin-manager 服务：从 NPM 安装只调一次后台安装（与�
       ok: true,
       plugins: [
         {
-          id: 'mini-canvas-plugin-demo',
+          id: '@plume-canvas/plugin-demo',
           name: 'demo',
           title: 'Demo',
-          url: '/plugins/mini-canvas-plugin-demo/demo.js',
-          server: { url: '/plugins/mini-canvas-plugin-demo/server.js', sha256: 'abc' },
+          url: '/plugins/@plume-canvas/plugin-demo/demo.js',
+          server: { url: '/plugins/@plume-canvas/plugin-demo/server.js', sha256: 'abc' },
         },
       ],
     }
@@ -926,7 +926,7 @@ describe('plugin-manager 服务：从 NPM 安装只调一次后台安装（与�
     })
     await svc.refresh()
     calls.length = 0 // 只看安装阶段的请求
-    await svc.installFromNpm('mini-canvas-plugin-demo', { serverConfirm: true })
+    await svc.installFromNpm('@plume-canvas/plugin-demo', { serverConfirm: true })
     const serverInstallCalls = calls.filter((u) => u.includes('/api/server-plugins/install'))
     expect(serverInstallCalls, '不该再调 /api/server-plugins/install（NPM 安装已装过后台半）').toEqual([])
     expect(calls.some((u) => u.includes('/api/npm-plugins/install'))).toBe(true)
@@ -988,9 +988,9 @@ describe('plugin-manager 服务：管理令牌', () => {
     await svc.refresh()
     await svc.install('plugin-srv', { serverConfirm: true })
     await svc.uninstall('plugin-srv')
-    await svc.installFromNpm('@mini-canvas/plugin-demo', { serverConfirm: true })
-    await svc.updateFromNpm('@mini-canvas/plugin-demo')
-    await svc.uninstallFromNpm('@mini-canvas/plugin-demo')
+    await svc.installFromNpm('@plume-canvas/plugin-demo', { serverConfirm: true })
+    await svc.updateFromNpm('@plume-canvas/plugin-demo')
+    await svc.uninstallFromNpm('@plume-canvas/plugin-demo')
 
     const protectedPaths = [
       '/api/server-plugins/install',
@@ -1012,7 +1012,7 @@ describe('plugin-manager 服务：管理令牌', () => {
     const { calls, fetchImpl } = tokenProbe(undefined)
     const { svc } = bootProbe(fetchImpl)
     await svc.refresh()
-    await svc.installFromNpm('@mini-canvas/plugin-demo', { serverConfirm: true })
+    await svc.installFromNpm('@plume-canvas/plugin-demo', { serverConfirm: true })
     await svc.searchNpmPlugins('demo')
     await svc.browseNpmPlugins()
     await svc.listNpmInstalled()
@@ -1034,6 +1034,6 @@ describe('plugin-manager 服务：管理令牌', () => {
       return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [], loaded: [] }), text: async () => '' } as Response
     }) as unknown as typeof fetch
     const { svc } = bootProbe(fetchImpl)
-    await expect(svc.installFromNpm('@mini-canvas/plugin-demo')).rejects.toThrow(/设置 → 插件里填写管理令牌.*需要管理令牌/)
+    await expect(svc.installFromNpm('@plume-canvas/plugin-demo')).rejects.toThrow(/设置 → 插件里填写管理令牌.*需要管理令牌/)
   })
 })

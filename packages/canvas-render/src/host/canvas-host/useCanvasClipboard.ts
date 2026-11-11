@@ -10,8 +10,8 @@ import {
   dispatchClipboardPaste,
   type ClipboardWriteHandler,
   type ClipboardPasteHandler,
-} from '@mini-canvas/canvas-data'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+} from '@plume-canvas/canvas-data'
+import type { CanvasHostHandle } from '../createPlumeHost'
 
 export function useCanvasClipboard(opts: {
   hostRef: { value: CanvasHostHandle | undefined }

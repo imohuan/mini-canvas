@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { cardSizePatch, defaultFlipIO, flipImageNode, readFitLimits, type FlipBitmapIO } from '../flipImage'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import {
   EdgeStore, GraphDocument, History, MemoryStorageAdapter, NodeStore, ResourceStore,
   SaveServiceImpl, Selection, createDocService,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 
 /** 造一个假位图读写口：不碰 canvas，宽度/高度按调用记录返回 */
 function fakeIO(): FlipBitmapIO & { painted: Array<{ width: number; height: number; axis: string }> } {

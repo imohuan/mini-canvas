@@ -5,8 +5,8 @@
  *     插件（context-menu / node-find / shortcut-manager / mini-map …）拿不到，只能各写一套
  *     硬编码浅色值 → 暗色主题下这些浮层永远是"白底黑字"，且每个插件都要自己发明一个
  *     `theme` 配置项。
- *   - 本文件随 `@mini-canvas/canvas-render` 加载即生效（index.ts 顶部 import），
- *     所有依赖 canvas-render 的渲染插件自动获得同一套 token；宿主应用（@mini-canvas/ui）
+ *   - 本文件随 `@plume-canvas/canvas-render` 加载即生效（index.ts 顶部 import），
+ *     所有依赖 canvas-render 的渲染插件自动获得同一套 token；宿主应用（@plume-canvas/ui）
  *     不再重复定义，直接消费。
  *
  * 切换机制（**纯 CSS，不需要任何配置项 / JS 监听**）：
@@ -208,7 +208,7 @@
   /* 浮层圆角：优先跟随主题全局档位；没选时保持原来的 16px。
      下拉 / 选择 / 参数面板全走 --dd-radius，
      如果这里硬写 16px，用户把圆角调大时这些浮层不会变（2026-11-02 反馈）。 */
-  --dd-radius: var(--mct-radius, 16px);
+  --dd-radius: var(--plume-radius, 16px);
   /* ===== 画布层叠带（z-index 唯一事实源的 CSS 出口）=====
      数值与 packages/canvas-render/src/contracts/layers.ts 的 LAYERS **逐项一致**，
      由 src/contracts/__tests__/layerTokens.test.ts 扫描本文件比对，漂移即报错。

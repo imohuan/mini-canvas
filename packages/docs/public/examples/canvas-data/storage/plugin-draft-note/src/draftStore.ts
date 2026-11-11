@@ -2,7 +2,7 @@
 // 格式：TypeScript 模块（薄封装：一处管住 key 与换后端重读）
 // 位置：插件包里唯一碰 save 的地方
 
-import type { SaveService } from '@mini-canvas/canvas-data'
+import type { SaveService } from '@plume-canvas/canvas-data'
 
 /** 裸 key 统一小写 kebab —— 前缀由 save 自己加（canvas:draft-note / config:draft-note-panel） */
 export const DRAFT_KEY = 'draft-note'

@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { apply, name, inject } from '../index'
 import { apply as applyGallery } from '../gallery'
 import { apply as applyUiSlots } from '../ui-slots'
@@ -20,20 +20,20 @@ import { apply as applyHotReload } from '../hot-reload'
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const pkg = JSON.parse(readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf8')) as {
-  miniCanvas?: { installable?: boolean; builtin?: boolean; pluginName?: string; title?: string }
+  plume?: { installable?: boolean; builtin?: boolean; pluginName?: string; title?: string }
   scripts?: Record<string, string>
 }
 
 describe('demo-kit 身份', () => {
   it('是可安装示例，不是产品自带件', () => {
-    expect(pkg.miniCanvas?.installable).toBe(true)
-    expect(pkg.miniCanvas?.builtin).toBeUndefined()
+    expect(pkg.plume?.installable).toBe(true)
+    expect(pkg.plume?.builtin).toBeUndefined()
   })
 
   it('清单名、运行时名一致，标题能认出是示例', () => {
-    expect(pkg.miniCanvas?.pluginName).toBe('demo-kit')
+    expect(pkg.plume?.pluginName).toBe('demo-kit')
     expect(name).toBe('demo-kit')
-    expect(pkg.miniCanvas?.title).toContain('示例')
+    expect(pkg.plume?.title).toContain('示例')
   })
 
   it('四套演示都不声明硬依赖（缺主题也能装，只是少了默认件）', () => {
@@ -44,7 +44,7 @@ describe('demo-kit 身份', () => {
     expect(typeof pkg.scripts?.build).toBe('string')
     const out = path.join(PKG_ROOT, 'dist/plugin-demo-kit.js')
     if (!existsSync(out)) return
-    expect(readFileSync(out, 'utf8')).toMatch(/\.MiniCanvasPluginDemoKit\s*=\s*\{\}/)
+    expect(readFileSync(out, 'utf8')).toMatch(/\.PlumePluginDemoKit\s*=\s*\{\}/)
   })
 })
 

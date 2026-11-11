@@ -48,7 +48,7 @@ async function writeTemplate(template: string): Promise<void> {
   const target = path.join(
     file,
     'agent',
-    'mini-canvas',
+    'plume-canvas',
     'agents',
     'canvas-agent',
     'agent_state',
@@ -69,14 +69,14 @@ describe('提示词模板体检', () => {
 
   it('模板被写成纯文本时体检报警（列出缺的记号）', async () => {
     // 服务起来时已经写过一次配置；这里把它改坏
-    await writeTemplate('你是 mini-canvas 画布助手。')
+    await writeTemplate('你是 plume-canvas 画布助手。')
     const cfg = await call('GET', '/api/agent/config')
     expect(cfg.json.template.ok).toBe(false)
     expect(cfg.json.template.missing).toContain('{{AGENTS_MD}}')
   })
 
   it('一键恢复：把模板换回出厂那份，体检随即转绿', async () => {
-    await writeTemplate('你是 mini-canvas 画布助手。')
+    await writeTemplate('你是 plume-canvas 画布助手。')
     expect((await call('GET', '/api/agent/config')).json.template.ok).toBe(false)
 
     const restored = await call('POST', '/api/agent/template/restore')

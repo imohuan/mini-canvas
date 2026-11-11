@@ -2,8 +2,8 @@
 // 格式：TypeScript 模块（纯逻辑小助手）
 // 位置：把 doc 的当前状态组装成连接校验要的 ValidateContext
 
-import { typeConnectionDef, validateConnection } from '@mini-canvas/canvas-data'
-import type { ConnectionInput, DocService, ValidateContext, ValidationResult } from '@mini-canvas/canvas-data'
+import { typeConnectionDef, validateConnection } from '@plume-canvas/canvas-data'
+import type { ConnectionInput, DocService, ValidateContext, ValidationResult } from '@plume-canvas/canvas-data'
 
 /**
  * 从 doc 现场组装校验上下文。

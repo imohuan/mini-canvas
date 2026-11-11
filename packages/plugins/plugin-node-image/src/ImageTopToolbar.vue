@@ -9,8 +9,8 @@
  */
 import { computed, ref } from 'vue'
 import { beginCrop, beginExpand, editDraft, endEdit, isCropping, isEditing, isExpanding, setEditDraft } from './cropSession'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, SlotAnchor, ToolbarIcon } from '@plume-canvas/canvas-render'
+import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@plume-canvas/canvas-render'
 import { createImageOps, uploadImage } from './imageOps'
 import { readImageSourceFields } from './imageRefs'
 import ImagePaintEntry from './ImagePaintEntry.vue'

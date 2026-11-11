@@ -1,5 +1,5 @@
 {
-  "name": "@mini-canvas/canvas-render",
+  "name": "@plume-canvas/canvas-render",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -21,14 +21,14 @@
     "vue": "^3.5.34"
   },
   "dependencies": {
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
-    "@mini-canvas/vue-render": "workspace:*"
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
+    "@plume-canvas/vue-render": "workspace:*"
   },
   "devDependencies": {
-    "@mini-canvas/plugin-multi-select": "workspace:*",
-    "@mini-canvas/plugin-node-image": "workspace:*",
-    "@mini-canvas/plugin-node-text": "workspace:*",
+    "@plume-canvas/plugin-multi-select": "workspace:*",
+    "@plume-canvas/plugin-node-image": "workspace:*",
+    "@plume-canvas/plugin-node-text": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue-flow/core": "^1.48.2",
     "typescript": "~6.0.2",

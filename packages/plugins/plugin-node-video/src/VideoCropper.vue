@@ -3,7 +3,7 @@
  * VideoCropper —— 视频编辑浮层（**薄封装**）。
  *
  * 框的几何、遮罩、方形控制点、拖拽会话、量测全部来自渲染层的通用件
- * @mini-canvas/canvas-render 的 MediaFrameOverlay —— 图片节点用的是同一个组件，
+ * @plume-canvas/canvas-render 的 MediaFrameOverlay —— 图片节点用的是同一个组件，
  * 用户明确要求「这完全可以做成一个通用组件」。
  *
  * 本文件只剩三件事：
@@ -18,7 +18,7 @@
  * 编辑态下操作栏换成确认/取消，浮层只负责画框。这样按钮位置在所有编辑场景里一致，
  * 也不会被视频画面（通常是暗的）淹没。
  */
-import { MediaFrameOverlay } from '@mini-canvas/canvas-render'
+import { MediaFrameOverlay } from '@plume-canvas/canvas-render'
 import type { Rect } from './videoCrop'
 
 const props = defineProps<{

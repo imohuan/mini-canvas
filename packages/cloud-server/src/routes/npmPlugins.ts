@@ -5,9 +5,9 @@
  *
  * 装 NPM 包 = **服务端代码执行**（server.js 下次启动会被 loader import）。所以：
  * 1. `confirm: true` 必填（界面弹"服务端权限"确认，与手动安装同一语义）；
- * 2. **scope 白名单**：默认只允许 @mini-canvas/ 开头的包（防"npm 上任意包"被装进来；
+ * 2. **scope 白名单**：默认只允许 @plume-canvas/ 开头的包（防"npm 上任意包"被装进来；
  *    放开走 opts.scopeAllowlist 配置）；
- * 3. installable 校验：包的 miniCanvas.installable !== true → 拒装（不是插件装了也没用）；
+ * 3. installable 校验：包的 plume.installable !== true → 拒装（不是插件装了也没用）；
  * 4. server 产物完整性：下载后**服务端自己算 sha256** 存入来源记录（next 启动 loader
  *    的文件即下载时那份；来源记录里留哈希供审计）；
  * 5. 前端半落 pluginsDir（catalog 自动收录 → 管理页可装卸）；后台半落 serverPluginsDir。
@@ -21,7 +21,7 @@ import { Hono } from 'hono'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { safeJson } from '@mini-canvas/plugin-agent/server/routes/agent.js'
+import { safeJson } from '@plume-canvas/plugin-agent/server/routes/agent.js'
 import { createNpmClient, extractTarball, NpmNotFoundError, type NpmClientOptions } from '../npm/npmClient.js'
 import { withAudit, type AuditBase } from '../auditPair.js'
 import type { AuditAppendInput } from '../audit.js'
@@ -29,12 +29,12 @@ import type { AuditAppendInput } from '../audit.js'
 /**
  * 允许安装的包名前缀（装 NPM 包 = 服务端执行代码，所以白名单起步）。
  *
- * 是**包名前缀**不是 npm scope：既能是 "@imohuan/"（scope 包），也能是 "mini-canvas-"（普通包）。
- * 可用 opts.scopeAllowlist 覆盖，或环境变量 MINI_CANVAS_NPM_SCOPES（逗号分隔）在服务层注入。
+ * 是**包名前缀**不是 npm scope：既能是 "@imohuan/"（scope 包），也能是 "plume-canvas-"（普通包）。
+ * 可用 opts.scopeAllowlist 覆盖，或环境变量 PLUME_NPM_SCOPES（逗号分隔）在服务层注入。
  */
-const DEFAULT_PREFIXES = ['mini-canvas-', '@mini-canvas/']
+const DEFAULT_PREFIXES = ['plume-canvas-', '@plume-canvas/']
 
-  /** 包名校验：scope 包（@scope/name）或普通包（mini-canvas-xxx）都收；不含路径分隔符/大写 */
+  /** 包名校验：scope 包（@scope/name）或普通包（plume-canvas-xxx）都收；不含路径分隔符/大写 */
   const PKG_RE = /^(@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/
 
 export interface NpmPluginsRoutesOptions extends NpmClientOptions {
@@ -44,7 +44,7 @@ export interface NpmPluginsRoutesOptions extends NpmClientOptions {
   serverPluginsDir: string
   /** 来源记录文件（NPM 装了什么、什么版本，落 JSON 供 GET installed 与 update 比对） */
   recordFile?: string
-  /** 允许的包名前缀（缺省见 DEFAULT_PREFIXES；既支持 @scope/ 也支持 mini-canvas- 这类前缀） */
+  /** 允许的包名前缀（缺省见 DEFAULT_PREFIXES；既支持 @scope/ 也支持 plume-canvas- 这类前缀） */
   scopeAllowlist?: string[]
   /** 热装/热卸钩子：装完/卸完当场生效（见 serverFramework/hotLoad.ts）；缺省不调 */
   hotInstall?: (id: string) => Promise<{ ok: boolean; error?: string }>
@@ -81,7 +81,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   const prefixAllowed = (pkg: string): boolean => prefixes.some((s) => pkg.startsWith(s))
 
   /**
-   * 判断一个包的 miniCanvas 段是不是"可用插件"。
+   * 判断一个包的 plume 段是不是"可用插件"。
    *
    * 用**结构**（pluginName + 至少一个 web/server 入口）而不是 installable 标记来判定 ——
    * 因为 installable 的语义是"是否进本地插件列表"（作者为了不重复展示会关掉它），
@@ -92,22 +92,22 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     return mini.web !== undefined || mini.server !== undefined
   }
 
-  /** 额外要直查的包名（环境变量 MINI_CANVAS_NPM_PACKAGES；绕过 npm 搜索的排序问题） */
+  /** 额外要直查的包名（环境变量 PLUME_NPM_PACKAGES；绕过 npm 搜索的排序问题） */
   const extraPackages = (): string[] =>
-    (process.env.MINI_CANVAS_NPM_PACKAGES ?? '')
+    (process.env.PLUME_NPM_PACKAGES ?? '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
 
   /**
-   * 维护者名（环境变量 MINI_CANVAS_NPM_MAINTAINER；默认取第一个 scope 前缀里的名字）。
+   * 维护者名（环境变量 PLUME_NPM_MAINTAINER；默认取第一个 scope 前缀里的名字）。
    *
    * 为什么要有：npm 搜索按**热度**排序，刚发布的包（0 下载）用包名/前缀词**永远搜不到**
-   * （实测：`mini-canvas-plugin-` 搜 250 条命中 0 个）。但 `maintainer:xxx` 是按发布者过滤的，
+   * （实测：`@plume-canvas/plugin-` 搜 250 条命中 0 个）。但 `maintainer:xxx` 是按发布者过滤的，
    * 能把同一作者的全部包列出来（实测 30 个里就有我们的包）。所以浏览/搜索都带上它兜底。
    */
   const maintainers = (): string[] =>
-    (process.env.MINI_CANVAS_NPM_MAINTAINER ?? 'imohuan')
+    (process.env.PLUME_NPM_MAINTAINER ?? 'imohuan')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
@@ -160,7 +160,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           const pk = await client.packument(name)
           const latest = pk['dist-tags'].latest
           if (!latest) return null
-          const mini = (pk.versions[latest] as unknown as { miniCanvas?: Record<string, unknown> })?.miniCanvas
+          const mini = (pk.versions[latest] as unknown as { plume?: Record<string, unknown> })?.plume
           if (!isPluginMeta(mini)) return null
           const m = mini as Record<string, unknown>
           return {
@@ -198,7 +198,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   })
 
   // ------------------------------------------------------------------
-  // 搜索：转发 npm 搜索 + 按 miniCanvas.installable 二次过滤（路由职责）
+  // 搜索：转发 npm 搜索 + 按 plume.installable 二次过滤（路由职责）
   // ------------------------------------------------------------------
   app.get('/api/npm-plugins/search', async (c) => {
     const q = c.req.query('q')?.trim() ?? ''
@@ -210,12 +210,12 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       //      也会把作者的整份插件列表倒出来（用户实测：搜"撒旦法的发"下面照样有数据）。
       // 候选池 = 公共三路并集 + 本次搜索特有的两类：
       //   · 输入本身（精确包名场景：搜全名要必中，哪怕热度排不上）
-      //   · "前缀 + 输入"（让 plugin-demo 能命中 @scope/plugin-demo / mini-canvas-plugin-demo）
+      //   · "前缀 + 输入"（让 plugin-demo 能命中 @scope/plugin-demo / @plume-canvas/plugin-demo）
       //   安全性由后面的名称校验 + packument 实查兜底：查不到/不匹配的自然被丢掉。
       const extra: string[] = [q]
       if (/^[a-z0-9-]+$/i.test(q)) {
         for (const prefix of prefixes) {
-          extra.push(prefix + q) // @scope/ + q  或  mini-canvas- + q
+          extra.push(prefix + q) // @scope/ + q  或  plume-canvas- + q
           extra.push(prefix.replace(/\/$/, '') + '-' + q)
         }
       }
@@ -231,7 +231,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       // ② 名称校验：只留包名包含搜索词的（大小写不敏感）。
       //    搜全名 / 前缀 / 词片段都能命中；搜无关内容则一个都不留（正确行为）。
       //    注意："包名含搜索词"用**词义包含**（去掉 scope 前缀后再比），这样 plugin-demo
-      //    能命中 @mini-canvas/plugin-demo，而乱七八糟的词一个都不留。
+      //    能命中 @plume-canvas/plugin-demo，而乱七八糟的词一个都不留。
       const needle = q.toLowerCase()
       const matched = [...pool].filter((n) => {
         const bare = n.replace(/^@[^/]+\//, '').toLowerCase()
@@ -264,13 +264,13 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     if (!version || !pk.versions[version]) {
       return { status: 404, body: { ok: false, error: '版本不存在：' + (wantVersion ?? '(latest)') } }
     }
-    const vInfo = pk.versions[version] as unknown as { tarball?: string; dist?: { tarball: string }; miniCanvas?: Record<string, unknown> } & Record<string, unknown>
+    const vInfo = pk.versions[version] as unknown as { tarball?: string; dist?: { tarball: string }; plume?: Record<string, unknown> } & Record<string, unknown>
     const tarballUrl = vInfo.tarball ?? vInfo.dist?.tarball
-    const mini = vInfo.miniCanvas as Record<string, unknown> | undefined
+    const mini = vInfo.plume as Record<string, unknown> | undefined
     // ③ installable 校验
     // ③ 是不是插件：看结构（pluginName + web/server 入口），不看 installable
     if (!isPluginMeta(mini)) {
-      return { status: 400, body: { ok: false, error: '该包不是 miniCanvas 插件（缺 miniCanvas.pluginName 或 web/server 入口）' } }
+      return { status: 400, body: { ok: false, error: '该包不是 plume 插件（缺 plume.pluginName 或 web/server 入口）' } }
     }
 
     // ④ 下载 + 解包到临时目录
@@ -297,13 +297,13 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       }
 
       // ⑥ 前端半 → pluginsDir/<pkgName>/dist/（catalog 自动收录）
-      // 落盘目录名：包名去掉 scope 前缀、把 / 换成 __（普通包如 mini-canvas-plugin-showcase 原样）
+      // 落盘目录名：包名去掉 scope 前缀、把 / 换成 __（普通包如 @plume-canvas/plugin-showcase 原样）
       const pkgDirName = dirNameOf(pkg)
       const webDest = path.join(opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins'), pkgDirName, 'dist')
       await fs.mkdir(webDest, { recursive: true })
       const webText = await fs.readFile(path.join(distDir, webFile), 'utf8')
       await fs.writeFile(path.join(webDest, webFile), webText, 'utf8')
-      // ⚠️ package.json 必须一起落：catalog 靠它的 miniCanvas 段判定"进不进本地列表"并取
+      // ⚠️ package.json 必须一起落：catalog 靠它的 plume 段判定"进不进本地列表"并取
       // title/globalName/server 元数据。少了它，前端半文件在、但管理页列不出来（实测踩过）。
       //
       // 关键：**强制补上 installable: true**。作者为了让源码包不进列表，会在发布的包里关掉它；
@@ -312,9 +312,9 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       // catalog 同名插件去重时据此优先保留副本（卸载只删副本、不动源码），
       // 比猜"id 里有没有 scope__"可靠（包名去 scope 后那个判据会失效）。
       const pkgObj = JSON.parse(await fs.readFile(pkgJsonPath, 'utf8')) as {
-        miniCanvas?: Record<string, unknown>
+        plume?: Record<string, unknown>
       }
-      pkgObj.miniCanvas = { ...(pkgObj.miniCanvas ?? {}), installable: true, npmInstalled: true }
+      pkgObj.plume = { ...(pkgObj.plume ?? {}), installable: true, npmInstalled: true }
       await fs.writeFile(path.join(path.dirname(webDest), 'package.json'), JSON.stringify(pkgObj, null, 2), 'utf8')
       // server.js 也留一份在 pluginsDir/dist：catalog 靠它算 sha256（前端下载后台半、
       // 以及"清单里的可信哈希"都从这条 URL 来）；真正运行的那份由 serverPluginsDir 承担。

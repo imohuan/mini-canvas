@@ -1,6 +1,6 @@
 import { markRaw, shallowRef, ref } from 'vue'
 import { assembleTheme } from '../canvasHostCore'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 
 export function useCanvasTheme(hostRef: { value: CanvasHostHandle | undefined }) {
   // 组件句柄(opaque，来自 themeRegistry/registry)塞给 VueFlow 的 node-types/edge-types。

@@ -12,7 +12,7 @@
  * 用 tryGet + ctx:plugin-installed 两腿走路（案例 7 同款），不赌装配顺序。
  */
 import { markRaw } from 'vue'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import RotateEntry from './RotateEntry.vue'
 import RotatePanel from './RotatePanel.vue'
 import { ROTATE_MODE_ID } from './rotateSession'

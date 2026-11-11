@@ -26,8 +26,8 @@ const pluginsDir = join(packagesDir, 'plugins')
  * 任何一个都不该被业务插件运行时依赖 —— 所以用集合而不是单个名字。
  */
 const THEME_PACKAGES = new Set([
-  '@mini-canvas/plugin-theme-components',
-  '@mini-canvas/plugin-theme-canvas',
+  '@plume-canvas/plugin-theme-components',
+  '@plume-canvas/plugin-theme-canvas',
 ])
 
 interface Pkg {
@@ -70,14 +70,14 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
     // 白名单：开发演示合集（demo-kit）。它是默认主题的"橱窗"——职责就是把主题组件
     // 真渲染出来给人看（含嵌真画布展示节点壳/连线/背景），所以它**必须**依赖主题包。
     // 这不是"业务插件当组件库用"的违规，而是展览者与展品的关系（2026-10-13 用户要求）。
-    const GALLERY = '@mini-canvas/plugin-demo-kit'
+    const GALLERY = '@plume-canvas/plugin-demo-kit'
     /**
      * 受控共享：plugin-node-video ← plugin-theme-canvas（2026-11-09 9771a198）。
      * 加载态组件随节点壳搬进 theme-canvas 后，视频节点四处直接 import 同一份实现；
      * 这是节点壳作者与节点插件之间的共享，不是"业务插件当组件库用"。
      * 等它像 bar-contract 一样抽成独立包时删掉这条。
      */
-    const SHELL_SHARED = { pkg: 'plugin-node-video', dep: '@mini-canvas/plugin-theme-canvas' }
+    const SHELL_SHARED = { pkg: 'plugin-node-video', dep: '@plume-canvas/plugin-theme-canvas' }
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
       if (THEME_PACKAGES.has(pkg.name)) continue
@@ -92,9 +92,9 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
   it('业务插件生产源码不出现指向主题插件包的运行时 import', () => {
     const offenders: string[] = []
     // 同上白名单：展厅的运行时 import 是职责（见上一条用例的注释）
-    const GALLERY_PKG = '@mini-canvas/plugin-demo-kit'
+    const GALLERY_PKG = '@plume-canvas/plugin-demo-kit'
     // 与上一条用例同一个受控共享例外（见 SHELL_SHARED 的注释）
-    const SHELL_SHARED_SRC = { pkg: 'plugin-node-video', dep: '@mini-canvas/plugin-theme-canvas' }
+    const SHELL_SHARED_SRC = { pkg: 'plugin-node-video', dep: '@plume-canvas/plugin-theme-canvas' }
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
       if (THEME_PACKAGES.has(pkg.name)) continue
@@ -136,11 +136,11 @@ describe('T08 · canvas-base 保持纯作者入口', () => {
 })
 
 describe('T08 · 组件库只由默认主题登记', () => {
-  it('业务插件生产源码不直接 import @mini-canvas/ui-kit-shadcn', () => {
+  it('业务插件生产源码不直接 import @plume-canvas/ui-kit-shadcn', () => {
     const offenders: string[] = []
     // 展厅的 theme-lab 是组件库自己的独立工作台：它负责演示主题和组件库，
     // 不是业务插件。除它之外，业务插件只能从 ctx 的 ui 目录按名取件。
-    const GALLERY_PKG = '@mini-canvas/plugin-demo-kit'
+    const GALLERY_PKG = '@plume-canvas/plugin-demo-kit'
     for (const dir of pluginDirs()) {
       const pkg = readPkg(dir)
       if (THEME_PACKAGES.has(pkg.name)) continue
@@ -149,7 +149,7 @@ describe('T08 · 组件库只由默认主题登记', () => {
       if (!existsSync(root)) continue
       for (const file of collectSources(root)) {
         for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
-          if (/^\s*import\b/.test(line) && line.includes('@mini-canvas/ui-kit-shadcn')) {
+          if (/^\s*import\b/.test(line) && line.includes('@plume-canvas/ui-kit-shadcn')) {
             offenders.push(file.replace(packagesDir, '') + ' :: ' + line.trim())
           }
         }
@@ -158,7 +158,7 @@ describe('T08 · 组件库只由默认主题登记', () => {
     expect(offenders, '这些插件绕过了 ui 目录：\n' + offenders.join('\n')).toEqual([])
   })
 
-  it('外壳生产源码不直接 import @mini-canvas/ui-kit-shadcn', () => {
+  it('外壳生产源码不直接 import @plume-canvas/ui-kit-shadcn', () => {
     const offenders: string[] = []
     // sharedGlobals.ts 是 UMD 插件的共享运行时出口：它必须把整个组件库挂到 window，
     // 这是基础设施，不是业务 UI 消费。样式入口 app.css 不扫（只看 .ts/.vue）。
@@ -166,7 +166,7 @@ describe('T08 · 组件库只由默认主题登记', () => {
     for (const file of collectSources(join(here, '..'))) {
       if (ALLOW.has(file)) continue
       for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
-        if (/^\s*import\b/.test(line) && line.includes('@mini-canvas/ui-kit-shadcn')) {
+        if (/^\s*import\b/.test(line) && line.includes('@plume-canvas/ui-kit-shadcn')) {
           offenders.push(file.replace(packagesDir, '') + ' :: ' + line.trim())
         }
       }

@@ -30,7 +30,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "缩放切换",
     "description": "Ctrl/Cmd+M 切换画布放大/缩小状态",
     "pluginName": "my-zoom-toggle",
@@ -44,10 +44,10 @@
   },
   "scripts": { "typecheck": "tsc --noEmit" },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"   // 命令/服务注册都在这层
+    "@plume-canvas/canvas-base": "workspace:*"   // 命令/服务注册都在这层
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*", // ZoomBadge.vue 要 useCanvasRender
+    "@plume-canvas/canvas-render": "workspace:*", // ZoomBadge.vue 要 useCanvasRender
     "vue": "^3.5.34"
   },
   "devDependencies": {
@@ -61,7 +61,7 @@
 // 文件：my-zoom-toggle/src/index.ts
 // 插件入口：上架一个响应式服务状态 + 注册一条带快捷键的命令
 import { reactive } from 'vue'  // reactive：把普通对象变成响应式，读它的组件自动更新
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 
 // ① 服务状态形状：一个字段 zoomed。命令、徽标、（将来的）面板都读它 —— 单一事实源
 export interface ZoomServiceState {
@@ -137,7 +137,7 @@ export const zoomTogglePlugin: PluginModule = { name, inject, apply }
 <!-- 读服务状态的徽标：演示"状态一变 UI 就变"，宿主不用写任何同步代码 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
 

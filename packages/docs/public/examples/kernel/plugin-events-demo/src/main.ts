@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-events-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：把喊话方与两个听众装进同一个内核
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { handlerPlugin } from './handlerPlugin'
 import { listenerPlugin } from './listenerPlugin'
 import { speakerPlugin } from './speakerPlugin'

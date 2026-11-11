@@ -30,10 +30,10 @@ import {
   dispatchClipboardPaste,
   type ClipboardEntry,
   type ClipboardPasteHandler,
-} from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { clipboardPlugin } from '@mini-canvas/plugin-clipboard'
-import { FileDropServiceImpl, createFileDropPasteHandlers, type FileDropReaders } from '@mini-canvas/plugin-file-drop'
+} from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { clipboardPlugin } from '@plume-canvas/plugin-clipboard'
+import { FileDropServiceImpl, createFileDropPasteHandlers, type FileDropReaders } from '@plume-canvas/plugin-file-drop'
 
 interface GraphEnvelope {
   nodes: Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown> }>

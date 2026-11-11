@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createMiniCanvasHost } from '../../host/createMiniCanvasHost'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { createPlumeHost } from '../../host/createPlumeHost'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 
 /**
  * Spec D4：模式注册与会话住在渲染层。
@@ -11,13 +11,13 @@ import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
  */
 describe('nodeToolbar 归属渲染层', () => {
   it('宿主装业务插件前就已注入', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     expect(host.ctx.hasService('nodeToolbar')).toBe(true)
     host.stop()
   })
 
   it('注册者插件卸载后，模式仍留在宿主服务里', async () => {
-    const { host } = await createMiniCanvasHost({
+    const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: [
         {
@@ -43,8 +43,8 @@ describe('nodeToolbar 归属渲染层', () => {
   })
 
   it('两个宿主不共享模式（DOM 锚点/会话不跨实例）', async () => {
-    const a = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
-    const b = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const a = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
+    const b = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     a.host.ctx
       .get<{ registerMode(m: { id: string; bottomBar?: unknown }): void }>('nodeToolbar')
       .registerMode({ id: 'only-a', bottomBar: {} })
@@ -57,7 +57,7 @@ describe('nodeToolbar 归属渲染层', () => {
   })
 
   it('registerMode 返回的注销函数只摘掉自己那一份，并清掉指向它的会话', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     const svc = host.ctx.get<{
       registerMode(m: { id: string; topBar?: unknown; order?: number }): () => void
       resolveBar(nodeId: string, side: 'top' | 'bottom', type?: string): { kind: string }

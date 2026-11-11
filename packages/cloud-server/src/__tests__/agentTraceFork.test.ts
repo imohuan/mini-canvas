@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { seedForkTrace, tracesDirOf } from '@mini-canvas/plugin-agent/server/agent/traceFork.js'
-import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
+import { seedForkTrace, tracesDirOf } from '@plume-canvas/plugin-agent/server/agent/traceFork.js'
+import { AgentSessionStore } from '@plume-canvas/plugin-agent/server/agent/sessionStore.js'
 
 let dir: string
 
@@ -28,7 +28,7 @@ async function writeParentTrace(sessionId: string, provider = 'local', model = '
       provider,
       model_id: model,
       model_context_window: 1048576,
-      system_prompt: '你是 mini-canvas 画布助手。',
+      system_prompt: '你是 plume-canvas 画布助手。',
     },
   }
   const msg = {
@@ -66,7 +66,7 @@ describe('seedForkTrace', () => {
     expect(lines[0].payload.session_id).toBe(fork)
     // meta 其余字段从父拷贝
     expect(lines[0].payload.model_context_window).toBe(1048576)
-    expect(lines[0].payload.system_prompt).toBe('你是 mini-canvas 画布助手。')
+    expect(lines[0].payload.system_prompt).toBe('你是 plume-canvas 画布助手。')
     const kinds = lines.slice(1).map((l) => l.payload.type)
     // 结构：user → begin → user?(无) → …（回合包裹后 type 序列）
     expect(kinds).toEqual(['text', 'request_begin', 'text', 'tool_call', 'tool_call_output', 'request_end'])
@@ -131,7 +131,7 @@ describe('seedForkTrace', () => {
 
 describe('seedForkTrace 的回合结构（resumeTrace 可读）', () => {
   it('user 开回合、request_begin/end 包裹 assistant 输出 —— 与 penguin-core 的 Trace 格式一致', async () => {
-    const { resumeTrace } = await import('@mini-canvas/plugin-agent/server/agent/traceFork.probe.js')
+    const { resumeTrace } = await import('@plume-canvas/plugin-agent/server/agent/traceFork.probe.js')
     const parent = 'session-2026-10-06-10-00-00-gggg0004'
     const fork = 'session-2026-10-06-11-00-00-hhhh0004'
     const store = new AgentSessionStore(dir)

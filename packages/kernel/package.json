@@ -1,5 +1,5 @@
 {
-  "name": "@mini-canvas/kernel",
+  "name": "@plume-canvas/kernel",
   "version": "0.0.0",
   "private": true,
   "type": "module",

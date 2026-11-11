@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 轻量 Markdown 渲染：内容先转义再拼标签（见 markdown.ts 的 XSS 说明）。
 import { computed } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { splitMarkdown } from './markdown.js'
 
 const props = defineProps<{ text: string }>()

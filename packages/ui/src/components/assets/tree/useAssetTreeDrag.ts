@@ -26,7 +26,7 @@ export function useAssetTreeDrag(
       // 拖到画布该建节点、而不是再上传一份，所以由宿主（抽屉/弹窗）自己接 drop（见 onCanvasDrop）。
       if (row.kind === 'asset') {
         try {
-          e.dataTransfer.setData('application/x-mini-canvas-asset', JSON.stringify({ id: row.id }))
+          e.dataTransfer.setData('application/x-plume-asset', JSON.stringify({ id: row.id }))
         } catch {
           /* 某些环境不允许自定义 MIME：宿主仍能靠 text/plain 的 id 兜底 */
         }

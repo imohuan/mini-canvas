@@ -10,9 +10,9 @@
  * 没有「刷新」按钮：后台改完会广播 providers-version，这里订阅后自动重拉。
  */
 import { computed, onMounted } from 'vue'
-import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
-import type { FeedbackService } from '@mini-canvas/canvas-render'
-import type { NotifyContract } from '@mini-canvas/canvas-base'
+import { useCanvasContextOrRender, useUiComponent } from '@plume-canvas/canvas-render'
+import type { FeedbackService } from '@plume-canvas/canvas-render'
+import type { NotifyContract } from '@plume-canvas/canvas-base'
 import { createProviderManagerService, type ProviderRow } from '../../providerManagerService'
 import ProviderIcon from './ProviderIcon.vue'
 

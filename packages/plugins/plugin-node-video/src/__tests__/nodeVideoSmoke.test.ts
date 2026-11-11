@@ -5,9 +5,9 @@
  * —— 壳（BaseNode）只渲染已注册的段，所以"段在不在"直接决定按钮会不会出现。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry, resolveSegment } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry, resolveSegment } from '@plume-canvas/canvas-data'
 import { nodeVideoPlugin, VIDEO_NODE_TYPE } from '../nodeVideoPlugin'
 import { isClipping, isCropping } from '../videoSession'
 

@@ -12,8 +12,8 @@
  * config 语义（P4）：per-plugin 装配 config，随 ctx.installPlugin(mod, config) 一起经插件 `Config` schema
  * 校验 + 补默认，apply(ctx, config) 收到；不做深度配置合并。
  */
-import type { PluginClassLike, PluginModule } from '@mini-canvas/kernel'
-import type { Context } from '@mini-canvas/canvas-data'
+import type { PluginClassLike, PluginModule } from '@plume-canvas/kernel'
+import type { Context } from '@plume-canvas/canvas-data'
 
 /** 一个插件的来源：源码模块 / Service 类 / 懒加载源码 / 外部 URL / 单文件插件 js 文本 */
 export type PluginEntrySource =

@@ -14,7 +14,7 @@ import type { UnpackedPack } from '../task/pack'
 let dir = ''
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-import-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-import-'))
 })
 afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true })

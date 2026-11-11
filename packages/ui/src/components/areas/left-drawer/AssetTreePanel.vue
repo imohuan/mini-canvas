@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Folder as FolderIcon } from 'lucide-vue-next'
 import AssetTree, { type AssetTreeRow, type AssetTreeTarget } from '../../AssetTree.vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { AssetFolderSummary } from '../../../composables/projectsApi'
 
 type AssetFolderNode = AssetFolderSummary & { children: AssetFolderNode[]; count: number }

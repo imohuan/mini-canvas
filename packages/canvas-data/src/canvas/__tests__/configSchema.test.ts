@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { resolveConfig, ConfigError, F } from '@mini-canvas/kernel'
-import type { ConfigSchema } from '@mini-canvas/kernel'
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { resolveConfig, ConfigError, F } from '@plume-canvas/kernel'
+import type { ConfigSchema } from '@plume-canvas/kernel'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 
 /** 造最小 ctx：注入 themeRegistry 外不需要其它服务；插件走 Config schema + apply(ctx,config) */
 async function boot(plugins: PluginModule[]): Promise<Context> {

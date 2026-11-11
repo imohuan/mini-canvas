@@ -1,6 +1,6 @@
 import { onBeforeUnmount, ref, watch, type Ref } from 'vue'
-import type { NodeWrite } from '@mini-canvas/canvas-render'
-import type { ViewContract } from '@mini-canvas/canvas-data'
+import type { NodeWrite } from '@plume-canvas/canvas-render'
+import type { ViewContract } from '@plume-canvas/canvas-data'
 import { isRectFullyVisible } from '../titleEdit'
 
 export interface NodeTitleEditInput {

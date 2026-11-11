@@ -4,7 +4,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 /** 外壳（BaseNode）注入的两个 props：节点 id 与节点数据 */
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()

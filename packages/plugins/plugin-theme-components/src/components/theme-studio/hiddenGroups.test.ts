@@ -9,7 +9,7 @@
  * 4. 颜色配方自己仍能读到这些分组的字段（否则颜色就没了）。
  */
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { SETTINGS_HIDDEN_FIELD, SETTINGS_HIDDEN_KEY, hidesKey, hidesWholeGroup } from '../settings/navCategory'
 import { HIDDEN_SETTINGS } from './register'
 

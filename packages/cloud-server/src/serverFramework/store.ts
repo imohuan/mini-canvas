@@ -13,7 +13,7 @@
  */
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import type { PluginScope } from '@mini-canvas/kernel'
+import type { PluginScope } from '@plume-canvas/kernel'
 
 /** 插件私有存储（键 → JSON 值） */
 export interface PluginStoreNamespace {

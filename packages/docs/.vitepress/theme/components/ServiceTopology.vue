@@ -86,53 +86,53 @@ const stats = computed(() => {
 </script>
 
 <template>
-  <div class="mc-live">
-    <div v-if="status === 'loading'" class="mc-empty">正在读取快照…</div>
-    <div v-else-if="status === 'error'" class="mc-empty">
+  <div class="plume-live">
+    <div v-if="status === 'loading'" class="plume-empty">正在读取快照…</div>
+    <div v-else-if="status === 'error'" class="plume-empty">
       读不到快照（{{ err }}）。需要 public/surface-snapshot.json 随站点发布。
     </div>
 
     <template v-else>
-      <div class="mc-stat-row">
-        <div class="mc-stat"><b>{{ stats.plugins }}</b><span>插件</span></div>
-        <div class="mc-stat"><b>{{ stats.services }}</b><span>服务</span></div>
-        <div class="mc-stat mc-stat--hi"><b>{{ stats.pluginProviders }}</b><span>提供服务的插件</span></div>
-        <div class="mc-stat mc-stat--hi"><b>{{ stats.noService }}</b><span>不提供服务的插件</span></div>
+      <div class="plume-stat-row">
+        <div class="plume-stat"><b>{{ stats.plugins }}</b><span>插件</span></div>
+        <div class="plume-stat"><b>{{ stats.services }}</b><span>服务</span></div>
+        <div class="plume-stat plume-stat--hi"><b>{{ stats.pluginProviders }}</b><span>提供服务的插件</span></div>
+        <div class="plume-stat plume-stat--hi"><b>{{ stats.noService }}</b><span>不提供服务的插件</span></div>
       </div>
 
-      <p class="mc-note">
+      <p class="plume-note">
         看最下面两格：<b>{{ stats.plugins }} 个插件里，只有 {{ stats.pluginProviders }} 个提供了服务</b>，
         另外 <b>{{ stats.noService }} 个一个服务都不提供</b>（它们只用注册场）。
         所以「每个插件都注册一个自己的服务」是个误解 —— 服务是少数派。
       </p>
 
-      <table class="mc-table">
+      <table class="plume-table">
         <thead><tr><th>提供方</th><th>是什么</th><th>服务</th></tr></thead>
         <tbody>
           <tr v-for="[src, names] in byProvider" :key="src">
-            <td class="mc-code">{{ src }}</td>
+            <td class="plume-code">{{ src }}</td>
             <td>{{ kindOf(src) }}</td>
-            <td class="mc-dim">{{ names.join(', ') }}</td>
+            <td class="plume-dim">{{ names.join(', ') }}</td>
           </tr>
         </tbody>
       </table>
 
       <h4>一个服务都不提供的插件（{{ noService.length }} 个）</h4>
-      <div class="mc-chipbox">
-        <span v-for="n in noService" :key="n" class="mc-badge">{{ n }}</span>
+      <div class="plume-chipbox">
+        <span v-for="n in noService" :key="n" class="plume-badge">{{ n }}</span>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
-.mc-stat--hi {
+.plume-stat--hi {
   border-color: var(--vp-c-brand-1);
 }
-.mc-stat--hi b {
+.plume-stat--hi b {
   color: var(--vp-c-brand-1);
 }
-.mc-note {
+.plume-note {
   border-left: 3px solid var(--vp-c-brand-1);
   padding: 6px 0 6px 12px;
   background: var(--vp-c-bg-soft);

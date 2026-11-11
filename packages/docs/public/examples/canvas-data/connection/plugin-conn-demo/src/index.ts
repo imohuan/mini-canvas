@@ -2,8 +2,8 @@
 // 格式：TypeScript 模块（插件入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
 
-import type { Context } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { Context } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { checkEdge, describe } from './connRules'
 
 export const name = 'conn-demo'

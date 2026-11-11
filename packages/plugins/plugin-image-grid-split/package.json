@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-image-grid-split",
+  "name": "@plume-canvas/plugin-image-grid-split",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "宫格切分",
     "description": "图片节点顶栏的宫格切分：预设/自定义行列、勾选格子、发布到画布与分镜组",
     "pluginName": "image-grid-split",
@@ -20,9 +20,9 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

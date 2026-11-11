@@ -1,12 +1,12 @@
 /**
  * 转发件回归：canvas-render 里的 SlotComposer / SlotAnchor 现在只是转发，
- * 实现住在 @mini-canvas/vue-render。这里跑一次真实渲染，证明转发链（.vue 转发）没断。
+ * 实现住在 @plume-canvas/vue-render。这里跑一次真实渲染，证明转发链（.vue 转发）没断。
  */
 import { describe, expect, it } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context } from '@mini-canvas/canvas-data'
-import { CANVAS_CONTEXT_KEY } from '@mini-canvas/vue-render'
+import { Context } from '@plume-canvas/canvas-data'
+import { CANVAS_CONTEXT_KEY } from '@plume-canvas/vue-render'
 import { SlotComposer, SlotAnchor } from '../../index'
 
 describe('canvas-render 转发件', () => {

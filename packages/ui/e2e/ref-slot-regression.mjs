@@ -29,7 +29,7 @@ await page.waitForTimeout(6000)
 
 // 选中节点 23（用户报的那个「角色B·日常便装全身参考」）
 const picked = await page.evaluate(() => {
-  const host = window.MiniCanvasUI?.getHost?.()
+  const host = window.PlumeUI?.getHost?.()
   const doc = host?.ctx?.get?.('doc')
   if (!doc) return { error: 'no doc' }
   const node = doc.getNodes().find((n) => n.id === '23')

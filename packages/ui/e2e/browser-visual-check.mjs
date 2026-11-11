@@ -20,7 +20,7 @@ await page.waitForTimeout(2200);
 await page.waitForSelector('.vue-flow__node', { timeout: 30000 });
 
 await page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   const doc = h.ctx.get('doc');
   const old = doc.getNodes();
   if (old.length) doc.removeNodes(old.map((n) => n.id));
@@ -36,7 +36,7 @@ await page.waitForTimeout(800);
 const offsets = () =>
   page.evaluate(() => {
     const outer = document.querySelector('.selection-frame-outer');
-    const ids = [...window.MiniCanvasUI.getHost().selection.ids];
+    const ids = [...window.PlumeUI.getHost().selection.ids];
     const ns = ids.map((id) => document.querySelector('.vue-flow__node[data-id="' + id + '"]')).filter(Boolean);
     if (!outer || !ns.length) return null;
     const o = outer.getBoundingClientRect();
@@ -60,7 +60,7 @@ await page.mouse.click(640, 780);
 await page.waitForTimeout(300);
 await page.keyboard.press('Control+a');
 await page.waitForTimeout(500);
-const selCount = await page.evaluate(() => window.MiniCanvasUI.getHost().selection.ids.size);
+const selCount = await page.evaluate(() => window.PlumeUI.getHost().selection.ids.size);
 check('Ctrl+A 全选出 2 个节点', selCount === 2, 'count=' + selCount);
 const hasFrame = await page.evaluate(() => !!document.querySelector('.selection-frame-outer'));
 check('多选框出现', hasFrame);
@@ -116,7 +116,7 @@ const movedScreen = afterX - before;
 // 此时 zoom 已放大（wheel -360 约 → 1.65）：节点 flow 位移 = 100/zoom，
 // 节点**屏幕**位移 = flow × zoom = 100 —— 屏幕上节点跟着鼠标 1:1 走（跟手）。
 // （修前 ratio=0.605：鼠标走 100px 屏幕上节点只走 60px，脱手。）
-const zoomNow = await page.evaluate(() => window.MiniCanvasUI.getHost().viewport.getViewport().zoom);
+const zoomNow = await page.evaluate(() => window.PlumeUI.getHost().viewport.getViewport().zoom);
 const ratio = movedScreen / 100;
 check('缩放后继续拖跟手（屏幕 ratio≈1：节点跟着鼠标走）', Math.abs(ratio - 1) < 0.15, `ratio=${ratio.toFixed(3)} zoom=${zoomNow.toFixed(3)}`);
 const afterOffsets = await offsets();
@@ -126,7 +126,7 @@ await page.screenshot({ path: OUT + '/v5-continued.png' });
 
 await page.mouse.up();
 await page.waitForTimeout(500);
-const selAfter = await page.evaluate(() => window.MiniCanvasUI.getHost().selection.ids.size);
+const selAfter = await page.evaluate(() => window.PlumeUI.getHost().selection.ids.size);
 check('松手后选中保留', selAfter === 2, 'count=' + selAfter);
 await page.screenshot({ path: OUT + '/v6-dropped.png' });
 

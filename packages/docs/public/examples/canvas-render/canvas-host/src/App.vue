@@ -3,11 +3,11 @@
      位置：应用装配层 —— 挂画布 + 用 @ready 拿到的句柄驱动业务 -->
 <script setup lang="ts">
 import { ref, shallowRef } from 'vue'
-import { CanvasHost, CanvasProvider, type CanvasHostHandle } from '@mini-canvas/canvas-render'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { CanvasHost, CanvasProvider, type CanvasHostHandle } from '@plume-canvas/canvas-render'
+import { LocalStorageAdapter } from '@plume-canvas/canvas-data'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 import { edge, handle } from './uiState'
 
 // ① 装配清单：顺序即装载顺序（通用件常驻 + 画布皮，业务节点在后）
@@ -48,7 +48,7 @@ function toggleEdgeColor() {
       :plugins="plugins"
       :adapter="adapter"
       :dev="import.meta.env.DEV"
-      window-key="MiniCanvasHostDemo"
+      window-key="PlumeHostDemo"
     >
       <CanvasHost
         ref="canvas"

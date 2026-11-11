@@ -14,7 +14,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import GroupTopToolbar from '../GroupTopToolbar.vue'
 import { GROUP_COLOR_SWATCHES, groupServiceOf } from '../groupEngine'
 

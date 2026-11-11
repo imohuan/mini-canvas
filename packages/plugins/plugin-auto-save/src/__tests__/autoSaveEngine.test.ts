@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createAutoSaveEngine } from '@mini-canvas/canvas-data'
+import { createAutoSaveEngine } from '@plume-canvas/canvas-data'
 
 describe('autoSaveEngine', () => {
   it('不启用时不落盘、不置计时器', () => {

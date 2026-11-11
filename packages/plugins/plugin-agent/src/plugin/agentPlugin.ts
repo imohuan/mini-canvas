@@ -13,7 +13,7 @@
  */
 import { markRaw, reactive } from 'vue'
 import { Bot } from 'lucide-vue-next'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import { createAgentService, type AgentService } from '../service/agentService.js'
 import AgentConversation from '../ui/conversation/AgentConversation.vue'
 import ModelPicker from '../ui/conversation/ModelPicker.vue'

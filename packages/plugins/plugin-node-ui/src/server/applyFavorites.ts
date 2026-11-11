@@ -24,7 +24,7 @@ export function applyFavorites(ctx: ServerCtx): void {
   ctx.mcp.tool({
     name: 'canvas_ui_export',
     description:
-      '把某个**可视化节点**（界面 + 它依赖的后台脚本）打包成一个 .mcnode 文件，' +
+      '把某个**可视化节点**（界面 + 它依赖的后台脚本）打包成一个 .plumenode 文件，' +
       '**自动保存到本机下载目录**，返回值里给绝对路径。' +
       '用途：给"这个节点 + 它的后台"留一份可带走的存档 —— 节点删了、画布没了，都能从它原样恢复。' +
       '★ 前后端调通之后**建议收尾就调它**（用户点名要的）。' +
@@ -131,7 +131,7 @@ export function applyFavorites(ctx: ServerCtx): void {
   ctx.mcp.tool({
     name: 'canvas_ui_favorites',
     description:
-      '列出**资产库里收藏的可视化节点**（节点包 .mcnode），每个带上它的功能说明书' +
+      '列出**资产库里收藏的可视化节点**（节点包 .plumenode），每个带上它的功能说明书' +
       '（做什么 / 效果 / 输入 / 输出）与包里的脚本清单。' +
       '用它来回答「有哪些收藏的节点可以复用」，或者照着挑一个用 canvas_ui_add_favorite 建到画布上。' +
       'keyword 可以按名字 / 说明过滤。',
@@ -199,7 +199,7 @@ export function applyFavorites(ctx: ServerCtx): void {
       const name = typeof args.name === 'string' ? args.name.trim() : ''
       if (!url && !name) return { ok: false, error: '要指定建哪一个：给 url（canvas_ui_favorites 的 url）或 name（包名）' }
       const packs = (await store.list()).filter((a) => a.kind === 'node-package')
-      const asset = url ? packs.find((a) => a.url === url) : packs.find((a) => a.name === name || a.name.replace(/\.mcnode$/i, '') === name)
+      const asset = url ? packs.find((a) => a.url === url) : packs.find((a) => a.name === name || a.name.replace(/\.plumenode$/i, '') === name)
       if (!asset) {
         return {
           ok: false,

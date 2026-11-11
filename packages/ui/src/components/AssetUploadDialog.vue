@@ -8,7 +8,7 @@ import {
   Plus as PlusIcon, X as XIcon, FileImage as FileIcon, Film as VideoIcon, Music as AudioIcon,
   CircleAlert as AlertIcon, Check as CheckIcon, RefreshCw as RetryIcon,
 } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
@@ -208,7 +208,7 @@ function save(): void {
 
 <template>
   <Teleport to="body">
-  <div class="mc-layer-dialog fixed inset-0 flex items-center justify-center">
+  <div class="plume-layer-dialog fixed inset-0 flex items-center justify-center">
     <div class="absolute inset-0 bg-veil" aria-hidden="true" @click="emit('close')"></div>
     <div
       class="relative flex w-[min(760px,calc(100vw-48px))] flex-col rounded-2xl border border-line bg-panel text-ink shadow-[0_8px_40px_rgba(0,0,0,0.45)]"

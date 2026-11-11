@@ -2,7 +2,7 @@
  * 插件管理清单（/plugin-catalog.json）与插件资源投放的单测。
  *
  * 锁三件事：
- * 1. 清单只收**声明了 miniCanvas.installable 的 UMD 插件**（ESM 产物与冷启动基础件都不列）；
+ * 1. 清单只收**声明了 plume.installable 的 UMD 插件**（ESM 产物与冷启动基础件都不列）；
  * 2. 插件资源能取到**非 js**（css / 图片 / 子目录），且带正确 MIME；
  * 3. 路径穿越与非白名单扩展名一律拒绝。
  */
@@ -41,11 +41,11 @@ describe('插件管理清单 /plugin-catalog.json', () => {
     const pluginsDir = await makePluginsDir({
       'plugin-demo': {
         file: 'plugin-demo.js',
-        content: UMD('MiniCanvasPluginDemo', 'e.Vue,e.MiniCanvasRender'),
+        content: UMD('PlumePluginDemo', 'e.Vue,e.PlumeRender'),
         pkg: {
-          name: '@mini-canvas/plugin-demo',
+          name: '@plume-canvas/plugin-demo',
           version: '1.2.3',
-          miniCanvas: { title: '示例插件', description: '说明', installable: true, pluginName: 'demo' },
+          plume: { title: '示例插件', description: '说明', installable: true, pluginName: 'demo' },
         },
       },
     })
@@ -62,8 +62,8 @@ describe('插件管理清单 /plugin-catalog.json', () => {
         title: '示例插件',
         description: '说明',
         url: '/plugins/plugin-demo/plugin-demo.js',
-        globalName: 'MiniCanvasPluginDemo',
-        requiresGlobals: ['Vue', 'MiniCanvasRender'],
+        globalName: 'PlumePluginDemo',
+        requiresGlobals: ['Vue', 'PlumeRender'],
         version: '1.2.3',
       })
     } finally {
@@ -76,18 +76,18 @@ describe('插件管理清单 /plugin-catalog.json', () => {
   it('未声明 installable 的插件不收录；声明了的 ESM 插件**要**收录（面板装云端客户端就靠它）', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({
-      'plugin-cold': { file: 'plugin-cold.js', content: UMD('MiniCanvasPluginCold'), pkg: { name: 'cold' } },
+      'plugin-cold': { file: 'plugin-cold.js', content: UMD('PlumePluginCold'), pkg: { name: 'cold' } },
       // 自包含 ESM + installable → 收（format 判成 esm，面板走 manager.install({ url })）
       'plugin-esm': {
         file: 'plugin-esm.js',
         content: 'export const name = "esm\nexport function apply() {}',
-        pkg: { miniCanvas: { installable: true } },
+        pkg: { plume: { installable: true } },
       },
       // 有裸模块名 import 的"伪 ESM" → 不收（data: URL 里解析不了裸模块名，装必炸）
       'plugin-bare': {
         file: 'plugin-bare.js',
         content: 'import { x } from "vue"\nexport const name = "bare"',
-        pkg: { miniCanvas: { installable: true } },
+        pkg: { plume: { installable: true } },
       },
     })
     const s = await createCloudServer({ dir, pluginsDir, watchProviders: false })
@@ -112,13 +112,13 @@ describe('插件管理清单 /plugin-catalog.json', () => {
     const pluginsDir = await makePluginsDir({
       'plugin-builtin-x': {
         file: 'plugin-builtin-x.js',
-        content: UMD('MiniCanvasPluginBuiltinX', 'e.Vue'),
-        pkg: { name: '@mini-canvas/plugin-builtin-x', miniCanvas: { title: '自带件', builtin: true, pluginName: 'builtin-x' } },
+        content: UMD('PlumePluginBuiltinX', 'e.Vue'),
+        pkg: { name: '@plume-canvas/plugin-builtin-x', plume: { title: '自带件', builtin: true, pluginName: 'builtin-x' } },
       },
       'plugin-ext': {
         file: 'plugin-ext.js',
-        content: UMD('MiniCanvasPluginExt', 'e.Vue'),
-        pkg: { name: '@mini-canvas/plugin-ext', miniCanvas: { installable: true, pluginName: 'ext' } },
+        content: UMD('PlumePluginExt', 'e.Vue'),
+        pkg: { name: '@plume-canvas/plugin-ext', plume: { installable: true, pluginName: 'ext' } },
       },
     })
     const s = await createCloudServer({ dir, pluginsDir, watchProviders: false })
@@ -140,7 +140,7 @@ describe('插件管理清单 /plugin-catalog.json', () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({
       'plugin-esm': { file: 'plugin-esm.js', content: 'export const name = "esm"' },
-      'plugin-umd': { file: 'plugin-umd.js', content: UMD('MiniCanvasPluginUmd'), pkg: { miniCanvas: { installable: true } } },
+      'plugin-umd': { file: 'plugin-umd.js', content: UMD('PlumePluginUmd'), pkg: { plume: { installable: true } } },
     })
     const s = await createCloudServer({ dir, pluginsDir, watchProviders: false })
     try {
@@ -162,21 +162,21 @@ describe('插件管理清单 /plugin-catalog.json', () => {
   it('冷启动自带插件（builtin）不进 /plugin-manifest.json（data: URL import 裸模块名必炸）', async () => {
     // 实测背景：plugin-bottom-bar（builtin + ESM 产物）被列进 manifest，应用冷启动
     // install({ url }) 走 import(data:text/javascript)，产物里 external 的
-    // "@mini-canvas/canvas-base" 在 data: URL 里解析不了 → 每次开页 console 报
+    // "@plume-canvas/canvas-base" 在 data: URL 里解析不了 → 每次开页 console 报
     // "Failed to resolve module specifier"。它由 APP_PLUGINS 冷启动装配，清单不该列它。
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({
-      'plugin-builtin-esm': { file: 'plugin-builtin-esm.js', content: 'import { x } from "@mini-canvas/canvas-base";export const name = "b";export { x };' },
-      'plugin-builtin-umd': { file: 'plugin-builtin-umd.js', content: UMD('MiniCanvasPluginBuiltinUmd') },
+      'plugin-builtin-esm': { file: 'plugin-builtin-esm.js', content: 'import { x } from "@plume-canvas/canvas-base";export const name = "b";export { x };' },
+      'plugin-builtin-umd': { file: 'plugin-builtin-umd.js', content: UMD('PlumePluginBuiltinUmd') },
       'plugin-ext-esm': { file: 'plugin-ext-esm.js', content: 'export const name = "ext";' },
     })
     await fs.writeFile(
       path.join(pluginsDir, 'plugin-builtin-esm', 'package.json'),
-      JSON.stringify({ name: '@mini-canvas/plugin-builtin-esm', miniCanvas: { builtin: true, pluginName: 'b-esm' } }),
+      JSON.stringify({ name: '@plume-canvas/plugin-builtin-esm', plume: { builtin: true, pluginName: 'b-esm' } }),
     )
     await fs.writeFile(
       path.join(pluginsDir, 'plugin-builtin-umd', 'package.json'),
-      JSON.stringify({ name: '@mini-canvas/plugin-builtin-umd', miniCanvas: { builtin: true, pluginName: 'b-umd' } }),
+      JSON.stringify({ name: '@plume-canvas/plugin-builtin-umd', plume: { builtin: true, pluginName: 'b-umd' } }),
     )
     const s = await createCloudServer({ dir, pluginsDir, watchProviders: false })
     try {
@@ -198,16 +198,16 @@ describe('前后端成对插件（Task 7）', () => {
     const pluginsDir = await makePluginsDir({
       'plugin-builtin-with-be': {
         file: 'plugin-builtin-with-be.js',
-        content: UMD('MiniCanvasPluginBuiltinWithBe'),
+        content: UMD('PlumePluginBuiltinWithBe'),
         pkg: {
-          name: '@mini-canvas/plugin-builtin-with-be',
-          miniCanvas: { builtin: true, pluginName: 'bwb', serverBuiltin: true },
+          name: '@plume-canvas/plugin-builtin-with-be',
+          plume: { builtin: true, pluginName: 'bwb', serverBuiltin: true },
         },
       },
       'plugin-builtin-fe-only': {
         file: 'plugin-builtin-fe-only.js',
-        content: UMD('MiniCanvasPluginBuiltinFeOnly'),
-        pkg: { name: '@mini-canvas/plugin-builtin-fe-only', miniCanvas: { builtin: true, pluginName: 'bfo' } },
+        content: UMD('PlumePluginBuiltinFeOnly'),
+        pkg: { name: '@plume-canvas/plugin-builtin-fe-only', plume: { builtin: true, pluginName: 'bfo' } },
       },
     })
     const srv = await createCloudServer({ port: 0, pluginsDir, watchProviders: false })
@@ -223,10 +223,10 @@ describe('前后端成对插件（Task 7）', () => {
     const pluginsDir = await makePluginsDir({
       'plugin-pair': {
         file: 'plugin-pair.js',
-        content: UMD('MiniCanvasPluginPair'),
+        content: UMD('PlumePluginPair'),
         pkg: {
-          name: '@mini-canvas/plugin-pair',
-          miniCanvas: { installable: true, pluginName: 'pair', serverPermissions: ['net', 'store'] },
+          name: '@plume-canvas/plugin-pair',
+          plume: { installable: true, pluginName: 'pair', serverPermissions: ['net', 'store'] },
         },
       },
     })
@@ -247,8 +247,8 @@ describe('前后端成对插件（Task 7）', () => {
     const pluginsDir = await makePluginsDir({
       'plugin-fe-only': {
         file: 'plugin-fe-only.js',
-        content: UMD('MiniCanvasPluginFeOnly'),
-        pkg: { name: '@mini-canvas/plugin-fe-only', miniCanvas: { installable: true, pluginName: 'fe-only' } },
+        content: UMD('PlumePluginFeOnly'),
+        pkg: { name: '@plume-canvas/plugin-fe-only', plume: { installable: true, pluginName: 'fe-only' } },
       },
     })
     const srv = await createCloudServer({ port: 0, pluginsDir, watchProviders: false })
@@ -264,7 +264,7 @@ describe('插件资源投放：不只发 js', () => {
   async function bootWithAssets() {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({
-      'plugin-demo': { file: 'plugin-demo.js', content: UMD('MiniCanvasPluginDemo', 'e.Vue') },
+      'plugin-demo': { file: 'plugin-demo.js', content: UMD('PlumePluginDemo', 'e.Vue') },
     })
     const dist = path.join(pluginsDir, 'plugin-demo', 'dist')
     await fs.writeFile(path.join(dist, 'plugin-demo.css'), '.x{color:red}')
@@ -309,7 +309,7 @@ describe('插件资源投放：不只发 js', () => {
         new Request('http://localhost/plugins/plugin-demo/%2e%2e/%2e%2e/package.json'),
       )
       // 归一化后变成 /package.json → 落到静态层的 SPA 回落（index.html），绝不是插件目录里那个文件
-      expect(await evil.text()).not.toContain('@mini-canvas/plugin-demo')
+      expect(await evil.text()).not.toContain('@plume-canvas/plugin-demo')
     } finally {
       s.stop()
       await fs.rm(dir, { recursive: true, force: true })
@@ -343,38 +343,38 @@ describe('插件资源投放：不只发 js', () => {
       // 仓库源码包：id 无 scope__ 前缀
       'plugin-demo': {
         file: 'plugin-demo.js',
-        content: UMD('MiniCanvasPluginDemo'),
-        pkg: { name: '@mini-canvas/plugin-demo', version: '1.0.0', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo' } },
+        content: UMD('PlumePluginDemo'),
+        pkg: { name: '@plume-canvas/plugin-demo', version: '1.0.0', plume: { installable: true, pluginName: 'demo', title: 'Demo' } },
       },
       // NPM 装进来的副本：带显式标记 npmInstalled（安装路由写入），pluginName 相同 → 同一个插件
-      'mini-canvas__plugin-demo': {
+      'plume-canvas__plugin-demo': {
         file: 'plugin-demo.js',
-        content: UMD('MiniCanvasPluginDemo'),
-        pkg: { name: '@mini-canvas/plugin-demo', version: '1.0.0', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', npmInstalled: true } },
+        content: UMD('PlumePluginDemo'),
+        pkg: { name: '@plume-canvas/plugin-demo', version: '1.0.0', plume: { installable: true, pluginName: 'demo', title: 'Demo', npmInstalled: true } },
       },
     })
     const srv = await createCloudServer({ port: 0, dir: await fs.mkdtemp(path.join(os.tmpdir(), 'cs-cat-dedup-')), pluginsDir: dir, watchProviders: false })
     const body = (await (await srv.app.fetch(new Request('http://x/plugin-catalog.json'))).json()) as { plugins: Array<{ id: string; name: string }> }
     const demo = body.plugins.filter((p) => p.name === 'demo')
     expect(demo, '同一插件只应列一份').toHaveLength(1)
-    expect(demo[0].id, '保留已装副本（卸载只删它，不动源码）').toBe('mini-canvas__plugin-demo')
+    expect(demo[0].id, '保留已装副本（卸载只删它，不动源码）').toBe('plume-canvas__plugin-demo')
     srv.stop()
   })
 
-  it('副本 id 不含 scope__（普通包名 mini-canvas-plugin-demo）时，去重仍靠 npmInstalled 生效', async () => {
+  it('副本 id 不含 scope__（普通包名 @plume-canvas/plugin-demo）时，去重仍靠 npmInstalled 生效', async () => {
     // 这是审查指出的回归场景：包名去 scope 后 id 不含 `__`。
     // 目录名故意让**源码包排在前面**（aaa 先于 zzz）—— 旧代码"保留先来的"会错误地保留源码，
     // 新代码靠 npmInstalled 标记仍能正确保留副本。这样这条测试才真正能分辨新旧行为。
     const dir = await makePluginsDir({
       'aaa-source-demo': {
         file: 'plugin-demo.js',
-        content: UMD('MiniCanvasPluginDemo'),
-        pkg: { name: '@mini-canvas/plugin-demo', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo' } },
+        content: UMD('PlumePluginDemo'),
+        pkg: { name: '@plume-canvas/plugin-demo', plume: { installable: true, pluginName: 'demo', title: 'Demo' } },
       },
       'zzz-npm-copy-demo': {
         file: 'plugin-demo.js',
-        content: UMD('MiniCanvasPluginDemo'),
-        pkg: { name: 'mini-canvas-plugin-demo', miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', npmInstalled: true } },
+        content: UMD('PlumePluginDemo'),
+        pkg: { name: '@plume-canvas/plugin-demo', plume: { installable: true, pluginName: 'demo', title: 'Demo', npmInstalled: true } },
       },
     })
     const srv = await createCloudServer({ port: 0, dir: await fs.mkdtemp(path.join(os.tmpdir(), 'cs-cat-plain-')), pluginsDir: dir, watchProviders: false })
@@ -392,21 +392,21 @@ describe('插件资源投放：不只发 js', () => {
       // 仓库源码包：已发布到 NPM，作者故意不声明 installable → 不列
       'plugin-demo': {
         file: 'plugin-demo.js',
-        content: UMD('MiniCanvasPluginDemo'),
+        content: UMD('PlumePluginDemo'),
         pkg: {
-          name: '@mini-canvas/plugin-demo',
+          name: '@plume-canvas/plugin-demo',
           version: '1.0.0',
-          miniCanvas: { pluginName: 'demo', title: 'Demo', web: { entry: 'dist/plugin-demo.js' } },
+          plume: { pluginName: 'demo', title: 'Demo', web: { entry: 'dist/plugin-demo.js' } },
         },
       },
       // NPM 装进来的副本：安装时会被补上 installable: true → 照常列
-      'mini-canvas__plugin-demo': {
+      'plume-canvas__plugin-demo': {
         file: 'plugin-demo.js',
-        content: UMD('MiniCanvasPluginDemo'),
+        content: UMD('PlumePluginDemo'),
         pkg: {
-          name: '@mini-canvas/plugin-demo',
+          name: '@plume-canvas/plugin-demo',
           version: '1.0.0',
-          miniCanvas: { installable: true, pluginName: 'demo', title: 'Demo', web: { entry: 'dist/plugin-demo.js' } },
+          plume: { installable: true, pluginName: 'demo', title: 'Demo', web: { entry: 'dist/plugin-demo.js' } },
         },
       },
     })
@@ -415,7 +415,7 @@ describe('插件资源投放：不只发 js', () => {
       plugins: Array<{ id: string }>
       skipped: Array<{ file: string; reason: string }>
     }
-    expect(body.plugins.map((p) => p.id)).toEqual(['mini-canvas__plugin-demo'])
+    expect(body.plugins.map((p) => p.id)).toEqual(['plume-canvas__plugin-demo'])
     expect(body.skipped.some((s) => s.file === 'plugin-demo' && s.reason.includes('installable'))).toBe(true)
     srv.stop()
   })

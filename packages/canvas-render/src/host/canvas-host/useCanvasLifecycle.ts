@@ -1,10 +1,10 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import type { Ref } from 'vue'
-import type { Disposable } from '@mini-canvas/kernel'
-import { GRAPH_VIEWPORT_KEY } from '@mini-canvas/canvas-data'
+import type { Disposable } from '@plume-canvas/kernel'
+import { GRAPH_VIEWPORT_KEY } from '@plume-canvas/canvas-data'
 import { applyCanvasInteractionChangeInto, resolveCanvasInteraction } from '../../contracts/canvasInteractionSettings'
 import type { CanvasInteractionSettings } from '../../contracts/canvasInteractionSettings'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 import type { CanvasInteractionState } from '../../contracts/interactionContext'
 import type { ViewportState } from '../../viewport/viewportService'
 

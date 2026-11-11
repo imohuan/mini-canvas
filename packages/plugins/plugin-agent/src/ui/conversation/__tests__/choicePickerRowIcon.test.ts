@@ -7,8 +7,8 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import ChoicePicker from '../ChoicePicker.vue'
 
 /** 只做形状的桩：面板测的是「图标选哪个」，不是按钮长相 */

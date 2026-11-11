@@ -8,7 +8,7 @@
  *   3. 后台报错 → 占位节点标失败（用户口径：占位节点先出现，失败态写在占位节点上）。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
 import { cropNodeWithBackend } from '../videoCropFlow'
 import { createVideoOps } from '../videoOps'
 import { resetCropBackendProbe } from '../videoCropService'

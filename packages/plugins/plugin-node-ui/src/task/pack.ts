@@ -31,7 +31,7 @@ export const PACK_FORMAT = 1
  * 前端那份在 packages/ui（跨包 import 会把 node 侧逻辑拖进浏览器包），
  * 所以那边留一个同名常量，并由一条测试盯着两边一致。
  */
-export const PACK_EXT = '.mcnode'
+export const PACK_EXT = '.plumenode'
 
 /**
  * 解开之后的**总字节**上限。

@@ -4,14 +4,14 @@ import {
   RenderEvents,
   useCanvasRender,
   watchThemeMode,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import type {
   AddEdgeRequest,
   CanvasNode,
   CanvasNodeType,
   NodePatchEntry,
   SelectionService,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import { shouldFrameFollowDrag } from '../batchConnect'
 import {
   computeSelectionFrameGeometry,

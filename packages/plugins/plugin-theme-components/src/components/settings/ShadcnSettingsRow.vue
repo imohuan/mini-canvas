@@ -38,7 +38,7 @@ defineProps<{
   justify-content: space-between;
   gap: 24px;
   /* 行高跟主题尺寸档走（10px 上下 padding + 内容行高本身已达标）。 */
-  min-height: calc(var(--mct-size-control-h, 2.25rem) - 4px);
+  min-height: calc(var(--plume-size-control-h, 2.25rem) - 4px);
   padding: 10px 0;
 }
 

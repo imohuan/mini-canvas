@@ -5,9 +5,9 @@
  *   mountCanvas → doc 出现；unmountCanvas → doc 消失、依赖插件回退 PENDING。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, createCanvasAppBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { Context, createCanvasAppBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 import { mountCanvas, unmountCanvas, hasActiveCanvasSession } from '../canvasSession'
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 
 async function bootApp() {
   const ctx = new Context()

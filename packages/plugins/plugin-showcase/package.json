@@ -1,17 +1,17 @@
 {
-  "name": "mini-canvas-plugin-showcase",
+  "name": "@plume-canvas/plugin-showcase",
   "version": "1.0.7",
   "description": "插件展示 —— 前后台成对的示例插件：演示 routes/store/jobs/mcp/agent 五个后台能力 + 在线测试/在线文档面板",
   "type": "module",
   "license": "MIT",
-  "miniCanvas": {
-    "_comment": "installable 已注释：本插件已发布到 NPM（mini-canvas-plugin-showcase），改由插件管理从 NPM 安装；仓库这份只作开发源 + 构建用，不再进本地插件列表（避免与 NPM 装的那份重复）。",
+  "plume": {
+    "_comment": "installable 已注释：本插件已发布到 NPM（@plume-canvas/plugin-showcase），改由插件管理从 NPM 安装；仓库这份只作开发源 + 构建用，不再进本地插件列表（避免与 NPM 装的那份重复）。",
     "title": "插件展示",
     "description": "在线测试 + 在线文档：演示后台五能力（路由/存储/定时/MCP/Agent）与前端插槽注册，装上即生效",
     "pluginName": "showcase",
     "web": {
       "entry": "dist/plugin-showcase.js",
-      "globalName": "MiniCanvasPluginShowcase"
+      "globalName": "PlumePluginShowcase"
     },
     "server": {
       "entry": "dist/server.js"
@@ -29,20 +29,20 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/bar-contract": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/bar-contract": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/server-renderer": "3.5.38",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "esbuild": "^0.28.2",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",

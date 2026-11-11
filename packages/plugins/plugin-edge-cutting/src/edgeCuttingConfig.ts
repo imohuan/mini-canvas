@@ -8,7 +8,7 @@
  * 改动实时生效（切割会话/绘制点读到本函数，不缓存 apply 时 config）。
  * 独立成文件避免 edgeCuttingPlugin ↔ edgeCuttingOverlay 循环 import。
  */
-import type { ConfigSchema, InferConfig, Context } from '@mini-canvas/canvas-base'
+import type { ConfigSchema, InferConfig, Context } from '@plume-canvas/canvas-base'
 
 /** 模块级 Config schema（P4：随插件模块导出，内核装配时校验 + 补默认 + 登记设置面板） */
 export const Config = {

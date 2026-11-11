@@ -12,7 +12,7 @@
  * 总开关 = Config.alignGuideEnabled（设置面板可改，见 alignGuideConfig.ts）：
  * 关闭时浮层不装配（组件未挂载 = 不订阅拖拽、不吸附、不画线），开启时现装配，改动实时生效。
  */
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import AlignGuideOverlay from './AlignGuideOverlay.vue'
 import { Config, ALIGN_GUIDE_COLOR_KEYS } from './alignGuideConfig'
 import { bindAlignGuideToggle } from './alignGuideToggle'

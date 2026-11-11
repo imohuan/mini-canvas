@@ -10,8 +10,8 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { SettingsStore } from '@mini-canvas/kernel'
-import { defineThemePaletteSettings, THEME_PREVIEW_SLOT } from '@mini-canvas/canvas-render'
+import { SettingsStore } from '@plume-canvas/kernel'
+import { defineThemePaletteSettings, THEME_PREVIEW_SLOT } from '@plume-canvas/canvas-render'
 import { buildColorEntries, GROUP_ORDER, type DeclaredColorField } from './catalog'
 import { CUSTOM_THEME_ID, LAB_THEMES, readLabState } from './storage'
 import { matchesThemeValues, themeIdForValues } from './themeMatch'
@@ -161,7 +161,7 @@ describe('颜色配方契约', () => {
     const original = (globalThis as { localStorage?: unknown }).localStorage
     Object.defineProperty(globalThis, 'localStorage', { value: fake, configurable: true })
     try {
-      mem.set('mini-canvas:plugin-theme-lab:v1', JSON.stringify(legacy))
+      mem.set('plume-canvas:plugin-theme-lab:v1', JSON.stringify(legacy))
       const state = readLabState()
       expect(state.themes.map((t) => t.id)).toEqual(['lab-1'])
     } finally {
@@ -223,7 +223,7 @@ describe('颜色配方契约', () => {
   })
 
   it('默认主题自己注册一层绘制函数，其它插件各自注册自己的那层', async () => {
-    const { Context } = await import('@mini-canvas/canvas-data')
+    const { Context } = await import('@plume-canvas/canvas-data')
     const ctx = new Context()
     const { registerThemePreview: registerTheme } = await import('../../themePreview')
     registerTheme(ctx as never)

@@ -15,8 +15,8 @@ import { describe, expect, it } from 'vitest'
 import {
   SHADCN_FAMILY_NAMES,
   isShadcnPrimitive,
-} from '@mini-canvas/ui-kit-shadcn/shadcnFamilies'
-import { SHADCN_COMPONENT_NAMES } from '@mini-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit-shadcn/shadcnFamilies'
+import { SHADCN_COMPONENT_NAMES } from '@plume-canvas/ui-kit-shadcn'
 
 describe('shadcn 原始组件名单', () => {
   it('认得出 shadcn 生成件与它们的子件', () => {

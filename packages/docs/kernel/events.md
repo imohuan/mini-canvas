@@ -163,7 +163,7 @@ ctx.waterfall('demo', 'blocked words', inner)  // '** BLOCKED **'（inner 从未
 | --- | --- | --- |
 | 形状 | **事件名 → payload 类型**（单对象） | **事件名 → 监听函数签名**（支持多参） |
 | 例子 | `'ctx:ready': { plugins: string[] }` | `'ctx:ready'(payload: { plugins: string[] }): void` |
-| 扩展写法 | `declare module '@mini-canvas/kernel' { interface EventMap { 'x:y': { n: number } } }` | `declare module '@mini-canvas/kernel' { interface Events { 'stats/report'(name: string, count: number): void } }` |
+| 扩展写法 | `declare module '@plume-canvas/kernel' { interface EventMap { 'x:y': { n: number } } }` | `declare module '@plume-canvas/kernel' { interface Events { 'stats/report'(name: string, count: number): void } }` |
 
 四个内置事件在两张表里**都有**（同键），保证 `keyof Events` 非空，`ctx.on` / `emit` 的类型化重载才有落点。
 
@@ -177,7 +177,7 @@ ctx.waterfall('demo', 'blocked words', inner)  // '** BLOCKED **'（inner 从未
 
 ```ts
 // 文件：my-plugin/src/events.d.ts（或任意被加载的 .ts 里）
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface Events {
     'my:progress'(done: number, total: number): void
   }
@@ -203,7 +203,7 @@ ctx.emit('some/typo', 2)                // 同名已 warn 过 → 不再 warn
 **消除 warn 有两条路**（选一条即可）：
 
 ```ts
-import { registerEventName, hasKnownEvent, knownEventNames } from '@mini-canvas/kernel'
+import { registerEventName, hasKnownEvent, knownEventNames } from '@plume-canvas/kernel'
 
 registerEventName('my:event')   // ① 运行时显式登记
 hasKnownEvent('my:event')       // → true
@@ -223,7 +223,7 @@ knownEventNames()               // → 全部已登记事件名（返回副本�
 内核内部用的是 `EventBus` 这个类，它**不依赖 `Context`**，可以 `new` 出来当独立的事件中枢（模块内部的发布订阅、跨模块通信都行）：
 
 ```ts
-import { EventBus } from '@mini-canvas/kernel'
+import { EventBus } from '@plume-canvas/kernel'
 
 const bus = new EventBus()   // 可选参数：{ devWhitelistWarn?: boolean }
 
@@ -300,7 +300,7 @@ plugin-events-demo/
 // 文件：packages\docs\public\examples\kernel\plugin-events-demo/src/speakerPlugin.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：插件包里「喊话」的那一件
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'speaker'
 
@@ -327,7 +327,7 @@ export const speakerPlugin: PluginModule = { name, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-events-demo/src/listenerPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：插件包里「听」的那一件
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'listener'
 
@@ -353,7 +353,7 @@ export const listenerPlugin: PluginModule = { name, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-events-demo/src/handlerPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：插件包里「接活」的那一件 —— 它在 serial 链上排在 listener 后面
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'handler'
 
@@ -376,7 +376,7 @@ export const handlerPlugin: PluginModule = { name, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-events-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：把喊话方与两个听众装进同一个内核
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { handlerPlugin } from './handlerPlugin'
 import { listenerPlugin } from './listenerPlugin'
 import { speakerPlugin } from './speakerPlugin'

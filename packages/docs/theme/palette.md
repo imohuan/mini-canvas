@@ -211,7 +211,7 @@ export function installThemePalette(
 - **空串 = 用户删掉了这个自定义色** → 清掉内联，回落 CSS（主题色）。
 - **dispose 会清掉所有内联覆盖**，否则"幽灵变量"会挡住下一个主题。
 
-宿主调用点（`createMiniCanvasHost.ts`）在上一页贴过：先 `defineThemePaletteSettings`，
+宿主调用点（`createPlumeHost.ts`）在上一页贴过：先 `defineThemePaletteSettings`，
 `restore()` 之后再 `installThemePalette` —— 顺序反了的话，用户上次存的配色要等下一次改动才可见。
 
 ### 写插件的姿势：什么时候必须用 `useThemeColor`
@@ -268,7 +268,7 @@ const edgeColor = computed(() => visual.value.edgeColor || railPalette.value || 
 | --- | --- | --- |
 | 色板真源 | `packages/canvas-render/src/contracts/themePalette.ts` | token 表、两格派生、解析与订阅 |
 | 宿主接线 | `packages/canvas-render/src/host/themePaletteSettings.ts` | `defineThemePaletteSettings` + `installThemePalette` |
-| 宿主时序 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | define → `restore()` → install（顺序不能反） |
+| 宿主时序 | `packages/canvas-render/src/host/createPlumeHost.ts` | define → `restore()` → install（顺序不能反） |
 | 取色（JS 通道） | `packages/canvas-render/src/contracts/useThemeColor.ts` | SVG 表现属性 / canvas 2D 的响应式取色 |
 | 连线组件 | `packages/plugins/plugin-theme-canvas/src/components/edge/CustomEdge.vue` | `useThemeColor('edgeRailColor')` / `('edgeFlowColor')` |
 | 参考线插件 | `packages/plugins/plugin-align-guide/src/alignGuidePlugin.ts` | 自己申报 `--uic-align-guide-light/dark`（用户口径：参考线颜色放专门插件里） |
@@ -288,7 +288,7 @@ const edgeColor = computed(() => visual.value.edgeColor || railPalette.value || 
 
 ~~~
 plugin-flow-badge/
-├── package.json                # 清单：包名 / 入口 / miniCanvas 元信息
+├── package.json                # 清单：包名 / 入口 / plume 元信息
 └── src/
     ├── index.ts                # 插件入口：把徽章挂到所有节点的 title 位
     └── FlowBadge.vue           # SVG 徽章：用 useThemeColor 取流光色
@@ -298,11 +298,11 @@ plugin-flow-badge/
 
 ~~~json
 {
-  "name": "@mini-canvas/plugin-flow-badge",
+  "name": "@plume-canvas/plugin-flow-badge",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：流光徽章",
     "description": "SVG 表现属性吃不到 var()，用 useThemeColor 取色板当前值",
     "pluginName": "flow-badge",
@@ -318,9 +318,9 @@ plugin-flow-badge/
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
@@ -341,7 +341,7 @@ plugin-flow-badge/
 <script setup lang="ts">
 // ① SVG 表现属性吃不到 var() —— :fill="color" 是属性，不是 CSS 声明。
 //    所以颜色必须经 useThemeColor 取具体色值（JS 通道）。
-import { useThemeColor } from '@mini-canvas/canvas-render'
+import { useThemeColor } from '@plume-canvas/canvas-render'
 
 const flow = useThemeColor('edgeFlowColor')   // 可留空 token：清空 = 跟随强调色，这里拿到的就是跟随后的值
 const rail = useThemeColor('edgeRailColor')
@@ -380,7 +380,7 @@ const rail = useThemeColor('edgeRailColor')
 // 格式：TypeScript 模块（插件入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
 
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import FlowBadge from './FlowBadge.vue'
 
 export const name = 'flow-badge'
@@ -402,7 +402,7 @@ export function apply(ctx: Context) {
     run: () => {
       const settings = ctx.tryGet<{ get(k: string): unknown }>('settings')
       // themeColorSlots 是色板派生的唯一入口：token 表 → 2×N 格
-      import('@mini-canvas/canvas-render').then(({ themeColorSlots, resolveThemeColorValue }) => {
+      import('@plume-canvas/canvas-render').then(({ themeColorSlots, resolveThemeColorValue }) => {
         for (const slot of themeColorSlots()) {
           const v = settings
             ? resolveThemeColorValue((k) => settings.get(k), slot.token.key, slot.mode)

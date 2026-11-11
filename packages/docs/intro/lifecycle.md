@@ -37,7 +37,7 @@ export function apply(ctx, config) {
 继承 `Service`，`super(ctx, name)` 会顺手把它挂上服务表：
 
 ```ts
-import { Service } from '@mini-canvas/kernel'
+import { Service } from '@plume-canvas/kernel'
 
 export class GreeterService extends Service {
   constructor(ctx) {

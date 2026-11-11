@@ -1,8 +1,8 @@
 /**
  * fullchain.test —— 画布宿主装配的全链路集成测试（由原 src/demo/__tests__/demo.test.ts 迁移）。
  *
- * 迁移说明：原测试基于早期装配 bootCanvas(src/demo/host.ts)，与现行 createMiniCanvasHost 功能重复；
- * bootCanvas 已删除，测试改用 createMiniCanvasHost 等价复测。createMiniCanvasHost **不内置**业务插件，
+ * 迁移说明：原测试基于早期装配 bootCanvas(src/demo/host.ts)，与现行 createPlumeHost 功能重复；
+ * bootCanvas 已删除，测试改用 createPlumeHost 等价复测。createPlumeHost **不内置**业务插件，
  * 需把 text/image 经 coldPlugins 显式传入。
  *
  * 注：画布通用命令（建节点/删选中/撤销/重做）现由数据层自带、宿主 boot 时默认注册
@@ -11,13 +11,13 @@
  * 覆盖：内核+插件装配、持久化(刷新恢复)、image/text 节点、命令(create/delete/undo/redo)、热装热卸。
  */
 import { describe, it, expect } from 'vitest'
-import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { type PluginModule } from '@mini-canvas/kernel'
-import { MemoryStorageAdapter, type CanvasNode, NodeStore, type CanvasEdge, GRAPH_EDGES_KEY } from '@mini-canvas/canvas-data'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import type { ImageNodeService } from '@mini-canvas/plugin-node-image'
-import type { TextNodeService } from '@mini-canvas/plugin-node-text'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { createPlumeHost } from '../createPlumeHost'
+import { type PluginModule } from '@plume-canvas/kernel'
+import { MemoryStorageAdapter, type CanvasNode, NodeStore, type CanvasEdge, GRAPH_EDGES_KEY } from '@plume-canvas/canvas-data'
+import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
+import type { ImageNodeService } from '@plume-canvas/plugin-node-image'
+import type { TextNodeService } from '@plume-canvas/plugin-node-text'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 
 /** 默认冷启动：text + image（命令由宿主自带，见文件头说明） */
 function baseColdPlugins(): PluginModule[] {
@@ -26,7 +26,7 @@ function baseColdPlugins(): PluginModule[] {
 
 /** 建宿主：可覆盖 adapter / coldPlugins */
 async function boot(opts: { adapter?: MemoryStorageAdapter; plugins?: PluginModule[] } = {}) {
-  const { host } = await createMiniCanvasHost({
+  const { host } = await createPlumeHost({
     adapter: opts.adapter ?? new MemoryStorageAdapter(),
     coldPlugins: opts.plugins ?? baseColdPlugins(),
   })

@@ -30,7 +30,7 @@ import HoverTip from "../HoverTip.vue";
 import { useUi } from "../../composables/ui";
 import { openUploadDialog } from "../../composables/assetUploadBus";
 import { computed, ref } from "vue";
-import { SlotAnchor, SlotComposer, useUiComponent } from "@mini-canvas/canvas-render";
+import { SlotAnchor, SlotComposer, useUiComponent } from "@plume-canvas/canvas-render";
 
 const Button = useUiComponent("Button")
 const DropdownMenu = useUiComponent("DropdownMenu")

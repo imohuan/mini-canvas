@@ -8,7 +8,7 @@
  */
 import { provide } from 'vue'
 import { Sparkles } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useAgentConversation } from './useAgentConversation'
 import AgentMessageList from './AgentMessageList.vue'
 import AgentComposer from './AgentComposer.vue'

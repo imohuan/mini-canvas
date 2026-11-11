@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * 渲染实验：验证文档站能否直接跑 `@mini-canvas/plugin-theme-default` 里的组件。
+ * 渲染实验：验证文档站能否直接跑 `@plume-canvas/plugin-theme-components` 里的组件。
  * 目前只探"纯 UI 件"（不依赖画布渲染上下文的那些）。
  */
-import { PrecisionSlider, ColorField } from '@mini-canvas/plugin-theme-default'
+import { PrecisionSlider, ColorField } from '@plume-canvas/plugin-theme-components'
 import {
   Button,
   Select,
@@ -15,7 +15,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit-shadcn'
 
 const options = [
   { label: '快速', value: 'fast' },
@@ -25,13 +25,13 @@ const options = [
 
 <template>
   <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center">
-    <Button class="mck-toolbar-btn mck-toolbar-btn--primary" variant="default" size="sm" type="button" title="下载">下载</Button>
-    <Button class="mck-toolbar-btn mck-toolbar-btn--danger" variant="destructive" size="sm" type="button" title="删除">删除</Button>
-    <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="图标钮" aria-label="图标钮">★</Button>
+    <Button class="pk-toolbar-btn pk-toolbar-btn--primary" variant="default" size="sm" type="button" title="下载">下载</Button>
+    <Button class="pk-toolbar-btn pk-toolbar-btn--danger" variant="destructive" size="sm" type="button" title="删除">删除</Button>
+    <Button class="pk-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="图标钮" aria-label="图标钮">★</Button>
     <TooltipProvider :delay-duration="120">
       <Tooltip>
         <TooltipTrigger as-child>
-          <Button class="mck-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="悬停我" aria-label="悬停我">?</Button>
+          <Button class="pk-toolbar-btn is-icon-only" variant="ghost" size="sm" type="button" title="悬停我" aria-label="悬停我">?</Button>
         </TooltipTrigger>
         <TooltipContent side="top">这是一条气泡提示</TooltipContent>
       </Tooltip>

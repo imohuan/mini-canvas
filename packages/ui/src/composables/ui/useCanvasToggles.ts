@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import type { SettingsStore } from '@mini-canvas/kernel'
+import type { SettingsStore } from '@plume-canvas/kernel'
 import { readyHost } from './hostRuntime'
 import type { UiState } from './createUiState'
 import type { UiHostScope } from './useUiHost'

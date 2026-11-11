@@ -12,7 +12,7 @@
  * 做法是接指针但不接动作：点击/拖拽进来都会被忽略，只有悬停提示生效。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import {
   referenceNodeState,
   canReference,
@@ -58,8 +58,8 @@ const tick = ref(0)
 function onModeChange(): void {
   tick.value += 1
 }
-onMounted(() => window.addEventListener('mini-canvas:selection-mode', onModeChange))
-onBeforeUnmount(() => window.removeEventListener('mini-canvas:selection-mode', onModeChange))
+onMounted(() => window.addEventListener('plume-canvas:selection-mode', onModeChange))
+onBeforeUnmount(() => window.removeEventListener('plume-canvas:selection-mode', onModeChange))
 onMounted(() => {
   syncRadius()
   radiusTimer = setInterval(syncRadius, 250)

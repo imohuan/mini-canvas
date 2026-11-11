@@ -12,8 +12,8 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { NodeRegistry } from '@mini-canvas/canvas-data'
-import { RENDER_CONTEXT_KEY, useVueFlow, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { NodeRegistry } from '@plume-canvas/canvas-data'
+import { RENDER_CONTEXT_KEY, useVueFlow, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import BaseNode from '../BaseNode.vue'
 
 const ContentStub = defineComponent({ name: 'ContentStub', render: () => h('div', { class: 'probe-content' }) })

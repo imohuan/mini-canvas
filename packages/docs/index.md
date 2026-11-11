@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: mini-canvas
+  name: plume-canvas
   text: 插件系统文档
   tagline: 画布本身几乎什么都不做，功能全靠插件装上去 —— 从一个极简的前后端插件开始
   actions:
@@ -27,7 +27,7 @@ features:
 
 ## 这个站是干什么的
 
-它讲清楚一件事：**mini-canvas 的插件系统是怎么运转的**，
+它讲清楚一件事：**plume-canvas 的插件系统是怎么运转的**，
 以及**你当前这台画布上到底装了什么、注册了什么**。
 
 不知道从哪看起 → 走 [入门](/start/) 的路线：

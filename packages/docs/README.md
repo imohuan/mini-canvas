@@ -1,6 +1,6 @@
-# @mini-canvas/docs
+# @plume-canvas/docs
 
-mini-canvas 的**插件系统文档站**。四类：
+plume-canvas 的**插件系统文档站**。四类：
 
 1. **入门** —— 从这是什么到动手写出前后端各一个插件，再深挖内核/数据层/渲染层/主题/后台。
 2. **示例** —— 10 个可照抄的插件案例（含完整上下文与逐行注释）。
@@ -21,7 +21,7 @@ pnpm -C packages/docs preview  # 预览静态站（:5291）
 | 想做什么 | 去哪改 |
 | --- | --- |
 | 写一篇文档 | 在对应目录新建 .md；想让菜单出现就改 .vitepress/config.ts 的 sidebar |
-| 让某个插件出现在总览表 | 该插件的 package.json 里声明 miniCanvas.title/description + builtin 或 installable |
+| 让某个插件出现在总览表 | 该插件的 package.json 里声明 plume.title/description + builtin 或 installable |
 | 让文档能内联预览某个组件 | .vitepress/theme/preview-registry.ts 加一条 |
 | 给某个内置服务写文档 | 在 services/ 新建 <服务名>.md，按 API 两节结构（一句话定位 + 用法表 + 注意事项）写；文件头路径用相对路径，别指向不存在的 public/examples |
 | 更新活快照的真实数据 | 在跑着画布应用的页面点「重新采集」，用它覆盖 public/surface-snapshot.json |
@@ -51,7 +51,7 @@ packages/docs/
 
 ## 文档专用组件
 
-- `<SurfaceReport/>`：**活快照**。调 `window.MiniCanvasUI.getContext().surface()`
+- `<SurfaceReport/>`：**活快照**。调 `window.PlumeUI.getContext().surface()`
   或后台接口，把当前画布的注册情况画成表格。这是"看不见的文档"变成"看得见"的桥。
 - `<PluginCapabilityTable/>`：按插件 `package.json` 的声明列出全部插件。
 - `<ComponentPreview/>` `<ComponentPreviewFrame/>`：在页面里跑真实组件 / 嵌整页。

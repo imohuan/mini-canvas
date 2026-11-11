@@ -3,8 +3,8 @@
 // 位置：证明“数据层脱离浏览器也能完整验证”
 
 import { describe, expect, it } from 'vitest'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { bootLedger } from '../host'
 
 describe('只装数据层的画布', () => {

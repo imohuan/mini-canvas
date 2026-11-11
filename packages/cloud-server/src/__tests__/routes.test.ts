@@ -212,18 +212,18 @@ describe('健康检查与静态兜底', () => {
       expect(spa.status).toBe(200)
       expect(await spa.text()).toContain('<div id="app">')
 
-      // 宿主标记：发出去的 index.html 里要有 mini-canvas-host —— 前端据此把「云端连接」
+      // 宿主标记：发出去的 index.html 里要有 plume-host —— 前端据此把「云端连接」
       // 当自带件**开机直接启动**（用户口径：cloud-server 起的服务，cloud-client 应在自带里直接启动）。
       // 少了这行，托管版就不会自动连后台，退化成「要用户先去面板点一次安装」。
       const spaHtml = await (await s.app.fetch(new Request('http://localhost/'))).text()
-      expect(spaHtml).toContain('name="mini-canvas-host"')
+      expect(spaHtml).toContain('name="plume-host"')
       expect(spaHtml).toContain('content="cloud-server"')
       // 幂等：同一个响应里只插一次
-      expect(spaHtml.split('name="mini-canvas-host"').length - 1).toBe(1)
+      expect(spaHtml.split('name="plume-host"').length - 1).toBe(1)
 
       // 路径穿越被挡下
       const evil = await s.app.fetch(new Request('http://localhost/../../package.json'))
-      expect(await evil.text()).not.toContain('"name": "mini-canvas"')
+      expect(await evil.text()).not.toContain('"name": "plume-canvas"')
     } finally {
       s.stop()
       await fs.rm(uiDist, { recursive: true, force: true })
@@ -239,7 +239,7 @@ describe('插件清单与产物', () => {
     await fs.writeFile(path.join(pluginsDir, 'plugin-a', 'dist', 'plugin-a.js'), 'const n="a";export{n as name};')
     await fs.writeFile(
       path.join(pluginsDir, 'plugin-a', 'package.json'),
-      JSON.stringify({ name: '@mini-canvas/plugin-a' }),
+      JSON.stringify({ name: '@plume-canvas/plugin-a' }),
     )
     await fs.mkdir(path.join(pluginsDir, 'plugin-b', 'src'), { recursive: true })
     await fs.mkdir(path.join(pluginsDir, 'plugin-c', 'dist'), { recursive: true })
@@ -248,7 +248,7 @@ describe('插件清单与产物', () => {
     await fs.mkdir(path.join(pluginsDir, 'plugin-d', 'dist'), { recursive: true })
     await fs.writeFile(
       path.join(pluginsDir, 'plugin-d', 'dist', 'plugin-d.js'),
-      '(function(){var name="d";window.MiniCanvasPluginD={name:name}})();',
+      '(function(){var name="d";window.PlumePluginD={name:name}})();',
     )
 
     const s = await createCloudServer({ dir, pluginsDir })
@@ -268,7 +268,7 @@ describe('插件清单与产物', () => {
       // 路径穿越/不存在的插件都拿不到东西
       // （穿越路径不会命中插件路由；即便落到静态层也只会拿到 index.html）
       const evil = await s.app.fetch(new Request('http://localhost/plugins/plugin-a/../package.json'))
-      expect(await evil.text()).not.toContain('@mini-canvas/plugin-a')
+      expect(await evil.text()).not.toContain('@plume-canvas/plugin-a')
       expect((await s.app.fetch(new Request('http://localhost/plugins/plugin-a/nope.js'))).status).toBe(404)
     } finally {
       s.stop()
@@ -399,7 +399,7 @@ describe('MCP 与网页共用一个服务', () => {
     )
     expect(res.status).toBe(200)
     const text = await res.text()
-    expect(text).toContain('mini-canvas-cloud')
+    expect(text).toContain('plume-canvas')
   })
 
   it('服务里报告了 MCP 开着、并列出工具', () => {
@@ -421,7 +421,7 @@ describe('MCP 与网页共用一个服务', () => {
       )
       // 没有 MCP 路由时，请求会落到静态兜底（SPA 回落给 index.html），不会是 JSON-RPC 响应
       const text = await mcp.text()
-      expect(text).not.toContain('mini-canvas-cloud')
+      expect(text).not.toContain('plume-canvas')
       // KV 接口不受影响
       expect((await s.app.fetch(new Request('http://localhost/health'))).status).toBe(200)
     } finally {

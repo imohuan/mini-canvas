@@ -1,4 +1,4 @@
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 
 export function useCanvasSave(opts: { hostRef: { value: CanvasHostHandle | undefined } }) {
   function flushSave(): void {

@@ -9,7 +9,7 @@
 // 真正改画布（详见 composables/ui.ts 的「缩放」段）。
 import { Check, PanelLeft, LayoutGrid, MapPin, MapPinOff, Link2Off, Link2, Magnet, Grid2x2X } from 'lucide-vue-next'
 // 状态栏控件从画布 ctx 的 ui 注册表按名取（默认主题插件登记），不直接 import 组件库。
-import { SlotAnchor, SlotComposer, useUiComponent } from '@mini-canvas/canvas-render'
+import { SlotAnchor, SlotComposer, useUiComponent } from '@plume-canvas/canvas-render'
 import { useUi } from '../../composables/ui'
 import { useMiniMapDockTarget } from '../../composables/miniMapDock'
 import HoverTip from '../HoverTip.vue'

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import {
   buildV2HelpList,
   groupV2HelpList,

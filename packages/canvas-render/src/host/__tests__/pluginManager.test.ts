@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { createMiniCanvasHost } from '../createMiniCanvasHost'
+import { Context } from '@plume-canvas/canvas-data'
+import { createPlumeHost } from '../createPlumeHost'
 import { loadPluginFromText, createPluginManager, sourceKind } from '../pluginManager'
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 
 /** 一个可热装插件：注入服务 + nodeStore type，供装/卸/重载验证 */
 function demoPlugin(flag: string): PluginModule {
@@ -22,12 +22,12 @@ function demoPlugin(flag: string): PluginModule {
 }
 
 afterEach(() => {
-  delete (globalThis as Record<string, unknown>)['MiniCanvas']
+  delete (globalThis as Record<string, unknown>)['Plume']
 })
 
 describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源/manifest）', () => {
   it('manager.install 源码模块 → 服务/type 生效；manager.uninstall 回收', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     expect(await manager.install(demoPlugin('v1'))).toBe('demo')
     expect(host.ctx.get<{ flag: string }>('demoSvc').flag).toBe('v1')
     expect(host.nodeStore.types.has('demo')).toBe(true)
@@ -39,7 +39,7 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
   })
 
   it('manager.reload(name, 新实现) 换版本生效', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     await manager.install(demoPlugin('old'))
     expect(host.ctx.get<{ flag: string }>('demoSvc').flag).toBe('old')
 
@@ -50,7 +50,7 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
   })
 
   it('外部来源：单文件插件 js 文本(ESM) loadPluginFromText 后能装生效', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     const text = `
       export const name = 'ext-svc'
       export function apply(ctx) {
@@ -64,7 +64,7 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
   })
 
   it('manager.install 接受 { text } 来源(懒解析)直接装外部插件', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     await manager.install({
       text: `export const name = 'ext2'; export function apply(ctx){ ctx.inject('ext2', { ok: 1 }) }`,
     })
@@ -72,7 +72,7 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
   })
 
   it('applyManifest 按序装 + 同 id(=name)覆盖旧实现(轻量分层)', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     const mk = (n: string, svc: string, flag: string): PluginModule => ({
       name: n,
       apply(ctx) {
@@ -97,7 +97,7 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
   })
 
   it('applyManifest 跳过 disabled 项(清单保留、关闭不装)，不参与返回/列表', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     const mk = (n: string, svc: string): PluginModule => ({
       name: n,
       apply(ctx) {
@@ -118,7 +118,7 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
   })
 
   it('manager 独立于宿主门面可基于任意已 start Context 创建', async () => {
-    const { host } = await createMiniCanvasHost()
+    const { host } = await createPlumeHost()
     const m = createPluginManager(host.ctx)
     expect(await m.install(demoPlugin('x'))).toBe('demo')
     expect(host.ctx.get<{ flag: string }>('demoSvc').flag).toBe('x')
@@ -127,14 +127,14 @@ describe('目标 D：统一安装句柄 manager（装/卸/换版本/外部来源
 
 describe('P5：manager.list/diagnose 暴露 fiber state + PENDING 缺依赖诊断', () => {
   it('ACTIVE 插件 list 条目带 state=active 与空 missingDeps', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     await manager.install(demoPlugin('v1'))
     const row = manager.list().find((p) => p.name === 'demo')
     expect(row).toMatchObject({ name: 'demo', state: 'active', missingDeps: [] })
   })
 
   it('卡 PENDING(缺提供方) 插件：list 显 state=pending + missingDeps，diagnose 单列它', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     // 依赖一个不存在的服务 → 停留 PENDING(install 不抛，等提供方)
     await manager.install({ name: 'waiting', inject: ['ghost-svc'], apply: () => {} })
     const row = manager.list().find((p) => p.name === 'waiting')
@@ -144,7 +144,7 @@ describe('P5：manager.list/diagnose 暴露 fiber state + PENDING 缺依赖诊�
   })
 
   it('FAILED 插件：list 不带(已移出可装载表)，但 inspect 能经 ctx 查到带 error', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     await expect(manager.install({ name: 'boom', apply() { throw new Error('bad-plugin') } })).rejects.toThrow(
       /bad-plugin/,
     )
@@ -175,7 +175,7 @@ describe('hiddenPlugins：只从应用清单隐去，内核诊断仍可见', () 
 
 describe('核心插件操作被拦后，装配 config 仍在', () => {
   it('卸载/换版本失败不改配置快照，仍能在 list 里读到', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     const core: PluginModule = {
       name: 'cfg-core',
       core: true,
@@ -200,7 +200,7 @@ describe('核心插件操作被拦后，装配 config 仍在', () => {
 
 describe('manifestReport（P1-7：disabled/重复项登记诊断）', () => {
   it('逐项登记 disabled / will-install / superseded，disabled 不再静默不可见', async () => {
-    const { manager } = await createMiniCanvasHost()
+    const { manager } = await createPlumeHost()
     const mk = (n: string): PluginModule => ({ name: n, apply: () => {} })
     const report = manager.manifestReport({
       plugins: [
@@ -219,7 +219,7 @@ describe('manifestReport（P1-7：disabled/重复项登记诊断）', () => {
   })
 
   it('懒加载/URL 来源（无同步 name）以 id 作 name 登记', async () => {
-    const { manager } = await createMiniCanvasHost()
+    const { manager } = await createPlumeHost()
     const report = manager.manifestReport({
       plugins: [{ id: 'lazy-1', source: { module: () => ({ name: 'lazy-1', apply: () => {} }) } }],
     })
@@ -229,7 +229,7 @@ describe('manifestReport（P1-7：disabled/重复项登记诊断）', () => {
 
 describe('manifestReport id 与 source.name 不一致（P1-7 边界）', () => {
   it('id ≠ source.name 时：report 保留声明 id、name 取 source 实际名；装载按 name', async () => {
-    const { host, manager } = await createMiniCanvasHost()
+    const { host, manager } = await createPlumeHost()
     const mk = (n: string): PluginModule => ({ name: n, apply(ctx) { ctx.inject(n + '-svc', { ok: 1 }) } })
     const report = manager.manifestReport({
       plugins: [{ id: 'stable-alias', source: mk('real-name') }],

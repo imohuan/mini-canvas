@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-model-tool-demo/src/toolLogger.ts
 // 格式：TypeScript 模块（插件入口，观察者）
 // 位置：打印每一次模型工具调用 —— 它不需要 inject 任何服务
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'model-tool-logger'
 

@@ -55,24 +55,24 @@ import { makeResolveResourceUrl } from './tasks/resourceResolver.js'
  */
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 import { makeFetchSelfBytes } from './tasks/selfFetch.js'
-import { branchStore } from '@mini-canvas/plugin-agent/server/agent/branchStore.js'
-import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_API_KEY } from '@mini-canvas/plugin-agent/server/agent/testModel.js'
-import { assembleAgentServices, type AgentServices } from '@mini-canvas/plugin-agent/server/agent/assembleAgent.js'
-import { buildRuntimeContext, runtimeContextSection } from '@mini-canvas/plugin-agent/server/agent/runtimeContext.js'
+import { branchStore } from '@plume-canvas/plugin-agent/server/agent/branchStore.js'
+import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_API_KEY } from '@plume-canvas/plugin-agent/server/agent/testModel.js'
+import { assembleAgentServices, type AgentServices } from '@plume-canvas/plugin-agent/server/agent/assembleAgent.js'
+import { buildRuntimeContext, runtimeContextSection } from '@plume-canvas/plugin-agent/server/agent/runtimeContext.js'
 import { listAgentPromptSections, runAgentMiddleware } from './serverFramework/agent.js'
 import { adminActionFor, createAdminAuth, isAdminPath } from './adminAuth.js'
 import { createDebugOrigin } from './debugOrigin.js'
 import { createAuditLog } from './audit.js'
 import { createRequestTrust, normalizeOriginEntry } from './requestTrust.js'
 import { createTaskTokens } from './taskToken.js'
-import { REFERENCE_MARKUP_GUIDE } from '@mini-canvas/plugin-agent/server/agent/referenceMarkup.js'
+import { REFERENCE_MARKUP_GUIDE } from '@plume-canvas/plugin-agent/server/agent/referenceMarkup.js'
 import type { CloudServerOptions, CloudServer } from './serverTypes.js'
 
 /** 默认端口：避开 ui dev 的 5288 与 mcp-server 的 8765 */
 export const DEFAULT_PORT = 8865
 
 /** 默认数据目录名（相对启动目录） */
-export const DEFAULT_DATA_DIR = '.mini-canvas'
+export const DEFAULT_DATA_DIR = '.plume'
 
 export type { CloudServerOptions, CloudServer } from './serverTypes.js'
 
@@ -87,14 +87,14 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 关鉴权必须显式配合 ALLOW_INSECURE —— 防止一个环境变量就把管理面敞开。
   // 单测里默认关掉：`app.fetch(new Request('http://localhost/...'))` 没有真实 Host，
   // 而且用例本身就是在测业务语义。**生产环境（非 VITEST）默认全开**，
-  // 命令行若显式 `--no-admin-auth`，仍要求 MINI_CANVAS_ALLOW_INSECURE=1（见 cli.ts）。
+  // 命令行若显式 `--no-admin-auth`，仍要求 PLUME_ALLOW_INSECURE=1（见 cli.ts）。
   const testEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test'
   const adminAuthEnabled = opts.adminAuth ?? !testEnv
   const adminAuth = await createAdminAuth({
     dataDir,
     enabled: adminAuthEnabled,
-    ...(opts.adminToken ?? process.env.MINI_CANVAS_ADMIN_TOKEN
-      ? { fixedToken: opts.adminToken ?? process.env.MINI_CANVAS_ADMIN_TOKEN }
+    ...(opts.adminToken ?? process.env.PLUME_ADMIN_TOKEN
+      ? { fixedToken: opts.adminToken ?? process.env.PLUME_ADMIN_TOKEN }
       : {}),
   })
   const audit = createAuditLog(path.join(dataDir, 'audit.log'))
@@ -348,7 +348,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           ? [`127.0.0.1:${listenPort}`, `[::1]:${listenPort}`]
           : []),
         ...(opts.trustedHosts ?? []),
-        ...(process.env.MINI_CANVAS_TRUSTED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+        ...(process.env.PLUME_TRUSTED_HOSTS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
       ]),
     )
   }
@@ -360,7 +360,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const trustedOrigins: string[] = Array.from(
     new Set([
       ...(opts.trustedOrigins ?? []).map(normalizeOriginEntry),
-      ...(process.env.MINI_CANVAS_TRUSTED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean).map(normalizeOriginEntry),
+      ...(process.env.PLUME_TRUSTED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean).map(normalizeOriginEntry),
     ]),
   )
   /**
@@ -458,7 +458,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         ...(c.req.header('host') ? { host: c.req.header('host')! } : {}),
       })
       return c.json(
-        { ok: false, error: '需要管理令牌（x-admin-token）；见启动日志或 ' + (adminAuth.tokenFile ?? '<MINI_CANVAS_ADMIN_TOKEN>') },
+        { ok: false, error: '需要管理令牌（x-admin-token）；见启动日志或 ' + (adminAuth.tokenFile ?? '<PLUME_ADMIN_TOKEN>') },
         403,
       )
     }
@@ -795,14 +795,14 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   await host.start(() => {
     // 本机访问时顺手把管理令牌注进页面（远程不注）：否则用户要先手抄一遍，
     // 忘了抄的表现是「所有写操作 403、节点上只写执行失败」。
-    // MINI_CANVAS_NO_TOKEN_INJECTION=1：反代被配成透传 Host / 删转发头时，令牌注入
+    // PLUME_NO_TOKEN_INJECTION=1：反代被配成透传 Host / 删转发头时，令牌注入
     // 的三个判定会被骗过 —— 部署者声明后一刀切不注入，所有用户都手填。
     app.route(
       '/',
       uiRoutes(
         uiDist,
         () => (adminAuthEnabled ? adminAuth.token : undefined),
-        process.env.MINI_CANVAS_NO_TOKEN_INJECTION === '1',
+        process.env.PLUME_NO_TOKEN_INJECTION === '1',
       ),
     )
   })

@@ -11,7 +11,7 @@
  * 两边都用内核**唯一写入口 graph** → 写回自动进历史、自动落盘、可撤销。
  *
  * 本模块只依赖纯工具（imageTransform / imageNodeData / imageExpand）与渲染层的通用几何
- * （@mini-canvas/canvas-render 的 crop/mediaFit），不 import Vue，
+ * （@plume-canvas/canvas-render 的 crop/mediaFit），不 import Vue，
  * node 环境下所有图片操作安全地返回 false（环境不支持），不会抛。
  */
 import {
@@ -23,7 +23,7 @@ import {
 } from './imageTransform'
 import { loadDrawableSource, paintCanvasBlob, releaseDrawable } from './imageBitmap'
 import { describeImageMeta, downloadFileName } from './imageNodeData'
-import { placeAdjacent, toPixelRect, type Rect } from '@mini-canvas/canvas-render'
+import { placeAdjacent, toPixelRect, type Rect } from '@plume-canvas/canvas-render'
 import { cardSizePatch, readImageFitLimits, MIN_CARD_WIDTH, type ImageFitLimits } from './imageFit'
 import { expandImage, isExpandEffective, type ExpandBitmapIO } from './imageExpand'
 import { renderMaskBlob, renderResultBlob, type PaintStroke } from './imagePaint'

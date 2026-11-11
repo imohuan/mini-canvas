@@ -8,10 +8,10 @@
  * 数据里 parentId 仍指向分镜组，position 却已经写成绝对值。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { createCanvasBasePlugin } from '@mini-canvas/canvas-data'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { ViewService } from '@mini-canvas/canvas-render'
+import { Context } from '@plume-canvas/canvas-data'
+import { createCanvasBasePlugin } from '@plume-canvas/canvas-data'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { ViewService } from '@plume-canvas/canvas-render'
 import { applyStoryboardDrop, storyboardHitAt } from '../storyboardDrag'
 
 interface Harness {

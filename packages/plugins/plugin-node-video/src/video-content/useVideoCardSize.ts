@@ -33,8 +33,13 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
 
   const sourceKey = computed(() => sourceFields.value.resourceId + '|' + sourceFields.value.legacyUrl)
 
-  /** 上一次量尺寸的地址：同一地址不重复解码（loadedmetadata 与 URL 监听都会走到这里） */
-  let measuredUrl = ''
+  /**
+   * 正在量尺寸的那一次（同地址并发调用时共用一次解码）。
+   *
+   * 刻意**不**记住「量完的地址」：槽位资源（`slot-<节点id>.mp4`）同址覆盖，
+   * 地址不变而内容会变；记住之后就会一直用旧尺寸。写回本身幂等，多量一次没有副作用。
+   */
+  let inflight: { url: string; task: Promise<{ width: number; height: number } | null> } | null = null
 
   function syncCardSize(patch: CardSizePatch | null): void {
     if (!patch) return
@@ -59,7 +64,6 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
 
   watch(sourceKey, () => {
     onSourceChanged()
-    measuredUrl = ''
     syncCardSize(followedVideoCardSizePatch(data(), ops.fitLimits?.()))
   })
 
@@ -70,16 +74,14 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
    * 拖入 / 换源 / 旧数据打开都走这一条；量不到（跨域、编码不支持）就什么都不做。
    */
   async function measure(url: string): Promise<void> {
-    if (!url || url === measuredUrl) return
-    measuredUrl = url
-    const meta = await readVideoMeta(url).catch(() => null)
-    // 量的时候地址又换了 → 这次结果作废（新地址那一次自己会量）
-    if (url !== measuredUrl) return
-    if (!meta || !(meta.width > 0) || !(meta.height > 0)) {
-      // 失败不记住：下次地址再变/再挂载还能重试
-      measuredUrl = ''
-      return
-    }
+    if (!url) return
+    const task = inflight?.url === url
+      ? inflight.task
+      : readVideoMeta(url).then((m) => (m ? { width: m.width, height: m.height } : null)).catch(() => null)
+    inflight = { url, task }
+    const meta = await task
+    if (inflight?.task === task) inflight = null
+    if (!meta || !(meta.width > 0) || !(meta.height > 0)) return
     flushMeta(meta.width, meta.height)
   }
 
@@ -129,6 +131,8 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
     mountSize,
     onMeta,
     measure,
+    /** 已知宽高（节点里记的、或缩略图同比例）→ 对齐卡片，不再解码 */
+    measureSize: (w: number, h: number) => flushMeta(w, h),
   }
 }
 

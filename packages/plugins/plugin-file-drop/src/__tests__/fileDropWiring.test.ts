@@ -11,10 +11,10 @@
  * 假 window 只需覆盖本插件真正用到的那几个 API，不引入 jsdom（少一个依赖，也更快）。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CLIPBOARD_PASTE_KIND, CLIPBOARD_PASTE_KEY } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CLIPBOARD_PASTE_KIND, CLIPBOARD_PASTE_KEY } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry } from '@plume-canvas/canvas-data'
 import { fileDropPlugin } from '../fileDropPlugin'
 
 type Listener = (ev: unknown) => void

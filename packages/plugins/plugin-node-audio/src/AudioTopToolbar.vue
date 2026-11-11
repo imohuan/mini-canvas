@@ -16,7 +16,7 @@
  * 选中态也不在这里：上插槽整体由壳按"框选中/多选收起、否则各段自己看选中态"的规则显隐。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { createAudioOps, defaultTransform, uploadAudio } from './audioOps'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()

@@ -1,9 +1,9 @@
 // 文件：packages/docs/public/examples/kernel/plugin-services-demo/src/greeterService.ts
 // 格式：TypeScript 模块（类形态插件：提供并上架一个服务）
 // 位置：插件包里「提供方」的那一件
-import { Service, type Context } from '@mini-canvas/kernel'
+import { Service, type Context } from '@plume-canvas/kernel'
 
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface Services {
     greeter: GreeterService           // ① 类型登记：ctx.get('greeter') 从此自带类型
   }

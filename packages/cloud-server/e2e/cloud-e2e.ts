@@ -80,7 +80,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   // e2e 要验的是云端存档能力，故这里模拟"用户点了安装"这一步。
   await pageA.ev(
     `(async () => {
-       const ctx = window.MiniCanvasUI.getContext()
+       const ctx = window.PlumeUI.getContext()
        const pm = ctx.tryGet('plugin-manager')
        if (pm) { await pm.refresh(); await pm.install('plugin-cloud-client') }
      })()`,
@@ -96,7 +96,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   const pluginInfo = await pageA.ev<{ manifest: string[]; hasService: boolean; status: unknown }>(
     `(async () => {
        const m = await fetch('/plugin-manifest.json').then((r) => r.json())
-       const api = window.MiniCanvasUI
+       const api = window.PlumeUI
        const ctx = api && api.getContext()
        return { manifest: m.plugins.map((p) => p.id), hasService: !!ctx?.get?.('cloud-client'), status: ctx?.get?.('cloud-client')?.status?.() ?? null }
      })()`,
@@ -107,7 +107,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
 
   const built = await pageA.ev<{ before: number; nodes: { id: string }[]; edges: number }>(
     `(() => {
-       const host = window.MiniCanvasUI.getHost()
+       const host = window.PlumeUI.getHost()
        const before = host.nodeStore.getNodes().length
        host.command.execute('command:create-node', { type: 'text', position: { x: 100, y: 100 } })
        host.command.execute('command:create-node', { type: 'image', position: { x: 420, y: 140 } })
@@ -129,7 +129,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
         const img = g.createImageData(cv.width, cv.height)
         for (let i = 0; i < img.data.length; i++) img.data[i] = (i * 2654435761) % 256
         g.putImageData(img, 0, 0)
-        const host = window.MiniCanvasUI.getHost()
+        const host = window.PlumeUI.getHost()
         const target = host.nodeStore.getNodes().find((n) => n.type === 'image')
         if (!target) return { id: '', dataUrlBytes: 0, ref: '' }
         const blob = await new Promise((r) => cv.toBlob(r, 'image/png'))
@@ -159,7 +159,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   // 去重的证据在磁盘上（json 里只应有 URL，不该有 base64）。
   const uploaded = await pageA.ev<{ imageUrl: string; status: unknown }>(
     `(() => {
-       const host = window.MiniCanvasUI.getHost()
+       const host = window.PlumeUI.getHost()
        const n = host.nodeStore.getNode(${JSON.stringify(placed.id)})
        return { imageUrl: n.data.imageUrl, status: host.ctx.get('cloud-client').status() }
      })()`,
@@ -202,7 +202,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
   // 机器 B 同样是全新 profile：云端客户端也得手动装一次，才能读回云端的画布。
   await pageB.ev(
     `(async () => {
-       const ctx = window.MiniCanvasUI.getContext()
+       const ctx = window.PlumeUI.getContext()
        const pm = ctx.tryGet('plugin-manager')
        if (pm) { await pm.refresh(); await pm.install('plugin-cloud-client') }
      })()`,
@@ -212,7 +212,7 @@ async function runChecks(baseUrl: string, dataDir: string): Promise<void> {
 
   const restored = await pageB.ev<{ nodes: string[]; edges: number; status: unknown }>(
     `(() => {
-       const api = window.MiniCanvasUI
+       const api = window.PlumeUI
        const host = api && api.getHost()
        return { nodes: host ? host.nodeStore.getNodes().map((n) => n.id) : [], edges: host ? host.graph.getEdges().length : -1, status: api?.getContext()?.get?.('cloud-client')?.status?.() ?? null }
      })()`,
@@ -270,7 +270,7 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
   // 这不是"作弊"：真用户面对一个视野外的节点也是先挪视图再操作。而鼠标手势测的是
   // "能不能拖/连/删"，不是"能不能盲操屏幕外的东西"——节点若大半在视野外，
   // elementFromPoint 根本找不到落点，测出来只会是假失败（上一版就是这么误报的）。
-  await page.ev(`(() => window.MiniCanvasUI.getHost().view.fitView(0.25))()`)
+  await page.ev(`(() => window.PlumeUI.getHost().view.fitView(0.25))()`)
   await sleep(1200)
 
   /** 某节点某端口锚点的屏幕坐标（锚点本身 0×0，真正接住鼠标的是外层跟随区） */
@@ -331,7 +331,7 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
   // 取两个"当前没有边相连"的节点来做连接用例（否则去重会让边数不变，白测一场）
   const pair = await page.ev<{ a: string; b: string } | null>(
     `(() => {
-       const host = window.MiniCanvasUI.getHost()
+       const host = window.PlumeUI.getHost()
        const nodes = host.nodeStore.getNodes()
        const edges = host.graph.getEdges()
        const linked = new Set(edges.map((e) => e.source + '>' + e.target))
@@ -363,7 +363,7 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
   check('挑到一个可拖动的目标节点', target !== null, { id: dragId })
 
   const posBefore = await page.ev<{ x: number; y: number }>(
-    `(() => window.MiniCanvasUI.getHost().nodeStore.getNode(${JSON.stringify(dragId)}).position)()`,
+    `(() => window.PlumeUI.getHost().nodeStore.getNode(${JSON.stringify(dragId)}).position)()`,
   )
   const grabPoint = target?.point ?? null
   if (grabPoint) {
@@ -375,7 +375,7 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
     await sleep(1000)
   }
   const posAfter = await page.ev<{ x: number; y: number }>(
-    `(() => window.MiniCanvasUI.getHost().nodeStore.getNode(${JSON.stringify(dragId)}).position)()`,
+    `(() => window.PlumeUI.getHost().nodeStore.getNode(${JSON.stringify(dragId)}).position)()`,
   )
   check(
     '★ 真鼠标拖动节点，那个节点的位置真的变了',
@@ -384,14 +384,14 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
   )
 
   // ② 真连线：从 a 的 source 拖到 b 的 target（这两个之间确定还没边）
-  const edgesBefore = await page.ev<number>(`(() => window.MiniCanvasUI.getHost().graph.getEdges().length)()`)
+  const edgesBefore = await page.ev<number>(`(() => window.PlumeUI.getHost().graph.getEdges().length)()`)
   const src = pair ? await portPointById(pair.a, 'source') : null
   const dst = pair ? await portPointById(pair.b, 'target') : null
   if (src && dst) {
     await page.dragMouse(src, dst, 18)
     await sleep(1300)
   }
-  const edgesAfter = await page.ev<number>(`(() => window.MiniCanvasUI.getHost().graph.getEdges().length)()`)
+  const edgesAfter = await page.ev<number>(`(() => window.PlumeUI.getHost().graph.getEdges().length)()`)
   check('★ 真鼠标从端口拖出连线，边数 +1', edgesAfter === edgesBefore + 1, {
     from: pair?.a,
     to: pair?.b,
@@ -401,7 +401,7 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
 
   // ③ 真点选 + 真 Delete（点同一个节点，最后按 id 核对它确实没了）
   const nodesBeforeDelete = await page.ev<number>(
-    `(() => window.MiniCanvasUI.getHost().nodeStore.getNodes().length)()`,
+    `(() => window.PlumeUI.getHost().nodeStore.getNodes().length)()`,
   )
   // 点选用"确认命中它"的点（拖动之后位置变了，重新扫一次）
   const reScan = await hitPoints()
@@ -424,27 +424,27 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
       clickCount: 1,
     })
     await sleep(700)
-    const selected = await page.ev<number>(`(() => window.MiniCanvasUI.getHost().selection.ids.size)()`)
+    const selected = await page.ev<number>(`(() => window.PlumeUI.getHost().selection.ids.size)()`)
     check('点一下节点就选中了', selected === 1, { selected })
     await page.pressKey('Delete')
     await sleep(900)
   }
   const nodesAfterDelete = await page.ev<number>(
-    `(() => window.MiniCanvasUI.getHost().nodeStore.getNodes().length)()`,
+    `(() => window.PlumeUI.getHost().nodeStore.getNodes().length)()`,
   )
   check('★ 选中后按 Delete 删掉了这个节点', nodesAfterDelete === nodesBeforeDelete - 1, {
     before: nodesBeforeDelete,
     after: nodesAfterDelete,
   })
   const gone = await page.ev<boolean>(
-    `(() => !window.MiniCanvasUI.getHost().nodeStore.getNode(${JSON.stringify(dragId)}))()`,
+    `(() => !window.PlumeUI.getHost().nodeStore.getNode(${JSON.stringify(dragId)}))()`,
   )
   check('删掉的正是那一个（按 id 核对）', gone, { id: dragId })
 
   // 删节点会级联删掉它的边，故最终态以"删除后"的读数为准（别拿删除前的 edgesAfter 比）
   const finalState = await page.ev<{ nodes: number; edges: number }>(
     `(() => {
-       const host = window.MiniCanvasUI.getHost()
+       const host = window.PlumeUI.getHost()
        return { nodes: host.nodeStore.getNodes().length, edges: host.graph.getEdges().length }
      })()`,
   )
@@ -471,7 +471,7 @@ async function runRealInteractionChecks(baseUrl: string, dataDir: string): Promi
   await sleep(9000)
   const final = await pageC.ev<{ nodes: number; edges: number }>(
     `(() => {
-       const host = window.MiniCanvasUI.getHost()
+       const host = window.PlumeUI.getHost()
        return { nodes: host.nodeStore.getNodes().length, edges: host.graph.getEdges().length }
      })()`,
   )

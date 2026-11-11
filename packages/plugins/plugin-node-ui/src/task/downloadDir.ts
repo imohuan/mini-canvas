@@ -41,7 +41,7 @@ export function downloadDirCandidates(): string[] {
     if (p && !out.includes(p)) out.push(p)
   }
   // ① 环境变量显式指定（测试 / 特殊部署用）
-  push(process.env.MINI_CANVAS_DOWNLOAD_DIR)
+  push(process.env.PLUME_DOWNLOAD_DIR)
   // ② Windows 的「已知文件夹」注册值（被 OneDrive 接管时它就指向真实位置）
   const winKnown = process.env.USERPROFILE ? path.join(process.env.USERPROFILE, 'Downloads') : undefined
   push(winKnown)
@@ -54,13 +54,13 @@ export function downloadDirCandidates(): string[] {
 /**
  * 取第一个**存在**的候选；一个都不存在就用第一个候选（调用时会现建）。
  *
- * ⚠️ **环境变量指定时不再回落**（审查/测试踩到的真问题）：`MINI_CANVAS_DOWNLOAD_DIR`
+ * ⚠️ **环境变量指定时不再回落**（审查/测试踩到的真问题）：`PLUME_DOWNLOAD_DIR`
  * 是"就用这里"的明确指令 —— 若它指向的目录还没建，就现建它，
  * 而不是"它不存在于是悄悄写到用户的真实下载目录去"。
  * 后者会让测试污染用户家目录，也让"定向输出"这个开关形同虚设。
  */
 export async function resolveDownloadDir(): Promise<string> {
-  const explicit = process.env.MINI_CANVAS_DOWNLOAD_DIR
+  const explicit = process.env.PLUME_DOWNLOAD_DIR
   if (explicit) return explicit
   const cands = downloadDirCandidates()
   if (cands.length === 0) return path.join(homeDir(), 'Downloads')
@@ -75,8 +75,8 @@ export async function resolveDownloadDir(): Promise<string> {
   return cands[0]
 }
 
-/** 把「包名」变成一个安全的文件名（去掉路径分隔符与非法字符，补 .mcnode） */
-export function safeDownloadFileName(rawName: string, ext = '.mcnode'): string {
+/** 把「包名」变成一个安全的文件名（去掉路径分隔符与非法字符，补 .plumenode） */
+export function safeDownloadFileName(rawName: string, ext = '.plumenode'): string {
   const base = String(rawName || '')
     .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
     // `..` 本身不是分隔符，但留在文件名里既难看又容易在别处被二次拼成路径 —— 一起消掉。
@@ -88,7 +88,7 @@ export function safeDownloadFileName(rawName: string, ext = '.mcnode'): string {
 }
 
 /**
- * 同名文件已存在时，找一个不覆盖它的名字（`x.mcnode` → `x (2).mcnode`）。
+ * 同名文件已存在时，找一个不覆盖它的名字（`x.plumenode` → `x (2).plumenode`）。
  *
  * **绝不覆盖**用户的旧文件：那是"上次调通的版本"，是用户真正的保命符
  * （他删节点就是靠它恢复）。同名就往后加号。

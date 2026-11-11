@@ -9,7 +9,7 @@
  * 放在组件外面是因为这三件事都不需要浏览器：放在这里能直接用普通数组断言，
  * 而组件只管渲染与交互（「算得对不对」与「画得对不对」分开，出问题时能立刻定位是哪一层）。
  */
-import { resolveToolParams, resolveToolTemplates, type ToolDef, type ToolInput, type ToolResource, type ToolResourceKind } from '@mini-canvas/kernel'
+import { resolveToolParams, resolveToolTemplates, type ToolDef, type ToolInput, type ToolResource, type ToolResourceKind } from '@plume-canvas/kernel'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
 import type { TagMatch, TagSpec } from 'prosemirror-editor-bundle'
 import { h } from 'vue'

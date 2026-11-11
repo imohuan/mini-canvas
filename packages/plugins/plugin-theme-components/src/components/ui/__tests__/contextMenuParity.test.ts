@@ -1,7 +1,7 @@
 /**
  * 下拉 / 参数面板与**右键菜单**同款（用户口径 2026-10-12）。
  *
- * 实现已经全部换成 @mini-canvas/ui-kit-shadcn 的分离件，所以这里不再读旧组件的源码，
+ * 实现已经全部换成 @plume-canvas/ui-kit-shadcn 的分离件，所以这里不再读旧组件的源码，
  * 只锁住主题自己那层的外观 token 与「参数面板仍然是右键菜单那一档」的尺寸。
  */
 import { describe, it, expect } from 'vitest'
@@ -27,7 +27,7 @@ describe('浮层外观 token 收在 ui-theme（所有下拉共用同一档数值
   it('--dd-padding / --dd-radius / --dd-bg 定义在 ui-theme.css，值与右键菜单一致', () => {
     const vars = rule(THEME_CSS, ':root')
     expect(vars).toMatch(/--dd-padding:\s*6px/)
-    expect(vars).toMatch(/--dd-radius:\s*var\(--mct-radius,\s*16px\)/)
+    expect(vars).toMatch(/--dd-radius:\s*var\(--plume-radius,\s*16px\)/)
     expect(vars).toMatch(/--dd-bg:\s*var\(--ui-overlay-solid\)/)
   })
 })
@@ -40,7 +40,7 @@ describe('参数面板 = 右键菜单那一档', () => {
   it('容器同样是不透明白底 + 主题圆角；右侧 4 给滚动条、左侧 12 给聚焦环让位', () => {
     const body = rule(TOOL_GROUP, '.tpg-popover')
     expect(body).toMatch(/background:\s*var\(--ui-overlay-solid/)
-    expect(body).toMatch(/border-radius:\s*var\(--mct-radius,\s*16px\)/)
+    expect(body).toMatch(/border-radius:\s*var\(--plume-radius,\s*16px\)/)
     //
     // 左侧从 16 收到 12：那 4px 挪到了内容层（.tpg-menu 的 padding-left），
     // 为了给输入框聚焦时向外扩 3px 的环留出位置 —— 否则 viewport 的
@@ -100,6 +100,6 @@ describe('不用主题色（黑白两套主题即可）', () => {
 
   it('取色浮层走 shadcn Popover，不再自己画下拉外壳', () => {
     expect(COLOR_FIELD).toMatch(/PopoverContent/)
-    expect(COLOR_FIELD).not.toMatch(/@mini-canvas\/ui-kit['"]/)
+    expect(COLOR_FIELD).not.toMatch(/@plume-canvas\/ui-kit['"]/)
   })
 })

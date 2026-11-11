@@ -6,9 +6,9 @@
  * 锁定「新建节点在打组这一刻必须已经能被布局服务读到」。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { ViewService } from '@mini-canvas/canvas-render'
+import { Context } from '@plume-canvas/canvas-data'
+import { createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { ViewService } from '@plume-canvas/canvas-render'
 import { groupPlugin } from '../groupPlugin'
 
 describe('批量建节点后在同一事务内打组', () => {

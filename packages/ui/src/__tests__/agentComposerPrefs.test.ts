@@ -114,11 +114,11 @@ describe('store：设置页改完立刻进快照，并广播给 Agent 面板', (
     const store = createAgentSettingsStore()
     await store.reload()
     const on = (e: Event) => seen.push((e as CustomEvent).detail)
-    window.addEventListener('mini-canvas:agent-composer-prefs-changed', on)
+    window.addEventListener('plume-canvas:agent-composer-prefs-changed', on)
 
     await store.setSubmitKeyMode('enter')
 
-    window.removeEventListener('mini-canvas:agent-composer-prefs-changed', on)
+    window.removeEventListener('plume-canvas:agent-composer-prefs-changed', on)
     expect(seen).toEqual([{ submitKeyMode: 'enter' }])
     store.dispose()
   })
@@ -170,6 +170,6 @@ describe('Agent 面板：读取同一个键（不自己再造一份）', () => {
   )
 
   it('订阅设置页的本地广播 + 订阅跨标签页 KV 变更', () => {
-    expect(conversationSrc + conversationHookSrc).toContain('mini-canvas:agent-composer-prefs-changed')
+    expect(conversationSrc + conversationHookSrc).toContain('plume-canvas:agent-composer-prefs-changed')
   })
 })

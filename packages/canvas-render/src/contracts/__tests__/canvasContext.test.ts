@@ -10,8 +10,8 @@
 import { describe, expect, it } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context } from '@mini-canvas/canvas-data'
-import type { CanvasHostHandle, MiniCanvasApi } from '../../host/createMiniCanvasHost'
+import { Context } from '@plume-canvas/canvas-data'
+import type { CanvasHostHandle, PlumeApi } from '../../host/createPlumeHost'
 import type { PluginManager } from '../../host/pluginManager'
 import { CANVAS_CONTEXT_KEY, useCanvasContext } from '../canvasContext'
 
@@ -38,7 +38,7 @@ describe('CanvasContext', () => {
   it('在 Provider 内取到 ctx / host / api / manager', async () => {
     const ctx = new Context()
     const host = { ctx } as unknown as CanvasHostHandle
-    const api = {} as MiniCanvasApi
+    const api = {} as PlumeApi
     const manager = {} as PluginManager
     const app = createSSRApp(Probe)
     app.provide(CANVAS_CONTEXT_KEY, { ctx, host, api, manager })

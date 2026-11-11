@@ -15,7 +15,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { createCloudServer } from '../server.js'
 import { BUILTIN_PLUGINS } from '../plugins/builtin/routes.js'
-import { agentPlugins } from '@mini-canvas/plugin-agent/server/routes/plugin.js'
+import { agentPlugins } from '@plume-canvas/plugin-agent/server/routes/plugin.js'
 
 /**
  * 清单校验用的「Agent 三条」：走插件包的工厂造一份占位中间件即可。

@@ -42,7 +42,7 @@ await page.goto(BASE + '#/canvas/824e779f34314f86', { waitUntil: 'load' })
 await page.waitForTimeout(6500)
 
 const seed = await page.evaluate((img) => {
-  const host = window.MiniCanvasUI?.getHost?.()
+  const host = window.PlumeUI?.getHost?.()
   const doc = host?.ctx?.get?.('doc')
   if (!doc) return { error: 'no doc' }
   const before = new Set(doc.getNodes().map((n) => n.id))
@@ -74,7 +74,7 @@ if (!tp) {
   console.log('SKIP: 找不到目标节点 / ' + JSON.stringify(await page.evaluate(() => ({
     nodes: [...document.querySelectorAll('.vue-flow__node')].map((n) => n.getAttribute('data-id')),
     bar: document.querySelectorAll('.nb-shell').length,
-    host: typeof window.MiniCanvasUI,
+    host: typeof window.PlumeUI,
   }))))
   await browser.close()
   process.exit(0)

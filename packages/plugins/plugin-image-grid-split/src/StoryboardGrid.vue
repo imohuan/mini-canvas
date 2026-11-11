@@ -17,7 +17,7 @@
  * 图片的显示/比例/居中由子节点自己负责（image 节点照常渲染）；
  * 本组件刻意 pointer-events: none —— 底板不吃事件，否则会把子节点的拖拽和点击全挡住。
  */
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import { computed, ref, watch } from 'vue'
 import { readStoryboard, readStoryboardLayout, slotRects } from './storyboard'
 import { storyboardHover } from './storyboardDrag'

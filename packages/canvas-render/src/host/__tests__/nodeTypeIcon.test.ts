@@ -6,18 +6,18 @@
  * 单点判定（字符串/组件/none）由 canvas-data 的 iconKind.test.ts 负责，此处不重复。
  */
 import { describe, it, expect } from 'vitest'
-import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { iconRenderMode } from '@mini-canvas/kernel'
+import { createPlumeHost } from '../createPlumeHost'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { iconRenderMode } from '@plume-canvas/kernel'
 // 菜单聚合实现已"合回"它唯一的消费者 plugin-context-menu（设计文档 §十一 决策 10：menu 服务删除）。
 // 这里用相对路径直接取那个纯逻辑函数 —— 测试专用，不给 canvas-render 增包依赖（避免 render ⇄ plugin 成环）。
 import { buildMenuItems } from '../../../../plugins/plugin-context-menu/src/menuBuilder'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
+import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
 
 describe('节点类型图标整链（插件注册 → 类型表 → 菜单）', () => {
   it('text/image 插件声明的 icon 落到 nodeStore 并被菜单新建节点项带上', async () => {
-    const { host } = await createMiniCanvasHost({
+    const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: [nodeTextPlugin, nodeImagePlugin],
     })
@@ -43,7 +43,7 @@ describe('节点类型图标整链（插件注册 → 类型表 → 菜单）', 
   })
 
   it('未声明图标的节点类型：类型表字段为空，标题侧据此不渲染图标位', async () => {
-    const { host } = await createMiniCanvasHost({
+    const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: [nodeTextPlugin, nodeImagePlugin],
     })

@@ -23,7 +23,7 @@
  * - 路由**必须在 apply() 里同步注册**：Hono 首次请求后路由表冻结（见 serverFramework/routes.ts）。
  * - 外挂形态重启生效：loader 在服务启动时 import 本文件并调 apply。
  */
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 
 const PLUGIN_NAME = 'showcase'
 const STARTED_AT = new Date().toISOString()

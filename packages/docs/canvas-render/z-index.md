@@ -170,7 +170,7 @@ plugin-always-top/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "最上层角标",
     "description": "演示层叠上下文：为什么加 z-index 没用、搬到画布浮层才有用",
     "pluginName": "always-top",
@@ -179,8 +179,8 @@ plugin-always-top/
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
-  "dependencies": { "@mini-canvas/canvas-base": "workspace:*" },
-  "peerDependencies": { "@mini-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
+  "dependencies": { "@plume-canvas/canvas-base": "workspace:*" },
+  "peerDependencies": { "@plume-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
 }
 ```
 
@@ -219,7 +219,7 @@ defineProps<{ id?: string; data?: Record<string, unknown> }>()
      位置：✅ 正解 —— 它在 .csurface-overlay（z-index:20，整棵 VueFlow 的兄弟）里，压得过所有节点 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { renderNodes } = useCanvasRender()
 
@@ -252,7 +252,7 @@ const anchor = computed(() => {
 // 文件：plugin-always-top/src/index.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：演示「同一个小 UI，挂哪儿决定它能压过谁」
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import NodeBadge from './NodeBadge.vue'
 import CanvasBadge from './CanvasBadge.vue'
 

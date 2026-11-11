@@ -54,7 +54,7 @@ activity = {
 
 ```ts
 // 片段：任何渲染子树里的组件（真实写法见 packages/plugins 下的浮层组件）
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { interaction } = useCanvasRender()
 
@@ -171,7 +171,7 @@ plugin-interaction-demo/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "交互状态角标",
     "description": "读 interaction 显示画布此刻在干什么",
     "pluginName": "interaction-demo",
@@ -180,8 +180,8 @@ plugin-interaction-demo/
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
-  "dependencies": { "@mini-canvas/canvas-base": "workspace:*" },
-  "peerDependencies": { "@mini-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
+  "dependencies": { "@plume-canvas/canvas-base": "workspace:*" },
+  "peerDependencies": { "@plume-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
 }
 ```
 
@@ -217,7 +217,7 @@ export function activityText(s: ActivitySnapshot): string {
      位置：插件包内部 —— 只读交互状态，不写 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import { activityText } from './visibility'
 
 const { interaction } = useCanvasRender()
@@ -253,7 +253,7 @@ const text = computed(() =>
 // 文件：plugin-interaction-demo/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import DragStatusBadge from './DragStatusBadge.vue'
 
 export const name = 'interaction-demo'

@@ -7,9 +7,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context } from '@mini-canvas/canvas-data'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
+import { Context } from '@plume-canvas/canvas-data'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
+import type { CanvasHostHandle } from '@plume-canvas/canvas-render'
 import { createPluginManagerService, INSTALLED_KEY, type HostPluginManager } from '../pluginManagerService'
 import { usePluginManager } from '../usePluginManager'
 
@@ -42,7 +42,7 @@ function fakeDom(win: Record<string, unknown>): Document {
       appendChild(el: Record<string, unknown>) {
         const src = String(el.src ?? '')
         const pkg = src.match(/plugins\/([^/]+)\//)?.[1] ?? 'unknown'
-        win['MiniCanvasPlugin' + pkg] = { name: pkg, apply() {} }
+        win['PlumePlugin' + pkg] = { name: pkg, apply() {} }
         queueMicrotask(() => (el.onload as () => void)?.())
       },
     },

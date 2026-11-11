@@ -18,7 +18,7 @@ import "./app.css";
 // 取证要的数据 localStorage 里都有。
 (function perfProbe() {
   try {
-    const KEY = 'mc-perf-probe';
+    const KEY = 'plume-perf-probe';
     const state = { tasks: [] as Array<{ t: number; d: number; who: string }>, win0: performance.now() };
     const po = new PerformanceObserver((list) => {
       for (const e of list.getEntries()) {
@@ -46,7 +46,7 @@ import "./app.css";
         const total = state.tasks.reduce((s2, t) => s2 + t.d, 0);
         const snapshot = 'lt=' + state.tasks.length + ' ms=' + Math.round(total) + ' wall=' + Math.round(now / 1000) + 's';
         localStorage.setItem(KEY, snapshot);
-        localStorage.setItem('mc-perf-probe-last', snapshot);
+        localStorage.setItem('plume-perf-probe-last', snapshot);
       } catch { /* 忽略 */ }
     }, 5000);
   } catch { /* 探针失败不影响应用 */ }
@@ -64,7 +64,7 @@ import { adoptInjectedAdminToken } from './adoptInjectedAdminToken'
 // 托管版后台把令牌注进页面时，在挂载前接住它（见那个文件头的说明）。
 adoptInjectedAdminToken();
 
-// 先挂共享运行时全局（Vue / MiniCanvasCore / …），再挂载应用 ——
+// 先挂共享运行时全局（Vue / PlumeCore / …），再挂载应用 ——
 // 外部 UMD 插件（经「插件管理」安装）靠这些全局取依赖，必须在它们加载前就位。
 exposeSharedGlobals();
 
@@ -73,10 +73,10 @@ exposeSharedGlobals();
 // 并发额度（6 条）占满，普通请求全部排队 —— 用户看到的是"网页卡住"。
 exposeSharedKvEvents();
 
-// 开发便利：把"重装插件"挂成 window 函数（改完插件产物后一句 window.MiniCanvasPlugin.reload('style-library') 生效）。
-// 函数内部调用时才去取 window.MiniCanvasUI，所以这里宿主还没起也没关系。
+// 开发便利：把"重装插件"挂成 window 函数（改完插件产物后一句 window.PlumePlugin.reload('style-library') 生效）。
+// 函数内部调用时才去取 window.PlumeUI，所以这里宿主还没起也没关系。
 //
-// 想"自动监听、产物一变就重装"：去 设置 → 热重载 里登记链接（见 @mini-canvas/plugin-hot-reload）——
+// 想"自动监听、产物一变就重装"：去 设置 → 热重载 里登记链接（见 @plume-canvas/plugin-hot-reload）——
 // 那边支持**多条、跨源**的链接，比在这里写死一条同源地址更通用。
 exposePluginReloader();
 

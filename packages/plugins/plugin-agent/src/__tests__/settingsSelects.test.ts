@@ -18,7 +18,7 @@ describe('Agent 设置页的下拉', () => {
   for (const page of PAGES) {
     it(page + ' 从画布 ui 目录取 shadcn Select（业务插件不直接 import 组件库）', () => {
       const src = sourceOf(page)
-      expect(src).not.toMatch(/from '@mini-canvas\/ui-kit-shadcn'/)
+      expect(src).not.toMatch(/from '@plume-canvas\/ui-kit-shadcn'/)
       expect(src).toContain("useUiComponent('Select')")
       expect(src).toContain("useUiComponent('SelectTrigger')")
     })

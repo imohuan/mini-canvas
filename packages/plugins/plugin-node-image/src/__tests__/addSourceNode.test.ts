@@ -13,7 +13,7 @@ import { describe, it, expect } from 'vitest'
 import {
   NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter,
   ResourceStore, createDocService, type GraphEnvelope,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import { addSourceNode, createImageOps, type ImageTransform } from '../imageOps'
 
 const BLOB = (tag = 'src') => new Blob([tag], { type: 'image/png' })

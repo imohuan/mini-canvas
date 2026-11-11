@@ -7,7 +7,7 @@
  * 与 cloud-client 的 submitJob 的差别：不依赖那个插件（底栏不能反向 import），
  * 这里就地发请求；令牌走 canvas-base 的 withAdminToken（同一份 localStorage）。
  */
-import { withAdminToken } from '@mini-canvas/canvas-base'
+import { withAdminToken } from '@plume-canvas/canvas-base'
 
 /** 当前画布 id（与 cloud-client keys.ts 同一条规则：URL 优先，缺省 default） */
 export function currentCanvasId(): string {

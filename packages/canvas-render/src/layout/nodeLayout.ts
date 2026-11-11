@@ -10,8 +10,8 @@
  * 插件只看到读口（nodeSize/absolutePosition/getNodeRect/getAllRects/childrenOf）；
  * 实测写口（setMeasuredSize/clearMeasuredSize/reset）是渲染层内部面，不进契约。
  */
-import type { NodeStoreService } from '@mini-canvas/canvas-data'
-import type { NodeLayoutContract, LayoutRect } from '@mini-canvas/canvas-data'
+import type { NodeStoreService } from '@plume-canvas/canvas-data'
+import type { NodeLayoutContract, LayoutRect } from '@plume-canvas/canvas-data'
 
 export type { LayoutRect }
 

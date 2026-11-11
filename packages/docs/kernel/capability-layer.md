@@ -17,12 +17,12 @@
 
 ```
                      ┌────────────────────────────┐
-   @mini-canvas/kernel │  Context（装载/事件/回收/注册场） │
+   @plume-canvas/kernel │  Context（装载/事件/回收/注册场） │
                      └──────────────┬─────────────┘
                                     │ 需要能力段（ctx.nodes / theme / …）
                                     ▼
                      ┌────────────────────────────┐
-   @mini-canvas/canvas-data │  createCanvasCapabilityLayer()      │
+   @plume-canvas/canvas-data │  createCanvasCapabilityLayer()      │
                      └────────────────────────────┘
 ```
 
@@ -170,7 +170,7 @@ export interface Context extends PluginCapabilities {}
 画布层在 `packages/canvas-data/src/canvas/capabilityTypes.ts` 里 declare 合并，把画布段补进去：
 
 ```ts
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface PluginCapabilities {
     nodes: { register(def: NodeRegisterDef): void; attach(…): Disposable; /* … */ }
     theme: { register(…): void; add(…): void; remove(…): void }
@@ -226,7 +226,7 @@ plugin-capability-demo/
 // 文件：packages\docs\public\examples\kernel\plugin-capability-demo/src/miniLayer.ts
 // 格式：TypeScript 模块（自定义能力层实现）
 // 位置：演示「内核不认识段，段由能力层产出」
-import type { CapabilityLayer, PluginScope } from '@mini-canvas/kernel'
+import type { CapabilityLayer, PluginScope } from '@plume-canvas/kernel'
 
 /** 段 / 内置服务的运行时状态（每 Context 一份 —— 所以要用工厂产出） */
 export function createMiniCapabilityLayer(): CapabilityLayer {
@@ -275,7 +275,7 @@ export function createMiniCapabilityLayer(): CapabilityLayer {
 // 文件：packages\docs\public\examples\kernel\plugin-capability-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：演示「装层 / 不装层」两种结果
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { createMiniCapabilityLayer } from './miniLayer'
 
 // ① 装层：显式传实例
@@ -327,5 +327,5 @@ bare.stop()
 5. **声明合并要显式 import 才生效**。`capabilityTypes.ts` 没被加载时，`ctx.nodes` 在**类型上**也不存在（运行时仍可拿到 —— `buildSegments` 挂的是真实属性）。
 6. **`reset()` 决定「stop 之后还剩什么」**。画布层的策略是 settings 重建、slots 保留；自己写层时要想清楚这一条，
    否则重启动后要么丢数据、要么留脏数据。
-7. **纯内核 `Context` 上拿不到画布段是设计如此**，不是 bug（有测试锁着）。要画布能力请用 `@mini-canvas/canvas-data` 导出的 `Context`。
+7. **纯内核 `Context` 上拿不到画布段是设计如此**，不是 bug（有测试锁着）。要画布能力请用 `@plume-canvas/canvas-data` 导出的 `Context`。
 

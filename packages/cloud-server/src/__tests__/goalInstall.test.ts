@@ -17,10 +17,10 @@ import {
   ensureGoalInstalled,
   GOAL_HOOK_NAME,
   type GoalInstallDeps,
-} from '@mini-canvas/plugin-agent/server/agent/goal.js'
+} from '@plume-canvas/plugin-agent/server/agent/goal.js'
 
 /** SDK 口径：hooks 目录挂在 <root>/<projectId>/agents/<agentId>/agent_state/hooks */
-const PROJECT_ID = 'mini-canvas'
+const PROJECT_ID = 'plume-canvas'
 const AGENT_ID = 'canvas-agent'
 
 let dataDir: string

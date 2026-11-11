@@ -8,7 +8,7 @@
  * 本文件定义画布手势/数据事件名 + payload 归一化纯函数。CanvasHost 在 VueFlow 事件回调里
  * emit 这些事件（用 coalesce 节流高频的 drag/move），插件 ctx.on(事件名) 消费。
  */
-import { registerEventName } from '@mini-canvas/kernel'
+import { registerEventName } from '@plume-canvas/kernel'
 
 /** 渲染层广播的画布事件名（供 CanvasHost emit + 插件 on） */
 export const RenderEvents = {

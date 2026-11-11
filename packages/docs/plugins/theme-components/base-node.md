@@ -13,10 +13,10 @@
 `BaseNode` 是 VueFlow 渲染每个节点时套上的壳，**离开画布宿主渲染不出来** —— 所以下面嵌一块真画布（装了默认主题 + 示例节点），你在真环境里看它：
 
 <script setup>
-import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
+import PlumeStage from '../../.vitepress/theme/demos/PlumeStage.vue'
 </script>
 
-<MiniCanvasStage :height="360" />
+<PlumeStage :height="360" />
 
 > 能拖着玩：拖节点、悬停看浮动端口、双击标题就地改名、拉端口连线。
 
@@ -48,7 +48,7 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 | `dimensions` | `Dimensions` | DOM 实测尺寸 |
 | `sourcePosition` / `targetPosition` | `Position` | 出/入端口方向（Top/Bottom/Left/Right） |
 
-> 完整的 `NodeProps` 形状来自 `@vue-flow/core`，由 `@mini-canvas/canvas-render` 转出。
+> 完整的 `NodeProps` 形状来自 `@vue-flow/core`，由 `@plume-canvas/canvas-render` 转出。
 
 ## Slots / 插槽
 
@@ -99,7 +99,7 @@ ctx.nodes.register({ type: 'text', /* ... */ segments: { 'out:top': MyToolbar } 
 // 文件：packages/my-plugin/src/myPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：一个插件包 —— 往 text 节点的顶部控制栏加一条自己的控件
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import MyToolbar from './MyToolbar.vue'
 
 export const name = 'my-toolbar'
@@ -119,7 +119,7 @@ export const myToolbarPlugin: PluginModule = { name, inject, apply }
 <!-- 格式：Vue 单文件组件 -->
 <!-- 位置：被上面的区域条目渲染的一条控件；它只拿自己声明过的能力 -->
 <script setup lang="ts">
-import { useCapability } from '@mini-canvas/canvas-render'
+import { useCapability } from '@plume-canvas/canvas-render'
 // 声明 needs 后，从能力袋按名取（@see RegionEntryHost）
 const node = useCapability('node')
 </script>

@@ -47,9 +47,9 @@ export const AGENT_GOAL_DEFAULTS_PATH = '/api/kv/config/' + AGENT_GOAL_DEFAULTS_
 export const AGENT_QUEUE_PREFS_PATH = '/api/kv/config/' + AGENT_QUEUE_PREFS_KEY
 export const AGENT_COMPOSER_PREFS_PATH = '/api/kv/config/' + AGENT_COMPOSER_PREFS_KEY
 /** 设置页翻「发送中显示队列」后向同页其它读者（Agent 面板）广播的事件名 */
-export const AGENT_QUEUE_PREFS_EVENT = 'mini-canvas:agent-queue-prefs-changed'
+export const AGENT_QUEUE_PREFS_EVENT = 'plume-canvas:agent-queue-prefs-changed'
 /** 设置页改「发送键」后向同页其它读者（Agent 面板）广播的事件名 */
-export const AGENT_COMPOSER_PREFS_EVENT = 'mini-canvas:agent-composer-prefs-changed'
+export const AGENT_COMPOSER_PREFS_EVENT = 'plume-canvas:agent-composer-prefs-changed'
 /**
  * config 作用域的**批量读**口（一次拿回该域全部 key/值）。
  *

@@ -53,12 +53,12 @@ const isColor = (actual, hex) => {
 
 /** 通过设置服务改一格（等价于用户在设置面板拖取色器） */
 const setSetting = (key, value) => page.evaluate((kv) => {
-  window.MiniCanvasUI.getHost().ctx.get('settings').set(kv[0], kv[1]);
+  window.PlumeUI.getHost().ctx.get('settings').set(kv[0], kv[1]);
   return true;
 }, [key, value]);
 
 const settingValue = (key) => page.evaluate((k) => {
-  const s = window.MiniCanvasUI.getHost().ctx.get('settings');
+  const s = window.PlumeUI.getHost().ctx.get('settings');
   return s.has(k) ? String(s.get(k)) : null;
 }, key);
 
@@ -108,7 +108,7 @@ check('强调色派生档跟随现算', softBefore !== softAfter, softBefore + '
 
 // —— 8. 真实连线元素吃到了色板色（先建一条真边：首屏样例只有节点、没有连线） ——
 await page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   const nodes = h.nodeStore.getNodes();
   const a = nodes.find((n) => n.type === 'text') ?? nodes[0];
   const b = nodes.find((n) => n.type === 'image') ?? nodes[1];

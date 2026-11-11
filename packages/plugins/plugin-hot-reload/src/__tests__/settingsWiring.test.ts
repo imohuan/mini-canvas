@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 // 用**画布版** Context（canvas-data）：设置页依赖 ctx.slots，裸内核没有这一层。
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { hotReloadPlugin, HOT_RELOAD_NAV_ID } from '../index'
 
 /**
@@ -34,14 +34,14 @@ describe('热重载插件的设置页接线', () => {
     const w = globalThis as Record<string, unknown>
     try {
       ctx.installPlugin(hotReloadPlugin as never)
-      expect(w.MiniCanvasHotReload).toBeDefined()
+      expect(w.PlumeHotReload).toBeDefined()
       expect(ctx.slots.occupants('settings.nav').some((o) => o.id === 'hot-reload/nav')).toBe(true)
 
       ctx.uninstallPlugin('hot-reload')
-      expect(w.MiniCanvasHotReload, 'window 上的单例要跟着摘掉').toBeUndefined()
+      expect(w.PlumeHotReload, 'window 上的单例要跟着摘掉').toBeUndefined()
       expect(ctx.slots.occupants('settings.nav').some((o) => o.id === 'hot-reload/nav')).toBe(false)
     } finally {
-      delete w.MiniCanvasHotReload
+      delete w.PlumeHotReload
       ctx.stop()
     }
   })

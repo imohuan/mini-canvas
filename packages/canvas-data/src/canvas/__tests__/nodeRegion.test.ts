@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { nodeSegmentStackEntries } from '../registry/nodeRenderer'
 import { NODE_REGIONS, regionKey, isRegion, assertRegion, nodeRegionStackEntries } from '../region'

@@ -12,7 +12,7 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { PlugZap, Plus, Trash2 } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import type { McpProbeResult } from '../../service/agentService.js'
 import SettingsDetailHeader from './components/SettingsDetailHeader.vue'

@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-events-demo/src/handlerPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：插件包里「接活」的那一件 —— 它在 serial 链上排在 listener 后面
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'handler'
 

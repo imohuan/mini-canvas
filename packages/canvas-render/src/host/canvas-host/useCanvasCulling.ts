@@ -7,7 +7,7 @@ import {
 import { computeVisibleIds, type VisibleCullConfig } from '../visibleCull'
 import { viewportRectInFlow } from '../../geometry/visibleArea'
 import type { CanvasInteractionSettings } from '../../contracts/canvasInteractionSettings'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 import type { CanvasSurfaceHandle } from './types'
 
 export function useCanvasCulling(opts: {

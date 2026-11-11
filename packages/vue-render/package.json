@@ -1,5 +1,5 @@
 {
-  "name": "@mini-canvas/vue-render",
+  "name": "@plume-canvas/vue-render",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -48,7 +48,7 @@
     "vue": "^3.5.34"
   },
   "dependencies": {
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

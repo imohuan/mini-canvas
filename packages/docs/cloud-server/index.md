@@ -1,6 +1,6 @@
 # 后台服务
 
-**一句话定位**：cloud-server 是 mini-canvas 的**自托管后台** —— 一个 Node 进程，
+**一句话定位**：cloud-server 是 plume-canvas 的**自托管后台** —— 一个 Node 进程，
 同时做四件事：托管画布界面、存画布数据、跑 MCP 接口（给 AI 用）、**跑后台插件**。
 
 它最像什么？像一台**家用路由器**：机器本身只管转发和存转发规则，功能（翻墙、去广告、加速）
@@ -17,7 +17,7 @@
 | MCP 接口（AI 读写画布的唯一通道） | 前端插件（浏览器里那套 `ctx` 与本包无关） |
 | **后台插件**的装载与运行 | |
 
-> 前后端是两套插件系统：前端插件跑在浏览器（用 `@mini-canvas/canvas-base` 的 `ctx`），
+> 前后端是两套插件系统：前端插件跑在浏览器（用 `@plume-canvas/canvas-base` 的 `ctx`），
 > 后台插件跑在这个 Node 进程（用同一套内核，但 `ctx` 上多出 routes/store/jobs/mcp/agent 五个段）。
 > 内核是同一颗 —— 这就是「写法一致、两边通用」的原因。
 
@@ -25,11 +25,11 @@
 
 ```bash
 # 仓库里开发态
-pnpm -C packages/cloud-server serve        # 起服务（等价 npx mini-canvas-cloud serve）
+pnpm -C packages/cloud-server serve        # 起服务（等价 npx plume-canvas serve）
 
 # 或装成 npm 包用
-npx mini-canvas-cloud serve --port 8865    # 起在 8865
-npx mini-canvas-cloud list-tools           # 列出 MCP 暴露的工具
+npx plume-canvas serve --port 8865    # 起在 8865
+npx plume-canvas list-tools           # 列出 MCP 暴露的工具
 ```
 
 启动后：
@@ -39,12 +39,12 @@ http://127.0.0.1:8865/        画布界面（托管 ui 产物）
 http://127.0.0.1:8865/mcp     MCP 接口（配置给 AI 客户端）
 ```
 
-常用 CLI 选项（完整见 `mini-canvas-cloud --help`）：
+常用 CLI 选项（完整见 `plume-canvas --help`）：
 
 | 选项 | 缺省 | 干什么 |
 | --- | --- | --- |
 | `-p, --port` | 8865 | 端口；被占用自动往后找 |
-| `-d, --dir` | `./.mini-canvas/` | 数据根目录（画布/资源/插件数据都落这） |
+| `-d, --dir` | `./.plume/` | 数据根目录（画布/资源/插件数据都落这） |
 | `--server-plugins <目录>` | `<数据根>/server-plugins` | **后台插件目录：丢 .js 进去即多一个后台插件** |
 | `--no-mcp` | （默认开 MCP） | 不提供 MCP 接口 |
 | `--no-open` | （默认开浏览器） | 不自动开浏览器 |

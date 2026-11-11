@@ -7,7 +7,7 @@
 //       跟随时球心精确对准鼠标点（中心对齐），静止/归位仍按 restOffset-overlap。
 //       CSS 消费本插件自建 --canvas-node-* 主题变量（styles/node-theme.css）。
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Handle, Position, createV2Logger } from '@mini-canvas/canvas-render'
+import { Handle, Position, createV2Logger } from '@plume-canvas/canvas-render'
 import { followTarget, needsMoreFrames, stepFollow } from './handleFollow'
 
 // 诊断日志 scope 约定见 canvas-render/utils/log.ts（'moving-handle'）。
@@ -473,7 +473,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component :is="preview ? 'span' : Handle" :id="id" :type="type" :position="position" class="moving-handle-anchor mc-export-ignore"
+  <component :is="preview ? 'span' : Handle" :id="id" :type="type" :position="position" class="moving-handle-anchor plume-export-ignore"
     :class="{
       'moving-handle-anchor--source': isSource,
       'moving-handle-anchor--target': !isSource,

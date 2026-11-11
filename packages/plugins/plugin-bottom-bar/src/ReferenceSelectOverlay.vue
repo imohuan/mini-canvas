@@ -20,8 +20,8 @@ defineOptions({ inheritAttrs: false })
  * 本文件只管「量矩形、摆位置、转交点击」。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, useUiComponent, RenderEvents } from '@mini-canvas/canvas-render'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { useCanvasRender, useUiComponent, RenderEvents } from '@plume-canvas/canvas-render'
+import type { DocService } from '@plume-canvas/canvas-data'
 import {
   exitSelection,
   readSelectionSnapshot,
@@ -88,8 +88,8 @@ function syncSession(): void {
   if (selectionMode() === null) hoverId.value = null
 }
 watch(selectionEpoch, syncSession)
-onMounted(() => window.addEventListener('mini-canvas:selection-mode', syncSession))
-onBeforeUnmount(() => window.removeEventListener('mini-canvas:selection-mode', syncSession))
+onMounted(() => window.addEventListener('plume-canvas:selection-mode', syncSession))
+onBeforeUnmount(() => window.removeEventListener('plume-canvas:selection-mode', syncSession))
 
 const active = computed(() => {
   void tick.value

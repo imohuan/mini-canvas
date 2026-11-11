@@ -9,7 +9,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '../canvas/context'
-import { Context as KernelContext } from '@mini-canvas/kernel'
+import { Context as KernelContext } from '@plume-canvas/kernel'
 import { NodeStore } from '../nodeStore'
 import { EdgeStore } from '../edgeStore'
 import { Selection } from '../selection'

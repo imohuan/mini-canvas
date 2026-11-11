@@ -174,7 +174,7 @@ await page.evaluate(() => document.body.click());
 await sleep(600);
 const focusRes = await page.evaluate(async (name) => {
   const s = (ms) => new Promise(r => setTimeout(r, ms));
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   const vp = () => h.view.getViewport();
   const before = { zoom: vp().zoom, x: Math.round(vp().x), y: Math.round(vp().y), nodes: h.nodeStore.getNodes().length };
   const btn = [...document.querySelectorAll('.left-drawer [aria-label^="更多操作"]')]

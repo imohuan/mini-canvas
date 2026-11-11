@@ -27,8 +27,8 @@ await page.goto(CANVAS_URL, { waitUntil: 'load' })
 await page.waitForTimeout(5000)
 
 await page.evaluate(() => {
-  document.title = '[DEBUG 标记归一化] mini-canvas'
-  const doc = window.MiniCanvasUI?.getHost?.()?.ctx?.get?.('doc')
+  document.title = '[DEBUG 标记归一化] plume-canvas'
+  const doc = window.PlumeUI?.getHost?.()?.ctx?.get?.('doc')
   if (doc && !doc.getNodes().some((n) => n.type === 'image')) {
     doc.addNodes([{ id: 'mk-probe-1', type: 'image', position: { x: 120, y: 140 }, data: {} }])
   }

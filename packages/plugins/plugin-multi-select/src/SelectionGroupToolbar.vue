@@ -14,9 +14,9 @@
  * 按钮从 ui 目录按名取（默认主题登记的 shadcn Button），外观走 shadcn 自己的 variant / size。
  */
 import { computed } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import type { SelectionCapability } from '@mini-canvas/canvas-render'
-import { useCapability } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
+import type { SelectionCapability } from '@plume-canvas/canvas-render'
+import { useCapability } from '@plume-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
 const Button = useUiComponent('Button')

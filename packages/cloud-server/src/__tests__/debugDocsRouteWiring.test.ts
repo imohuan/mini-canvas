@@ -15,7 +15,7 @@ let dir = ''
 let srv: Awaited<ReturnType<typeof createCloudServer>> | undefined
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-debug-wiring-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-debug-wiring-'))
 })
 
 afterEach(async () => {

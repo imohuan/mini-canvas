@@ -26,7 +26,7 @@ export interface CatalogEntry {
   format?: 'umd' | 'esm'
   /** UMD 产物在 window 上暴露的全局名 */
   globalName?: string
-  /** 该产物运行时需要哪些 window 全局（Vue / MiniCanvasCore / …） */
+  /** 该产物运行时需要哪些 window 全局（Vue / PlumeCore / …） */
   requiresGlobals?: string[]
   /** 是否默认安装 */
   defaultInstalled?: boolean

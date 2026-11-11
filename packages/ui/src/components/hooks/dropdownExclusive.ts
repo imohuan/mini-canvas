@@ -1,5 +1,5 @@
 /**
- * dropdownExclusive —— `@mini-canvas/ui` 自己的「同屏只开一个下拉浮层」登记表。
+ * dropdownExclusive —— `@plume-canvas/ui` 自己的「同屏只开一个下拉浮层」登记表。
  *
  * **为什么本包自带一份**（用户口径 2026-10-15：「他们每一个插件都是独立的……
  * 你就需要单独的对他们两个库里面单独的进行一个实现，你复制成两份，放在这两个地方都行，
@@ -8,7 +8,7 @@
  * 与「祖先豁免」，但谁都不该去改核心层，于是各留一份自己的实现（主题包那份见它的
  * `components/ui/dropdownRegistry.ts`）。
  *
- * 两份实现的**共同语言只有一条**：浮层根的 `data-mck-floating-chain` 属性（见 floatingGroup.ts）。
+ * 两份实现的**共同语言只有一条**：浮层根的 `data-pk-floating-chain` 属性（见 floatingGroup.ts）。
  * 靠它，两套浮层混在一起时也能认出父子关系 —— 共享的是 DOM 契约，不是代码。
  * 互斥本身只在各自实现内部生效（跨库互斥不是这里的目标）。
  *

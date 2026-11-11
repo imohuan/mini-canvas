@@ -1,10 +1,10 @@
 import { shallowRef, watch, type Ref } from 'vue'
-import { GRAPH_VIEWPORT_KEY } from '@mini-canvas/canvas-data'
+import { GRAPH_VIEWPORT_KEY } from '@plume-canvas/canvas-data'
 import {
   FIRST_RUN_FIT_PADDING,
   FIRST_RUN_FIT_RETRY_DELAYS,
 } from '../canvasHostCore'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 import type { ViewportState } from '../../viewport/viewportService'
 import type { CanvasSurfaceHandle } from './types'
 

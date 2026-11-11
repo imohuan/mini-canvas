@@ -32,10 +32,10 @@ ctx.nodes.register({ type: 'text', /* ... */ })
 节点类型装好之后，画布上就长这样（下面是一块装了本插件的真画布，可拖动、双击编辑）：
 
 <script setup>
-import MiniCanvasStage from '../../../.vitepress/theme/demos/MiniCanvasStage.vue'
+import PlumeStage from '../../../.vitepress/theme/demos/PlumeStage.vue'
 </script>
 
-<MiniCanvasStage :height="320" />
+<PlumeStage :height="320" />
 
 ## 注意事项
 

@@ -13,7 +13,7 @@
  */
 import type { Ref } from 'vue'
 import type { CapabilityFactory } from './capabilities'
-import type { Registry } from '@mini-canvas/kernel'
+import type { Registry } from '@plume-canvas/kernel'
 import {
   buildParentIndex,
   collectAncestors,
@@ -21,7 +21,7 @@ import {
   readDataPort,
   topoOrderFrom,
   upstreamDepth,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import type {
   Context,
   DataPortDef,
@@ -30,7 +30,7 @@ import type {
   ResourcePutOptions,
   UpstreamGraphInput,
   UpstreamTraversalOptions,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import {
   placeAdjacent,
   type PlacementRect,
@@ -688,7 +688,7 @@ export function mediaCapabilityOf(ctx: Context): MediaCapability | undefined {
 }
 
 /**
- * 造宿主的标准四件（在 createMiniCanvasHost 里注册进 registryOf('capability')）。
+ * 造宿主的标准四件（在 createPlumeHost 里注册进 registryOf('capability')）。
  *
  * 只依赖 ctx（与传入的节点上下文），不 import 任何节点插件 —— 保持"渲染层不认识业务节点"的边界。
  */

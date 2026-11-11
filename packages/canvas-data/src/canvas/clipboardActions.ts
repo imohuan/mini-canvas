@@ -60,7 +60,7 @@ export const CLIPBOARD_CUT_KEY = 'cut'
  * 它既是仲裁标记（"最后这次复制来自画布"），也是**跨窗口传数据的唯一通道**：
  * v2 起值里带完整节点/边载荷（见 canvasClipboardPayload），另一个浏览器页面读它就能贴出节点。
  */
-export const CANVAS_CLIPBOARD_MIME = 'application/x-mini-canvas-nodes'
+export const CANVAS_CLIPBOARD_MIME = 'application/x-plume-nodes'
 /**
  * 伴侣文本前缀：兜底让只认 text/plain 的场景也能识别这次复制来自画布。
  *
@@ -69,7 +69,7 @@ export const CANVAS_CLIPBOARD_MIME = 'application/x-mini-canvas-nodes'
  * 自定义 MIME 写不进去（浏览器只允许它经原生 copy 事件的 setData 落地）。若 text/plain 里
  * 只有标记，菜单复制后在另一个页面粘贴就只剩个"来自画布"的空标记，什么也贴不出来。
  */
-export const CANVAS_CLIPBOARD_TEXT_PREFIX = 'mini-canvas-nodes:'
+export const CANVAS_CLIPBOARD_TEXT_PREFIX = 'plume-canvas-nodes:'
 
 /** 画布快照载荷版本（v2 = 带完整节点/边，可跨窗口） */
 export const CANVAS_CLIPBOARD_PAYLOAD_VERSION = 2

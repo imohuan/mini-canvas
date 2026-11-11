@@ -1,10 +1,10 @@
 /**
  * cloud-client 的产物要求零 import，所以它把「后台地址校验」就地内联了一份。
- * 这条测试保证内联副本与 `@mini-canvas/bar-contract` 的唯一真源行为一致 ——
+ * 这条测试保证内联副本与 `@plume-canvas/bar-contract` 的唯一真源行为一致 ——
  * 改一边忘了另一边，会在这里红。
  */
 import { describe, expect, it } from 'vitest'
-import { normalizeApiBase } from '@mini-canvas/bar-contract'
+import { normalizeApiBase } from '@plume-canvas/bar-contract'
 import { configFrom } from '../config'
 
 /** 用 configFrom 读同一份 settings，间接覆盖内联实现的输出。 */

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type CanvasNode } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type CanvasNode } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { autoLayoutPlugin } from '../autoLayoutPlugin'
 
 /** 最小 view stub（render 层服务的只读子集 + 取景；node 测试无 DOM） */

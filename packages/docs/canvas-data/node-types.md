@@ -311,7 +311,7 @@ export interface SelectionAttachReq {
 ~~~ts
 // 文件：packages/canvas-base/src/define.ts
 // 格式：TypeScript 模块（defineNode，逐字摘录）
-// 位置：插件作者薄层 @mini-canvas/canvas-base
+// 位置：插件作者薄层 @plume-canvas/canvas-base
 
 export type DefineNodeDef = NodeRegisterDef
 
@@ -337,7 +337,7 @@ export function defineNode(def: DefineNodeDef) {
 // 文件：my-node/src/index.ts
 // 格式：TypeScript 模块（插件入口，用 defineNode 声明）
 // 位置：插件包源码入口
-import { defineNode } from '@mini-canvas/canvas-base'
+import { defineNode } from '@plume-canvas/canvas-base'
 import AudioContent from './AudioContent.vue'
 
 export default defineNode({
@@ -379,7 +379,7 @@ export default defineNode({
 
 ~~~
 plugin-stamp-node/
-├── package.json                     # 清单：包名 / 入口 / miniCanvas 元信息
+├── package.json                     # 清单：包名 / 入口 / plume 元信息
 └── src/
     ├── index.ts                     # 插件入口：注册节点类型 + 三处区域挂载
     ├── StampContent.vue             # in 区域：邮票卡片的内容
@@ -393,11 +393,11 @@ plugin-stamp-node/
 
 ~~~json
 {
-  "name": "@mini-canvas/plugin-stamp-node",
+  "name": "@plume-canvas/plugin-stamp-node",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：邮票节点",
     "description": "注册一种新节点 + 往标题位叠角标 + 给图片节点和多选框挂按钮",
     "pluginName": "stamp-node",
@@ -413,8 +413,8 @@ plugin-stamp-node/
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
@@ -528,7 +528,7 @@ const props = defineProps<{ data?: Record<string, unknown> }>()
      说明：needs 声明要用哪些能力包 —— 组件按名拿到，不自己 ctx.get 拼 -->
 <script setup lang="ts">
 // 能力包按名取：needs: ['node'] 在 ctx.nodes.attach 里声明（忘了写会拿到 undefined，dev 有提示）
-import { useCapability } from '@mini-canvas/canvas-render'
+import { useCapability } from '@plume-canvas/canvas-render'
 
 // NodeCapability 的形状来自渲染层标准能力包（packages/canvas-render/src/contracts/standardCapabilities.ts）
 const node = useCapability<{ readonly id: string; readonly type: string }>('node')
@@ -585,7 +585,7 @@ const node = useCapability<{ readonly id: string; readonly type: string }>('node
 // 格式：TypeScript 模块（插件入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
 
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import StampContent from './StampContent.vue'
 import StampTitle from './StampTitle.vue'
 import TitleBadge from './TitleBadge.vue'

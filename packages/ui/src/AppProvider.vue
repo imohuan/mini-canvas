@@ -2,14 +2,14 @@
 /**
  * AppProvider —— 外壳对根级 Provider 的装配。
  *
- * Provider 本体住在 `@mini-canvas/vue-render` 的 `RenderProvider`：它只负责
+ * Provider 本体住在 `@plume-canvas/vue-render` 的 `RenderProvider`：它只负责
  * "建一次 Context、provide 令牌、卸载时回收"，与画布无关。
  * 这里只补外壳自己的启动配方（默认存储适配器、要登记的插件清单、配置桥）。
  */
-import { RenderProvider } from '@mini-canvas/vue-render'
-import { Context } from '@mini-canvas/canvas-data'
-import { createCanvasBaseAppPlugin } from '@mini-canvas/canvas-base'
-import { createPluginManager } from '@mini-canvas/canvas-render'
+import { RenderProvider } from '@plume-canvas/vue-render'
+import { Context } from '@plume-canvas/canvas-data'
+import { createCanvasBaseAppPlugin } from '@plume-canvas/canvas-base'
+import { createPluginManager } from '@plume-canvas/canvas-render'
 import { setReadyHost } from './composables/ui/hostRuntime'
 import { createDefaultStorageAdapter, resolveAppPlugins } from './assembly'
 

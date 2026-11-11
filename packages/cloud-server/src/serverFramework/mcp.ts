@@ -18,7 +18,7 @@
  * MCP server 是**每请求新建**的（见 routes/mcp.ts 的 stateless 说明），
  * 所以每次建时现读注册场即可，天然拿到最新集合。
  */
-import type { PluginScope, Registry } from '@mini-canvas/kernel'
+import type { PluginScope, Registry } from '@plume-canvas/kernel'
 
 /** 注册场名：插件注册的 MCP 工具 */
 export const MCP_TOOL_FIELD = 'server/mcp-tool'

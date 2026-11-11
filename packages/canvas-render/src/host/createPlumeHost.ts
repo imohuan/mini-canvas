@@ -1,5 +1,5 @@
 /**
- * createMiniCanvasHost —— 可复用画布宿主门面（window.MiniCanvas 的唯一装配点）。
+ * createPlumeHost —— 可复用画布宿主门面（window.Plume 的唯一装配点）。
  *
  * 定位：
  * - 一个工厂：建 Context → 装应用底座（canvas-base：save / resources / 注册表 / 命令）
@@ -14,8 +14,8 @@
  *
  * 依赖方向：宿主(本模块) 只操作 opaque 注册表 + PluginModule，不反向依赖插件实现。
  */
-import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, type SettingSchema, SettingsStore } from '@mini-canvas/kernel'
-import type { CommandService } from '@mini-canvas/kernel'
+import { type PluginClassLike, type PluginModule, type PluginRuntimeStatus, type SettingSchema, SettingsStore } from '@plume-canvas/kernel'
+import type { CommandService } from '@plume-canvas/kernel'
 import {
   Context,
   createCanvasAppBasePlugin,
@@ -24,8 +24,8 @@ import {
   CANVAS_DATA_PLUGIN_NAME,
   GRAPH_EDGES_KEY,
   GRAPH_KEY,
-} from '@mini-canvas/canvas-data'
-import { restoreNodeMediaUrls } from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
+import { restoreNodeMediaUrls } from '@plume-canvas/canvas-data'
 import { registerStandardCapabilities } from '../renderPlugin'
 import type {
   CanvasEdge,
@@ -43,7 +43,7 @@ import type {
   SettingsPersistService,
   StorageAdapter,
   ThemeRegistry,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import { createPluginManager, type PluginManager } from './pluginManager'
 import TipLayer from '../tip/TipLayer.vue'
 import { NodeLayoutService } from '../layout/nodeLayout'
@@ -63,7 +63,7 @@ import type { PluginManifest } from './pluginManager'
 export type HostPlugin = PluginModule | PluginClassLike
 
 /** 门面可选项 */
-export interface MiniCanvasOptions {
+export interface PlumeOptions {
   /** 存储后端（本地/云端可插拔）。默认内存 adapter。 */
   adapter?: StorageAdapter
   /**
@@ -72,7 +72,7 @@ export interface MiniCanvasOptions {
    */
   appBase?: {
     pluginName: string
-    services: import('@mini-canvas/canvas-data').CanvasAppBaseServices
+    services: import('@plume-canvas/canvas-data').CanvasAppBaseServices
   }
   /**
    * 复用一个已启动的根级 Context（单 Context 模型）。
@@ -145,8 +145,8 @@ export interface CanvasHostHandle {
 }
 
 
-/** 暴露给 window.MiniCanvas 的插件/运行时 API 面 */
-export interface MiniCanvasApi {
+/** 暴露给 window.Plume 的插件/运行时 API 面 */
+export interface PlumeApi {
   /** 热装一个插件（对象 { name, apply } 或 Service 类） */
   installPlugin(mod: HostPlugin): string
   /** 热卸一个插件（副作用/注册/UI 自动回收）；返回是否真卸到 */
@@ -177,9 +177,9 @@ export interface MiniCanvasApi {
  * 注意时序：它在 `ctx.plugin(basePlugin)` **之前**注入 —— 基础插件之后装的业务插件一 start 就能
  * `ctx.get('view')` 拿到（否则从「注入即可达」退化成「PENDING」，属行为变化）。
  */
-export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promise<{
+export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
   host: CanvasHostHandle
-  api: MiniCanvasApi
+  api: PlumeApi
   manager: PluginManager
   exposeToWindow: (key?: string) => void
 }> {
@@ -405,7 +405,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     },
   }
 
-  const api: MiniCanvasApi = {
+  const api: PlumeApi = {
     installPlugin: (mod) => ctx.installPlugin(mod),
     uninstallPlugin: (name) => ctx.uninstallPlugin(name),
     reloadPlugin(name, nextMod) {
@@ -434,7 +434,7 @@ export async function createMiniCanvasHost(opts: MiniCanvasOptions = {}): Promis
     getHost: () => host,
   }
 
-  const exposeToWindow = (key = 'MiniCanvas') => {
+  const exposeToWindow = (key = 'Plume') => {
     const w = globalThis as Record<string, unknown>
     w[key] = api
     exposedWindowKey = key // 记录供 stop 清理

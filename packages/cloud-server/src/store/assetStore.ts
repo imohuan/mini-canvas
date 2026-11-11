@@ -20,7 +20,7 @@ import { assetsFilesDir, assetsIndexFile, canvasResourcesDir, isSafeAssetName, i
 /**
  * 资产类型。
  *
- * node-package 是**节点包**（可视化节点 + 它依赖的后台脚本打成一个 .mcnode）。
+ * node-package 是**节点包**（可视化节点 + 它依赖的后台脚本打成一个 .plumenode）。
  * 单独一类而不是丢进 other：左侧抽屉据此知道它是"能拖出节点的东西"，
  * 拖到画布时的落点是"还原节点 + 写脚本"，而不是"建一个媒体节点"。
  */
@@ -75,7 +75,7 @@ function foldersFile(root: string): string {
 /** 由扩展名 / MIME 猜资产类型 */
 export function kindOfName(name: string): AssetKind {
   const ext = (name.split('?')[0].split('.').pop() ?? '').toLowerCase()
-  if (ext === 'mcnode') return 'node-package'
+  if (ext === 'plumenode') return 'node-package'
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext)) return 'image'
   if (['mp4', 'webm', 'mov'].includes(ext)) return 'video'
   if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) return 'audio'

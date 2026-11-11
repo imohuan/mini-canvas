@@ -10,7 +10,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createCloudServer, type CloudServer } from '../server'
-import { fakeReplyFor, sseBodyFor, TEST_PROVIDER, TEST_MODEL_ID, testModelBaseUrl } from '@mini-canvas/plugin-agent/server/agent/testModel.js'
+import { fakeReplyFor, sseBodyFor, TEST_PROVIDER, TEST_MODEL_ID, testModelBaseUrl } from '@plume-canvas/plugin-agent/server/agent/testModel.js'
 
 let dir: string
 let srv: CloudServer

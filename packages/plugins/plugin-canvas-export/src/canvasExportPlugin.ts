@@ -46,7 +46,7 @@
  *
  * ## 怎么把元素排除出导出图
  * 画布 DOM 里有一类「临时 UI」（多选圆点、端口球/透明接收区、resize 拖柄、吸附调试带…）：
- * 它们是操作提示，不该出现在用户的作品截图里。约定一个通用类名 `mc-export-ignore`
+ * 它们是操作提示，不该出现在用户的作品截图里。约定一个通用类名 `plume-export-ignore`
  * （见 exportGeometry.EXPORT_IGNORE_CLASS）：任何元素（含其子树）挂上它，导出时整棵跳过。
  * 主题侧在 BaseNode / MovingHandle 上已挂好；插件作者给自己的浮层加这一个类即可，
  * 导出插件不必知道每个主题内部用了哪些具体类名（旧调试类 DEBUG_OVERLAY_CLASSES 仍保留兼容）。
@@ -61,10 +61,10 @@ import type {
   Context,
   ConfigSchema,
   InferConfig,
-} from '@mini-canvas/canvas-base'
-import type { SelectionService } from '@mini-canvas/canvas-data'
-import { isTransient } from '@mini-canvas/canvas-data'
-import { registerEventName } from '@mini-canvas/canvas-base'
+} from '@plume-canvas/canvas-base'
+import type { SelectionService } from '@plume-canvas/canvas-data'
+import { isTransient } from '@plume-canvas/canvas-data'
+import { registerEventName } from '@plume-canvas/canvas-base'
 import { toCanvas } from 'html-to-image'
 import { buildExportFontCss } from './exportFonts'
 import { stripXmlUnsafeComments, withXmlSafeSerialization } from './xmlSanitize'

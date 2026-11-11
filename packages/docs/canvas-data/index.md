@@ -1,10 +1,10 @@
 # 数据层
 
-**一句话定位**：`@mini-canvas/canvas-data` 是画布的**账本** —— 它只管**数据**：有哪些节点、
+**一句话定位**：`@plume-canvas/canvas-data` 是画布的**账本** —— 它只管**数据**：有哪些节点、
 哪条线连着谁、改了以后能不能撤销、存到哪里去。它**不认识 Vue，也不认识屏幕**。
 
 **它属于哪一块**：四层里的第二层。依赖方向是 `kernel ← canvas-data ← canvas-render ← plugins`，
-所以数据层可以用 `@mini-canvas/kernel` 的东西，但**反过来不行** —— 内核不知道"节点"是什么。
+所以数据层可以用 `@plume-canvas/kernel` 的东西，但**反过来不行** —— 内核不知道"节点"是什么。
 
 ## 它是什么
 
@@ -74,13 +74,13 @@ import {
   registerNodeType, NodeRegistry, ThemeRegistry,             // 画布注册表
   NODE_REGIONS, assertRegion, nodeRegionStackEntries,        // 区域词
   type DocService, type CanvasBaseAssembly,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 
 // 子路径入口 —— 画布语义层（节点类型 / 区域词 / 连接 / 建节点 / 展示注册表）
-import { registerNodeType, validateConnection } from '@mini-canvas/canvas-data/canvas'
+import { registerNodeType, validateConnection } from '@plume-canvas/canvas-data/canvas'
 ~~~
 
-> **写插件的人一般不用直接引这里**：插件只引 `@mini-canvas/canvas-base`（薄入口，重导出内核 + 数据层的
+> **写插件的人一般不用直接引这里**：插件只引 `@plume-canvas/canvas-base`（薄入口，重导出内核 + 数据层的
 > 类型与常用助手）。直接引 `canvas-data` 的是**宿主**（自己组织装配的人）和**渲染层**（要订阅数据、量尺寸）。
 
 ## 服务清单与宿主装配
@@ -133,7 +133,7 @@ base.services  // 已建好的 12 件实例（外加条件持有的 settingsPers
 // 格式：TypeScript 模块（宿主装配骨架，逐行可跑）
 // 位置：任何"想自己掌控装配"的宿主入口
 
-import { Context, createCanvasBasePlugin, LocalStorageAdapter } from '@mini-canvas/canvas-data'
+import { Context, createCanvasBasePlugin, LocalStorageAdapter } from '@plume-canvas/canvas-data'
 
 export async function boot() {
   // ① 建 ctx。画布版的 Context 默认装好画布能力层，
@@ -157,16 +157,16 @@ export async function boot() {
 }
 ~~~
 
-想一行出画布（含渲染层）就用渲染层的 `createMiniCanvasHost`，它内部就是上面这四步，外加两件渲染层服务：
+想一行出画布（含渲染层）就用渲染层的 `createPlumeHost`，它内部就是上面这四步，外加两件渲染层服务：
 
 ~~~ts
 // 文件：宿主应用/src/main.ts
 // 格式：TypeScript 模块（渲染宿主装配，摘要）
 // 位置：成品应用启动处
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
+import { LocalStorageAdapter } from '@plume-canvas/canvas-data'
 
-const { host, api, manager } = await createMiniCanvasHost({
+const { host, api, manager } = await createPlumeHost({
   adapter: new LocalStorageAdapter(),
   coldPlugins: [themeComponentsPlugin, nodeTextPlugin],
   dev: import.meta.env.DEV,
@@ -175,7 +175,7 @@ const { host, api, manager } = await createMiniCanvasHost({
 
 **顺序上只有一条硬规矩**：`view` / `canvas` 这两个渲染层服务要在 `ctx.plugin(base.plugin)` **之前**
 `ctx.inject` 进去。理由很实际 —— 基础插件之后装的业务插件一 `start` 就会 `ctx.get('view')`，
-晚注入的话它们只能拿到 `undefined`。细节见 [createMiniCanvasHost](/canvas-render/create-host)。
+晚注入的话它们只能拿到 `undefined`。细节见 [createPlumeHost](/canvas-render/create-host)。
 
 ### 基础插件顺手做掉的三件事
 
@@ -192,7 +192,7 @@ const { host, api, manager } = await createMiniCanvasHost({
 
 | 谁 | 在哪 | 用它干什么 |
 | --- | --- | --- |
-| 渲染宿主门面 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | 调 `createCanvasBasePlugin`、注入 `view`/`canvas`、装业务插件、恢复存档 |
+| 渲染宿主门面 | `packages/canvas-render/src/host/createPlumeHost.ts` | 调 `createCanvasBasePlugin`、注入 `view`/`canvas`、装业务插件、恢复存档 |
 | 渲染宿主组件 | `packages/canvas-render/src/host/CanvasHost.vue` | `host.graph.connectEdge(...)` 落边、写 `GRAPH_VIEWPORT_KEY` |
 | 渲染装配核心 | `packages/canvas-render/src/host/canvasHostCore.ts` | 从 `host.nodeRegistry` / `host.themeRegistry` 读整幅画布的外观装配 |
 | 文本节点插件 | `packages/plugins/plugin-node-text/src/nodeTextPlugin.ts` | `ctx.nodes.register` 注册类型、`doc` 事务建节点 |
@@ -212,7 +212,7 @@ const { host, api, manager } = await createMiniCanvasHost({
 
 ~~~
 plugin-ledger-demo/
-├── package.json                  # 清单：包名 / 入口 / miniCanvas 元信息
+├── package.json                  # 清单：包名 / 入口 / plume 元信息
 └── src/
     ├── host.ts                   # 宿主装配：建 ctx → 建基础插件 → 装插件 → start（无渲染）
     ├── ledgerPlugin.ts           # 业务插件：注册一个节点类型 + 两条命令
@@ -224,11 +224,11 @@ plugin-ledger-demo/
 
 ~~~json
 {
-  "name": "@mini-canvas/plugin-ledger-demo",
+  "name": "@plume-canvas/plugin-ledger-demo",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：账本（只数据层）",
     "description": "不装渲染层，把数据层单独跑起来：建节点、连边、撤销、落盘，并有 Node 单测",
     "pluginName": "ledger-demo",
@@ -248,9 +248,9 @@ plugin-ledger-demo/
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
@@ -266,8 +266,8 @@ plugin-ledger-demo/
 // 格式：TypeScript 模块（插件入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口；这里故意**不注册任何组件**（数据层不认识屏幕）
 
-import type { Context } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { Context } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 
 export const name = 'ledger-demo'
 // ① 硬依赖：doc 没就绪，本插件停在 PENDING（而不是跑起来后拿到 undefined）
@@ -334,8 +334,8 @@ export function apply(ctx: Context) {
 // 格式：TypeScript 模块（宿主装配函数）
 // 位置：把"只装数据层"的最小画布跑起来的入口
 
-import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import type { CanvasBaseAssembly } from '@mini-canvas/canvas-data'
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import type { CanvasBaseAssembly } from '@plume-canvas/canvas-data'
 import * as ledgerPlugin from './ledgerPlugin'
 
 /**
@@ -382,8 +382,8 @@ export async function bootLedger(adapter = new MemoryStorageAdapter()) {
 // 位置：证明"数据层脱离浏览器也能完整验证"
 
 import { describe, expect, it } from 'vitest'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { bootLedger } from '../host'
 
 describe('只装数据层的画布', () => {

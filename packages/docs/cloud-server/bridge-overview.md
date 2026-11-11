@@ -58,7 +58,7 @@ Agent 对话由 AgentRuntime 在后台跑（它可以操作画布，经 MCP）�
 两个插件都在成品应用的装配清单里（`packages/ui/src/assembly.ts`）：
 
 - `agentPlugin` —— 自带，冷启动装配；配套的后台半（`/api/agent/*` 路由）由 cloud-server 内置跑着，
-  所以插件的 `miniCanvas.serverBuiltin: true`。
+  所以插件的 `plume.serverBuiltin: true`。
 - `pluginCloudClient` —— 自带，冷启动装配；`inject: ['doc']`，宿主服务全部 `tryGet` 软探测
   （底栏没装就不注册按钮，画布同步退化成纯本地）。
 - `pluginManagerPlugin`（也在这个包里，`plugin-cloud-client/manager`）—— 设置面板的「插件」页，

@@ -15,7 +15,7 @@
  * 不反向依赖任何节点插件。
  */
 import { computed, type Component } from 'vue'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import {
   Input,
   Select,
@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
   Switch,
-} from '@mini-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit-shadcn'
 import { resolvePresetKind, resolveBaseControl, gridColumns } from './paramKind'
 import ToolOptionGrid from './ToolOptionGrid.vue'
 import ToolRatioGrid from './ToolRatioGrid.vue'
@@ -90,7 +90,7 @@ const options = computed(() => (props.param.options ?? []).map((o) => ({ label: 
  * （比如 MiniMax 的情感：默认 / 开心 / 难过……）。这里把空值换成私有哨兵串
  * 交给 SelectItem，选中后再映射回空串 —— 作者的 option 定义不用做任何妥协。
  */
-const EMPTY_OPTION_VALUE = '__mini-canvas-empty__'
+const EMPTY_OPTION_VALUE = '__plume-canvas-empty__'
 const toSelectItemValue = (v: string | number): string | number => (v === '' ? EMPTY_OPTION_VALUE : v)
 const fromSelectItemValue = (v: unknown): string | number | boolean =>
   (v === EMPTY_OPTION_VALUE ? '' : v) as string | number | boolean
@@ -284,7 +284,7 @@ const sliderHint = computed(() => (props.hideHint ? '' : hintText.value))
  * 这里原来写 `padding: 5px 8px`，把组件的 12px 左右内边距盖成 8px，
  * 上下也从 8px 压到 5px —— 文字贴着圆角，垂直方向又偏上，观感就是被切了。
  * `border` 与 `border-radius` 同理：shadcn 用 border-transparent + 主题圆角，
- * 再写一遍会把主题圆角档位（--mct-radius）顶掉。
+ * 再写一遍会把主题圆角档位（--plume-radius）顶掉。
  */
 .tpf-input {
   width: 100%;

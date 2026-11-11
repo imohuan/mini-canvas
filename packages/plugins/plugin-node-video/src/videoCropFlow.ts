@@ -4,7 +4,7 @@
  * 单独一层的原因：这条链路要同时碰「读节点 data」「解析可显示地址」「调后台」「写回」，
  * 塞进命令注册里会让命令体长到看不清主次；塞进 videoOps 又会把 fetch 带进纯逻辑模块。
  */
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import type { Rect } from './videoCrop'
 import { resolveVideoSrc } from './videoRefs'
 import { canCropOnBackend, cropVideoOnBackend } from './videoCropService'

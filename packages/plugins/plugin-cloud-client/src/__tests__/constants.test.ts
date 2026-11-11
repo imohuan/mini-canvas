@@ -1,7 +1,7 @@
 // 常量防漂移：这些字面量在本插件里是**就地内联**的（产物要自包含），
 // 与数据层 / 后端各有一份。改了一边没改另一边，这里立刻红。
 import { describe, it, expect } from 'vitest'
-import { ADMIN_TOKEN_KEY, ADMIN_TOKEN_HEADER, setAdminToken } from '@mini-canvas/canvas-base'
+import { ADMIN_TOKEN_KEY, ADMIN_TOKEN_HEADER, setAdminToken } from '@plume-canvas/canvas-base'
 import { CloudApi } from '../api'
 import {
   GRAPH_KEY,
@@ -20,7 +20,7 @@ import {
   SAVE_TYPES,
   scopedKey,
   restoreNodeMediaUrls,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 
 describe('与 canvas-data 逐字一致', () => {
   it('三个画布 key', () => {
@@ -87,7 +87,7 @@ describe('管理令牌：就地内联与 canvas-base 不漂移', () => {
     ;(globalThis as { localStorage?: unknown }).localStorage = new MemoryStorage()
     try {
       setAdminToken('shared-token')
-      expect(ADMIN_TOKEN_KEY).toBe('mc_admin_token')
+      expect(ADMIN_TOKEN_KEY).toBe('plume_admin_token')
       let sent: Headers | undefined
       const api = new CloudApi({
         baseUrl: 'http://srv',

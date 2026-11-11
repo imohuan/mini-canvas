@@ -9,7 +9,7 @@
   （baseNodeSlotsRender 的 HTML 断言照旧：不出现多余包裹元素）。
 -->
 <script setup lang="ts">
-import type { NodeSegmentEntry } from '@mini-canvas/canvas-data'
+import type { NodeSegmentEntry } from '@plume-canvas/canvas-data'
 import { provideCapabilityBag, type CapabilityCache } from '../contracts/capabilities'
 
 const props = defineProps<{

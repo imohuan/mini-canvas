@@ -2,7 +2,7 @@
 import { computed, nextTick, ref } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { Check, Plus as PlusIcon, FolderPlus as FolderPlusIcon, Upload as UploadIcon } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useUi } from '../../../composables/ui'
 import { openAssetManager } from '../../../composables/assetUiBus'
 

@@ -28,7 +28,7 @@ type KvEventListener = (e: KvChangeEventLike) => void
 export const KV_EVENTS_PATH = '/api/kv/events'
 
 /** 跨 bundle 共享用的全局键（外部插件靠它复用本应用的连接） */
-export const KV_EVENTS_GLOBAL_KEY = '__miniCanvasKvEvents'
+export const KV_EVENTS_GLOBAL_KEY = '__plumeKvEvents'
 
 /** 挂在全局上的共享订阅形状（外部 bundle 按这个签名调用） */
 export interface SharedKvEventsRegistry {

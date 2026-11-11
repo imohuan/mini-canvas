@@ -11,7 +11,7 @@
  *
  * 放在 canvas-base（作者薄入口）而不是各节点插件里复制四遍：规则只有一套，抄四份必然漂移。
  */
-import type { Context } from '@mini-canvas/canvas-data'
+import type { Context } from '@plume-canvas/canvas-data'
 
 /** 两个设置 key（宽 / 高），都是 number */
 export interface TypeSizeConfigKeys {

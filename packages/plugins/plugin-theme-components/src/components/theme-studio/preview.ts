@@ -21,7 +21,7 @@ import {
   type PreviewLayer,
   type PreviewNodeRect,
   type PreviewRect,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import { fitRectInView } from './framing'
 import type { ThemeStudioState } from './state'
 

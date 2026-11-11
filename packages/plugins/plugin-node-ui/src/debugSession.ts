@@ -20,7 +20,7 @@
 export const UI_DEBUG_INVITE_KEY = 'uiDebugInvite'
 
 /** sessionStorage 里存凭据的键名 */
-export const DEBUG_CREDENTIAL_KEY = 'mc-ui-debug-credential'
+export const DEBUG_CREDENTIAL_KEY = 'plume-ui-debug-credential'
 
 /** 一次调试邀请的形状（存在节点 data 上，经 SSE 同步到所有标签页） */
 export interface DebugInvite {

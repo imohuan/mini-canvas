@@ -10,12 +10,12 @@
  * - 方法内**惰性 `this.ctx.get('nodeStore'/'save')` 取现时服务、不缓存**：避免卸载残留/换实例时拿旧引用；
  *   nodeStore/save 同时写进 `inject` 硬依赖（宿主恒在、start 前注入 → 无 PENDING 风险；缺则让插件
  *   PENDING 而非 ctx.get 静默返 undefined，更 cordis 规范）。
- * - `declare module '@mini-canvas/canvas-data'` 给 `ctx.text` 加直访类型（运行靠服务解析 Proxy），
+ * - `declare module '@plume-canvas/canvas-data'` 给 `ctx.text` 加直访类型（运行靠服务解析 Proxy），
  *   宿主/作者可 `ctx.text` 直访或 `ctx.get<TextService>('text')` 类型安全消费。
  *
- * 依赖方向：只依赖内核(@mini-canvas/canvas-base / canvas-data)，不反向依赖宿主/其它插件。
+ * 依赖方向：只依赖内核(@plume-canvas/canvas-base / canvas-data)，不反向依赖宿主/其它插件。
  */
-import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@mini-canvas/canvas-base'
+import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@plume-canvas/canvas-base'
 import TextPreview from './TextPreview.vue'
 
 /**
@@ -36,9 +36,9 @@ export const Config: ConfigSchema = {
     description: '文本节点没有自己的尺寸时用的高度（px）。改完立即生效（同上）。',
   },
 }
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@plume-canvas/canvas-data'
 import TextContent from './TextContent.vue'
-import { publishToolActions, registerBarAction, registerBarApplier } from '@mini-canvas/bar-contract'
+import { publishToolActions, registerBarAction, registerBarApplier } from '@plume-canvas/bar-contract'
 
 /** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用；形状保持不变，.vue 零改动） */
 export interface TextNodeService {
@@ -51,7 +51,7 @@ export interface TextNodeService {
 }
 
 /** 类型增强缝（cordis ch3 声明合并）：宿主/作者 ctx.text 直访时类型为 TextService */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     text: TextService
   }

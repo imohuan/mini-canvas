@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-manager",
+  "name": "@plume-canvas/plugin-manager",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "插件管理",
     "description": "设置面板「插件」页：安装 / 卸载 / 重装第三方插件（清单来自云端或本地 dev 服务）",
     "pluginName": "plugin-manager",
@@ -23,15 +23,15 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
   },
   "devDependencies": {
-    "@mini-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
     "vitest": "^3.0.0",

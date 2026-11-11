@@ -1,4 +1,4 @@
-// @mini-canvas/ui 编译期 .vue 模块 shim。
+// @plume-canvas/ui 编译期 .vue 模块 shim。
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

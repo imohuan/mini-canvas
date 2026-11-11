@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, type Ref } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import type { RefTile } from '../refTiles'
 import { nodeMediaOf, judgeSlotHover } from '../refSlotDrag'
 import {

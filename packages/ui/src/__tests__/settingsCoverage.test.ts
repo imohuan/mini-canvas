@@ -11,19 +11,19 @@
  * 这里会立刻拦住 —— 那种错误在界面上表现为"配置项凭空消失"，靠肉眼看很难发现。
  */
 import { describe, it, expect } from 'vitest'
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
-import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
-import { pluginBottomBar } from '@mini-canvas/plugin-bottom-bar'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry } from '@plume-canvas/canvas-data'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
+import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
+import { node3dPreviewPlugin } from '@plume-canvas/plugin-node-3d-preview'
+import { alignGuidePlugin } from '@plume-canvas/plugin-align-guide'
+import { pluginBottomBar } from '@plume-canvas/plugin-bottom-bar'
 import { resolveAppPlugins } from '../assembly'
 
 /** 起一个与宿主同形的内核（真服务），装载声明了 Config 的几个插件 */
@@ -264,7 +264,7 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
    * - 内容不会因为菜单合并而丢（每个 group 至少出现在一个 section 里）。
    */
   it('真实 APP_PLUGINS：菜单零兜底、一级不重复、全部 group 可见', async () => {
-    const { host } = await createMiniCanvasHost({
+    const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: resolveAppPlugins(),
     })
@@ -304,7 +304,7 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
   })
 
   it('安装本地清单后，所有分组仍被菜单收编，不冒出重复的一级入口', async () => {
-    const { host } = await createMiniCanvasHost({
+    const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: resolveAppPlugins(),
     })

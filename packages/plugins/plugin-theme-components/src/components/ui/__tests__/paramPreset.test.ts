@@ -15,7 +15,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import ToolParamField from '../ToolParamField.vue'
 import {
   resolvePresetKind,

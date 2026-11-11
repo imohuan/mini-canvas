@@ -1,12 +1,12 @@
 import { ref, type Ref } from 'vue'
-import { LAYERS } from '@mini-canvas/vue-render/contracts/layers'
+import { LAYERS } from '@plume-canvas/vue-render/contracts/layers'
 import { edgeOnTopOf } from './helpers'
 import {
   edgesFromStore,
   nodesFromStore,
   overlayDraggingPositions,
 } from '../canvasHostCore'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 import type { EdgeVisual } from '../../contracts/edgeContext'
 import type { CanvasHostRenderEdge, CanvasSurfaceHandle } from './types'
 

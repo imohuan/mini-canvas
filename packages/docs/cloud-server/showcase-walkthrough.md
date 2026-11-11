@@ -10,7 +10,7 @@
 
 ## 完整代码
 
-源文件：`packages/plugins/plugin-showcase/src/server.ts`（约 240 行）。构建脚本 `scripts/build-server.mjs` 用 esbuild 把它打成**自包含单文件** `dist/server.js`（`@mini-canvas/kernel` 打进产物、`hono` 保持 external —— data: URL 加载没有依赖解析，这是硬要求）。发布为 npm 包 `mini-canvas-plugin-showcase`，`package.json` 的 `miniCanvas` 段声明 `server: { entry: "dist/server.js" }`。
+源文件：`packages/plugins/plugin-showcase/src/server.ts`（约 240 行）。构建脚本 `scripts/build-server.mjs` 用 esbuild 把它打成**自包含单文件** `dist/server.js`（`@plume-canvas/kernel` 打进产物、`hono` 保持 external —— data: URL 加载没有依赖解析，这是硬要求）。发布为 npm 包 `@plume-canvas/plugin-showcase`，`package.json` 的 `plume` 段声明 `server: { entry: "dist/server.js" }`。
 
 下面逐段讲。所有代码块第一行标「文件：」的都是真实源码（有删节）；想看全量直接打开源文件。
 
@@ -242,7 +242,7 @@ ctx.routes.get('/api/showcase/mcp/tools', (c) =>
 
 - **演示能力**：`ctx.mcp.tool(def)` 的完整形状。工具登记进注册场（`server/mcp-tool`），MCP server 每请求现读注册场 —— 注册后把 `http://127.0.0.1:8865/mcp` 配给 AI 客户端，工具清单里就会出现 `showcase.add`；卸载插件即摘。
 - ③ 简表只支持 `string / number / boolean` 三种类型（外挂插件引不了 zod，框架负责翻译成 MCP SDK 的 schema）。
-- **验证**：POST 注册 → `npx mini-canvas-cloud list-tools` 或在 AI 客户端里看到 `showcase.add`；也可以直接在 MCP 会话里调它。
+- **验证**：POST 注册 → `npx plume-canvas list-tools` 或在 AI 客户端里看到 `showcase.add`；也可以直接在 MCP 会话里调它。
 
 ### 第 6 段 · agent 组（3 条）：pre-turn 中间件
 
@@ -277,7 +277,7 @@ ctx.routes.delete('/api/showcase/agent/middleware', (c) => {
 
 三条路任选：
 
-1. **NPM 安装**（最省事）：画布网页 → 插件管理 → 搜索 `mini-canvas-plugin-showcase` → 安装（有后台半时确认一次「以服务端权限运行」）。装完即时生效。
+1. **NPM 安装**（最省事）：画布网页 → 插件管理 → 搜索 `@plume-canvas/plugin-showcase` → 安装（有后台半时确认一次「以服务端权限运行」）。装完即时生效。
 2. **仓库构建 + 手工放文件**：`pnpm -C packages/plugins/plugin-showcase build` 产出 `dist/server.js`，复制进 `<数据根>/server-plugins/`，重启服务。
 3. **HTTP 热装**：把 `dist/server.js` 的文本作为 `code`、清单里的 sha256、`confirm: true` POST 到 `/api/server-plugins/install`（见热装篇）。
 
@@ -294,7 +294,7 @@ ctx.routes.delete('/api/showcase/agent/middleware', (c) => {
 | mcp 2 条 | 同上 mcp 组 | `ctx.mcp.tool({ name: 'showcase.add', input: { a,b }, required, handler })` |
 | agent 3 条 | 同上 agent 组 | `ctx.agent.use` 注册 / 查询 / 置停；DELETE 置 inactive 不摘注册场 |
 | 单文件打包 | `packages/plugins/plugin-showcase/scripts/build-server.mjs` | esbuild bundle，`external: ['hono']`，产物 `dist/server.js` |
-| NPM 包声明 | `packages/plugins/plugin-showcase/package.json` | `miniCanvas.server.entry = "dist/server.js"`；发布名 `mini-canvas-plugin-showcase` |
+| NPM 包声明 | `packages/plugins/plugin-showcase/package.json` | `plume.server.entry = "dist/server.js"`；发布名 `@plume-canvas/plugin-showcase` |
 
 ## 常见坑
 

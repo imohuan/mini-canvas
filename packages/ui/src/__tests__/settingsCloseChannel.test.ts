@@ -11,7 +11,7 @@
  * 而不是某个孤立小函数：少一步接线就会红。
  */
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { useUi } from '../composables/ui'
 
 describe('设置面板关闭通道（装配层订阅 settings:ui-close）', () => {

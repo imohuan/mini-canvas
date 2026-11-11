@@ -1,5 +1,5 @@
 import { computed, markRaw, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasContext } from '@mini-canvas/canvas-render'
+import { useCanvasContext } from '@plume-canvas/canvas-render'
 import { useUi } from '../../../composables/ui'
 import {
   DRAWER_TAB_ASSETS,

@@ -14,7 +14,7 @@
  * 名字前缀 `agent:` 表示**由 agent 插件发出**；登记进 EventBus 白名单，dev 下不 warn
  *（见 kernel 的 registerEventName 与设计文档 §7.4）。
  */
-import { registerEventName } from '@mini-canvas/canvas-base'
+import { registerEventName } from '@plume-canvas/canvas-base'
 
 /** 事件名（消费方 import 它来监听，不自己拼字符串） */
 export const REF_CLICK_EVENT = 'agent:ref-click'

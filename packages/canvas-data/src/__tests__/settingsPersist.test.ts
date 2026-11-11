@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SettingsStore } from '@mini-canvas/kernel'
+import { SettingsStore } from '@plume-canvas/kernel'
 import { SaveServiceImpl } from '../storage/SaveService'
 import { MemoryStorageAdapter } from '../storage/memoryAdapter'
 import { createSettingsPersist, SETTINGS_SAVE_KEY } from '../settingsPersist'

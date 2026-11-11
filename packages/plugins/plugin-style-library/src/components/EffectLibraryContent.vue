@@ -9,7 +9,7 @@
  * 差别只在点击行为：点卡片 = 全屏预览（没有详情页）。
  */
 import { computed, ref, watch } from 'vue'
-import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender, useUiComponent } from '@plume-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_MEDIA_VIEWER } from '../names'

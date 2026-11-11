@@ -41,8 +41,8 @@ await page.waitForTimeout(1200)
 // 报「单文件插件需导出 name」。（这条曾把 e2e 自己坑过一次。）
 const installed = await page.evaluate(async () => {
   const w = /** @type {any} */ (window)
-  const ctx = w.MiniCanvasUI?.getContext?.()
-  const manager = w.MiniCanvasUI?.getHost?.()?.manager
+  const ctx = w.PlumeUI?.getContext?.()
+  const manager = w.PlumeUI?.getHost?.()?.manager
   if (!ctx || !manager) return { ok: false, why: 'no host.manager' }
   await new Promise((resolve, reject) => {
     const el = document.createElement('script')
@@ -51,7 +51,7 @@ const installed = await page.evaluate(async () => {
     el.onerror = () => reject(new Error('script load failed'))
     document.head.appendChild(el)
   })
-  const mod = w.MiniCanvasPluginDemoKit
+  const mod = w.PlumePluginDemoKit
   if (!mod?.name) return { ok: false, why: 'no UMD global' }
   await manager.install(mod)
   return { ok: ctx.listPlugins().includes('demo-kit'), names: ctx.listPlugins() }
@@ -74,14 +74,14 @@ check('组件展厅入口在', marks.galleryButton === true, JSON.stringify(mark
 
 // 卸载一次 = 四套一起消失（这是合并最大的收益）
 await page.evaluate(async () => {
-  await window.MiniCanvasUI.getHost()?.manager.uninstall('demo-kit')
+  await window.PlumeUI.getHost()?.manager.uninstall('demo-kit')
 })
 await page.waitForTimeout(600)
 const after = await page.evaluate(() => ({
   hotReload: !!document.querySelector('[data-testid="demo-kit-hot-reload-card"]'),
   shellStatus: !!document.querySelector('[data-testid="ssd-status"]'),
   shellDock: !!document.querySelector('[data-testid="ssd-dock-end"]'),
-  plugins: window.MiniCanvasUI.getContext().listPlugins(),
+  plugins: window.PlumeUI.getContext().listPlugins(),
 }))
 check('卸载一次四套演示全消失', !after.hotReload && !after.shellStatus && !after.shellDock, JSON.stringify(after))
 check('plugin 列表里已无 demo-kit', !after.plugins.includes('demo-kit'), JSON.stringify(after.plugins))

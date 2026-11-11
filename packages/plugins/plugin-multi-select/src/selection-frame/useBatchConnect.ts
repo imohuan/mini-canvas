@@ -4,8 +4,8 @@ import {
   reasonText as reasonTextFrom,
   resolveFeedback,
   type CanvasRenderContext,
-} from '@mini-canvas/canvas-render'
-import { typeConnectionDef, validateConnection } from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-render'
+import { typeConnectionDef, validateConnection } from '@plume-canvas/canvas-data'
 import {
   buildBatchGuideLines,
   markGuideLines,

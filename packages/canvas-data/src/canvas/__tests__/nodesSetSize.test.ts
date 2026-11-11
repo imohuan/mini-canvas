@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore } from '@plume-canvas/canvas-data'
 import { EdgeStore } from '../../edgeStore'
 import { Selection } from '../../selection'
 import { History } from '../../history'
@@ -8,9 +8,9 @@ import { GraphDocument } from '../../graphDocument'
 import { createDocService } from '../../docService'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { ThemeRegistry } from '../registry/themeRegistry'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { NodeFactory } from '../nodeFactory'
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 
 /**
  * ctx.nodes.setSize —— 插件作者改节点尺寸的一等入口。

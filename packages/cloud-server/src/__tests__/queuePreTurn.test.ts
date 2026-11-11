@@ -12,8 +12,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { QueueScheduler } from '@mini-canvas/plugin-agent/server/agent/queueScheduler.js'
-import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
+import { QueueScheduler } from '@plume-canvas/plugin-agent/server/agent/queueScheduler.js'
+import { AgentSessionStore } from '@plume-canvas/plugin-agent/server/agent/sessionStore.js'
 
 const delay = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 

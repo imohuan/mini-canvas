@@ -19,7 +19,7 @@ const props = defineProps<{ nodeId: string; data: Record<string, unknown> }>()
 const stillDebugging = ref(false)
 function refreshDebugging(): void {
   try {
-    const cred = sessionStorage.getItem('mc-ui-debug-credential')
+    const cred = sessionStorage.getItem('plume-ui-debug-credential')
     if (!cred) { stillDebugging.value = false; return }
     const c = JSON.parse(cred) as { nodeId?: string }
     stillDebugging.value = c.nodeId === props.nodeId

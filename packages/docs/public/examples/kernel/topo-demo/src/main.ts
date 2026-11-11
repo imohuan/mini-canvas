@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/topo-demo/src/main.ts
 // 格式：TypeScript 模块（预检脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：验证清单合法 + 演示四种错误的报错长什么样
-import { topoSort, depsOf } from '@mini-canvas/kernel'
+import { topoSort, depsOf } from '@plume-canvas/kernel'
 import { KNOWN_SERVICES, manifest } from './manifest'
 
 // ① 正常排序：依赖在前

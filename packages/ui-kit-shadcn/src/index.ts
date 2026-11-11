@@ -1,8 +1,8 @@
 /**
- * @mini-canvas/ui-kit-shadcn 的唯一入口。
+ * @plume-canvas/ui-kit-shadcn 的唯一入口。
  *
  * 全部导出都是 shadcn-vue 生成文件的**原样转发**，没有适配层。
- * 样式由使用方按需引入 `@mini-canvas/ui-kit-shadcn/styles.css`。
+ * 样式由使用方按需引入 `@plume-canvas/ui-kit-shadcn/styles.css`。
  */
 export * from './components/ui/alert-dialog'
 export * from './components/ui/badge'

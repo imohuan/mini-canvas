@@ -93,7 +93,7 @@ flowchart TD
 | [任务脚本](/plugins/parsed/node-ui/task-scripts) | **后台脚本怎么写**、ctx 里有什么、产物落哪个字段 |
 | [依赖声明与 403](/plugins/parsed/node-ui/declare) | 为什么"不声明就调不动"、怎么自动补 |
 | [后台路由](/plugins/parsed/node-ui/routes) | 界面调后台走的 HTTP 接口 |
-| [节点包](/plugins/parsed/node-ui/node-package) | 导出 / 导入 / 版本化（`.mcnode`） |
+| [节点包](/plugins/parsed/node-ui/node-package) | 导出 / 导入 / 版本化（`.plumenode`） |
 | [常见坑](/plugins/parsed/node-ui/pitfalls) | AI 写界面时最容易踩的七条（复盘沉淀） |
 | [事件](/plugins/parsed/node-ui/events) · [设置项](/plugins/parsed/node-ui/config) | 剩下两件小事 |
 

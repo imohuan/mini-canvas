@@ -2,7 +2,7 @@
 // 格式：TypeScript 模块（插件入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
 
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import FlowBadge from './FlowBadge.vue'
 
 export const name = 'flow-badge'
@@ -24,7 +24,7 @@ export function apply(ctx: Context) {
     run: () => {
       const settings = ctx.tryGet<{ get(k: string): unknown }>('settings')
       // themeColorSlots 是色板派生的唯一入口：token 表 → 2×N 格
-      import('@mini-canvas/canvas-render').then(({ themeColorSlots, resolveThemeColorValue }) => {
+      import('@plume-canvas/canvas-render').then(({ themeColorSlots, resolveThemeColorValue }) => {
         for (const slot of themeColorSlots()) {
           const v = settings
             ? resolveThemeColorValue((k) => settings.get(k), slot.token.key, slot.mode)

@@ -7,8 +7,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { Context } from '@mini-canvas/canvas-data'
-import { SettingsMenuRegistry } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { SettingsMenuRegistry } from '@plume-canvas/canvas-data'
 
 const read = (path: string): string => readFileSync(new URL(path, import.meta.url), 'utf-8')
 

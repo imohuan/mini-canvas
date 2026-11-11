@@ -6,7 +6,7 @@
  * 3. normalizeAiActions 对载荷里的清单照常归一（坏项丢弃，不把底栏渲染炸掉）。
  */
 import { describe, it, expect } from 'vitest'
-import { hasKnownEvent } from '@mini-canvas/kernel'
+import { hasKnownEvent } from '@plume-canvas/kernel'
 import {
   AI_ACTIONS_CHANGED_EVENT,
   normalizeAiActions,

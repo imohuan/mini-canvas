@@ -3,7 +3,7 @@
  * 抽屉插件页签正文：host 来自宿主 props；按钮从 ui 注册表取，节点数自己从上下文取。
  */
 import { onBeforeUnmount, shallowRef } from 'vue'
-import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContext, useUiComponent } from '@plume-canvas/canvas-render'
 import type { DrawerHost } from './types'
 
 const props = defineProps<{

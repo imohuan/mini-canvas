@@ -10,7 +10,7 @@
  * 好处：撤销/保存/复制/删除全走已有的节点机制，不需要并行一套"格子里的图"。
  */
 
-import { placeAdjacent } from '@mini-canvas/canvas-render'
+import { placeAdjacent } from '@plume-canvas/canvas-render'
 
 /** 槽位数据形状（节点 data 里的 slots 字段） */
 export interface StoryboardData {

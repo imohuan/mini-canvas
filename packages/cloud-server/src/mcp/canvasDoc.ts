@@ -1,7 +1,7 @@
 /**
  * CanvasDocument —— MCP 与网页界面**共用同一份画布数据**的读写层。
  *
- * 为什么需要它：`npx mini-canvas-cloud serve` 同时提供网页画布与 MCP 接口，
+ * 为什么需要它：`npx plume-canvas serve` 同时提供网页画布与 MCP 接口，
  * 这两边必须看到同一张画布 —— 否则 AI 改的和用户在浏览器里看到的各是一份，
  * 那这个 MCP 就是摆设。所以 MCP 不另起一套存储，直接读写网页界面用的那套 key：
  *
@@ -16,7 +16,7 @@
  * 边界（有意如此）：
  * - 本模块只管"读出来 / 写回去"与批量增删改的语义，不认识 Vue、不认识渲染。
  * - **不动 viewport**：AI 加节点不该把用户当前看的视野重置掉。
- * - 类型定义就地写（不 import @mini-canvas/canvas-data）：本包要能独立 `npx` 跑，
+ * - 类型定义就地写（不 import @plume-canvas/canvas-data）：本包要能独立 `npx` 跑，
  *   而 canvas-data 是 private 的工作区包，装不到用户机器上。字段形状由测试与
  *   canvas-data 的导出逐字比对守住（见 __tests__/canvasDoc.test.ts）。
  *
@@ -24,7 +24,7 @@
  * 理由是实测出来的，不是口味问题：
  *
  * 1. 前提没满足，且卡在本次范围外。canvas-data 要能发布，先得能编译出 .d.ts；
- *    而它有 39 处 import/export 直接依赖 @mini-canvas/kernel，kernel 也是 private 且同样只发 src/。
+ *    而它有 39 处 import/export 直接依赖 @plume-canvas/kernel，kernel 也是 private 且同样只发 src/。
  *    也就是说「把 canvas-data 做成可发布」实际等于「先发布 kernel」——kernel 在本次步骤里禁止改动。
  *    探针（用 tsc 模拟本包 rootDir=./src + declaration，去消费一个 src-only 的包）实测：
  *    error TS6059: File ... is not under rootDir。
@@ -47,7 +47,7 @@ import type { CanvasStore } from '../store/canvasStore.js'
 import { extFromMime, safeExt, mimeOf, sniffMimeFromHead, kindOfMime } from '../store/mime.js'
 import { toResourceUrl, type CanvasResourceStore } from '../store/canvasResources.js'
 
-/** 画布节点（与 @mini-canvas/canvas-data 的同名字段对齐；这里只留数据层用得到的） */
+/** 画布节点（与 @plume-canvas/canvas-data 的同名字段对齐；这里只留数据层用得到的） */
 export interface CanvasNode {
   id: string
   type: string

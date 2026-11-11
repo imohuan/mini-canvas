@@ -11,6 +11,8 @@ export function plainTextOf(doc: any): string {
         text += formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue, {
           ...(node.attrs.refExt ? { ext: node.attrs.refExt } : {}),
           ...(node.attrs.refFolderId ? { folderId: node.attrs.refFolderId } : {}),
+          // 内容类型（image / video / audio / text）：重开会话后靠它画对标签图标
+          ...(node.attrs.chipKind ? { contentKind: node.attrs.chipKind } : {}),
         }) + " ";
       } else {
         text += `@${node.attrs.name || node.attrs.id} `;
@@ -52,6 +54,7 @@ export function clipboardTextOf(slice: { content: any }): string {
           ? formatReferenceMarkup(node.attrs.refKind, node.attrs.name || node.attrs.id, node.attrs.refValue, {
               ...(node.attrs.refExt ? { ext: node.attrs.refExt } : {}),
               ...(node.attrs.refFolderId ? { folderId: node.attrs.refFolderId } : {}),
+              ...(node.attrs.chipKind ? { contentKind: node.attrs.chipKind } : {}),
             }) + " "
           : `@${node.attrs.name || node.attrs.id} `;
       } else if (node.isText) {

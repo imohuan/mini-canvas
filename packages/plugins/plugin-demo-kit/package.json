@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-demo-kit",
+  "name": "@plume-canvas/plugin-demo-kit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "示例 · 插件演练场",
     "description": "开发演示合集：组件展厅、插槽与工具栏、外壳插槽、热重载靶子。装一个就够，不混进产品冷启动",
     "pluginName": "demo-kit",
@@ -28,23 +28,23 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/plugin-align-guide": "workspace:*",
-    "@mini-canvas/plugin-edge-cutting": "workspace:*",
-    "@mini-canvas/plugin-multi-select": "workspace:*",
-    "@mini-canvas/ui-kit-shadcn": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/plugin-align-guide": "workspace:*",
+    "@plume-canvas/plugin-edge-cutting": "workspace:*",
+    "@plume-canvas/plugin-multi-select": "workspace:*",
+    "@plume-canvas/ui-kit-shadcn": "workspace:*",
     "lucide-vue-next": "^1.0.0",
-    "@mini-canvas/plugin-theme-components": "workspace:*",
-    "@mini-canvas/plugin-theme-canvas": "workspace:*"
+    "@plume-canvas/plugin-theme-components": "workspace:*",
+    "@plume-canvas/plugin-theme-canvas": "workspace:*"
   },
   "peerDependencies": {
     "@vue-flow/core": "^1.48.2",
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {
-    "@mini-canvas/kernel": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "@vue-flow/core": "^1.48.2",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/server-renderer": "3.5.38",

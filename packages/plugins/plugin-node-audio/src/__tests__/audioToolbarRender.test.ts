@@ -13,11 +13,11 @@
 import { beforeAll, describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { RegistryImpl } from '@mini-canvas/kernel'
-import { Context } from '@mini-canvas/canvas-data'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
+import { RegistryImpl } from '@plume-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
 // 只导入主题**插件**（走注册流程），不导入它的实现组件（T08）
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
 import AudioTopToolbar from '../AudioTopToolbar.vue'
 
 const AUDIO = 'blob:mock-audio'

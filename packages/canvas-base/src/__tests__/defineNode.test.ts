@@ -7,11 +7,11 @@
  * 静默丢掉。这条边界只能靠"字段走到 nodeStore 里"的端到端断言钉住。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore } from '@mini-canvas/canvas-data'
-import { NodeRegistry } from '@mini-canvas/canvas-data'
-import { createDocService } from '@mini-canvas/canvas-data'
-import { NodeFactory } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore } from '@plume-canvas/canvas-data'
+import { NodeRegistry } from '@plume-canvas/canvas-data'
+import { createDocService } from '@plume-canvas/canvas-data'
+import { NodeFactory } from '@plume-canvas/canvas-data'
 import { defineNode } from '../define'
 
 const InContent = { name: 'InContent' }

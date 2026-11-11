@@ -11,7 +11,7 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import ToolParamField from '../ToolParamField.vue'
 
 /** 渲染一个参数控件；返回值以便自定义组件场景里断言收到的 props */
@@ -38,7 +38,7 @@ describe('内置控件按 type 渲染', () => {
       },
       'medium',
     )
-    // Select 触发器是 shadcn 的 data-slot 标记（不再有旧 ui-kit 的 mck-select 类）
+    // Select 触发器是 shadcn 的 data-slot 标记（不再有旧 ui-kit 的 pk-select 类）
     expect(html).toContain('data-slot="select-trigger"')
     expect(html).not.toContain('<select')
     // 当前值作为标签显示在触发器上

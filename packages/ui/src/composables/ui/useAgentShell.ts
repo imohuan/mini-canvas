@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { readyHost } from './hostRuntime'
 import type { UiState } from './createUiState'
-import type { FeedbackService } from '@mini-canvas/canvas-render'
+import type { FeedbackService } from '@plume-canvas/canvas-render'
 
 export interface AgentShellView {
   open: boolean

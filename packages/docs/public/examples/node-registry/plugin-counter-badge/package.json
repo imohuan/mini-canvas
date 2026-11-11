@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-counter-badge",
+  "name": "@plume-canvas/plugin-counter-badge",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "计数器 + 角标",
     "description": "注册一个计数器节点类型，并给所有节点的标题位叠一个角标",
     "pluginName": "counter-badge",
@@ -23,9 +23,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

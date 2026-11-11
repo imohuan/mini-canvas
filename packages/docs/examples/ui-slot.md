@@ -18,7 +18,7 @@
 目录就这几个文件：
 
     my-count-overlay/
-    ├── package.json            # 插件清单，声明 miniCanvas 元信息
+    ├── package.json            # 插件清单，声明 plume 元信息
     └── src/
         ├── index.ts            # 插件入口：往三个槽各登记一个组件
         ├── CountOverlay.vue    # 画布上的浮层
@@ -26,13 +26,13 @@
 
 ```json
 // 文件：my-count-overlay/package.json
-// 插件清单：名字、入口、miniCanvas 元信息照抄 mini-map 的写法
+// 插件清单：名字、入口、plume 元信息照抄 mini-map 的写法
 {
   "name": "my-count-overlay",        // npm 包名（本地包随意，发 npm 要带 scope）
   "version": "0.0.0",
   "private": true,                    // 仓库内私有包
   "type": "module",                   // 用 ESModule，import 写法与源码一致
-  "miniCanvas": {                     // 画布专属元信息：「插件管理」读这里显示/安装
+  "plume": {                     // 画布专属元信息：「插件管理」读这里显示/安装
     "title": "画布计数",               // 插件列表里显示的名字
     "description": "点画布计数 +1 的示例浮层", // 一句话说明
     "pluginName": "my-count-overlay",  // 插件名，全画布唯一
@@ -48,10 +48,10 @@
     "typecheck": "tsc --noEmit"       // 最少脚本：类型检查
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"  // 插件作者薄入口（kernel + 类型重导出）
+    "@plume-canvas/canvas-base": "workspace:*"  // 插件作者薄入口（kernel + 类型重导出）
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*", // overlay 组件要用 useCanvasRender
+    "@plume-canvas/canvas-render": "workspace:*", // overlay 组件要用 useCanvasRender
     "vue": "^3.5.34"                              // 组件是 Vue 组件
   },
   "devDependencies": {
@@ -65,7 +65,7 @@
 // 文件：my-count-overlay/src/index.ts
 // 插件入口：裸导出 name / inject / apply，往三个槽各登记一个组件
 import { markRaw } from 'vue'   // markRaw：告诉 Vue "这是组件定义，别做成响应式"，注册槽必须包
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import CountOverlay from './CountOverlay.vue'          // 画布浮层组件
 import CountSettingsPage from './CountSettingsPage.vue' // 设置面板"计数"整页
 
@@ -122,7 +122,7 @@ export const countOverlayPlugin: PluginModule = { name, inject, apply }
 <!-- 画布浮层组件：SlotHost 渲染它时不需要任何 props，自己取 ctx -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render' // 渲染上下文：拿 ctx 靠它
+import { useCanvasRender } from '@plume-canvas/canvas-render' // 渲染上下文：拿 ctx 靠它
 
 // 组件必须渲染在 <CanvasHost> 子树内（overlay 槽天然满足），否则这里会抛清晰错误
 const { ctx } = useCanvasRender()
@@ -169,7 +169,7 @@ ctx.effect(() => {
 <!-- 设置面板"计数"整页（mode: replace = 这一页全归你画）。settings 服务的最小用法 -->
 <script setup lang="ts">
 import { ref, onBeforeUnmount } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
 

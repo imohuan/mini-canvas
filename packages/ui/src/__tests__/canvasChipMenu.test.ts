@@ -236,7 +236,7 @@ describe('问题 05：右上实色 / 状态图标替换 / 缩放下拉 / Agent �
     expect(rule).toMatch(/width:\s*2\.5rem/)
     expect(rule).toMatch(/height:\s*2\.5rem/)
     expect(rule).toMatch(/border-radius:\s*9999px/)
-    expect(rule).not.toContain('--mct-radius')
+    expect(rule).not.toContain('--plume-radius')
   })
 })
 

@@ -57,7 +57,7 @@
 // 格式：TypeScript 模块（前端插件入口）
 // 位置：一个对话类前端插件的骨架；真实版 = packages/plugins/plugin-agent
 import { markRaw, reactive } from 'vue'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import AgentConversation from './AgentConversation.vue'
 
 export const name = 'my-agent'

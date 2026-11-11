@@ -12,9 +12,9 @@
 | # | 需要什么 | 由谁给 |
 | --- | --- | --- |
 | 1 | 一个 Vue 应用挂在页面上 | 你自己（`createApp`） |
-| 2 | 画布组件 `<CanvasHost>` | `@mini-canvas/canvas-render` |
-| 3 | 「皮肤」插件（节点壳 / 边 / 背景） | `@mini-canvas/plugin-theme-canvas`（通用件另装 `plugin-theme-components`） |
-| 4 | 至少一种业务节点 | `@mini-canvas/plugin-node-text`（或 image 等） |
+| 2 | 画布组件 `<CanvasHost>` | `@plume-canvas/canvas-render` |
+| 3 | 「皮肤」插件（节点壳 / 边 / 背景） | `@plume-canvas/plugin-theme-canvas`（通用件另装 `plugin-theme-components`） |
+| 4 | 至少一种业务节点 | `@plume-canvas/plugin-node-text`（或 image 等） |
 
 外加两件**一定要做**的事：引入 VueFlow 的两份样式表、给画布容器一个确定的尺寸。
 
@@ -55,7 +55,7 @@ canvas-app/
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>mini-canvas 最小应用</title>
+    <title>plume-canvas 最小应用</title>
     <style>
       /* ① 画布要铺满整屏：html/body/#app 都必须有高度，否则画布高度是 0（什么都看不到） */
       html, body, #app { height: 100%; margin: 0; }
@@ -77,11 +77,11 @@ canvas-app/
 // 文件：canvas-app/src/assembly.ts
 // 格式：TypeScript 模块
 // 位置：装配决定（装哪些插件 / 用什么存储 / 空画布塞什么）的唯一住址
-import type { CanvasNode, StorageAdapter } from '@mini-canvas/canvas-data'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import type { CanvasNode, StorageAdapter } from '@plume-canvas/canvas-data'
+import { LocalStorageAdapter } from '@plume-canvas/canvas-data'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 
 // ① 顺序即装载顺序：先装「皮」（提供节点壳/边/背景/端口），再装业务节点
 export const APP_PLUGINS = [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin]
@@ -107,7 +107,7 @@ export function seedDefaultCanvas(): CanvasNode[] {
      位置：应用装配层 —— 一行 CanvasHost 出画布，业务 UI 放 #ui 插槽 -->
 <script setup lang="ts">
 import { shallowRef } from 'vue'
-import { CanvasHost, type CanvasHostHandle } from '@mini-canvas/canvas-render'
+import { CanvasHost, type CanvasHostHandle } from '@plume-canvas/canvas-render'
 import { APP_PLUGINS, createStorage, seedDefaultCanvas } from './assembly'
 
 const adapter = createStorage()             // ① 存储：只建一次（重建会换一份数据）
@@ -137,7 +137,7 @@ function undo() {
       :adapter="adapter"
       :seed="seedDefaultCanvas"
       :dev="import.meta.env.DEV"
-      window-key="MiniCanvas"
+      window-key="Plume"
       @ready="onReady"
       @plugin-issue="(p) => console.warn('插件异常：', p.name, p.lifecycle)"
     >
@@ -194,11 +194,11 @@ export default defineConfig({
     //    否则 vite 会把它们当第三方依赖预构建，VueFlow 的单例 / 样式替换都可能出问题。
     //    真实对照：packages/ui/vite.config.ts 里有同名的一份更长清单。
     exclude: [
-      '@mini-canvas/kernel',
-      '@mini-canvas/canvas-data',
-      '@mini-canvas/canvas-render',
-      '@mini-canvas/plugin-theme-components',
-      '@mini-canvas/plugin-node-text',
+      '@plume-canvas/kernel',
+      '@plume-canvas/canvas-data',
+      '@plume-canvas/canvas-render',
+      '@plume-canvas/plugin-theme-components',
+      '@plume-canvas/plugin-node-text',
     ],
   },
 })
@@ -218,10 +218,10 @@ export default defineConfig({
     "preview": "vite preview"
   },
   "dependencies": {
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/plugin-node-text": "workspace:*",
-    "@mini-canvas/plugin-theme-components": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/plugin-node-text": "workspace:*",
+    "@plume-canvas/plugin-theme-components": "workspace:*",
     "@vue-flow/core": "^1.48.2",
     "vue": "^3.5.34"
   },
@@ -247,7 +247,7 @@ pnpm -C canvas-app dev  # 起开发服务，浏览器打开终端里打印的地
 把下面这段贴进浏览器控制台，就多了一个「随机放一个文本节点」的插件，再卸掉它：
 
 ```js
-// 片段：控制台里热装 / 热卸（window.MiniCanvas 由 window-key="MiniCanvas" 挂上）
+// 片段：控制台里热装 / 热卸（window.Plume 由 window-key="Plume" 挂上）
 const mod = {
   name: 'console-demo',
   inject: [],
@@ -265,10 +265,10 @@ const mod = {
   },
 }
 
-MiniCanvas.installPlugin(mod)      // ① 装上
-MiniCanvas.listPlugins()           // ② → ['theme-components', 'text', 'console-demo']
-MiniCanvas.getContext().get('canvas').runCommand('console-demo:add')   // ③ 跑一次
-MiniCanvas.uninstallPlugin('console-demo')   // ④ 卸掉：命令也一起消失
+Plume.installPlugin(mod)      // ① 装上
+Plume.listPlugins()           // ② → ['theme-components', 'text', 'console-demo']
+Plume.getContext().get('canvas').runCommand('console-demo:add')   // ③ 跑一次
+Plume.uninstallPlugin('console-demo')   // ④ 卸掉：命令也一起消失
 ```
 
 ### 九、对照：成品应用多做了什么
@@ -304,16 +304,16 @@ MiniCanvas.uninstallPlugin('console-demo')   // ④ 卸掉：命令也一起消�
 // 文件：canvas-app/scripts/headless.ts
 // 格式：TypeScript 模块（Node 运行，tsx scripts/headless.ts）
 // 位置：无浏览器的「画布逻辑实验场」—— 数据层能跑，但画面相关的服务用不了
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 
-const { host, exposeToWindow } = await createMiniCanvasHost({
+const { host, exposeToWindow } = await createPlumeHost({
   adapter: new MemoryStorageAdapter(),
   coldPlugins: [nodeTextPlugin],   // 注意：没装主题插件也没关系，Node 里根本没有画面
   dev: true,
 })
-exposeToWindow('MiniCanvas')
+exposeToWindow('Plume')
 
 const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
 text.addTextNode({ x: 0, y: 0 })
@@ -330,4 +330,4 @@ host.stop()
 3. **`vite.config.ts` 没排除 workspace 源码包**。这些包是未编译的 `.ts` / `.vue` 源码，放着让 vite 预打包会出现「依赖解析怪问题 / 两份实例」。照抄 `optimizeDeps.exclude` 清单最省事。
 4. **`adapter` 每次渲染都重建**。`new LocalStorageAdapter()` 要放在 `setup` 里**只跑一次**的位置（或模块级），不能在模板 / `computed` 里建 —— 否则每次重建都会换一份存储，用户看到「刚存的没了」。
 5. **业务 UI 放错位置**。放进 `<template #ui>` 才在渲染子树里；放外面会导致里面的组件调 `useCanvasRender()` 时抛错。
-6. **Node 环境看不到画面不是坏了**。`createMiniCanvasHost` 在 Node 里能跑，但「渲染」这件事本身要浏览器：`view` 的视口后端只有 `<CanvasSurface>` 挂载后才接上，DOM 锚点也只有那时才有。
+6. **Node 环境看不到画面不是坏了**。`createPlumeHost` 在 Node 里能跑，但「渲染」这件事本身要浏览器：`view` 的视口后端只有 `<CanvasSurface>` 挂载后才接上，DOM 锚点也只有那时才有。

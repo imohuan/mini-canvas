@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, effectScope, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context, RegistryImpl } from '@mini-canvas/kernel'
+import { Context, RegistryImpl } from '@plume-canvas/kernel'
 import type { ContextWithSlots } from '../context'
 import { CANVAS_CONTEXT_KEY } from '../context'
 import { uiComponent, uiComponentRefs, uiNames, useUiComponent } from '../contracts/uiCatalog'

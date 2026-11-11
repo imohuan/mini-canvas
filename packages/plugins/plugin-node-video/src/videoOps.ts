@@ -26,8 +26,8 @@ import {
 import { downloadFileName, frameFileName } from './videoNodeData'
 import { readVideoFitLimits, videoCardSizePatch, type VideoFitLimits } from './videoFit'
 import { clampClipRange, MIN_CLIP_DURATION } from './videoClip'
-import { mediaCapabilityOf, placeAdjacent, toPixelRect, type Rect } from '@mini-canvas/canvas-render'
-import type { Services } from '@mini-canvas/canvas-base'
+import { mediaCapabilityOf, placeAdjacent, toPixelRect, type Rect } from '@plume-canvas/canvas-render'
+import type { Services } from '@plume-canvas/canvas-base'
 
 /** 操作所需的读/写句柄（组件与命令各备一份，实现只写一遍） */
 export interface VideoOpsContext {

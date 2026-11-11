@@ -5,7 +5,7 @@
  * ④ 多选 ⑤ 连线切割」（「文件拖入分组」对应「文件拖入」与「分组」两个插件，故共 6 个）。
  *
  * 「自带」是**两个地方同时声明**才成立的，任何一处漏了都会静默出错：
- * 1. 插件的 package.json 写 miniCanvas.builtin: true —— 服务端清单据此把它列进「设置 → 插件」
+ * 1. 插件的 package.json 写 plume.builtin: true —— 服务端清单据此把它列进「设置 → 插件」
  *    的「自带」页（只读展示、不给装卸按钮）；若还是 installable，它就会同时出现在「本地清单」
  *    页并带上安装/卸载按钮（同一插件两个身份）。
  * 2. ui 的 APP_PLUGINS 冷启动装配它 —— 光声明 builtin 而不装配，面板里显示「已装」但画布上
@@ -32,27 +32,27 @@ const BUILTIN_INTERACTIVE = {
   'plugin-edge-cutting': 'edge-cutting',
 } as const
 
-interface MiniCanvas {
+interface Plume {
   pluginName?: string
   builtin?: boolean
   installable?: boolean
   defaultInstalled?: boolean
 }
 
-function miniCanvasOf(dir: string): MiniCanvas {
+function plumeOf(dir: string): Plume {
   const pkg = JSON.parse(readFileSync(path.join(PLUGINS_DIR, dir, 'package.json'), 'utf8')) as {
-    miniCanvas?: MiniCanvas
+    plume?: Plume
   }
-  return pkg.miniCanvas ?? {}
+  return pkg.plume ?? {}
 }
 
 describe('6 个基础交互插件 = 自带件', () => {
   it('每个包的 package.json 声明 builtin（不是 installable）', () => {
     for (const [dir, pluginName] of Object.entries(BUILTIN_INTERACTIVE)) {
-      const mc = miniCanvasOf(dir)
-      expect(mc.builtin, dir + ' 应声明 miniCanvas.builtin: true').toBe(true)
+      const mc = plumeOf(dir)
+      expect(mc.builtin, dir + ' 应声明 plume.builtin: true').toBe(true)
       // installable 与 builtin 语义互斥：同时声明会让插件在"自带"与"本地清单"两页各出现一次
-      expect(mc.installable, dir + ' 不该再声明 miniCanvas.installable').toBeUndefined()
+      expect(mc.installable, dir + ' 不该再声明 plume.installable').toBeUndefined()
       // pluginName 是面板「已装」判定与内核索引用的名字，两处对不上就会显示未装
       expect(mc.pluginName, dir + ' 的 pluginName 应为 ' + pluginName).toBe(pluginName)
     }
@@ -81,7 +81,7 @@ describe('6 个基础交互插件 = 自带件', () => {
       const name = (plugin as { name?: string }).name
       const dir = name ? byPluginName.get(name) : undefined
       if (!dir) continue
-      expect(miniCanvasOf(dir).installable, dir + ' 仍在冷启动清单里，不该声明 installable').toBeUndefined()
+      expect(plumeOf(dir).installable, dir + ' 仍在冷启动清单里，不该声明 installable').toBeUndefined()
     }
   })
 })

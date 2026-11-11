@@ -1,7 +1,7 @@
 /**
- * launch-server —— mini-canvas 一键启动（node 版）。
+ * launch-server —— plume-canvas 一键启动（node 版）。
  *
- * 复刻桌面上的「启动mini-canvas-server.ps1」，顺序保持一致：
+ * 复刻桌面上的「启动plume-canvas-server.ps1」，顺序保持一致：
  *   1. pnpm bundle        构建后台
  *   2. pnpm build:assets  构建前端和插件资源（有指纹，没改动会跳过）
  *   3. 结束占用端口的进程
@@ -106,9 +106,9 @@ async function pauseIfNeeded(options) {
 }
 
 function printHelp() {
-  console.log(`mini-canvas 一键启动（node 版）
+  console.log(`plume-canvas 一键启动（node 版）
 
-默认流程和 启动mini-canvas-server.ps1 一样：
+默认流程和 启动plume-canvas-server.ps1 一样：
   1. pnpm bundle        构建后台
   2. pnpm build:assets  构建前端和插件资源
   3. 结束占用端口的进程
@@ -182,7 +182,7 @@ async function main() {
     const child = spawnPnpm(serveArgs, {
       cwd: SERVER_DIR,
       stdio: 'inherit',
-      env: { ...process.env, MINI_CANVAS_PORT: String(options.port) },
+      env: { ...process.env, PLUME_PORT: String(options.port) },
     })
     const result = await new Promise((resolve, reject) => {
       child.on('error', reject)

@@ -6,10 +6,10 @@
  * （快捷键/右键菜单/MCP 调不到）、卸载后残留（热卸留僵尸）。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry } from '@plume-canvas/canvas-data'
 import { nodeAudioPlugin, AudioService, AUDIO_NODE_TYPE } from '../nodeAudioPlugin'
 
 /** 起一个与宿主同形的内核（真服务，不 mock）并装载音频节点插件 */

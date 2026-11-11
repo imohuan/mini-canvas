@@ -72,7 +72,7 @@ function loadComponent(rel: string): unknown {
   const requireShim = (id: string): unknown => {
     if (id === 'vue') return vue
     if (id === 'lucide-vue-next') return lucide
-    if (id === '@mini-canvas/canvas-render') return { useUiComponent: () => vue.shallowRef(ButtonStub) }
+    if (id === '@plume-canvas/canvas-render') return { useUiComponent: () => vue.shallowRef(ButtonStub) }
     throw new Error('不认识这个依赖（测试的 require 只放 vue / lucide / canvas-render）：' + id)
   }
   new Function('module', 'exports', 'require', js)(mod, mod.exports, requireShim)
@@ -185,7 +185,7 @@ function fire(el: HNode, prop: 'onClick' | 'onKeydown' | 'onError', event: Recor
 /** 真机场景：read_file 读一张资产目录里的图 →「文件预览」卡片（40px 缩略图） */
 const READ_FILE_VIEW = toolView(
   'read_file',
-  JSON.stringify({ file_path: 'D:/p/.mini-canvas/assets/files/faaca433.jpeg', canvasId: 'c1' }),
+  JSON.stringify({ file_path: 'D:/p/.plume/assets/files/faaca433.jpeg', canvasId: 'c1' }),
   'image/jpeg, 3.7 MB',
 )
 
@@ -250,12 +250,12 @@ describe('read_file 的视频 / 音频卡片（用户口径 2026-10-13）', () =
    */
   const VIDEO_VIEW = toolView(
     'read_file',
-    JSON.stringify({ file_path: 'D:/p/.mini-canvas/canvases/c1/resources/clip.mp4' }),
+    JSON.stringify({ file_path: 'D:/p/.plume/canvases/c1/resources/clip.mp4' }),
     'looks like a binary file (contains NUL bytes)',
   )
   const AUDIO_VIEW = toolView(
     'read_file',
-    JSON.stringify({ file_path: 'D:/p/.mini-canvas/canvases/c1/resources/voice.mp3' }),
+    JSON.stringify({ file_path: 'D:/p/.plume/canvases/c1/resources/voice.mp3' }),
     'audio/mpeg, 1.2 MB',
   )
 

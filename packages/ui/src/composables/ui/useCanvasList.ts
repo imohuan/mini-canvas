@@ -9,7 +9,7 @@ import {
   type CanvasSummary,
 } from '../projectsApi'
 import { unregisterPendingSave } from '../pendingSave'
-import type { FeedbackService } from '@mini-canvas/canvas-render'
+import type { FeedbackService } from '@plume-canvas/canvas-render'
 import type { UiState } from './createUiState'
 import type { UiHostScope } from './useUiHost'
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { NodeStore } from '@mini-canvas/canvas-data'
-import { ThemeRegistry } from '@mini-canvas/canvas-data'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { NodeStore } from '@plume-canvas/canvas-data'
+import { ThemeRegistry } from '@plume-canvas/canvas-data'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import {
   assembleTheme,
   hitNodeIdAt,
@@ -20,7 +20,7 @@ import {
   FIRST_RUN_FIT_PADDING,
   FIRST_RUN_FIT_RETRY_DELAYS,
 } from '../canvasHostCore'
-import { LAYERS } from '@mini-canvas/vue-render/contracts/layers'
+import { LAYERS } from '@plume-canvas/vue-render/contracts/layers'
 
 function makeStore(): NodeStore {
   const s = new NodeStore()

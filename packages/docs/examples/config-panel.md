@@ -28,7 +28,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "示例时钟",
     "description": "画布角落的时钟，字号和开关可在设置面板调",
     "pluginName": "my-clock",
@@ -41,9 +41,9 @@
     "./*": "./src/*"
   },
   "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "@mini-canvas/canvas-base": "workspace:*" },
+  "dependencies": { "@plume-canvas/canvas-base": "workspace:*" },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {
@@ -56,8 +56,8 @@
 ```ts
 // 文件：my-clock/src/clockConfig.ts
 // 配置定义单独一个文件：避免 index.ts ↔ ClockOverlay.vue 循环 import（mini-map 同款做法）
-import type { ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
-import type { Context } from '@mini-canvas/canvas-base'
+import type { ConfigSchema, InferConfig } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 
 // ① Config schema：每个字段 = 设置面板的一个控件。
 //    键名加 myClock 前缀 —— 内核 settings 是全局同一张表，通用名会跟别的插件抢键
@@ -98,7 +98,7 @@ export function myClockConfigFrom(ctx: Context): MyClockConfig {
 // 文件：my-clock/src/index.ts
 // 插件入口：Config 导出 + overlay 组件注册。组件自己订阅配置变化
 import { markRaw } from 'vue'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import { Config } from './clockConfig'
 import ClockOverlay from './ClockOverlay.vue'
 
@@ -126,7 +126,7 @@ export const clockPlugin: PluginModule = { name, inject, Config, apply }
 <!-- 读配置的浮层：订阅 settings.onChange，配置一改立刻重读 —— 这就是"实时生效"的全部秘密 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import { myClockConfigFrom } from './clockConfig'
 
 const { ctx } = useCanvasRender()

@@ -3,7 +3,7 @@
  * SettingsSchemaField —— 单个配置项的控件（默认设置皮的字段级 UI）。
  *
  * 只负责按 schema 画一种控件并提交值，不背分组和页面排版。
- * 控件统一用 @mini-canvas/ui-kit-shadcn 的原始组件：
+ * 控件统一用 @plume-canvas/ui-kit-shadcn 的原始组件：
  * Switch / Select / Input / Slider / NumberField / ColorPicker。
  *
  * 数字项统一「滑块 + 数字框（带 - / +）」：没有退化成纯输入的例外分支。
@@ -12,8 +12,8 @@
  * 滑块拖动时先更新本地值，松手再补一次 flush，画面跟手、落库也不迟到。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { SettingsPanelSource, SettingEntry, SettingSchema } from '@mini-canvas/canvas-render'
-import { createCoalescer } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource, SettingEntry, SettingSchema } from '@plume-canvas/canvas-render'
+import { createCoalescer } from '@plume-canvas/canvas-render'
 import {
   ColorPicker,
   Input,
@@ -32,9 +32,9 @@ import {
   SelectValue,
   Slider,
   Switch,
-} from '@mini-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit-shadcn'
 import { Minus, Plus } from 'lucide-vue-next'
-import { componentConfig } from '@mini-canvas/ui-kit-shadcn'
+import { componentConfig } from '@plume-canvas/ui-kit-shadcn'
 import ShadcnSettingsRow from './ShadcnSettingsRow.vue'
 import ThemeFontField from './ThemeFontField.vue'
 import ThemeRadiusField from './ThemeRadiusField.vue'
@@ -484,13 +484,13 @@ const appearanceControl = computed(() =>
   gap: 8px;
   /* 给角标留出右侧空间：清除按钮压在色块内侧，不再盖住 hex 文本 */
   position: relative;
-  /* 高度跟设置行一起走（--mct-size-control-h 由尺寸档位写入） */
-  height: calc(var(--mct-size-control-h, 2.25rem) - 4px);
+  /* 高度跟设置行一起走（--plume-size-control-h 由尺寸档位写入） */
+  height: calc(var(--plume-size-control-h, 2.25rem) - 4px);
   padding: 0 10px 0 5px;
   border: 1px solid var(--ui-line, #e2e5ea);
   /* 圆角交给组件库：全局圆角档位改的是 [data-slot] 本体，
      这里写死 var(--radius-control) 会把它盖住（用户 2026-11-02 反馈「圆角没生效」）。 */
-  border-radius: var(--mct-radius, var(--radius-control, 8px));
+  border-radius: var(--plume-radius, var(--radius-control, 8px));
   background: transparent;
   color: var(--ui-ink, #18202b);
   font-size: 12px;
@@ -574,6 +574,6 @@ const appearanceControl = computed(() =>
   width: 272px;
   padding: 16px;
   border: 1px solid var(--ui-line, #e2e5ea);
-  border-radius: var(--mct-radius, var(--radius-open, 12px));
+  border-radius: var(--plume-radius, var(--radius-open, 12px));
 }
 </style>

@@ -18,7 +18,7 @@ const entryAbsPath = fileURLToPath(new URL('./src/index.ts', import.meta.url)).r
  * 热更链路(全用 vite 自带机制，无自建 SSE/轮询)：
  *   宿主 import 插件 dev 入口 index.ts → 该模块带上 5311 的 /@vite/client(token 随模块注入)，
  *   宿主页面自动成为 5311 的 HMR 客户端。插件 src/index.ts 里 import.meta.hot.accept(自) 收
- *   原生 HMR 通知 → 调 window.MiniCanvas.reloadPlugin(重卸旧装新)。
+ *   原生 HMR 通知 → 调 window.Plume.reloadPlugin(重卸旧装新)。
  *
  * 为什么需要本插件：@vitejs/plugin-vue 给每个 .vue 注入了自己的 self-accept，当只改
  *   TextContent.vue 这类深层组件时，vite 会在该 .vue 就地热更、不再向上冒泡到 index.ts
@@ -28,7 +28,7 @@ const entryAbsPath = fileURLToPath(new URL('./src/index.ts', import.meta.url)).r
  */
 function forcePluginEntryHotUpdate(): Plugin {
   return {
-    name: 'mini-canvas:force-plugin-entry-hot',
+    name: 'plume-canvas:force-plugin-entry-hot',
     handleHotUpdate(ctx) {
       // ctx.file = 变更文件绝对路径；只关心插件 src 内文件(排除 vite 自身/编辑器临时文件)
       const file = ctx.file.replace(/\\/g, '/')

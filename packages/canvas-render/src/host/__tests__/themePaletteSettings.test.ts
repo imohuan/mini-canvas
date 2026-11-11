@@ -7,7 +7,7 @@
  * 用假 store 恰好把这些都测掉。
  */
 import { describe, it, expect } from 'vitest'
-import { SettingsStore } from '@mini-canvas/kernel'
+import { SettingsStore } from '@plume-canvas/kernel'
 import { defineThemePaletteSettings, installThemePalette } from '../themePaletteSettings'
 import {
   THEME_COLOR_LIGHT_GROUP,

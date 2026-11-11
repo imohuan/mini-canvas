@@ -121,7 +121,7 @@ export function buildContextJs(input: {
   const W = (name: string, val: string): string =>
     'window[' + Q + name + Q + '] = ' + val + ';'
   return [
-    '/* 由 mini-canvas 自动生成 —— 数据真相文件，改动会被下次构建覆盖。 */',
+    '/* 由 plume-canvas 自动生成 —— 数据真相文件，改动会被下次构建覆盖。 */',
     '/* 界面通过 sdk-*.js 的轮询发现本文件变化并触发 CanvasUI.onChange。 */',
     W('__CANVAS_INPUTS__', serializeForScriptShared(input.inputs)),
     W('__CANVAS_UPSTREAM__', serializeForScriptShared(input.upstream)),

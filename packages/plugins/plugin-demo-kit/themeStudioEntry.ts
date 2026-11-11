@@ -1,23 +1,23 @@
 /**
  * 独立验收页（theme-lab.html）的 settings / 预览上下文。
  *
- * 颜色配方本体已迁到 @mini-canvas/plugin-theme-components；这里只保留"造一个
+ * 颜色配方本体已迁到 @plume-canvas/plugin-theme-components；这里只保留"造一个
  * 真实内核 store + 让四个插件注册预览层"的装配，供目验页面使用。
  */
-import { SettingsStore } from '@mini-canvas/kernel'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
-import { defineThemePaletteSettings } from '@mini-canvas/canvas-render'
-import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
-import { edgeCuttingPlugin } from '@mini-canvas/plugin-edge-cutting'
-import { multiSelectPlugin } from '@mini-canvas/plugin-multi-select'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { Context } from '@mini-canvas/canvas-data'
-import type { ConfigField, ConfigSchema } from '@mini-canvas/canvas-base'
-import type { SettingSchema } from '@mini-canvas/kernel'
-import { registerThemePreview as registerThemeDefaultPreview } from '@mini-canvas/plugin-theme-components'
-import { registerThemePreview as registerMultiSelectPreview } from '@mini-canvas/plugin-multi-select'
-import { registerThemePreview as registerAlignGuidePreview } from '@mini-canvas/plugin-align-guide'
-import { registerThemePreview as registerEdgeCuttingPreview } from '@mini-canvas/plugin-edge-cutting'
+import { SettingsStore } from '@plume-canvas/kernel'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
+import { defineThemePaletteSettings } from '@plume-canvas/canvas-render'
+import { alignGuidePlugin } from '@plume-canvas/plugin-align-guide'
+import { edgeCuttingPlugin } from '@plume-canvas/plugin-edge-cutting'
+import { multiSelectPlugin } from '@plume-canvas/plugin-multi-select'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { Context } from '@plume-canvas/canvas-data'
+import type { ConfigField, ConfigSchema } from '@plume-canvas/canvas-base'
+import type { SettingSchema } from '@plume-canvas/kernel'
+import { registerThemePreview as registerThemeDefaultPreview } from '@plume-canvas/plugin-theme-components'
+import { registerThemePreview as registerMultiSelectPreview } from '@plume-canvas/plugin-multi-select'
+import { registerThemePreview as registerAlignGuidePreview } from '@plume-canvas/plugin-align-guide'
+import { registerThemePreview as registerEdgeCuttingPreview } from '@plume-canvas/plugin-edge-cutting'
 
 export function createStudioPreviewContext(): Context {
   const ctx = new Context()

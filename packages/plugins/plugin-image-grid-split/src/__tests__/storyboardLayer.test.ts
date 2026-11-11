@@ -9,8 +9,8 @@
  * 白底由 StoryboardGrid 自己画。
  */
 import { describe, it, expect, afterEach } from 'vitest'
-import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { LAYERS, nodesFromStore } from '@mini-canvas/canvas-render'
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { LAYERS, nodesFromStore } from '@plume-canvas/canvas-render'
 import { gridSplitPlugin } from '../index'
 
 async function boot() {

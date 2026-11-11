@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-photo-note",
+  "name": "@plume-canvas/plugin-photo-note",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "图片便签",
     "description": "演示 resources：选图 → put 拿引用 → resolve 拿地址 → 写进节点",
     "pluginName": "photo-note",
@@ -23,10 +23,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

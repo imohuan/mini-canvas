@@ -1,4 +1,4 @@
-import { findCommandByKeys } from '@mini-canvas/kernel'
+import { findCommandByKeys } from '@plume-canvas/kernel'
 
 export function useCanvasKeyboard(opts: {
   commands: () => { listCommands(): Array<{ id: string }>; runCommand(id: string): unknown } | undefined

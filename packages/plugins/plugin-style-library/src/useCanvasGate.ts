@@ -28,7 +28,7 @@ export interface CanvasGate {
   reason: ComputedRef<string>
 }
 
-/** 能力场名（与 canvas-render 的 createMiniCanvasHost 注册用的一致） */
+/** 能力场名（与 canvas-render 的 createPlumeHost 注册用的一致） */
 const CAPABILITY_FIELD = 'capability'
 
 export function useCanvasGate(ctx: CanvasGateCtx, what: '素材' | '特效'): CanvasGate {

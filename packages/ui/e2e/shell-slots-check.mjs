@@ -3,7 +3,7 @@
  * shell-slots-check —— 三块外壳插槽 + 左抽屉插件页签的真实浏览器回归。
  *
  * 用户口径（2026-10-27）：状态条、底栏、左抽屉都要能插；抽屉页签要能切、
- * 能回退、不能留空白。这里用 window.MiniCanvasUI 的 ctx.slots 直接登记测试组件，
+ * 能回退、不能留空白。这里用 window.PlumeUI 的 ctx.slots 直接登记测试组件，
  * 抓的是真实 DOM 位置与 aria 状态，不碰源码字符串。
  *
  * 跑法（需 packages/ui dev 已在 :5288 运行）：
@@ -40,7 +40,7 @@ await page.waitForTimeout(800)
 
 const registered = await page.evaluate(() => {
   const Vue = window.Vue
-  const ctx = window.MiniCanvasUI.getContext()
+  const ctx = window.PlumeUI.getContext()
   if (!Vue || !ctx) return false
 
   const button = (text) => ({
@@ -90,7 +90,7 @@ await page.waitForSelector('[data-e2e-slot="DRAWER_PANEL"]', { timeout: 5000 })
 check('点击插件页签后出现插件面板', (await page.locator('[data-e2e-slot="DRAWER_PANEL"]').count()) === 1)
 
 await page.evaluate(() => {
-  const ctx = window.MiniCanvasUI.getContext()
+  const ctx = window.PlumeUI.getContext()
   ctx.slots.remove('shell.status.end', 'e2e-status')
   ctx.slots.remove('shell.dock.end', 'e2e-dock')
   ctx.slots.remove('shell.drawer.tabs', 'e2e-tab')

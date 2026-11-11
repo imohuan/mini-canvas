@@ -13,18 +13,18 @@
 宿主组件 `CanvasHost` 一行渲染：
 
 ```vue
-<CanvasHost :cold-plugins="APP_PLUGINS" window-key="MiniCanvasUI" />
+<CanvasHost :cold-plugins="APP_PLUGINS" window-key="PlumeUI" />
 ```
 
 或者不要 Vue，只要一张画布，用一行函数：
 
 ```ts
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
 
-const { host, api, exposeToWindow } = await createMiniCanvasHost({
+const { host, api, exposeToWindow } = await createPlumeHost({
   coldPlugins: [themeComponentsPlugin, nodeTextPlugin],
 })
-exposeToWindow()   // 顺手把 api 挂到 window.MiniCanvas
+exposeToWindow()   // 顺手把 api 挂到 window.Plume
 ```
 
 它内部做的就是：建 `ctx` → 装基础服务 → 补渲染层那几件服务 → 装插件 → `start`。
@@ -34,10 +34,10 @@ exposeToWindow()   // 顺手把 api 挂到 window.MiniCanvas
 它负责把"插件门面"挂到 window 上，让外部（脚本、AI、调试工具）能操作画布：
 
 ```ts
-window.MiniCanvasUI.getContext()            // 拿到 ctx
-window.MiniCanvasUI.getContext().surface()  // 拿到自省快照
-window.MiniCanvasUI.listPlugins()           // 已装插件
-window.MiniCanvasUI.installPlugin(mod)      // 热装
+window.PlumeUI.getContext()            // 拿到 ctx
+window.PlumeUI.getContext().surface()  // 拿到自省快照
+window.PlumeUI.listPlugins()           // 已装插件
+window.PlumeUI.installPlugin(mod)      // 热装
 ```
 
 ## 它注入的两个服务

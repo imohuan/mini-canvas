@@ -3,7 +3,7 @@
  *
  * baseUrl 缺省空串 = 与画布同源（cloud-server 托管界面时就是这样）。
  */
-import { withAdminToken } from '@mini-canvas/canvas-base'
+import { withAdminToken } from '@plume-canvas/canvas-base'
 
 export type ChatEvent =
   | { type: 'session'; sessionId: string; title: string }
@@ -172,8 +172,8 @@ export interface ContextPlaceholderView {
   /** 当前值；空串 = 这行的值每轮不同（界面只显示说明） */
   value: string
   description: string
-  /** mini-canvas = 本服务自己展开的；harness = SDK 自带的（交给 SDK） */
-  source: 'mini-canvas' | 'harness'
+  /** plume-canvas = 本服务自己展开的；harness = SDK 自带的（交给 SDK） */
+  source: 'plume-canvas' | 'harness'
 }
 
 /** 一次模型真实请求测试的结果（后端 AgentModelProbe 的同形） */

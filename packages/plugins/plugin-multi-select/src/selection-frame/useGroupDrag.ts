@@ -1,6 +1,6 @@
 import { type Ref } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { RenderEvents } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
+import { RenderEvents } from '@plume-canvas/canvas-render'
 import { BoxSelectClickGuard } from '../boxSelectGuard'
 import { isHitOwnBatchPort } from '../batchConnect'
 import { computeUnionBounds, draggableMembers, type MultiSelectRect } from '../multiSelectEngine'

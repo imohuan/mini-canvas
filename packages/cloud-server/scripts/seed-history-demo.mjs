@@ -20,7 +20,7 @@ import {
 } from '../src/tasks/mediaSize.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const dataRoot = path.resolve(here, '..', '.mini-canvas')
+const dataRoot = path.resolve(here, '..', '.plume')
 const canvasId = process.argv[2] ?? '824e779f34314f86'
 const canvasDir = path.join(dataRoot, 'canvases', canvasId)
 const resourcesDir = path.join(canvasDir, 'resources')

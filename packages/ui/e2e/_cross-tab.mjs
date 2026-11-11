@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core'
 import { readFileSync } from 'node:fs'
 const EXE = 'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe'
 const BASE = 'http://127.0.0.1:8865/'
-const FILE = 'D:/Code/Git/mini-canvas/packages/cloud-server/.mini-canvas/settings.json'
+const FILE = 'D:/Code/Git/plume-canvas/packages/cloud-server/.plume/settings.json'
 const cloud = () => { const s = JSON.parse(readFileSync(FILE, 'utf8'))?.config?.settings ?? {}; return { light: s.accentColorLight, dark: s.accentColorDark, mode: s.themeMode } }
 
 const B = await chromium.launch({ executablePath: EXE, headless: true })
@@ -22,17 +22,17 @@ console.log('HOME-initial ' + JSON.stringify(await readHome()))
 // 标签 B：画布页改亮色强调色为粉红（用户口径的紫色系之外的、肉眼可辨的颜色）
 const canvas = await ctx.newPage()
 await canvas.goto(BASE + '#/canvas/default', { waitUntil: 'load' }); await canvas.waitForTimeout(4200)
-await canvas.evaluate(() => window.MiniCanvasUI.getHost().ctx.get('settings').set('accentColorLight', '#ff2fd0'))
+await canvas.evaluate(() => window.PlumeUI.getHost().ctx.get('settings').set('accentColorLight', '#ff2fd0'))
 await canvas.waitForTimeout(2000)
 console.log('CLOUD-after-set ' + JSON.stringify(cloud()))
 
 // 标签 A（首页，全程没刷新）应该已经变了
 await home.waitForTimeout(1800)
 console.log('HOME-no-reload ' + JSON.stringify(await readHome()))
-await home.screenshot({ path: 'D:/Code/Git/mini-canvas/.scratch/home-sync.png' })
+await home.screenshot({ path: 'D:/Code/Git/plume-canvas/.scratch/home-sync.png' })
 
 // 还原用户设置
-await canvas.evaluate((v) => { const s = window.MiniCanvasUI.getHost().ctx.get('settings'); if (v.light) s.set('accentColorLight', v.light); if (v.dark) s.set('accentColorDark', v.dark); if (v.mode) s.set('themeMode', v.mode) }, before)
+await canvas.evaluate((v) => { const s = window.PlumeUI.getHost().ctx.get('settings'); if (v.light) s.set('accentColorLight', v.light); if (v.dark) s.set('accentColorDark', v.dark); if (v.mode) s.set('themeMode', v.mode) }, before)
 await canvas.waitForTimeout(1800)
 await home.waitForTimeout(1200)
 console.log('CLOUD-restored ' + JSON.stringify(cloud()))

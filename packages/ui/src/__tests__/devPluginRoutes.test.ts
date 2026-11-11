@@ -58,7 +58,7 @@ describe('dev 插件路由（packages/ui 的 catalogPlugin）', () => {
     // 后台客户端必须在内：它是"dev 也能连后台"的唯一入口，少它这条链就断
     expect(ids).toContain('plugin-cloud-client')
 
-    // 自带件不进外部清单：它们由应用源码冷启动装配，产物多 external 掉 @mini-canvas/*，
+    // 自带件不进外部清单：它们由应用源码冷启动装配，产物多 external 掉 @plume-canvas/*，
     // 走 data: URL 装会在浏览器里直接炸（"Failed to resolve module specifier"）
     expect(ids).not.toContain('plugin-node-text')
     expect(ids).not.toContain('plugin-theme-components')

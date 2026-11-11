@@ -12,9 +12,9 @@
  *
  * 依赖：save（内核）、nodeStore/edgeStore（内核；订阅数据变化置脏）。
  */
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { SaveService, DocService, AutoSaveService } from '@mini-canvas/canvas-data'
-import { createAutoSaveEngine, type AutoSaveEngine } from '@mini-canvas/canvas-data'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
+import type { SaveService, DocService, AutoSaveService } from '@plume-canvas/canvas-data'
+import { createAutoSaveEngine, type AutoSaveEngine } from '@plume-canvas/canvas-data'
 
 export const name = 'auto-save'
 export const inject = ['save', 'doc'] as string[]

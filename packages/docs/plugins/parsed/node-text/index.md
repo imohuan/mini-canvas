@@ -1,6 +1,6 @@
 # 文本节点 text
 
-> 插件解析 · `@mini-canvas/plugin-node-text` · 自带件
+> 插件解析 · `@plume-canvas/plugin-node-text` · 自带件
 
 **一句话**：提供画布上的"文本节点" —— 双击就地编辑、可复制删除、底栏里能调 AI 生成工具把结果写回节点。
 
@@ -22,9 +22,9 @@
 | 项 | 值 | 来源 |
 | --- | --- | --- |
 | 插件名（`name`） | `'text'` | `src/nodeTextPlugin.ts` |
-| 包名 | `@mini-canvas/plugin-node-text` | `package.json` |
+| 包名 | `@plume-canvas/plugin-node-text` | `package.json` |
 | 硬依赖（`inject`） | `['doc']` | 同上 |
-| 自带件 | `miniCanvas.builtin: true` | `package.json` |
+| 自带件 | `plume.builtin: true` | `package.json` |
 | 产物出口 | `nodeTextPlugin: PluginModule` | `src/index.ts` |
 
 ## 注意事项

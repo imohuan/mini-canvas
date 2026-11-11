@@ -5,9 +5,9 @@
  * 设置面板改它要实时生效（与 bindTypeDefaultSize 同一条响应式链）。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { SettingsStore } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { SettingsStore } from '@plume-canvas/kernel'
 import { bindTypeResizeMode } from '../bindTypeDefaultSize'
 
 function boot(config: Record<string, unknown> = {}) {

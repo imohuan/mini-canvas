@@ -12,7 +12,7 @@
  * - 变更：applyCanvasInteractionChange（订阅回调里单项应用；无关键原样返回同一引用）。
  *
  * 键名注意：settings 的 key 全局平面命名、先声明者独占（撞名静默保留先者），
- * 这批是渲染宿主级配置，由 createMiniCanvasHost 在插件装载后声明（scope='canvas-render'）。
+ * 这批是渲染宿主级配置，由 createPlumeHost 在插件装载后声明（scope='canvas-render'）。
  * 键名对齐 v1 core 同名项（nodesDraggable 等），未加前缀 —— 它们语义本就唯一，
  * 且 v1 数据迁移/用户认知都按这个名字；撞名风险由"先声明者保留"兜底。
  */
@@ -134,7 +134,7 @@ function num(
   }
 }
 
-/** 20 项声明（宿主 createMiniCanvasHost 用 settings.define 一次登记） */
+/** 20 项声明（宿主 createPlumeHost 用 settings.define 一次登记） */
 export const CANVAS_INTERACTION_SCHEMA: Record<string, CanvasInteractionSettingSchema> = {
   nodesDraggable: bool('nodesDraggable', '节点可拖拽', '关闭后节点不能拖动（画布只读平移时常用）。'),
   nodesConnectable: bool('nodesConnectable', '节点可连线', '关闭后不能从端口拖出连线。'),

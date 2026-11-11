@@ -2,7 +2,7 @@
  * 成品出口契约测试 —— 锁住"包根声明指向的东西真实存在且公开面是设计好的那几样"。
  *
  * 为什么值得单开一条：本包此前的 bug 正是"`package.json` 的 `main`/`types` 都指 `./src/index.ts`，
- * 而那个文件不存在"—— 安装方 `import '@mini-canvas/ui'` 会直接报模块找不到，
+ * 而那个文件不存在"—— 安装方 `import '@plume-canvas/ui'` 会直接报模块找不到，
  * 但仓库内没有任何测试会红（没人从包根 import 自己）。这类"声明与实体脱节"的错，
  * 只能靠"读 package.json 再核对文件"来拦，功能测试永远碰不到。
  *
@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { APP_PLUGINS, CANVAS_PLUGINS, SAMPLE_TEXT, createDefaultStorageAdapter, seedDefaultCanvas } from '../assembly'
-import { canvasRenderPlugin } from '@mini-canvas/canvas-render'
+import { canvasRenderPlugin } from '@plume-canvas/canvas-render'
 import * as entry from '../index'
 
 const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -24,7 +24,7 @@ const pkg = JSON.parse(readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf-8'
   exports: Record<string, Record<string, string> | string>
 }
 
-describe('@mini-canvas/ui 出口契约', () => {
+describe('@plume-canvas/ui 出口契约', () => {
   it('package.json 的 main / types / exports 指向的文件真实存在', () => {
     // 曾经的 bug：三者都指 ./src/index.ts，而该文件不存在 → 安装方 import 直接失败
     expect(existsSync(path.resolve(PKG_ROOT, pkg.main)), `main 指向的文件不存在: ${pkg.main}`).toBe(true)
@@ -64,7 +64,7 @@ describe('@mini-canvas/ui 出口契约', () => {
     // 冷启动 = 画布骨架（主题皮 / 设置面板 / 下拉）+ 底栏 + 这 6 个交互件 + 节点类型
     //          + Agent + 插件管理本身。
     // 主题色配置**不在清单里**了：色板已上移进渲染层（canvas-render 的 themePalette），
-    // 由宿主 createMiniCanvasHost 直接声明与落值，任一宿主都自带。
+    // 由宿主 createPlumeHost 直接声明与落值，任一宿主都自带。
     // 不装完整 shortcut-manager：成品 UI 自带快捷键帮助（DockArea 按钮 + ModalsArea 浮层），
     // 插件版 Ctrl+/ 帮助面板与之重复；只装 shortcut-settings，提供设置页里的重映射配置。
     // 假后台插件（旧 plugin-mock-task-backend）已删：测试用的假动作不该以插件形式

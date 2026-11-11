@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 弹窗工具行的按钮区：搜索 / 批量 / 筛选 / 新建，保持原有 DOM 与事件顺序。
 import { Check, Search as SearchIcon, ListFilter as BatchIcon, Filter as FilterIcon, Plus as PlusIcon, FolderPlus as FolderPlusIcon, Upload as UploadIcon } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')

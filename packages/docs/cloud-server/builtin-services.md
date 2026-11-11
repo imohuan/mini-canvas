@@ -85,10 +85,10 @@ Agent 打开时（默认开）还有 7 个：`agentConfig`（全局配置）、`
 
 ### ④ 数据根目录的存储布局
 
-数据根缺省是 `./.mini-canvas/`（`-d` 可换）。磁盘上长这样：
+数据根缺省是 `./.plume/`（`-d` 可换）。磁盘上长这样：
 
 ```text
-.mini-canvas/                      # 数据根（cli.ts DEFAULT_DATA_DIR）
+.plume/                      # 数据根（cli.ts DEFAULT_DATA_DIR）
 ├── settings.json                  # KV：config / shortcut 两桶小数据（kvStore.ts）
 ├── projects.json                  # 项目注册表（projectStore.ts）
 ├── canvases/                      # 画布（canvasStore.ts + canvasPaths.ts）
@@ -152,7 +152,7 @@ Agent 打开时（默认开）还有 7 个：`agentConfig`（全局配置）、`
 | need 取服务缺了就抛 | 同上 `need` 助手 | `tryGet` 得 undefined 时抛「缺少服务 xxx」，不静默 |
 | 宿主上架服务 | `packages/cloud-server/src/server.ts`（② 段） | `host.ctx.inject(...)` 12 个服务 + agent 相关 7 个（按开关） |
 | 插件私有数据 | `packages/cloud-server/src/serverFramework/store.ts` | `数据根/plugin-data/命名空间.json`，卸载即清 |
-| 数据根与打印 | `packages/cloud-server/src/cli.ts` + server.ts 的 paths | 默认 `.mini-canvas/`；启动日志逐行打印 kv / canvases / providers / server-plugins 落点 |
+| 数据根与打印 | `packages/cloud-server/src/cli.ts` + server.ts 的 paths | 默认 `.plume/`；启动日志逐行打印 kv / canvases / providers / server-plugins 落点 |
 | 路由优先级实例 | `packages/cloud-server/src/routes/jobs.ts` | `/api/jobs/active` 必须先于 `/api/jobs/:jobId` 注册（文件内注释） |
 
 ## 常见坑

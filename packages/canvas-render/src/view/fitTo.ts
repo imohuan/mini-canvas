@@ -16,7 +16,7 @@ import type {
   LayoutRect,
   ViewportState,
   FitToOptions,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 
 /**
  * 参数类型只有一处定义（canvas-data 的契约）。

@@ -10,10 +10,10 @@
  * 为什么不用手写 inject/撤销：内核只会在「提供服务的插件被卸载」时回退依赖方；
  * 手写 inject 撤销不会触发回退。所以画布服务必须住在一个可装卸的普通插件里。
  */
-import { CANVAS_BASE_PLUGIN_NAME, type Context } from '@mini-canvas/canvas-data'
-import type { CanvasNode, StorageAdapter, CanvasAppBaseServices } from '@mini-canvas/canvas-data'
-import type { PluginClassLike, PluginModule } from '@mini-canvas/kernel'
-import { createMiniCanvasHost, type CanvasHostHandle, type MiniCanvasApi } from './createMiniCanvasHost'
+import { CANVAS_BASE_PLUGIN_NAME, type Context } from '@plume-canvas/canvas-data'
+import type { CanvasNode, StorageAdapter, CanvasAppBaseServices } from '@plume-canvas/canvas-data'
+import type { PluginClassLike, PluginModule } from '@plume-canvas/kernel'
+import { createPlumeHost, type CanvasHostHandle, type PlumeApi } from './createPlumeHost'
 import type { PluginManager } from './pluginManager'
 
 type CanvasReadyPlugin = PluginModule & {
@@ -63,7 +63,7 @@ function canvasReadyPlugins(opts: MountCanvasOptions): CanvasReadyPlugin[] {
 export interface CanvasSessionHandle {
   ctx: Context
   host: CanvasHostHandle
-  api: MiniCanvasApi
+  api: PlumeApi
   manager: PluginManager
   /** 卸载本会话（先落盘、再卸 canvas-data；可重复调用，不抛错）。 */
   dispose(): Promise<void>
@@ -120,7 +120,7 @@ async function mountCanvasNow(opts: MountCanvasOptions): Promise<CanvasSessionHa
   const gen = ++generation
   if (active) await unmountCanvas()
 
-  const created = await createMiniCanvasHost({
+  const created = await createPlumeHost({
     ctx: opts.ctx,
     // 根级底座已经作为 `canvas-base` 插件装进同一份 Context；这里只传实例，
     // 不再另立插件名（否则会出现两个名字指向同一层底座）。

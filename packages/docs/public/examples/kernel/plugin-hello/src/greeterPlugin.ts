@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-hello/src/greeterPlugin.ts
 // 格式：TypeScript 模块（类形态插件）
 // 位置：插件包里「提供一项服务」的那一件
-import { Service, type Context } from '@mini-canvas/kernel'
+import { Service, type Context } from '@plume-canvas/kernel'
 
 export class GreeterService extends Service {
   constructor(ctx: Context) {

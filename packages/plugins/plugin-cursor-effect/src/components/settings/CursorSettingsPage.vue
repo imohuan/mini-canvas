@@ -9,7 +9,7 @@
  * 导航项不再自绘，实际入口由设置面板统一渲染。
  */
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { RotateCcw, Upload } from 'lucide-vue-next'
 import { CURSOR_GROUPS, CUSTOM_CURSOR_ID, FOLLOWS, EFFECTS, cursorById, type CursorItem, type CursorSrc } from '../../catalog'
 import { svgIcon } from '../../engine'

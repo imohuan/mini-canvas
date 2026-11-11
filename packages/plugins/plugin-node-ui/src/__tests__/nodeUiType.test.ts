@@ -9,9 +9,9 @@
  * 节点类型只声明"要不要"。这条测试钉住"别又声明回 frameless"。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type DocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type DocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry } from '@plume-canvas/canvas-data'
 import { nodeUiPlugin, UI_NODE_TYPE } from '../nodeUiPlugin'
 
 function boot() {

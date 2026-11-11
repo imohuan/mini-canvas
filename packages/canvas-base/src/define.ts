@@ -10,7 +10,7 @@
  */
 // 类型从画布层直接取，不走本包 package name：包内自引用会形成"包 → 自己"的解析环，
 // 独立打包/类型解析都要多绕一圈（T02）。
-import type { Context, NodeRegisterDef } from '@mini-canvas/canvas-data'
+import type { Context, NodeRegisterDef } from '@plume-canvas/canvas-data'
 
 /**
  * ctx.nodes.register 的一次给全定义（段名即区域词；步骤 9 起老段名 content/… 已下线）。

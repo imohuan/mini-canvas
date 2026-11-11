@@ -24,7 +24,7 @@ my-note-plugin/
   "version": "0.0.0",
   "private": true,
   "type": "module",                     // ① 我们全程用 import/export 写代码，必须标这个
-  "miniCanvas": {                       // ② miniCanvas 段：画布的插件市场靠它认你
+  "plume": {                       // ② plume 段：画布的插件市场靠它认你
     "title": "便签节点",
     "description": "一张能写字的小卡片，输出 text",
     "pluginName": "note",               // 插件名（插件 ts 里 name 的一致），全画布唯一
@@ -37,8 +37,8 @@ my-note-plugin/
     "./*": "./src/*"
   },
   "dependencies": {                     // ④ 我们用到的仓库自己的包（内核的薄入口 + 数据层）
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"                    // ⑤ content 组件是 Vue 组件，Vue 由宿主提供
@@ -60,7 +60,7 @@ my-note-plugin/
 // 这里只管卡片中间那块白纸：显示文字、双击打字、失焦保存。
 import { ref, watch } from 'vue'
 // useCanvasRender 是渲染层发的「对讲机」：拿到 ctx，才能叫到插件上架的服务。
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import type { NoteService } from './notePlugin'
 
 // ① props 由节点外壳自动塞进来：id = 这个节点的编号，data = 这个节点存的数据。
@@ -160,8 +160,8 @@ function cancelEdit(): void {
 ```ts
 // 文件：my-note-plugin/src/notePlugin.ts
 // 一个插件文件 = 导出 name / inject / apply 三样东西。宿主把整个包当参数装进去即可。
-import { Service, type Context } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { Service, type Context } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import NoteContent from './NoteContent.vue'
 
 /** NoteService —— 这个插件对外提供的「能力包」：别的插件和组件都从这里调它。 */
@@ -173,7 +173,7 @@ export interface NoteService {
 }
 
 /** ① 类型增强：让全画布都能用 ctx.note 直达本服务（写代码时会有提示）。 */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     note: NoteService
   }
@@ -251,7 +251,7 @@ export function apply(ctx: Context): void {
 
 ```ts
 // 文件：my-note-plugin/src/notePlugin.ts（追加）
-import { Service, bindTypeDefaultSize, type Context, type ConfigSchema } from '@mini-canvas/canvas-base'
+import { Service, bindTypeDefaultSize, type Context, type ConfigSchema } from '@plume-canvas/canvas-base'
 
 export const Config: ConfigSchema = {
   // ① 键名带 note 前缀：设置面板是全局一张表，先声明者独占键名。
@@ -284,7 +284,7 @@ export function apply(ctx: Context): void {
 
 ## 每一步在干什么
 
-**① package.json 的 `miniCanvas` 段**：插件市场、设置面板靠它知道这个包「叫什么、装不装」。缺了这段，包还能被代码装，但用户在界面里找不到它。仓库里真实插件都带这段（见 [真实出处](#仓库里的真实出处)）。
+**① package.json 的 `plume` 段**：插件市场、设置面板靠它知道这个包「叫什么、装不装」。缺了这段，包还能被代码装，但用户在界面里找不到它。仓库里真实插件都带这段（见 [真实出处](#仓库里的真实出处)）。
 
 **② Service 子类**：`super(ctx, 'note')` 干两件事 —— 把 `this` 以 `note` 的名字放进服务表，并且把「撤销上架」记到本插件的账本上。所以插件卸载时服务自动消失，**不要**自己在 `apply` 里写 `ctx.inject('note', …)` 然后再想办法撤销。别的插件 `ctx.get<NoteService>('note')` 就能拿到它，拿不到时得到 `undefined`，不会抛错。
 
@@ -307,10 +307,10 @@ export function apply(ctx: Context): void {
 | Service 子类上架服务 | `packages/plugins/plugin-node-text/src/nodeTextPlugin.ts` | `TextService extends Service`，`super(ctx, 'text')` 上架 `text` 服务，方法里惰性 `this.ctx.get('doc')` |
 | 建节点包事务、create 委托服务 | 同上 `addTextNode` / `ctx.nodes.register({ create })` | `this.doc().transaction('add-text-node', tx => tx.createNode('text', …))`，create 返回它的结果 |
 | 节点类型全字段（端口/图标/可拖拽改尺寸/名称模板） | 同上 `ctx.nodes.register({...})` | `type: 'text'`，`inputs: [{ port: 'target', acceptsTypes: ['text'] }]`，`outputs: [{ port: 'source', contentType: 'text' }]` |
-| 类型增强 `ctx.text` | 同上 `declare module '@mini-canvas/canvas-data'` | 给 Context 补 `text: TextService`，写代码有类型提示 |
+| 类型增强 `ctx.text` | 同上 `declare module '@plume-canvas/canvas-data'` | 给 Context 补 `text: TextService`，写代码有类型提示 |
 | content 组件双击编辑、失焦保存、类名防拖拽 | `packages/plugins/plugin-node-text/src/TextContent.vue` | 双击进编辑（`beginEdit`），blur 提交经 `ctx.get('text').editText`，编辑框带 `nodrag nopan nowheel` |
 | content 组件的 props 形状 | `packages/canvas-render/src/contracts/contentComponentTypes.ts` | `SegmentContentProps { id: string; data: SegmentNodeData }`，BaseNode 壳统一注入 |
-| package.json 的 miniCanvas 段写法 | `packages/plugins/plugin-mini-map/package.json` | `title / description / pluginName / installable` 同款结构 |
+| package.json 的 plume 段写法 | `packages/plugins/plugin-mini-map/package.json` | `title / description / pluginName / installable` 同款结构 |
 
 ## 常见坑
 

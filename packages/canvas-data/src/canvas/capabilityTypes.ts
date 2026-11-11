@@ -1,19 +1,19 @@
 /**
  * capabilityTypes —— 画布能力段的**类型**（声明合并回框架的 PluginCapabilities）。
  *
- * 框架（@mini-canvas/kernel）不认识 node/theme/command 这些画布字眼，故它的 PluginCapabilities
+ * 框架（@plume-canvas/kernel）不认识 node/theme/command 这些画布字眼，故它的 PluginCapabilities
  * 只声明了通用的 tools；本文件把画布独有的段（nodes/theme/commands/slots/settings）经声明合并补上，
  * 于是作者在插件里写 ctx.nodes.register(...) 有完整类型提示，而框架包保持干净。
  *
  * 只要本文件被加载（canvas-pack 入口会 import 它），合并即生效。
  */
-import type { CommandDef, Disposable } from '@mini-canvas/kernel'
+import type { CommandDef, Disposable } from '@plume-canvas/kernel'
 import type { NodeRegisterDef, SettingDefineItem, NodeAttachReq, SelectionAttachReq } from './capabilities'
 import type { SettingsMenuScope } from './settingsMenu'
 import type { ThemeSlot } from './registry/themeRegistry'
 import type { NodeSegment } from './registry/nodeRegistry'
 
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface PluginCapabilities {
     /** 注册一个节点类型（数据+展示+可选建节点），自动回收 */
     nodes: {

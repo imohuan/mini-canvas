@@ -16,7 +16,7 @@
  */
 
 /** 存储键。**只在这里出现一次**，其余地方一律走下面的函数。 */
-export const ADMIN_TOKEN_KEY = 'mc_admin_token'
+export const ADMIN_TOKEN_KEY = 'plume_admin_token'
 
 /** 请求头名（与后端 `adminAuth` 的读取保持一致） */
 export const ADMIN_TOKEN_HEADER = 'x-admin-token'

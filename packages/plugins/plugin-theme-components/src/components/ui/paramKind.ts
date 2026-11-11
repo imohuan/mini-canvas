@@ -16,7 +16,7 @@
  * 2. `kind: 'ratio'` → 比例网格；
  * 3. 其余按 `type` 画基础控件。
  */
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 
 /** 专属 UI 的形态（与 ui 目录里登记的名字一一对应） */
 export type PresetKind = 'ratio'

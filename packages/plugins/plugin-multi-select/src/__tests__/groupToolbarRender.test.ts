@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import SelectionGroupToolbar from '../SelectionGroupToolbar.vue'
 
 /** 目录里的 Button 桩：本组件只关心它被按名取到并渲染出来，不关心内部实现 */

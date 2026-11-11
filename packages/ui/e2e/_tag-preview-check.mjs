@@ -10,7 +10,7 @@ await page.goto(BASE + '#/canvas/824e779f34314f86', { waitUntil: 'load' })
 await page.waitForTimeout(8000)
 // 注册动作 + 造场景：目标节点 + 图片参考 + 视频参考
 const seed = await page.evaluate(() => {
-  const ctx = window.MiniCanvasUI.getHost().ctx
+  const ctx = window.PlumeUI.getHost().ctx
   ctx.tryGet('nodeBar')?.register(ctx, { id: 'e2e:pv', types: ['text','image','video','audio'], title: '预览探针', description: 'e2e', needsPrompt: true, promptBinding: 'none', run: async () => ({ ok: true }) })
   const doc = ctx.get('doc')
   const before = new Set(doc.getNodes().map(n => n.id))
@@ -24,11 +24,11 @@ const seed = await page.evaluate(() => {
 })
 await page.waitForTimeout(600)
 // 选中目标节点
-await page.evaluate((id) => { window.MiniCanvasUI.getHost().ctx.get('selection').set([id]) }, seed.target)
+await page.evaluate((id) => { window.PlumeUI.getHost().ctx.get('selection').set([id]) }, seed.target)
 await page.waitForTimeout(2000)
 // 把目标节点摆到屏幕中上（底栏完整可见，坐标都可靠 —— 与主 e2e 同一套）
 await page.evaluate((id) => {
-  const ctx = window.MiniCanvasUI.getHost().ctx
+  const ctx = window.PlumeUI.getHost().ctx
   const vp = ctx.tryGet('view'); const rect = ctx.tryGet('view').getNodeRect(id)
   vp.setViewport({ x: 700 - (rect.x + rect.w/2), y: 300 - (rect.y + rect.h/2), zoom: 1 })
 }, seed.target)

@@ -15,7 +15,7 @@ const PLUGINS_DIR = path.resolve(HERE, '../../../plugins')
 
 interface Pkg {
   name?: string
-  miniCanvas?: { pluginName?: string; builtin?: boolean; installable?: boolean }
+  plume?: { pluginName?: string; builtin?: boolean; installable?: boolean }
 }
 
 function readPackages(): Array<{ dir: string; pkg: Pkg }> {
@@ -56,11 +56,11 @@ describe('APP_PLUGIN_REGISTRY', () => {
       APP_PLUGIN_REGISTRY.map((e) => (e.plugin as { name?: string }).name),
     )
     for (const { dir, pkg } of readPackages()) {
-      const mc = pkg.miniCanvas ?? {}
+      const mc = pkg.plume ?? {}
       const pluginName = mc.pluginName
       if (!pluginName) continue
       if (mc.builtin === true) {
-        // 主题拆成了两个独立包：dir（包目录名）与 miniCanvas.pluginName 不同，
+        // 主题拆成了两个独立包：dir（包目录名）与 plume.pluginName 不同，
         // 两边都按 pluginName 核对（theme-components / theme-canvas 都在注册表里）。
         const themeSplit = dir === 'plugin-theme-components' || dir === 'plugin-theme-canvas'
         if (!themeSplit) {

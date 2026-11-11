@@ -1,5 +1,5 @@
 import type { ComputedRef, Ref } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { promptDocPersistFields, promptPersistFields } from '../promptPersist'
 
 interface PersistDeps {

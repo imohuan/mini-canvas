@@ -16,7 +16,7 @@
  *     · ctx.selectionRegion.attach({ region:'out:top', ... }) —— 多选插件暴露的"上控制栏注册函数"。
  */
 import { markRaw } from 'vue'
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 import SelectionSaveAssetsToolbar from './components/SelectionSaveAssetsToolbar.vue'
 import { pendingUploads, queueUploadsFromNodeIds } from './composables/assetUploadBus'
 import { buildPack, downloadBytes, packFileName, resolvePackBase, bytesToBlob } from './composables/nodePack'
@@ -57,7 +57,7 @@ export const uiAssetUploadPlugin: PluginModule = {
     //
     //    所以：**合并成一条**（旧「加入资产库」删掉），并按节点类型分流 ——
     //      · 图片 / 视频 / 音频 → 把它的媒体贴进上传弹窗（和左侧「上传资产」同一个弹窗）；
-    //      · 可视化节点（type=ui）→ 打包成 .mcnode 再贴进去（就是原来那条「收藏到资产库」）；
+    //      · 可视化节点（type=ui）→ 打包成 .plumenode 再贴进去（就是原来那条「收藏到资产库」）；
     //      · 别的类型 → 明确提示"这个节点没有可收藏的媒体"，不静默什么都不做。
     ctx.commands.register({
       id: 'ui:node-save-to-assets',
@@ -104,7 +104,7 @@ export const uiAssetUploadPlugin: PluginModule = {
     //    与「加入资产库」同一族（都在节点右键、同一个 group），但做的是另一件事：
     //    它要把**这个节点 + 它依赖的后台脚本**打成一个包 —— 打包只能在后台做
     //    （脚本内容在服务器上）。用户 2026-10-13 口径：
-    //      · 导出 = 拿到字节存成 .mcnode 文件；
+    //      · 导出 = 拿到字节存成 .plumenode 文件；
     //      · 收藏 = **走现成的上传弹窗**（自己选保存位置、填名字、挑标签），不是静默入库。
     const packOf = async (nodeId: string) => {
       const base = await resolvePackBase()
@@ -137,7 +137,7 @@ export const uiAssetUploadPlugin: PluginModule = {
     })
 
     /**
-     * 把可视化节点打包成 .mcnode 并**贴进上传弹窗**（合并后由 ① 调用）。
+     * 把可视化节点打包成 .plumenode 并**贴进上传弹窗**（合并后由 ① 调用）。
      *
      * 用户口径（2026-10-14）两条，都在这里落地：
      *   · 「打开这个弹出框，类型可以自动选择这个节点」→ 预勾「节点」标签；
@@ -148,7 +148,7 @@ export const uiAssetUploadPlugin: PluginModule = {
         const pack = await packOf(nodeId)
         // 走现成的上传弹窗：包是"本地选好的一个文件"，预填成它的名字
         const blob = bytesToBlob(pack.bytes)
-        const file = new File([blob], packFileName(pack.name), { type: 'application/x-mini-canvas-node' })
+        const file = new File([blob], packFileName(pack.name), { type: 'application/x-plume-node' })
         const ui = useUi()
         // 「节点库」：没有就现建一个（用户口径：默认存这儿）
         const folderId = await ensureNodeLibraryFolder(ui)
@@ -179,7 +179,7 @@ export const uiAssetUploadPlugin: PluginModule = {
         seen.add(p.url)
         if (registered.has(p.url)) continue
         const id = 'ui:import-pack:' + p.id
-        const title = (p.name || '节点包').replace(/\.mcnode$/i, '')
+        const title = (p.name || '节点包').replace(/\.plumenode$/i, '')
         const handle = ctx.commands.register({
           id,
           // 分组写「资源库/节点包」——斜杠就是二级菜单（用户提的那套写法）
@@ -205,7 +205,7 @@ export const uiAssetUploadPlugin: PluginModule = {
     // 资产一变就重建（收藏完、删完立刻反映到右键菜单）
     // ⚠️ 守一下 window：这个插件在**非浏览器环境**（单测、SSR、构建期预渲染）也会被 apply，
     //    裸用 window 会直接抛 —— 而装配期抛一下，整个界面就是白屏（2026-10-13 踩到）。
-    if (typeof window !== 'undefined') window.addEventListener('mini-canvas:assets-changed', syncPackCommands)
+    if (typeof window !== 'undefined') window.addEventListener('plume-canvas:assets-changed', syncPackCommands)
     void ui.loadAssets().then(syncPackCommands)
   },
 }

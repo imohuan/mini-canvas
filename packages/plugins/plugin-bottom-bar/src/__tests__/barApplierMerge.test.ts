@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import type { BarAction, BarApplier } from '../barTypes'
 import { registerBarAction, registerBarApplier } from '../nodeBarPlugin'
 import { NodeBarService } from '../nodeBarPlugin'

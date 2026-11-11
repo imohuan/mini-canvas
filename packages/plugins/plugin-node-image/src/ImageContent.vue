@@ -13,7 +13,7 @@
  *   也避免纯展示态占据撤销栈）。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 import { ThumbCache, type ThumbResourcePort, type TierImage } from './thumbCanvas'
 import { makeThumbRef, thumbRefParam } from './thumbKey'
 import { readThumbTiers, resolveThumbTier, thumbTargetFor, thumbTierKeys, type ThumbTierConfig } from './thumbTier'
@@ -23,11 +23,10 @@ import { clearImageBroken, isImageBroken, markImageBroken } from './imageStatus'
 import { createImageOps } from './imageOps'
 import { followedCardSizePatch, measuredCardSizePatch, missingCardSizePatch, type CardSizePatch } from './imageFit'
 import { readImageSourceFields, resolveImageSrc } from './imageRefs'
-import { readImageSize } from './imageTransform'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
-const { ctx, flow, visibleNodes, interaction } = useCanvasRender()
+const { ctx, flow, visibleNodes } = useCanvasRender()
 /** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
 
@@ -213,8 +212,14 @@ function onImgLoad(e: Event): void {
   clearImageBroken(props.id)
   const el = e.target as HTMLImageElement
   if (!el?.naturalWidth || !el?.naturalHeight) return
-  // 量到图片真实宽高：宽高与卡片尺寸一起对齐。
-  // 以前这里只在「卡片还没有尺寸」时才写 —— 卡片已有错误比例（例如先按 4:3 建出来）就永远不纠正。
+  // ★ 只在显示的就是**原图**时才把宽高写进节点。
+  //
+  // 画布上为了省内存可能垫的是等比缩小的缩略图（displaySrc 指向 tierImage）：
+  // 用它算**卡片比例**没问题（比例一样），但把它当成原图宽高写进 data 就错了 ——
+  // 标题上的「1280×720」和裁剪框的像素换算都读这份数据。
+  const showingOriginal = !tierImage.value || editing.value
+  if (!showingOriginal) return
+  // 原图回来了：用它把卡片比例再对一遍（缩略图阶段只改过比例，这里补上真实的原图像素）
   applyMeasured(el.naturalWidth, el.naturalHeight)
 }
 
@@ -238,6 +243,21 @@ function syncCardSize(patch: CardSizePatch | null): void {
 /** 正有限数才算有值（与 imageFit 内的判断同口径） */
 function positiveNum(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
+}
+
+/**
+ * 拿元素自己报的真实宽高，写回卡片。
+ *
+ * 用户口径（2026-11-11）：「不用额外请求；每次加载图片时顺手算一下宽高，有偏差就修正」。
+ * 所以这里不主动去 fetch / 解码，只接收 `<img>` 已经加载完的那份 naturalWidth/Height；
+ * 幂等：尺寸与当前一致时一次都不写。
+ */
+function applyMeasured(width: number, height: number): void {
+  const patch = measuredCardSizePatch(props.data, width, height, ops.fitLimits?.())
+  if (!patch) return
+  const current = ops.read(props.id) ?? props.data
+  // 测量结果不是用户动作：走 measured 写入（落盘、不进撤销栈）
+  ops.writeMeasured(props.id, { ...current, imageWidth: width, imageHeight: height }, patch.size)
 }
 
 /**
@@ -265,77 +285,13 @@ onMounted(() => {
 })
 watch(imageUrl, (url) => {
   syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.()))
-  if (url) prepareSize(url)
-})
-
-/**
- * 地址变了：**有宽高就直接按它纠正卡片**（不额外解码），没有才去量一次。
- *
- * 图片的宽高在上传/裁剪/生成时就已经写进 data 了，重开画布、拖入资产都带着；
- * 只有后台/MCP 那种"只给了地址"的节点才需要真的解码量一次。
- */
-function prepareSize(url: string): void {
+  if (!url) return
+  // 新地址可能在 `<img>` 重挂之前就已知宽高（上传/裁剪/生成时写过），先按它纠正一次；
+  // 之后 `<img>` 加载完还会再核对一遍真实宽高，有偏差就以真实值为准。
   const w = positiveNum(props.data?.imageWidth)
   const h = positiveNum(props.data?.imageHeight)
-  if (w !== null && h !== null) {
-    applyMeasured(w, h)
-    return
-  }
-  void measure(url)
-}
-
-/** 上一次量尺寸的地址：同一地址不重复解码 */
-let measuredUrl = ''
-
-/** 图片是否正被拖动：拖动中改尺寸会让节点在指针下跳，先攒着 */
-let pendingMeasure: { width: number; height: number } | null = null
-
-/** 本节点是不是正在被拖 */
-function isDragging(): boolean {
-  return interaction.activity.value.nodeDragging && interaction.activity.value.nodeDragId === props.id
-}
-
-/**
- * 图片地址一变就先量尺寸，量到再按尺寸显示宽高（与视频节点同一条链）。
- *
- * 用户口径（2026-11-11）：「直接看它的地址，变了就先取尺寸，再按尺寸显示宽高」。
- * 拖入 / 换图 / 旧数据打开都走这一条；量不到（跨域、解码失败）就什么都不做。
- */
-async function measure(url: string): Promise<void> {
-  if (!url || url === measuredUrl) return
-  measuredUrl = url
-  const size = await readImageSize(url).catch(() => null)
-  if (!size || !(size.width > 0) || !(size.height > 0)) {
-    // 失败不记住：下次地址再变/再挂载还能重试
-    measuredUrl = ''
-    return
-  }
-  if (isDragging()) {
-    pendingMeasure = size
-    return
-  }
-  applyMeasured(size.width, size.height)
-}
-
-/** 量到的宽高与卡片尺寸一起写（幂等：已经是这一组就一次都不写） */
-function applyMeasured(width: number, height: number): void {
-  pendingMeasure = null
-  const patch = measuredCardSizePatch(props.data, width, height, ops.fitLimits?.())
-  if (!patch) return
-  const current = ops.read(props.id) ?? props.data
-  // 测量结果不是用户动作：走 measured 写入（落盘、不进撤销栈）
-  ops.writeMeasured(props.id, { ...current, imageWidth: width, imageHeight: height }, patch.size)
-}
-
-// 拖动结束：把拖动中量到的尺寸补上
-watch(
-  () => interaction.activity.value.nodeDragging,
-  (dragging) => {
-    if (dragging || !pendingMeasure) return
-    const { width, height } = pendingMeasure
-    applyMeasured(width, height)
-  },
-)
+  if (w !== null && h !== null) applyMeasured(w, h)
+})
 
 // 节点被删/卸载时清掉编辑态，避免共享态留下幽灵 id
 onBeforeUnmount(() => {

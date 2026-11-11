@@ -1,6 +1,6 @@
 # 可视化节点 node-ui
 
-> 插件解析 · `@mini-canvas/plugin-node-ui` · 自带件
+> 插件解析 · `@plume-canvas/plugin-node-ui` · 自带件
 
 **一句话**：画布上一种"**交给 Agent 画的**"节点 —— 它自己没有界面，内容是一段 HTML，由 AI 写进去就地渲染；
 生成的界面还能反过来调画布接口、跑后台脚本 —— 所以它不只是"画给你看"，而是能**干活**。
@@ -28,7 +28,7 @@
 | **后台** 任务脚本 | `task-scripts/*.mjs` | 后台活怎么干（转码/抽帧/批处理） | [任务脚本](/plugins/parsed/node-ui/task-scripts) |
 | **后台** 依赖声明 | `data.uiScripts` | 界面调脚本的授权（不声明 → 403） | [依赖声明与 403](/plugins/parsed/node-ui/declare) |
 | **后台** 路由 | `/api/task/*` 等 12 条 | 界面调后台走的 HTTP 口 | [后台路由](/plugins/parsed/node-ui/routes) |
-| **后台** 节点包 | `.mcnode` | 导出 / 导入 / 版本化 | [节点包](/plugins/parsed/node-ui/node-package) |
+| **后台** 节点包 | `.plumenode` | 导出 / 导入 / 版本化 | [节点包](/plugins/parsed/node-ui/node-package) |
 | 复盘 | — | AI 写界面最容易踩的坑 | [常见坑](/plugins/parsed/node-ui/pitfalls) |
 
 ## 身份与依赖
@@ -36,9 +36,9 @@
 | 项 | 值 | 来源 |
 | --- | --- | --- |
 | 插件名（`name`） | `'node-ui'` | `src/nodeUiPlugin.ts` |
-| 包名 | `@mini-canvas/plugin-node-ui` | `package.json` |
+| 包名 | `@plume-canvas/plugin-node-ui` | `package.json` |
 | 硬依赖（`inject`） | `['doc']` | 同上 |
-| 自带件 | `miniCanvas.builtin: true` | `package.json` |
+| 自带件 | `plume.builtin: true` | `package.json` |
 | 节点类型名 | `'ui'`（`UI_NODE_TYPE`） | `src/nodeUiPlugin.ts` |
 | 产物出口 | `nodeUiPlugin`（前端） + `dist/server.js`（后台半，单文件自包含） | `src/index.ts` · `scripts/build-server.mjs` |
 

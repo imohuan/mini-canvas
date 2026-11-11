@@ -5,7 +5,7 @@
  * 但 `ctx.commands` 糖、canvas 门面、宿主键盘分发都需要同一个 CommandRegistry ——
  * 这里给一个内部运行时句柄，插件不按名取 command 也能执行/枚举/改键。
  */
-import type { CommandDef, CommandService, Disposable } from '@mini-canvas/kernel'
+import type { CommandDef, CommandService, Disposable } from '@plume-canvas/kernel'
 
 export interface CommandRuntime {
   execute(id: string, ...payload: unknown[]): unknown

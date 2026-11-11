@@ -20,6 +20,8 @@ export interface HistoryDetailItem extends HistoryPreviewItem {
   resources?: Array<{ id?: string; kind: string; name?: string; url?: string; value?: string }>
   finishedAt?: number
   error?: string
+  /** 文本产物的正文（历史条目里的 text；图片/视频/音频没有） */
+  text?: string
 }
 
 interface PreviewSelection {
@@ -30,6 +32,13 @@ interface PreviewSelection {
   names?: string[]
   kinds?: string[]
   index?: number
+}
+
+/** 详情面板里点某个参考素材/产物 → 打开全屏预览 */
+export interface HistoryPreviewRequest {
+  url: string
+  kind: string
+  name?: string
 }
 
 /**
@@ -136,5 +145,15 @@ export function useHistoryPreview(
     }
   }
 
-  return { thumbOf, previewableUrl, historyPreviewGroup, previewItem, openHistoryItem }
+  /** 详情面板里点开一条资源：直接复用同一只 MediaViewer（历史条目本身不再重新入组） */
+  function openHistoryPreview(req: HistoryPreviewRequest): void {
+    if (!req.url) return
+    previewItem.value = {
+      name: req.name || '',
+      kind: req.kind,
+      url: req.url,
+    }
+  }
+
+  return { thumbOf, previewableUrl, historyPreviewGroup, previewItem, openHistoryItem, openHistoryPreview }
 }

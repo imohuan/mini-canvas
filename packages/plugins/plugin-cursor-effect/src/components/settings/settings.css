@@ -1,4 +1,4 @@
 /*
- * 光标特效设置页已改用 @mini-canvas/ui-kit-shadcn 的卡片/开关/滑块/页签，
+ * 光标特效设置页已改用 @plume-canvas/ui-kit-shadcn 的卡片/开关/滑块/页签，
  * 页面级样式收在 CursorSettingsPage.vue 的 scoped 段里；这里不再保留自绘控件样式。
  */

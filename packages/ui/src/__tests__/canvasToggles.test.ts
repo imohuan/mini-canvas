@@ -9,16 +9,16 @@
  * 设置面板用的是不是同一个键、写下去消费方读不读得到。用真实内核 + 真实插件跑一遍 ——
  * 少接一根线（键名写错、没订阅、没声明）这里就会红。
  *
- * 放在 ui 包：只有装配层能同时拿到宿主（createMiniCanvasHost）+ 插件 + useUi 单例。
+ * 放在 ui 包：只有装配层能同时拿到宿主（createPlumeHost）+ 插件 + useUi 单例。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
-import { MemoryStorageAdapter, type Context } from '@mini-canvas/canvas-data'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
-import { miniMapPlugin } from '@mini-canvas/plugin-mini-map'
-import { autoLayoutPlugin } from '@mini-canvas/plugin-auto-layout'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
+import { MemoryStorageAdapter, type Context } from '@plume-canvas/canvas-data'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+import { miniMapPlugin } from '@plume-canvas/plugin-mini-map'
+import { autoLayoutPlugin } from '@plume-canvas/plugin-auto-layout'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 import { setReadyHost, useUi } from '../composables/ui'
 
 /**
@@ -26,7 +26,7 @@ import { setReadyHost, useUi } from '../composables/ui'
  * + 小地图 + 自动布局（整理画布命令）。
  */
 async function boot() {
-  const { host } = await createMiniCanvasHost({
+  const { host } = await createPlumeHost({
     adapter: new MemoryStorageAdapter(),
     coldPlugins: [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin, miniMapPlugin, autoLayoutPlugin],
   })
@@ -136,7 +136,7 @@ describe('画布开关按钮接上内核（状态栏 / 底栏）', () => {
     // 重开一个「没有小地图」的宿主：模拟插件还没装（本用例自己管生命周期）
     ui.unbindCanvasToggles()
     host.stop()
-    const late = await createMiniCanvasHost({
+    const late = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: [themeComponentsPlugin],
     })

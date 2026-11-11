@@ -2,10 +2,10 @@
  * node-3d-preview smoke：装配 3D 预览插件不抛、服务与节点类型注册、连接约束生效。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry, validateConnection } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry, validateConnection } from '@plume-canvas/canvas-data'
 import { node3dPreviewPlugin } from '../node3dPreviewPlugin'
 
 function boot() {

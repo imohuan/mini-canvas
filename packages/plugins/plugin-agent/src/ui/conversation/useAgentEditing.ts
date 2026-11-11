@@ -91,7 +91,7 @@ const goalMark = computed<{ objective: string; budget: number } | null>(() => s.
  * token 单位制（用户口径 2026-10-09）：国际 k/M/B/T ⇄ 中文 万/亿/万亿。
  * 跟着「换算口径」走，不放进设置弹框 —— 它就是这里数字的显示方式。
  */
-const UNIT_KEY = 'mini-canvas:agent:token-unit'
+const UNIT_KEY = 'plume-canvas:agent:token-unit'
 const tokenUnit = ref<TokenUnit>(
   (typeof localStorage !== 'undefined' && localStorage.getItem(UNIT_KEY) === 'cn') ? 'cn' : 'si',
 )

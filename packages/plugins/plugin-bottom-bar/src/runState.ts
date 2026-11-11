@@ -4,7 +4,7 @@
  * 形状与 mcp-server 既有的一致（有意撞名：同一个含义用同一个键，云端后台写的进度
  * 前端能直接显示）。写盘走 doc.updateNodeRuntime（落盘但不进撤销栈），见 graphDocument。
  */
-import type { ToolProgress } from '@mini-canvas/kernel'
+import type { ToolProgress } from '@plume-canvas/kernel'
 
 /** 节点运行状态（唯一持久化位置 = node.data.runState） */
 export interface NodeRunState {

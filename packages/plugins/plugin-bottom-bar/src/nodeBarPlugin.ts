@@ -10,12 +10,12 @@
  * 服务取值（见计划 §0.1）：插件 apply 内可直访 ctx.nodeBar；组件与根级测试一律
  * ctx.get('nodeBar') —— 服务解析 Proxy 只存在于插件作用域。
  */
-import { Service, type Context } from '@mini-canvas/canvas-base'
-import type { PluginScope } from '@mini-canvas/kernel'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { Service, type Context } from '@plume-canvas/canvas-base'
+import type { PluginScope } from '@plume-canvas/kernel'
+import type { DocService } from '@plume-canvas/canvas-data'
 import type { BarAction, BarApplier } from './barTypes'
-import { registerBarAction, registerBarApplier } from '@mini-canvas/bar-contract'
-import type { ToolResourceKind } from '@mini-canvas/kernel'
+import { registerBarAction, registerBarApplier } from '@plume-canvas/bar-contract'
+import type { ToolResourceKind } from '@plume-canvas/kernel'
 import { runAction, type TaskDeps } from './taskRuntime'
 import { errorState, readRunState } from './runState'
 import { publishToolActions, type PublishToolActionsOptions } from './toolActions'

@@ -11,7 +11,7 @@
  *
  * 返回的 revoke 自动挂进当前插件 scope：插件被 uninstallPlugin/stop 时该槽位自动回退默认(注销)。
  */
-import type { PluginScope } from '@mini-canvas/kernel'
+import type { PluginScope } from '@plume-canvas/kernel'
 import type { ThemeRegistry, ThemeSlot } from './themeRegistry'
 import { canvasRuntime } from '../canvasRuntime'
 

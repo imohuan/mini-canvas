@@ -15,7 +15,7 @@ import { listDraftScripts, listFunctions } from '../task/runs'
 let dir = ''
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-draft-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-draft-'))
 })
 afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true })

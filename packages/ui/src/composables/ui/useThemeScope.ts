@@ -1,6 +1,6 @@
 import type { UiState } from './createUiState'
 import type { UiHostScope } from './useUiHost'
-import type { SettingsStore } from '@mini-canvas/kernel'
+import type { SettingsStore } from '@plume-canvas/kernel'
 
 /**
  * 主题：写 <html class="dark"> + 订阅 settings.themeMode 镜像。

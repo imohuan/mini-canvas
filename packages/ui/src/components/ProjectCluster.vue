@@ -14,7 +14,7 @@
 import { ChevronDown, Plus } from 'lucide-vue-next'
 import { computed } from 'vue'
 // 外壳按钮与下拉菜单从画布 ctx 的 ui 注册表按名取；行内交互保持不变。
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')

@@ -3,7 +3,7 @@
 **一句话定位**：主题就是**一整套 CSS 变量**。写组件时只说"用面板色""用强调色"，
 不说"用 #ffffff" —— 于是换主题就是换那套变量的值，组件一行不改。
 
-**它属于哪一块**：渲染层 `@mini-canvas/canvas-render`。
+**它属于哪一块**：渲染层 `@plume-canvas/canvas-render`。
 变量表在 `packages/canvas-render/src/styles/ui-theme.css`，它随 `canvas-render` **加载即生效**
 （包入口 `src/index.ts` 顶部就 `import './styles/ui-theme.css'`）。
 
@@ -132,7 +132,7 @@ export function installThemeMode(
 ): () => void
 ~~~
 
-宿主那边（`packages/canvas-render/src/host/createMiniCanvasHost.ts`）的时序是：
+宿主那边（`packages/canvas-render/src/host/createPlumeHost.ts`）的时序是：
 
 ~~~ts
 // 三条 declare/define 都在 save.settings.restore() 之前，用户的旧值才能在 define 时命中为初值
@@ -187,7 +187,7 @@ const disposeThemeMode = installThemeMode(interactionSettings)        // 落 <ht
 
 ### 写在插件的哪里
 
-变量表**不用你 import** —— 只要插件依赖 `@mini-canvas/canvas-render`（绝大多数插件都依赖），
+变量表**不用你 import** —— 只要插件依赖 `@plume-canvas/canvas-render`（绝大多数插件都依赖），
 `ui-theme.css` 就随包加载生效了。
 
 > 一些插件的 `src/env.d.ts` 里会看到一段关于 `ui-theme.css` 的注释，那是给 TS 的 CSS 模块声明
@@ -201,7 +201,7 @@ const disposeThemeMode = installThemeMode(interactionSettings)        // 落 <ht
 | 包入口 | `packages/canvas-render/src/index.ts` | `import './styles/ui-theme.css'` —— 加载即生效 |
 | 主题模式 | `packages/canvas-render/src/contracts/themeModeSettings.ts` | `THEME_MODE_KEY` / `applyThemeMode` / `installThemeMode` |
 | 色板 | `packages/canvas-render/src/contracts/themePalette.ts` | 可配置颜色的两格制（[专页](/theme/palette)） |
-| 宿主接线 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | `defineThemeModeSetting` + `installThemeMode` + 色板落值 |
+| 宿主接线 | `packages/canvas-render/src/host/createPlumeHost.ts` | `defineThemeModeSetting` + `installThemeMode` + 色板落值 |
 | 默认主题 | `packages/plugins/plugin-theme-canvas/src/components/`（壳/边/背景）+ `packages/plugins/plugin-theme-components/src/components/`（设置面板），全部走 token |
 | 右键菜单 | `packages/plugins/plugin-context-menu/src/ContextMenu.vue` | 注释写着"配色全部走通用 UI token，本组件不带任何主题配置项" |
 | 多选框 | `packages/plugins/plugin-multi-select/src/BoxSelectLayer.vue` | 颜色走 `--ui-select-box`，自定义色为空时回落主题 token |

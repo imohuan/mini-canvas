@@ -3,7 +3,7 @@
      位置：插件包内部；它只知道「我在 overlay 槽里」 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { flow } = useCanvasRender()
 // ① 缩放值：flow.viewport 是响应式 Ref，缩放一变这里自动重算

@@ -14,8 +14,8 @@
 import {
   Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize,
   DEFAULT_IMAGE_CARD_LIMITS, IMAGE_CARD_LIMIT_KEYS, isMediaCardLimitKey,
-} from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { thumbTierFields, thumbTierKeys } from './thumbTier'
 import { imageTitleExtra } from './imageNodeData'
 import { cardSizePatch, followedCardSizePatch, readImageFitLimits } from './imageFit'
@@ -29,11 +29,11 @@ import { beginCrop, beginExpand, endEdit, onEditModeChange } from './cropSession
 import { beginPaint, endPaint, isPainting, onPaintModeChange, paintState, redoStroke, undoStroke } from './paintSession'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, paintImageNodes, rotateImage, uploadImage } from './imageOps'
 import { pickImageFile, readImageSize } from './imageTransform'
-import type { Rect } from '@mini-canvas/canvas-render'
+import type { Rect } from '@plume-canvas/canvas-render'
 import {
   MEDIA_CREATOR_FIELD,
   type MediaKindCreator,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 
 /** image 插件暴露给外部的服务形状（content/宿主经 ctx.get('image') 使用；形状不变，.vue 零改动） */
 export interface ImageNodeService {
@@ -68,7 +68,7 @@ export interface ImageNodeMeta {
 }
 
 /** 类型增强缝（cordis ch3 声明合并）：宿主/作者 ctx.image 直访时类型为 ImageService */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     image: ImageService
   }
@@ -224,7 +224,7 @@ export function apply(ctx: Context) {
   // 状态栏的内容必须走同一条解析链路（nodeToolbar），否则「默认 / 功能模式」两套入口会打架。
   // 节点类型不再声明 out:top 段，避免同一个位置出现两份内容。
   //
-  // 不 import @mini-canvas/plugin-theme-canvas / plugin-bottom-bar —— 插件之间不互相
+  // 不 import @plume-canvas/plugin-theme-canvas / plugin-bottom-bar —— 插件之间不互相
   // import 是硬规则；服务名与 ui 目录名才是跨插件公共契约。
   const registerToolbar = (): boolean => {
     const svc = ctx.tryGet<{

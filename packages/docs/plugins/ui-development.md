@@ -32,8 +32,8 @@ flowchart LR
 ```vue
 <!-- 文件：packages/plugins/my-plugin/src/Panel.vue -->
 <script setup lang="ts">
-import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
-import type { NotifyContract } from '@mini-canvas/canvas-base'
+import { useCanvasContext, useUiComponent } from '@plume-canvas/canvas-render'
+import type { NotifyContract } from '@plume-canvas/canvas-base'
 
 const {
   Button,
@@ -122,7 +122,7 @@ function save(): void {
 适合拖线、吸附这类即时提示；右下角通知走 `ctx.get('notify')`。
 
 ```ts
-import type { Context, NotifyContract } from '@mini-canvas/canvas-base'
+import type { Context, NotifyContract } from '@plume-canvas/canvas-base'
 
 export function save(ctx: Context): void {
   const notify = ctx.get<NotifyContract>('notify')

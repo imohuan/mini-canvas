@@ -18,7 +18,7 @@
 | 我的插件要用别人的功能 | 案例 5 | `inject: ['名字']` 或 `ctx.tryGet` | `plugin-node-image` |
 | AI/节点面板能调我的生成能力 | [案例 6](/examples/register-tool) | `ctx.tools.register` | `plugin-tool-text-generation` |
 | 节点顶部/底部状态栏装按钮或换面板 | [案例 9](/examples/node-toolbar) | `registerMode` / `ctx.slots.register` | `plugin-node-image` / `plugin-demo-kit` |
-| 节点/画面正在加载时显示统一的加载态 | [节点加载态](/plugins/theme-components/node-loading-state) | `import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'` | `plugin-theme-canvas` / `plugin-node-video` |
+| 节点/画面正在加载时显示统一的加载态 | [节点加载态](/plugins/theme-components/node-loading-state) | `import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'` | `plugin-theme-canvas` / `plugin-node-video` |
 | 给节点加自定义状态层（排队中之类） | [节点加载态 · 注册自己的状态组件](/plugins/theme-components/node-loading-state) | `ctx.nodes.attach('*', { region: 'state:overlay', component })` | `plugin-theme-canvas` |
 | 工具栏下拉里嵌一块自定义面板（色板、宫格） | [下拉菜单](/plugins/theme-components/dropdown) | shadcn `DropdownMenuSub` 的默认插槽 | `plugin-image-grid-split` |
 | 节点底栏多一个动作按钮 | [案例 7](/examples/bottom-bar) | `registerBarAction`（跨插件） | `plugin-node-text` |
@@ -28,7 +28,7 @@
 | 从最后一个节点倒推、按依赖顺序执行 | [上游与执行顺序](/canvas-data/upstream) | `upstream.order()` 返回拓扑序 | 执行类插件（ComfyUI 式） |
 | 定时任务/轮询 | 案例 8 | `ctx.effect` 包 `setInterval` | `plugin-auto-save` |
 | 换掉整个节点外壳/连线 | [主题手册](/theme/) | `ctx.theme.add(slot, comp, { order })` | `theme-components` |
-| 设置里改字体 / 圆角，整站跟着变 | [组件库](/plugins/theme-components) | 默认主题的「外观」配置 → `--mct-*` 变量 | `theme-components` |
+| 设置里改字体 / 圆角，整站跟着变 | [组件库](/plugins/theme-components) | 默认主题的「外观」配置 → `--plume-*` 变量 | `theme-components` |
 | 给自己的颜色加实时预览 | [颜色与预览](/theme/preview) | `Config` 的 `type: 'color'` + `ctx.slots.register(THEME_PREVIEW_SLOT)` | `plugin-multi-select` |
 | 看某个 shadcn 组件是哪个文件在用 | [组件库](/plugins/theme-components) | 「常规 → 调试 → 组件库使用标记」 | `theme-components` |
 | 写界面 / 补组件 / 弹通知 | [UI 开发](/plugins/ui-development) | `useUiComponent()` + `ctx.get('notify')` | `plugin-manager` |

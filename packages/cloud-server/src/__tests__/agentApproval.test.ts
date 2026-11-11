@@ -1,6 +1,6 @@
 /** 审批规则（纯函数）：默认只问「本地命令 / 写文件」，其余放行 */
 import { describe, it, expect } from 'vitest'
-import { DEFAULT_POLICY, decideTool, matchesPattern, normalizePolicy } from '@mini-canvas/plugin-agent/server/agent/approval.js'
+import { DEFAULT_POLICY, decideTool, matchesPattern, normalizePolicy } from '@plume-canvas/plugin-agent/server/agent/approval.js'
 
 describe('通配匹配', () => {
   it('精确名', () => {

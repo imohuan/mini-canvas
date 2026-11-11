@@ -24,8 +24,8 @@ export interface NpmClientOptions {
 export interface NpmVersionInfo {
   version: string
   tarball: string
-  /** 该版本 package.json 里的 miniCanvas 段（没有则 undefined） */
-  miniCanvas?: Record<string, unknown>
+  /** 该版本 package.json 里的 plume 段（没有则 undefined） */
+  plume?: Record<string, unknown>
   /** 该版本的发布时间（packument 的 time 段） */
   publishedAt?: string
 }
@@ -74,7 +74,7 @@ export function createNpmClient(opts: NpmClientOptions = {}) {
   }
 
   /**
-   * 搜索。q 会做转义；scope 过滤由**路由层**做（它还要按 miniCanvas.installable
+   * 搜索。q 会做转义；scope 过滤由**路由层**做（它还要按 plume.installable
    * 二次过滤 —— 那需要对每个命中再查一次 packument，属于路由的编排职责）。
    */
   async function search(q: string, size = 20): Promise<NpmSearchHit[]> {

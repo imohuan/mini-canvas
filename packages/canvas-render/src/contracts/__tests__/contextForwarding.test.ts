@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import * as vueRender from '@mini-canvas/vue-render/context'
+import * as vueRender from '@plume-canvas/vue-render/context'
 import * as canvasRender from '../canvasContext'
 
 describe('上下文取件只有一份实现', () => {

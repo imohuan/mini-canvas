@@ -28,7 +28,7 @@
  *   : ping                                     保活（客户端忽略）
  *
  * 有意**只报"哪个插件的产物变了"**，不带产物内容：前端自己按 id/地址去拉最新产物
- * （那条路已经存在：window.MiniCanvasPlugin.reload）。服务端不当代码分发器。
+ * （那条路已经存在：window.PlumePlugin.reload）。服务端不当代码分发器。
  */
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -101,14 +101,14 @@ export async function pluginsDirSignature(pluginsDir: string | undefined): Promi
   return parts.sort().join('\n')
 }
 
-/** 从插件目录读它的运行时名（package.json 的 miniCanvas.pluginName，退回落包名，再退回落目录名） */
+/** 从插件目录读它的运行时名（package.json 的 plume.pluginName，退回落包名，再退回落目录名） */
 async function pluginNameOf(pkgDir: string, fallback: string): Promise<string> {
   try {
     const pkg = JSON.parse(await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8')) as {
       name?: string
-      miniCanvas?: { pluginName?: string }
+      plume?: { pluginName?: string }
     }
-    const mc = pkg.miniCanvas?.pluginName
+    const mc = pkg.plume?.pluginName
     if (typeof mc === 'string' && mc) return mc
     if (typeof pkg.name === 'string' && pkg.name) return pkg.name.replace(/^@[^/]+\//, '')
   } catch {

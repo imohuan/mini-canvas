@@ -6,7 +6,7 @@ import {
   keyPartsToLabels,
   type V2ShortcutManager,
   type ShortcutManagerHost,
-} from '@mini-canvas/plugin-shortcut-manager'
+} from '@plume-canvas/plugin-shortcut-manager'
 import type { FullHost } from './types'
 import type { UiState } from './createUiState'
 

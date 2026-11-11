@@ -2,7 +2,7 @@
 
 **一句话定位**：**`slots` 是一排"空位子" —— 插件把组件放进某个槽，宿主在固定位置把它渲染出来。**
 
-**它属于哪一档**：**内核内置服务，由画布能力层提供**。用 `@mini-canvas/canvas-base` / `@mini-canvas/canvas-data` 导出的画布版 `Context` 时，能力层把 `SlotRegistry` 建好、作为内置服务登记，于是 `ctx.get('slots')` 与 `ctx.slots` 直接可用。有一个真实差别要知道：`@mini-canvas/kernel` 的纯内核 `Context` 不带它（纯内核只自带 `tools`），这一点有测试锁着，见 `packages/kernel/src/__tests__/kernelBoundary.test.ts`。
+**它属于哪一档**：**内核内置服务，由画布能力层提供**。用 `@plume-canvas/canvas-base` / `@plume-canvas/canvas-data` 导出的画布版 `Context` 时，能力层把 `SlotRegistry` 建好、作为内置服务登记，于是 `ctx.get('slots')` 与 `ctx.slots` 直接可用。有一个真实差别要知道：`@plume-canvas/kernel` 的纯内核 `Context` 不带它（纯内核只自带 `tools`），这一点有测试锁着，见 `packages/kernel/src/__tests__/kernelBoundary.test.ts`。
 
 ## 用法
 

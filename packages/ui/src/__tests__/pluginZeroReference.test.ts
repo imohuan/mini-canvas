@@ -2,7 +2,7 @@
  * 死规则：业务插件之间零引用。
  *
  * 判据（18 号文档）：packages/plugins/* 的源码里不能 import 另一个
- * @mini-canvas/plugin-*（运行时或类型都不行），package.json 的依赖也不允许。
+ * @plume-canvas/plugin-*（运行时或类型都不行），package.json 的依赖也不允许。
  *
  * 豁免：测试文件、plugin-demo-kit 示例、ui-shell 入口自带件（本文件只扫 plugins/*）。
  */
@@ -23,7 +23,7 @@ const EXEMPT_DIRS = new Set(['plugin-demo-kit'])
  * 的受控共享，不是"业务插件当组件库用"；等它像 bar-contract 一样抽成独立包时删掉。
  */
 const EXEMPT_EDGES: Array<[from: string, to: string]> = [
-  ['plugin-node-video', '@mini-canvas/plugin-theme-canvas'],
+  ['plugin-node-video', '@plume-canvas/plugin-theme-canvas'],
 ]
 
 function isExemptEdge(fromDir: string, spec: string): boolean {
@@ -46,17 +46,17 @@ function walk(dir: string): string[] {
 }
 
 describe('业务插件零引用', () => {
-  it('源码不 import 另一个 @mini-canvas/plugin-*', () => {
+  it('源码不 import 另一个 @plume-canvas/plugin-*', () => {
     for (const dir of readdirSync(PLUGINS_DIR)) {
       if (EXEMPT_DIRS.has(dir)) continue
       const root = path.join(PLUGINS_DIR, dir)
       if (!statSync(root).isDirectory()) continue
-      const self = '@mini-canvas/' + dir
+      const self = '@plume-canvas/' + dir
       for (const file of walk(root)) {
         const text = readFileSync(file, 'utf-8')
         // 只看真实 import 行（行首 import / export ... from），注释里的示例不算。
         const imports = [
-          ...text.matchAll(/^\s*(?:import|export)[^\n]*?from\s+['"](@mini-canvas\/plugin-[^'"]+)['"]/gm),
+          ...text.matchAll(/^\s*(?:import|export)[^\n]*?from\s+['"](@plume-canvas\/plugin-[^'"]+)['"]/gm),
         ]
         for (const m of imports) {
           if (isExemptEdge(dir, m[1])) continue
@@ -77,7 +77,7 @@ describe('业务插件零引用', () => {
         continue
       }
       for (const dep of Object.keys(pkg.dependencies ?? {})) {
-        if (!dep.startsWith('@mini-canvas/plugin-')) continue
+        if (!dep.startsWith('@plume-canvas/plugin-')) continue
         if (isExemptEdge(dir, dep)) continue
         expect(dep, dir + ' 的 dependencies 引用了另一个业务插件').toBe(pkg.name)
       }

@@ -10,7 +10,7 @@
  *   × 宫格切分 | 已选择 N 项 | 创建分镜组 | 发送到画布
  */
 import { computed } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon, type FeedbackService } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon, type FeedbackService } from '@plume-canvas/canvas-render'
 import { beginPublish, endPublish, endSplit, splitState } from './splitSession'
 import { finishSplitPublish, publishCells, publishDepsOf } from './publish'
 import { publishConfirmText } from './publishConfirm'

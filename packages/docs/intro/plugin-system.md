@@ -7,7 +7,7 @@
 
 ```ts
 // my-plugin.ts —— 一个把数据、换肤、命令、配置串起来的最小插件
-import { F, type Context } from '@mini-canvas/canvas-base'
+import { F, type Context } from '@plume-canvas/canvas-base'
 import MyBlockContent from './MyBlockContent.vue'
 
 export const name = 'my-plugin'

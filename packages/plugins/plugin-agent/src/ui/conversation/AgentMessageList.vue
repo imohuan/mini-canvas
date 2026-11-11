@@ -6,7 +6,7 @@
  * useAgentConversation 控制器（入口 provide）。
  */
 import { computed, inject, nextTick, onMounted, ref, watch } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import AgentMarkdown from '../render/AgentMarkdown.vue'
 import ToolViewBody from '../render/ToolViewBody.vue'
 import AgentScrollArea from './AgentScrollArea.vue'

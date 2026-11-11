@@ -4,7 +4,7 @@
 项目统一使用 shadcn-vue 的 DropdownMenu 分离件。
 
 ```ts
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
@@ -63,7 +63,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 文件：packages/my-plugin/src/MyMenu.vue -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')

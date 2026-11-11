@@ -3,7 +3,7 @@ import { Folder as FolderIcon, Video as VideoIcon, Type as TypeIcon, Image as Im
 import folderImg from '../../../assets/folder.png'
 import LibIcon from '../../LibIcon.vue'
 import CanvasRowMenu from '../../CanvasRowMenu.vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { CanvasTreeBlock } from '../../../composables/canvasTree'
 import { useUi } from '../../../composables/ui'
 

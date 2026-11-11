@@ -11,7 +11,7 @@
  *   3. 粗细滑块前要有图标。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { paintState, endPaint, isPainting, undoStroke, redoStroke, clearStrokes } from './paintSession'
 import ImageToolbarShell from './ImageToolbarShell.vue'
 import PaintColorPicker from './PaintColorPicker.vue'

@@ -27,7 +27,7 @@ await page.waitForTimeout(5000)
 
 // 造一个图片节点作为「本节点」
 await page.evaluate(() => {
-  const doc = window.MiniCanvasUI?.getHost?.()?.ctx?.get('doc')
+  const doc = window.PlumeUI?.getHost?.()?.ctx?.get('doc')
   if (doc && !doc.getNodes().some((n) => n.type === 'image')) {
     doc.addNodes([{ id: 'paste-probe-target', type: 'image', position: { x: 200, y: 200 }, data: {} }])
   }
@@ -46,7 +46,7 @@ await editor.click()
 await page.waitForTimeout(300)
 
 const before = await page.evaluate(() => {
-  const doc = window.MiniCanvasUI.getHost().ctx.get('doc')
+  const doc = window.PlumeUI.getHost().ctx.get('doc')
   return { nodes: doc.getNodes().length, edges: (doc.getEdges?.() ?? []).length }
 })
 
@@ -63,7 +63,7 @@ await page.evaluate(() => {
 await page.waitForTimeout(3500)
 
 const after = await page.evaluate(() => {
-  const doc = window.MiniCanvasUI.getHost().ctx.get('doc')
+  const doc = window.PlumeUI.getHost().ctx.get('doc')
   const ed = document.querySelector('.nb-shell .ProseMirror')
   return {
     nodes: doc.getNodes().length,

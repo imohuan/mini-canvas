@@ -13,8 +13,8 @@
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
-import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
-import { NodeToolbarService } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected } from '@plume-canvas/canvas-render'
+import { NodeToolbarService } from '@plume-canvas/canvas-render'
 
 const props = defineProps<{ id: string; data: Record<string, unknown>; type?: string }>()
 const { ctx } = useCanvasRender()

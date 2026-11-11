@@ -10,7 +10,7 @@
  * 这里只管：取服务、收藏、详情、加入画布。显隐由外壳决定。
  */
 import { computed, ref, watch } from 'vue'
-import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender, useUiComponent } from '@plume-canvas/canvas-render'
 import type { StyleCard } from '../data/types'
 import type { LibraryService } from '../data/store'
 import { UI_GALLERY, UI_DETAIL } from '../names'

@@ -58,6 +58,14 @@ export function createShellScope(
      */
     history.resetHistoryRequest()
     state.histPage = 1
+    /**
+     * 打开时回到「全部类型」。
+     *
+     * 页签会记住上次选择；如果上次停在「图片」而这张画布没有图片、只有音频，
+     * 打开就是一整面空白（用户看到的正是“音频 5、列表空”）。计数徽章已经告诉
+     * 用户哪一类有内容，列表不该被一个空页签挡住。
+     */
+    state.histType = ''
     history.openHistoryView()
   }
   function toggleLeftCollapsed(): void {

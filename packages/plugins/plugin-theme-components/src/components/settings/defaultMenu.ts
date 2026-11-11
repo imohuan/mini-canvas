@@ -5,7 +5,7 @@
  * 同一个 id 有更小 order 时覆盖；上游卸载后自动露出这里。
  */
 import { Blocks, Brush, Grid2x2, Layers, Puzzle } from 'lucide-vue-next'
-import type { SettingsCategoryDef, SettingsMenuScope, SettingsNavDef, SettingsSectionDef } from '@mini-canvas/canvas-data'
+import type { SettingsCategoryDef, SettingsMenuScope, SettingsNavDef, SettingsSectionDef } from '@plume-canvas/canvas-data'
 
 const C = {
   personal: 'category/personal',

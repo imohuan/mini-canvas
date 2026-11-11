@@ -171,7 +171,7 @@ describe('toolView · fallback', () => {
 
   it('read_file 读图：「文件预览」卡片 + 一行缩略图（用户参考图的形态）', () => {
     // 真实形态的路径（画布资源目录）—— 只有这种服务端才取得到字节
-    const p = 'D:/x/.mini-canvas/canvases/c1/resources/pic.jpeg'
+    const p = 'D:/x/.plume/canvases/c1/resources/pic.jpeg'
     const v = toolView('read_file', JSON.stringify({ file_path: p, canvasId: 'c1' }), 'image/png, 4.0 MB')
     // 用户口径 2026-10-13：图片做成卡片（有缩略图那版）
     expect(v.family).toBe('file')
@@ -209,7 +209,7 @@ describe('toolView · fallback', () => {
      * ② 超限：「Image too large: 13.3 MB exceeds the 5.0 MB limit.」
      * 所以判据只能是**扩展名**，拿输出文本判会让视频永远变成折叠行。
      */
-    const p = 'D:/x/.mini-canvas/canvases/e5860e437dd04d51/resources/9360cd8573fc8abc.mp4'
+    const p = 'D:/x/.plume/canvases/e5860e437dd04d51/resources/9360cd8573fc8abc.mp4'
     const v = toolView('read_file', JSON.stringify({ file_path: p }), 'looks like a binary file (contains NUL bytes)')
     expect(v.family).toBe('file')
     expect(v.heading).toBe('文件预览')
@@ -226,7 +226,7 @@ describe('toolView · fallback', () => {
   })
 
   it('read_file 读音频：卡片 + 播放位（用户口径 2026-10-13 点名了音频）', () => {
-    const p = 'D:/x/.mini-canvas/canvases/c1/resources/voice.mp3'
+    const p = 'D:/x/.plume/canvases/c1/resources/voice.mp3'
     const v = toolView('read_file', JSON.stringify({ file_path: p }), 'audio/mpeg, 1.2 MB')
     expect(v.family).toBe('file')
     expect(v.icon).toBe('audio')
@@ -261,7 +261,7 @@ describe('卡片 vs 默认工具的分流（组件按 family 判断）', () => {
 
   it('read_file 的分流只认**媒体类型**：图 / 视频 / 音频成卡片，其余一律折叠行', () => {
     // 用户口径 2026-10-13：① 图片做成卡片；② 除了视频、图片、音频，其他都回退默认状态
-    const base = 'D:/x/.mini-canvas/canvases/c1/resources/'
+    const base = 'D:/x/.plume/canvases/c1/resources/'
     const kindOf = (name: string): string =>
       toolView('read_file', JSON.stringify({ file_path: base + name }), '').family
     expect(kindOf('a.png')).toBe('file')
@@ -280,14 +280,14 @@ describe('toolView · read_file 的图片预览地址（用户实测报的裂图
    * 服务端真正能出字节的只有两条资源路由，所以这里钉：能映射就映射，映射不到就不给 <img>。
    */
   it('assets/files 下的绝对路径 → /api/assets/files/<hash>', () => {
-    const p = 'D:\\Code\\Git\\mini-canvas\\packages\\cloud-server\\.mini-canvas\\assets\\files\\faaca433dafb2b75.jpeg'
+    const p = 'D:\\Code\\Git\\plume-canvas\\packages\\cloud-server\\.plume\\assets\\files\\faaca433dafb2b75.jpeg'
     const v = toolView('read_file', JSON.stringify({ file_path: p }), 'image/jpeg, 3.7 MB')
     const media = v.blocks.find((b) => b.kind === 'media')
     expect(media && media.kind === 'media' && media.thumb).toBe('/api/assets/files/faaca433dafb2b75.jpeg')
   })
 
   it('画布 resources 下的绝对路径 → /api/canvases/<canvasId>/resources/<hash>', () => {
-    const p = 'D:\\x\\.mini-canvas\\canvases\\430c8f1f00bd4aba\\resources\\abc123.jpeg'
+    const p = 'D:\\x\\.plume\\canvases\\430c8f1f00bd4aba\\resources\\abc123.jpeg'
     const v = toolView('read_file', JSON.stringify({ file_path: p, canvasId: '430c8f1f00bd4aba' }), 'image/jpeg, 20 KB')
     const media = v.blocks.find((b) => b.kind === 'media')
     expect(media && media.kind === 'media' && media.thumb).toBe('/api/canvases/430c8f1f00bd4aba/resources/abc123.jpeg')
@@ -300,7 +300,7 @@ describe('toolView · read_file 的图片预览地址（用户实测报的裂图
    * 而画布资源的真实路径里**写着画布 id**（…/canvases/<id>/resources/<hash>）。
    */
   it('入参里没有 canvasId 时，从**路径**里认出画布 id（否则图片永远不显示）', () => {
-    const p = 'D:\\Code\\Git\\mini-canvas\\packages\\cloud-server\\.mini-canvas\\canvases\\e5860e437dd04d51\\resources\\fd389505047498e5.png'
+    const p = 'D:\\Code\\Git\\plume-canvas\\packages\\cloud-server\\.plume\\canvases\\e5860e437dd04d51\\resources\\fd389505047498e5.png'
     const v = toolView('read_file', JSON.stringify({ file_path: p }), 'image/png, 2.1 MB')
     const media = v.blocks.find((b) => b.kind === 'media')
     expect(media && media.kind === 'media' && media.thumb).toBe(
@@ -322,7 +322,7 @@ describe('toolView · read_file 的图片预览地址（用户实测报的裂图
   })
 
   it('再也不出现已废弃的 /api/agent/file 地址', () => {
-    const p = 'D:\\Code\\Git\\mini-canvas\\packages\\cloud-server\\.mini-canvas\\assets\\files\\faaca433dafb2b75.jpeg'
+    const p = 'D:\\Code\\Git\\plume-canvas\\packages\\cloud-server\\.plume\\assets\\files\\faaca433dafb2b75.jpeg'
     const v = toolView('read_file', JSON.stringify({ file_path: p }), 'image/jpeg, 3.7 MB')
     expect(JSON.stringify(v)).not.toContain('/api/agent/file')
   })

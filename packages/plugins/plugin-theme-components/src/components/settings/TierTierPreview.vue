@@ -7,7 +7,7 @@
  * 这里只补“这三档是什么关系”的可视化。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 import { tierPreviewRows, tierSectionSpec } from './tierSection'
 
 const props = defineProps<{

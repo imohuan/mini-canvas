@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { X } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import AppDialog from '../../AppDialog.vue'
 import { useDirectorSettings } from './useDirectorSettings'
 

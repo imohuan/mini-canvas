@@ -23,7 +23,7 @@ let srv: Awaited<ReturnType<typeof createCloudServer>> | undefined
 let built = false
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-debug-real-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-debug-real-'))
   built = await fs
     .access(PLUGIN_SERVER_JS)
     .then(() => true)

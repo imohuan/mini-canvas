@@ -13,10 +13,10 @@ import { describe, it, expect } from 'vitest'
 import {
   NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, MemoryStorageAdapter,
   ResourceStore, type GraphEnvelope,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, nextCropLabel, nextExpandLabel, rotateImage, uploadImage, type ImageTransform } from '../imageOps'
 import type { ExpandBitmapIO } from '../imageExpand'
-import type { Rect } from '@mini-canvas/canvas-render'
+import type { Rect } from '@plume-canvas/canvas-render'
 
 const BLOB = (tag = 'x') => new Blob([tag], { type: 'image/png' })
 

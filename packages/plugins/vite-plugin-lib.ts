@@ -11,7 +11,7 @@
  *
  * 三条规矩：
  * 1. 宿主只允许一份的东西必须 external（Vue / VueFlow / three / prosemirror-editor-bundle /
- *    所有 @mini-canvas/*）。打进插件会造成两份实例：Vue 两份 → 组件挂不上、警告刷屏；
+ *    所有 @plume-canvas/*）。打进插件会造成两份实例：Vue 两份 → 组件挂不上、警告刷屏；
  *    canvas-data 两份 → 画布状态各存各的。所以它们从宿主 window 上的全局取。
  * 2. 其余依赖一律内联（如 @dagrejs/dagre、html-to-image、@ckpack/vue-color）。
  *    它们要么是纯函数、要么状态不在模块级，内联没有副作用，也省得再要求宿主喂全局。
@@ -34,16 +34,16 @@ export const HOST_GLOBALS: Record<string, string> = {
   //（不是 installable）。真要让 3D 预览也可装卸时，这里加 three: 'THREE'，
   // 并同步给 ui 的 sharedGlobals 挂上（那条守卫测试会立刻要求两边一致）。
   'prosemirror-editor-bundle': 'ProseMirrorEditorBundle',
-  '@mini-canvas/kernel': 'MiniCanvasKernel',
-  '@mini-canvas/canvas-base': 'MiniCanvasBase',
-  '@mini-canvas/canvas-data': 'MiniCanvasCore',
-  '@mini-canvas/canvas-render': 'MiniCanvasRender',
+  '@plume-canvas/kernel': 'PlumeKernel',
+  '@plume-canvas/canvas-base': 'PlumeBase',
+  '@plume-canvas/canvas-data': 'PlumeCore',
+  '@plume-canvas/canvas-render': 'PlumeRender',
   // 组件库（shadcn-vue 原始件）：插件直接 import Button，靠宿主这一份实例渲染。
   // 打进插件会变成两份组件定义 + 两份样式，主题与 Tailwind 类都对不上。
-  '@mini-canvas/ui-kit-shadcn': 'MiniCanvasUiKit',
+  '@plume-canvas/ui-kit-shadcn': 'PlumeUiKit',
   // 主题契约（纯数据/纯函数）：两个主题包与业务插件都可能读同一张默认值表，
-  // 多份实例会出现"两个真相"，所以和其它 @mini-canvas/* 一样由宿主提供。
-  '@mini-canvas/theme-contract': 'MiniCanvasThemeContract',
+  // 多份实例会出现"两个真相"，所以和其它 @plume-canvas/* 一样由宿主提供。
+  '@plume-canvas/theme-contract': 'PlumeThemeContract',
 }
 /**
  * 生成 build 段（纯数据）。各插件的 vite.config.ts：
@@ -52,7 +52,7 @@ export const HOST_GLOBALS: Record<string, string> = {
 export const HOST_EXTERNALS: string[] = Object.keys(HOST_GLOBALS)
 
 export interface PluginLibOptions {
-  /** UMD 的全局名（如 MiniCanvasPluginMiniMap）；加载器按它取插件对象 */
+  /** UMD 的全局名（如 PlumePluginMiniMap）；加载器按它取插件对象 */
   name: string
   /** 产物文件名（默认 = 包目录名 + .js）。一般不用改 */
   fileName?: string
@@ -63,7 +63,7 @@ export interface PluginLibOptions {
  * 生成 build 段（纯数据）。各插件的 vite.config.ts：
  *   export default defineConfig({
  *     plugins: [vue(), cssInjectedByJs()],
- *     build: pluginLibBuild(import.meta.url, { name: 'MiniCanvasPluginMiniMap' }),
+ *     build: pluginLibBuild(import.meta.url, { name: 'PlumePluginMiniMap' }),
  *   })
  */
 export function pluginLibBuild(importMetaUrl: string, opts: PluginLibOptions) {

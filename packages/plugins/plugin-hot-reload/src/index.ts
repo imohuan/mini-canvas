@@ -18,8 +18,8 @@
  * - PLUGIN_WATCH_PREFIX：watch 工具 PUT 的 key 前缀约定
  */
 import { createHotReload, type HotReload } from './data/hotReload'
-import type { Context, NotifyContract } from '@mini-canvas/canvas-data'
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { Context, NotifyContract } from '@plume-canvas/canvas-data'
+import type { PluginModule } from '@plume-canvas/kernel'
 import { markRaw } from 'vue'
 import { Bug } from 'lucide-vue-next'
 import HotReloadNav from './components/settings/HotReloadNav.vue'
@@ -39,8 +39,8 @@ export type {
 } from './data/hotReload'
 export { looksLikeUrl, pathOf, PLUGIN_WATCH_PREFIX } from './data/hotReload'
 
-/** 挂到 window 的默认 key（与 window.MiniCanvasUI / MiniCanvasPlugin 并列） */
-export const HOT_RELOAD_WINDOW_KEY = 'MiniCanvasHotReload'
+/** 挂到 window 的默认 key（与 window.PlumeUI / PlumePlugin 并列） */
+export const HOT_RELOAD_WINDOW_KEY = 'PlumeHotReload'
 
 /** 设置面板里这一页的一级名（左导航项 id 与正文分组都用它） */
 export const HOT_RELOAD_NAV_ID = '调试插件'

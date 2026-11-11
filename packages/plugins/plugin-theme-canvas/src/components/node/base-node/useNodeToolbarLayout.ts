@@ -3,7 +3,7 @@ import {
   NODE_TOOLBAR_HOST_KEY,
   resolveNodeSlotStyle,
   useToolbarOffsets,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 
 export interface NodeToolbarLayoutInput {
   zoom: Ref<number>

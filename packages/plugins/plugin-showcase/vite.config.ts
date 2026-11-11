@@ -6,5 +6,5 @@ import { pluginLibBuild } from '../vite-plugin-lib'
 // plugin-showcase —— 前端半 lib 打包（UMD）供「插件管理」从清单加载。
 export default defineConfig({
   plugins: [vue(), cssInjectedByJs()],
-  build: pluginLibBuild(import.meta.url, { name: 'MiniCanvasPluginShowcase', sourcemap: false }),
+  build: pluginLibBuild(import.meta.url, { name: 'PlumePluginShowcase', sourcemap: false }),
 })

@@ -2,7 +2,7 @@
  * 主题拆包边界守卫（画布半边）。
  *
  * canvas 包只放画布外观；通用组件在 plugin-theme-components，两边互不 import。
- * 共享的默认值 / Config 分片 / 边几何都在 @mini-canvas/theme-contract。
+ * 共享的默认值 / Config 分片 / 边几何都在 @plume-canvas/theme-contract。
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -33,7 +33,7 @@ function collectSources(dir: string, out: string[] = []): string[] {
   return out
 }
 
-const SIBLING = '@mini-canvas/plugin-theme-components'
+const SIBLING = '@plume-canvas/plugin-theme-components'
 
 describe('主题拆包边界（画布半边）', () => {
   it('canvas 不声明、也不 import 通用组件包', () => {

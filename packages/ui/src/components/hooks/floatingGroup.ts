@@ -7,20 +7,20 @@
  *   父菜单先关、二级菜单随父卸载，click 派发时目标已脱离文档，Vue 的 click 回调不再执行
  *   （表现为：嵌套菜单看着能展开，点下去菜单消失了、动作没生效）。
  *
- * 契约：每个浮层根元素写 `data-mck-floating-chain`，值为**从最初的一级面板到自己**的 id 链
+ * 契约：每个浮层根元素写 `data-pk-floating-chain`，值为**从最初的一级面板到自己**的 id 链
  * （空格分隔）。子浮层打开时把自己的 panel 链 = 父链 + 自己 id。
  * 判定「某次点击是否算我这一组内」只需看命中的链上有没有我的 id ——
  * 三级嵌套时链是 `A B C`，对一级 A 判定也自然成立，不需要额外的注册表/生命周期同步。
  *
- * **本文件是 `@mini-canvas/ui` 自己的一份实现**（不跨包共享）：插件都是独立的，
+ * **本文件是 `@plume-canvas/ui` 自己的一份实现**（不跨包共享）：插件都是独立的，
  * 各库自带自己那份，谁也不改核心层（用户口径 2026-10-15）。
- * 主题默认件 `@mini-canvas/plugin-theme-canvas` 里另有一份等价的实现（见其
- * `components/ui/floatingChain.ts`）—— 两份都读同一个 DOM 属性 `data-mck-floating-chain`，
+ * 主题默认件 `@plume-canvas/plugin-theme-canvas` 里另有一份等价的实现（见其
+ * `components/ui/floatingChain.ts`）—— 两份都读同一个 DOM 属性 `data-pk-floating-chain`，
  * 所以两边浮层混在一起时照样认得出父子关系。
  */
 
 /** 浮层链属性名（写入 / 读取都用它，避免两处各写一遍字符串） */
-export const FLOATING_CHAIN_ATTR = 'data-mck-floating-chain'
+export const FLOATING_CHAIN_ATTR = 'data-pk-floating-chain'
 
 /**
  * 只要能「往上找最近的浮层根」就够（鸭子类型）：真实 DOM 元素天然满足，

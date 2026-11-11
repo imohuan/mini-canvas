@@ -36,7 +36,7 @@ Handler 就是 Hono 的 `Handler`：`(c, next) => ...`，`c.json(...)` / `c.text
 ## 注册场
 
 条目落在注册场 `server/route`（`ROUTE_FIELD`），键 = `METHOD path`，id = 注册方插件名；
-挂载落 `server/route-mount`（`MOUNT_FIELD`），键 = 前缀。两条都可从 `@mini-canvas/...` 引常量名。
+挂载落 `server/route-mount`（`MOUNT_FIELD`），键 = 前缀。两条都可从 `@plume-canvas/...` 引常量名。
 
 ## 匹配语义
 

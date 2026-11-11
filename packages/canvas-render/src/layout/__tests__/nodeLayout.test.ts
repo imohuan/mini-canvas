@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { NodeStore } from '@mini-canvas/canvas-data'
+import { NodeStore } from '@plume-canvas/canvas-data'
 import { NodeLayoutService } from '../nodeLayout'
 
 function makeStore(): NodeStore {

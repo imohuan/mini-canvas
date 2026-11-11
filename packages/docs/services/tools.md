@@ -2,7 +2,7 @@
 
 **一句话定位**：**`tools` 是"外部能力"的登记台 —— 谁能让机器画一张图、谁能让机器写一段文字，都先来这里报名；要用的人按名字挑一个来调。**
 
-**它属于哪一档**：**内核内置**。它由 `@mini-canvas/kernel` 自己建好（`Context` 构造时就创建一个 `ToolRegistry`），不装画布、不装任何插件也有 —— 纯 `new Context()` 就能 `ctx.get('tools')` 拿到它。源码在 `packages/kernel/src/toolRegistry.ts`。
+**它属于哪一档**：**内核内置**。它由 `@plume-canvas/kernel` 自己建好（`Context` 构造时就创建一个 `ToolRegistry`），不装画布、不装任何插件也有 —— 纯 `new Context()` 就能 `ctx.get('tools')` 拿到它。源码在 `packages/kernel/src/toolRegistry.ts`。
 
 ## 用法
 
@@ -133,7 +133,7 @@ run: async () => {
 
 ### 两个现成的小助手（纯函数）
 
-从 `@mini-canvas/kernel` 导入，UI 侧直接用，避免各写一份口径不一的默认值逻辑：
+从 `@plume-canvas/kernel` 导入，UI 侧直接用，避免各写一份口径不一的默认值逻辑：
 
 ```ts
 // 把声明的参数 schema 收敛成"当前生效的参数值"：有默认用默认，下拉没选就取第一项

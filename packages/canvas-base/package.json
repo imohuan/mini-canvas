@@ -1,5 +1,5 @@
 {
-  "name": "@mini-canvas/canvas-base",
+  "name": "@plume-canvas/canvas-base",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,8 +17,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",

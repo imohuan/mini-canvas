@@ -6,7 +6,7 @@
  * 顶栏整排换成 ImagePaintPanel（绘制模式的 topBar）。
  */
 import { computed } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { readImageSourceFields } from './imageRefs'
 import { beginPaint, isPainting } from './paintSession'
 

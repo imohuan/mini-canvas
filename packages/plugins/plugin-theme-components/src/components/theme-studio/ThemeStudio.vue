@@ -6,7 +6,7 @@
  * 所以整块界面住在这里，由 theme-components 注册成设置页的一节。
  */
 import { computed } from 'vue'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 import ThemeStudioView from './ThemeStudioView.vue'
 
 /**

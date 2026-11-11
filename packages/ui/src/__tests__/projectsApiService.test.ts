@@ -5,7 +5,7 @@
  * 这里不测后端，只钉三件事：服务名对、方法齐、请求仍走统一出口（带管理令牌）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { projectsApiPlugin, type ProjectsApiService } from '../projectsApiPlugin'
 
 const calls: Array<{ url: string; init?: RequestInit }> = []
@@ -28,7 +28,7 @@ const g = globalThis as { localStorage?: unknown }
 beforeEach(() => {
   calls.length = 0
   g.localStorage = {
-    m: new Map<string, string>([['mc_admin_token', 'tok-abc']]),
+    m: new Map<string, string>([['plume_admin_token', 'tok-abc']]),
     getItem(k: string) {
       return (this as unknown as { m: Map<string, string> }).m.get(k) ?? null
     },

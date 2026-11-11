@@ -9,8 +9,8 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { NodeRegistry } from '@mini-canvas/canvas-data'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { NodeRegistry } from '@plume-canvas/canvas-data'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import {
   RENDER_CONTEXT_KEY,
   useVueFlow,
@@ -18,7 +18,7 @@ import {
   useCapability,
   type CanvasRenderContext,
   type CapabilityFactory,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import BaseNode from '../BaseNode.vue'
 
 ;(globalThis as unknown as { document: unknown }).document = {

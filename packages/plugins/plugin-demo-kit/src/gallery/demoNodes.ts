@@ -9,7 +9,7 @@
  *   - demo-overlay：内容区上盖一层浮层（over:inset 区域）
  */
 import { defineComponent, h } from 'vue'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 
 /** 内容区：一块居中的说明文字 */
 const CardContent = defineComponent({

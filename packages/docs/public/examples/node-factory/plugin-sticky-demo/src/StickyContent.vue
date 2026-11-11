@@ -3,7 +3,7 @@
 // 格式：Vue 单文件组件（setup 语法糖）
 // 位置：sticky 节点卡片内部（in 区域）渲染的内容
 import { ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 // ① 区域组件收到的 props 固定是 { id, data }（壳 BaseNode 传的）
 const props = defineProps<{ id: string; data: { text?: string } }>()

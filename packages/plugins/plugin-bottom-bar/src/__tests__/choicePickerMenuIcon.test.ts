@@ -7,8 +7,8 @@
 import { describe, expect, it } from 'vitest'
 import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import ChoicePickerMenu from '../node-bottom-bar/ChoicePickerMenu.vue'
 
 const SVG = '<svg viewBox="0 0 24 24" data-own="x"><circle cx="12" cy="12" r="8"/></svg>'

@@ -42,7 +42,7 @@
 
 ```ts
 // 片段：任何渲染在 <CanvasHost> 子树里的组件
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { ctx, host, flow, registry, nodeWrite, handleParams, edgeVisual, edgeSelection,
         connectionState, interaction, debug, snapZone, renderNodes, renderEdges,
@@ -100,7 +100,7 @@ ctx.nodes.attach('image', {
 ```vue
 <!-- 片段：组件侧按名取（这是 packages/plugins 里各按钮组件的同一套写法） -->
 <script setup lang="ts">
-import { useCapabilities } from '@mini-canvas/canvas-render'
+import { useCapabilities } from '@plume-canvas/canvas-render'
 
 interface NodeCapability { label(): string | undefined; update(patch: Record<string, unknown>): void }
 interface SelectedCapability { solo: { value: boolean } }
@@ -205,7 +205,7 @@ plugin-note-demo/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "便签节点",
     "description": "演示 content 组件的写法：props 收数据、nodeWrite 写回",
     "pluginName": "note-demo",
@@ -214,8 +214,8 @@ plugin-note-demo/
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
-  "dependencies": { "@mini-canvas/canvas-base": "workspace:*" },
-  "peerDependencies": { "@mini-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
+  "dependencies": { "@plume-canvas/canvas-base": "workspace:*" },
+  "peerDependencies": { "@plume-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
 }
 ```
 
@@ -225,7 +225,7 @@ plugin-note-demo/
 // 文件：plugin-note-demo/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import NoteContent from './NoteContent.vue'
 
 export const name = 'note-demo'
@@ -263,7 +263,7 @@ export const noteDemoPlugin: PluginModule = { name, inject, apply }
      位置：插件包内部；它只知道「我是某个节点的内容」，不知道壳是谁 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 // ① 壳注进来的两个 props：id 与 data（响应式对象引用）
 const props = defineProps<{ id: string; data: { text?: string } }>()

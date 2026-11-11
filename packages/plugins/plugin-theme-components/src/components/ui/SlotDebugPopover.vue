@@ -13,7 +13,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@mini-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit-shadcn'
 
 const props = defineProps<{
   /** 多行文本，每行形如 "key: value" */

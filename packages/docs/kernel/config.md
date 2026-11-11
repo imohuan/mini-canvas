@@ -51,7 +51,7 @@ export const Config = { … } satisfies ConfigSchema
 
 ```ts
 // 文件：my-plugin/src/index.ts
-import { F, type ConfigSchema, type InferConfig, type Context } from '@mini-canvas/canvas-base'
+import { F, type ConfigSchema, type InferConfig, type Context } from '@plume-canvas/canvas-base'
 
 export const name = 'my-plugin'
 
@@ -234,7 +234,7 @@ plugin-config-demo/
 
 同样的文件在仓库里也放了一份，可直接打开对照：`packages/docs/public/examples/kernel/plugin-config-demo/`。
 
-> 说明：示例能在**纯内核**（`@mini-canvas/kernel` 的 `Context`）里直接跑，所以订阅那段用
+> 说明：示例能在**纯内核**（`@plume-canvas/kernel` 的 `Context`）里直接跑，所以订阅那段用
 > `ctx.tryGet('settings')` 探测 —— `ctx.settings` 那一段是**画布能力层**给的，纯内核里没有。
 > 在画布插件里请直接写 `ctx.settings.onChange(插件名, cb)`。
 
@@ -244,7 +244,7 @@ plugin-config-demo/
 // 文件：packages\docs\public\examples\kernel\plugin-config-demo/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / Config / apply）
 // 位置：一个可安装插件包的源码入口
-import { F, type ConfigSchema, type InferConfig, type Context, type PluginModule } from '@mini-canvas/kernel'
+import { F, type ConfigSchema, type InferConfig, type Context, type PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'config-demo'
 
@@ -313,7 +313,7 @@ export const configDemoPlugin: PluginModule = { name, Config, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-config-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：演示「只给一部分 config，其余补默认」与「越界响亮报错」
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { configDemoPlugin } from './index'
 
 // ① 正常装配：只给一项，其余全走默认

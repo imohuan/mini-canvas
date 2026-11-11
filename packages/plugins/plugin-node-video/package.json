@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-node-video",
+  "name": "@plume-canvas/plugin-node-video",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "视频节点",
     "description": "视频节点：播放 / 裁剪 / 剪辑 / 截图 / 下载",
     "pluginName": "video",
@@ -28,13 +28,13 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
-    "@mini-canvas/plugin-theme-canvas": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
+    "@plume-canvas/plugin-theme-canvas": "workspace:*",
     "lucide-vue-next": "^1.0.0",
-    "@mini-canvas/bar-contract": "workspace:*"
+    "@plume-canvas/bar-contract": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
@@ -48,6 +48,6 @@
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34",
-    "@mini-canvas/plugin-theme-components": "workspace:*"
+    "@plume-canvas/plugin-theme-components": "workspace:*"
   }
 }

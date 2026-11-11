@@ -1,5 +1,5 @@
 import { ref, watch, type Ref } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 
 export interface VideoCaptureOptions {
   nodeId: () => string

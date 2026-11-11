@@ -155,10 +155,10 @@ export function registerPackRoutes(ctx: PackRoutesCtx, scriptsDir: string, host:
     if (!r.ok) return c.json({ ok: false, error: r.error }, 400)
     // 直接回字节：导出是"存成一个文件"，让浏览器拿到原始字节最直接
     // 名字与"带了哪些脚本"走**响应头**带回（字节响应没有 JSON 体可以放它们）。
-    // 为什么要带名字：前端收藏时要拿它当文件名/预填项 —— 少了它只能回落成"节点包.mcnode"，
+    // 为什么要带名字：前端收藏时要拿它当文件名/预填项 —— 少了它只能回落成"节点包.plumenode"，
     // 用户每次都得手改（审查发现的缺口）。
     const headers: Record<string, string> = {
-      'content-type': 'application/x-mini-canvas-node',
+      'content-type': 'application/x-plume-node',
       'content-disposition': 'attachment; filename="' + encodeURIComponent(r.name + PACK_EXT) + '"',
       // 非 ASCII 走 percent-encoding（HTTP 头只能是 ASCII）
       'x-pack-name': encodeURIComponent(r.name),

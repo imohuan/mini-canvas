@@ -7,7 +7,7 @@
  *
  * 解法：能力段由**能力层**产出，框架只负责把产出的段挂到每个 ctx 上并负责回收；
  * 具体有哪些段、段是什么含义，框架一概不知道。画布能力层的实现见
- * 画布层（@mini-canvas/canvas-data）装的就是这样一层，由该包入口注册为默认层。
+ * 画布层（@plume-canvas/canvas-data）装的就是这样一层，由该包入口注册为默认层。
  *
  * 未装能力层的 new Context() 就是纯插件内核：
  * 只有 on/once/emit/effect/inject/provide/get/plugin/registry。

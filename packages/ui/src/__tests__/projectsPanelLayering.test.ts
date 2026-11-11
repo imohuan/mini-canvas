@@ -11,15 +11,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context, MemoryStorageAdapter, createCanvasAppBasePlugin } from '@mini-canvas/canvas-data'
+import { Context, MemoryStorageAdapter, createCanvasAppBasePlugin } from '@plume-canvas/canvas-data'
 import {
   CANVAS_CONTEXT_KEY,
   SlotHost,
   mountCanvas,
   unmountCanvas,
   type CanvasContext,
-} from '@mini-canvas/canvas-render'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+} from '@plume-canvas/canvas-render'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
 import { projectsApiPlugin } from '../projectsApiPlugin'
 
 async function boot() {

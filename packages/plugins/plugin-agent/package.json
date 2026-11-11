@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-agent",
+  "name": "@plume-canvas/plugin-agent",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "Agent 对话助手",
     "description": "画布内对话助手：消息流 + 工具调用 + 设置页",
     "pluginName": "agent",
@@ -33,9 +33,9 @@
     "@prismshadow/penguin-core": "0.2.13",
     "hono": "^4.6.0",
     "yaml": "^2.9.1",
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "vue-draggable-plus": "^0.6.1",
     "prosemirror-editor-bundle": "workspace:*"
@@ -44,7 +44,7 @@
   "devDependencies": {
     "@types/node": "^24.12.3",
     "esbuild": "^0.28.2",
-    "@mini-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
     "vitest": "^3.0.0",

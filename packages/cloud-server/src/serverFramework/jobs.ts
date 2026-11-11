@@ -8,7 +8,7 @@
  * 边界：这是**进程内**的轻量调度，不是持久化任务队列。进程重启就没了 ——
  * 需要跨重启的任务应该用任务系统（tasks/），不是这里。
  */
-import type { PluginScope } from '@mini-canvas/kernel'
+import type { PluginScope } from '@plume-canvas/kernel'
 
 /** `ctx.jobs` 的形状 */
 export interface JobsRegistrar {

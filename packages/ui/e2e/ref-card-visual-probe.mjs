@@ -29,7 +29,7 @@ await page.goto(CANVAS, { waitUntil: 'load' })
 await page.waitForTimeout(6500)
 
 const info = await page.evaluate(() => {
-  const host = window.MiniCanvasUI?.getHost?.()
+  const host = window.PlumeUI?.getHost?.()
   const doc = host?.ctx?.get?.('doc')
   if (!doc) return { error: 'no doc' }
   const before = new Set(doc.getNodes().map((n) => n.id))
@@ -76,7 +76,7 @@ ok(
 const before = await page.locator('.nb-shell [data-tile-key]').count()
 // 先把底栏挪进视口（节点在画布下方时按钮落在屏幕外，真实鼠标点不到）
 await page.evaluate(() => {
-  const host = window.MiniCanvasUI?.getHost?.()
+  const host = window.PlumeUI?.getHost?.()
   const vp = host?.view
   const box = document.querySelector('.nb-shell .nb-root')?.getBoundingClientRect()
   if (!vp?.setViewport || !box) return

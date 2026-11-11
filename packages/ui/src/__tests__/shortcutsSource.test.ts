@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildV2HelpList, groupV2HelpList, keyPartsToLabels,
-} from '@mini-canvas/plugin-shortcut-manager'
+} from '@plume-canvas/plugin-shortcut-manager'
 
 /**
  * 快捷键面板数据 = 命令注册表的 keys（不再写死一份）。

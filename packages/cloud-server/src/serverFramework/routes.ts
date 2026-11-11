@@ -33,7 +33,7 @@
  * - ⚠️ **路由必须在 `ctx.start()` 之前注册**（装载期）。运行期新注册的 path 没有代理，会 404。
  */
 import { Hono, type Handler } from 'hono'
-import type { Context, PluginScope } from '@mini-canvas/kernel'
+import type { Context, PluginScope } from '@plume-canvas/kernel'
 
 /** 注册场名：路由条目（key = `METHOD path`，id = 注册方插件名） */
 export const ROUTE_FIELD = 'server/route'

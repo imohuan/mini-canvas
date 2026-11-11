@@ -12,7 +12,7 @@
  * 生命周期：根级常驻，不随路由卸载。因此**不声明 core**（core 只影响热卸拦截，
  * 这里由宿主自己持有实例，不需要靠内核的卸载守卫）。
  */
-import { CommandRegistry, type PluginModule, type PluginScope, type SettingsStore } from '@mini-canvas/kernel'
+import { CommandRegistry, type PluginModule, type PluginScope, type SettingsStore } from '@plume-canvas/kernel'
 import { SaveServiceImpl } from '../storage/SaveService'
 import { createIndexedDbResourceAdapter } from '../storage/indexedDbResourceAdapter'
 import { isResourceAdapter, type StorageAdapter } from '../storage/types'

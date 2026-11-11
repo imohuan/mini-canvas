@@ -6,8 +6,8 @@
 
 | 包 | 插件名 | 管什么 | 何时启动 | 源码 |
 | --- | --- | --- | --- | --- |
-| `@mini-canvas/plugin-theme-canvas` | `theme-canvas` | 节点壳 / 连线 / 背景 / 拖线临时线 / 节点上下工具栏 | 进画布才启动（`inject: ['doc']`） | `packages/plugins/plugin-theme-canvas` |
-| `@mini-canvas/plugin-theme-components` | `theme-components` | 通用组件目录 / 设置面板 / 外观变量 / 通知服务 | 应用级常驻 | `packages/plugins/plugin-theme-components` |
+| `@plume-canvas/plugin-theme-canvas` | `theme-canvas` | 节点壳 / 连线 / 背景 / 拖线临时线 / 节点上下工具栏 | 进画布才启动（`inject: ['doc']`） | `packages/plugins/plugin-theme-canvas` |
+| `@plume-canvas/plugin-theme-components` | `theme-components` | 通用组件目录 / 设置面板 / 外观变量 / 通知服务 | 应用级常驻 | `packages/plugins/plugin-theme-components` |
 
 两边**互不 import**。要共用的纯数据（配置默认值、`Config` 分片、外观桥接、图标表）
 放在 `packages/theme-contract`，只放 TS 数据与纯函数，不放 `.vue`。
@@ -37,7 +37,7 @@
 ```ts
 export const name = 'theme-canvas'
 export const inject = ['doc'] as string[]
-export const Config = CanvasConfig   // 来自 @mini-canvas/theme-contract
+export const Config = CanvasConfig   // 来自 @plume-canvas/theme-contract
 
 export function apply(ctx, config) {
   ctx.theme.register('nodeShell', BaseNode)
@@ -94,8 +94,8 @@ export function apply(ctx) {
 theme-canvas 是画布级（进画布才装）：
 
 ```ts
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
 ```
 
 项目页只装通用组件一半，所以点开项目列表时不会为了主题启动一整套画布外观。

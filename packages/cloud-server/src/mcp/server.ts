@@ -200,7 +200,7 @@ export function createCanvasMcpServer(
   /** 列出全部画布（画布 id + 名字）。给 AI 用来发现「该往哪张画布写」的 id */
   listCanvases?: () => Promise<Array<{ id: string; name: string }>>,
 ): McpServer {
-  const server = new McpServer({ name: 'mini-canvas-cloud', version: '0.0.0' })
+  const server = new McpServer({ name: 'plume-canvas', version: '0.0.0' })
   const toText = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }] })
 
   /** 本次调用该操作哪张画布：给了 canvasId 就按它取（不存在则报错），没给就用默认画布 */

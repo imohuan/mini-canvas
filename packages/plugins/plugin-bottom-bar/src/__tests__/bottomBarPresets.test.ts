@@ -63,7 +63,7 @@ describe('预设提示词面板：只用全局组件', () => {
   })
 
   it('不直接 import 组件库（只有默认主题能那样做）', () => {
-    expect(PRESETS).not.toContain('@mini-canvas/ui-kit-shadcn')
+    expect(PRESETS).not.toContain('@plume-canvas/ui-kit-shadcn')
     expect(PRESETS).not.toContain('vue-sonner')
   })
 

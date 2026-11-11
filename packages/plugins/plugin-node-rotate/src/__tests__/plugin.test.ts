@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { nodeRotatePlugin } from '../index'
 
 describe('plugin-node-rotate 装配 smoke', () => {

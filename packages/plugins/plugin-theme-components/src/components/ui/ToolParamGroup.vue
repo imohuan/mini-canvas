@@ -17,8 +17,8 @@
  * 依赖方向：只 import 内核 ToolParamDef 类型 + 本包自家 UI 组件，不反向依赖节点插件。
  */
 import { computed } from 'vue'
-import type { ToolParamDef } from '@mini-canvas/kernel'
-import { Popover, PopoverContent, PopoverTrigger, ScrollArea } from '@mini-canvas/ui-kit-shadcn'
+import type { ToolParamDef } from '@plume-canvas/kernel'
+import { Popover, PopoverContent, PopoverTrigger, ScrollArea } from '@plume-canvas/ui-kit-shadcn'
 import ToolParamField from './ToolParamField.vue'
 import ToolParamHint from './ToolParamHint.vue'
 import { drawsOwnTitle, resolveInlineSoleSelect } from './paramKind'
@@ -354,7 +354,7 @@ const summary = computed(() => {
    */
   padding: 16px 4px 16px 12px;
   gap: 12px;
-  border-radius: var(--mct-radius, 16px);
+  border-radius: var(--plume-radius, 16px);
   background: var(--ui-overlay-solid, #fff);
   overflow: hidden;
 }

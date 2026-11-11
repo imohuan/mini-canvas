@@ -5,7 +5,7 @@
  * 主题色板），所以搬到这里，跟着默认主题一起常驻、一起回收。
  */
 import { markRaw } from 'vue'
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import { SETTINGS_HIDDEN_FIELD, SETTINGS_HIDDEN_KEY, type SettingsHiddenDecl } from '../settings/navCategory'
 import ThemeStudio from './ThemeStudio.vue'
 

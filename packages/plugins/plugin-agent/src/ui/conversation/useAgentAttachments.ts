@@ -4,7 +4,7 @@
  * 纯拆分：从 useAgentConversation 原样搬出，语句与顺序不变。
  */
 import { computed, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { AgentServiceState } from '../../service/types.js'
 
 export function useAgentAttachments(s: AgentServiceState) {

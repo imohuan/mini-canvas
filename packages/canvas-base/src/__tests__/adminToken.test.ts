@@ -24,7 +24,7 @@ afterEach(() => { delete g.localStorage })
 
 describe('adminToken', () => {
   it('键名固定', () => {
-    expect(ADMIN_TOKEN_KEY).toBe('mc_admin_token')
+    expect(ADMIN_TOKEN_KEY).toBe('plume_admin_token')
     expect(ADMIN_TOKEN_HEADER).toBe('x-admin-token')
   })
 

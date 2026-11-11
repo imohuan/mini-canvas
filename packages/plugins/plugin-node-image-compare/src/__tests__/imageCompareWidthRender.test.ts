@@ -8,8 +8,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import ImageCompareContent from '../ImageCompareContent.vue'
 
 /** 记录所有写回调用的假 graph（真实实现走内核 updateNode，这里只要"收到什么"） */

@@ -17,7 +17,7 @@
 
 ## 注册函数的签名
 
-来自 `@mini-canvas/plugin-bottom-bar`：
+来自 `@plume-canvas/plugin-bottom-bar`：
 
 ```ts
 registerBarAction(ctx, action: BarAction): void
@@ -35,7 +35,7 @@ publishToolActions(ctx, { types, produces, needsPrompt, promptBinding?, ... }): 
 // 文件：packages/my-plugin/src/myPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：往文本节点底栏加一个自己的动作
-import { registerBarAction } from '@mini-canvas/plugin-bottom-bar'
+import { registerBarAction } from '@plume-canvas/plugin-bottom-bar'
 
 const registerBar = (): boolean => {
   if (!ctx.tryGet('nodeBar')) return false          // bottom-bar 还没装

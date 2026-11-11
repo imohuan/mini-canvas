@@ -38,7 +38,7 @@ await page.waitForTimeout(7000)
  * 这样断言「卡片名称 = 节点名称」时不会受历史数据里旧标签干扰。
  */
 const info = await page.evaluate(() => {
-  const host = window.MiniCanvasUI?.getHost?.()
+  const host = window.PlumeUI?.getHost?.()
   const doc = host?.ctx?.get?.('doc')
   if (!doc) return { error: 'no doc' }
   const existing = doc.getNodes().map((n) => n.id)
@@ -114,7 +114,7 @@ if (legacy.length > 0) {
 }
 
 const typed = await page.evaluate(() => {
-  const host = window.MiniCanvasUI?.getHost?.()
+  const host = window.PlumeUI?.getHost?.()
   const doc = host?.ctx?.get?.('doc')
   if (!doc) return { error: 'no doc' }
   /**

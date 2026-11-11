@@ -179,7 +179,7 @@ export interface ChromeHandle {
 export async function launchChrome(chromePath?: string): Promise<ChromeHandle> {
   const exe = chromePath ?? findChrome()
   const port = 9200 + Math.floor(Math.random() * 500)
-  const profile = mkdtempSync(path.join(os.tmpdir(), 'mini-canvas-e2e-'))
+  const profile = mkdtempSync(path.join(os.tmpdir(), 'plume-canvas-e2e-'))
   const child = spawn(
     exe,
     [

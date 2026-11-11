@@ -16,7 +16,7 @@ import {
   computeSideBandRect,
   type SnapZoneConfig,
   type SnapZoneShape,
-} from "@mini-canvas/canvas-render";
+} from "@plume-canvas/canvas-render";
 
 export interface SnapBandRect {
   x: number;

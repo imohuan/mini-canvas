@@ -22,7 +22,7 @@ import { computed, ref } from 'vue'
 import {
   ChevronRight, LayoutGrid, CircleDot, Image as ImageIcon, ImageOff, Video, Music, Type, Folder, Briefcase, Wand2, FileText,
 } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { CardBlock, CardIcon, ToolView } from '../../model/toolViews.js'
 
 const props = defineProps<{ view: ToolView; args: string; output?: string; name?: string }>()

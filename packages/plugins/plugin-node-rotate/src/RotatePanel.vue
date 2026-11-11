@@ -7,7 +7,7 @@
  * 按钮直接用 shadcn Button，不自绘。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { bumpRotateAngle, closeRotateMode, isRotateModeActive, rotateAngle } from './rotateSession'
 import { flipImageNode } from './flipImage'
 

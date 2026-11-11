@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { BatchGuideLine, BatchSide } from '../batchConnect'
 
 defineProps<{

@@ -22,7 +22,7 @@ describe('外壳通用组件按名取件', () => {
       ['AssetUiSlot.vue', assetUiSlot],
       ['HistoryModal.vue', historyModal],
     ] as const) {
-      expect(src, name).not.toMatch(/from ['"]@mini-canvas\/plugin-theme-components\/components\//)
+      expect(src, name).not.toMatch(/from ['"]@plume-canvas\/plugin-theme-components\/components\//)
     }
   })
 

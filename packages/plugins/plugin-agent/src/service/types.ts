@@ -251,9 +251,9 @@ export interface AgentServiceState {
   pendingNodeRefs: string[] | null
   /** 待插入的资源标签（资产「添加到 Agent」走这条：服务只记意图，输入框组件消费） */
   /** 待引用的资产（「添加到 Agent」：服务只记数据，输入框组件用 assetResource 现造完整标签） */
-  pendingAsset: { id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean } | null
+  pendingAsset: { id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean; kind?: string } | null
   /** 待批量插入的资产（多选工具栏「加入资产库」走这条：一次插多张图，组件消费后清空） */
-  pendingAssets: Array<{ id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean }> | null
+  pendingAssets: Array<{ id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean; kind?: string }> | null
 
   /** 正在被编辑的用户消息 id（null = 没有编辑流程）；输入框联动标记跟它走 */
   editingId: string | null
@@ -432,9 +432,9 @@ export interface AgentService {
   requestNodeRefs(nodeIds: string[]): void
 
   /** 引用一份外部资产到 Agent 输入框（资产面板「添加到 Agent」调用） */
-  referenceAsset(asset: { id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean }): void
+  referenceAsset(asset: { id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean; kind?: string }): void
   /** 批量引用多份资产到 Agent 输入框（多选工具栏「加入资产库」调用；一次插多张图） */
-  referenceAssets(assets: Array<{ id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean }>): void
+  referenceAssets(assets: Array<{ id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean; kind?: string }>): void
   /** 输入框插完资产标签后清掉待办 */
   clearPendingResource(): void
   /** 输入框组件批量插完后清掉 */

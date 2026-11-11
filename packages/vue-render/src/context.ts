@@ -8,7 +8,7 @@
  * 由 canvas-render 在它的 CanvasContext 里补全；两边结构兼容，旧引用不用改。
  */
 import { inject, type InjectionKey } from 'vue'
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 
 /** 只声明本包用到的能力段（画布能力层提供，不 import 任何具体包）。 */
 export type ContextWithSlots = Context & {
@@ -37,7 +37,7 @@ export interface CanvasContext {
   manager?: unknown
 }
 
-export const CANVAS_CONTEXT_KEY: InjectionKey<CanvasContext> = Symbol.for('mini-canvas-context')
+export const CANVAS_CONTEXT_KEY: InjectionKey<CanvasContext> = Symbol.for('plume-canvas-context')
 
 export function useCanvasContext(): CanvasContext {
   const base = inject(CANVAS_CONTEXT_KEY, null)

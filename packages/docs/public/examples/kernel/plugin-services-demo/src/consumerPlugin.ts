@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-services-demo/src/consumerPlugin.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：插件包里「依赖方」的那一件
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'consumer'
 export const inject = ['greeter'] as string[]   // ① 硬依赖：greeter 没就绪，本插件停在 pending

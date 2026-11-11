@@ -3,7 +3,7 @@
      位置：插件包内部；它只知道「我是某个节点的内容」，不知道壳是谁 -->
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 // ① 壳注进来的两个 props：id 与 data（响应式对象引用）
 const props = defineProps<{ id: string; data: { text?: string } }>()

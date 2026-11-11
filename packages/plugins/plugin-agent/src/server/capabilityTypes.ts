@@ -1,7 +1,7 @@
 /**
  * 后台能力段的**类型**：让插件后台半（本包的 src/server/**）能看到 `ctx.routes`。
  *
- * 形状与 @mini-canvas/cloud-server 的 serverFramework/capabilityTypes.ts **对齐**，
+ * 形状与 @plume-canvas/cloud-server 的 serverFramework/capabilityTypes.ts **对齐**，
  * 但只声明本包真正用到的那一段（routes）—— 插件不该从宿主包里 import 类型，
  * 那会让「后台半属于插件」这件事又退回到「嵌在 cloud-server 里」。
  *
@@ -32,7 +32,7 @@ export interface RouteRegistrar {
   adopt(app: Hono): void
 }
 
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface PluginCapabilities {
     /** 后台路由注册（插件卸载时自动摘除） */
     routes: RouteRegistrar

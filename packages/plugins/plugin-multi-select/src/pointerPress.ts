@@ -13,7 +13,7 @@ import { ref } from 'vue'
 export const pointerDown = ref(false)
 
 /** body 上的类名（CSS 兜底用，不依赖 Vue 响应式） */
-export const POINTER_DOWN_CLASS = 'mc-pointer-down'
+export const POINTER_DOWN_CLASS = 'plume-pointer-down'
 
 let bound = false
 

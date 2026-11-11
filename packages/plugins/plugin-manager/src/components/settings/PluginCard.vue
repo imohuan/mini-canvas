@@ -6,7 +6,7 @@
  * 卡片底部的真实按钮始终可单独操作（卸载这类动作不会被整卡点击误触）。
  */
 import { computed } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { Download, Loader2, Lock, Plus, RotateCcw, Trash2 } from 'lucide-vue-next'
 import type {
   PluginCardTone,

@@ -10,7 +10,7 @@
  * - 键名全局平面命名，跨插件不能重名 → 全部加 cursorFx 前缀；
  * - 分组用一个**扁平分组** `光标`：设置面板把它当一个一级页渲染，整页由本插件自绘。
  */
-import type { ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
+import type { ConfigSchema, InferConfig } from '@plume-canvas/canvas-base'
 
 /** 设置页一级导航名（= Config 的扁平分组名，也是 settingsGroup/<此名> 的槽键） */
 export const CURSOR_NAV_ID = '光标'

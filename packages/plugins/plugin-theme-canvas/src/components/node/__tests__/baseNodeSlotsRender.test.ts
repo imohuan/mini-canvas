@@ -16,13 +16,13 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, h, ref } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { NodeRegistry } from '@mini-canvas/canvas-data'
+import { NodeRegistry } from '@plume-canvas/canvas-data'
 import {
   NODE_TOOLBAR_HOST_KEY,
   RENDER_CONTEXT_KEY,
   useVueFlow,
   type CanvasRenderContext,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import BaseNode from '../BaseNode.vue'
 
 const ContentStub = defineComponent({ name: 'ContentStub', render: () => h('div', { class: 'probe-content' }) })
@@ -774,8 +774,8 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
     r.register('text', { in: ContentStub })
     const html = await renderNode(r, { resizable: true }, {}, { type: 'text' })
     expect(html).toContain('resize-handle')
-    // 拖柄是「临时 UI」，挂了导出剔除标记 mc-export-ignore（见下方 describe）
-    expect(html).toMatch(/class="resize-handle mc-export-ignore"[^>]*style="[^"]*transform:scale/)
+    // 拖柄是「临时 UI」，挂了导出剔除标记 plume-export-ignore（见下方 describe）
+    expect(html).toMatch(/class="resize-handle plume-export-ignore"[^>]*style="[^"]*transform:scale/)
   })
 
   it('不可 resize → 不渲染拖柄（不挡卡片内容）', async () => {
@@ -836,19 +836,19 @@ describe('resize 拖柄（用户要求：反缩放，屏幕大小恒定）', () 
 })
 
 /**
- * 导出剔除标记 mc-export-ignore：画布上的临时 UI（多选圆点 / resize 拖柄 / 端口球）
+ * 导出剔除标记 plume-export-ignore：画布上的临时 UI（多选圆点 / resize 拖柄 / 端口球）
  * 必须带上它，导出插件才会在截图时整棵跳过 —— 否则多选圆点会被照进导出图（用户报的问题）。
  * 这里只锁「节点壳内部」这几件；端口球在 MovingHandle、选框在多选插件，各自另有测试。
  */
-describe('导出剔除标记 mc-export-ignore（临时 UI 不进导出图）', () => {
-  const MARK = 'mc-export-ignore'
+describe('导出剔除标记 plume-export-ignore（临时 UI 不进导出图）', () => {
+  const MARK = 'plume-export-ignore'
 
   it('多选圆点带标记（用户报：多选标记被照进导出图）', async () => {
     const r = new NodeRegistry()
     r.register('image', { in: ContentStub })
     const html = await renderNode(r, {}, {}, { selectedIds: ['n1', 'n2'] })
     // 标记类必须落在多选圆点那个元素上（不是别处）
-    expect(html).toMatch(/class="v2-multi-radio[^"]*\bmc-export-ignore\b[^"]*"/)
+    expect(html).toMatch(/class="v2-multi-radio[^"]*\bplume-export-ignore\b[^"]*"/)
     // 多选圆点自己的调试/交互类仍在（没有把别的类挤掉）
     expect(html).toMatch(/class="v2-multi-radio[^"]*\bnodrag\b/)
     expect(html).toMatch(/class="v2-multi-radio[^"]*\bnopan\b/)

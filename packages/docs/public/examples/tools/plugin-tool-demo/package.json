@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示工具",
     "description": "注册两个不联网的演示工具，用来学 ctx.tools 怎么用",
     "pluginName": "tool-demo",
@@ -15,7 +15,7 @@
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*"
   }
 }
 

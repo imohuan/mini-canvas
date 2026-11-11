@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { type PluginModule } from '@mini-canvas/kernel'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { createPlumeHost } from '../createPlumeHost'
+import { type PluginModule } from '@plume-canvas/kernel'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 import type { PluginManifest } from '../pluginManager'
 
 /** 一个最简可热装插件：注册一个 node type 'demo' + 一个服务，供装/卸/重载验证 */
@@ -21,15 +21,15 @@ function demoPlugin(flag: string): PluginModule {
   }
 }
 
-describe('createMiniCanvasHost（可复用宿主门面）', () => {
+describe('createPlumeHost（可复用宿主门面）', () => {
   it('启动时按 resourceId 恢复资源 URL，缺失资源不保留失效 blob 地址', async () => {
     const storage = new MemoryStorageAdapter()
     const seed = [{ id: '1', type: 'image', position: { x: 0, y: 0 }, data: { resourceId: 'res-missing', imageUrl: 'blob:dead' } }]
-    const first = await createMiniCanvasHost({ adapter: storage, seedDefault: () => seed })
+    const first = await createPlumeHost({ adapter: storage, seedDefault: () => seed })
     await first.host.save.set('graph', seed, 'canvas')
     await first.host.save.flush()
     first.host.stop()
-    const second = await createMiniCanvasHost({ adapter: storage })
+    const second = await createPlumeHost({ adapter: storage })
     expect(second.host.nodeStore.getNode('1')?.data.imageUrl).toBeUndefined()
     expect(second.host.nodeStore.getNode('1')?.data.resourceId).toBe('res-missing')
     second.host.stop()
@@ -38,22 +38,22 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
   it('视频节点的 videoUrl 从 resourceId 恢复（按 node.type，而不是 data.nodeType）', async () => {
     const storage = new MemoryStorageAdapter()
     const seed = [{ id: 'v1', type: 'video', position: { x: 0, y: 0 }, data: { resourceId: 'res-missing', videoUrl: 'blob:dead' } }]
-    const first = await createMiniCanvasHost({ adapter: storage, seedDefault: () => seed })
+    const first = await createPlumeHost({ adapter: storage, seedDefault: () => seed })
     await first.host.save.set('graph', seed, 'canvas')
     await first.host.save.flush()
     first.host.stop()
-    const second = await createMiniCanvasHost({ adapter: storage })
+    const second = await createPlumeHost({ adapter: storage })
     const data = second.host.nodeStore.getNode('v1')?.data
     expect(data?.videoUrl).toBeUndefined()
     expect(data?.imageUrl).toBeUndefined()
     second.host.stop()
   })
   afterEach(() => {
-    delete (globalThis as Record<string, unknown>)['MiniCanvas']
+    delete (globalThis as Record<string, unknown>)['Plume']
   })
 
   it('冷启动后宿主可用、空 ctx 已 start、可 list 插件', async () => {
-    const { host, api } = await createMiniCanvasHost()
+    const { host, api } = await createPlumeHost()
     expect(host.ctx.getState()).toBe('started')
     expect(api.listPlugins()).toEqual([])
     expect(api.getNodeStore()).toBe(host.nodeStore)
@@ -62,16 +62,16 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
 
   it('dev 选项落到 ctx.isDev（决策 9 的 needs 缺项裁决依赖它）', async () => {
     // 缺省 = 生产语义：库不悄悄读打包器全局变量，判据必须从调用方来
-    const off = await createMiniCanvasHost()
+    const off = await createPlumeHost()
     expect(off.host.ctx.isDev).toBe(false)
     off.host.stop()
-    const on = await createMiniCanvasHost({ dev: true })
+    const on = await createPlumeHost({ dev: true })
     expect(on.host.ctx.isDev).toBe(true)
     on.host.stop()
   })
 
   it('api.installPlugin 热装插件立即可用（服务 + nodeStore type）', async () => {
-    const { host, api } = await createMiniCanvasHost()
+    const { host, api } = await createPlumeHost()
     api.installPlugin(demoPlugin('v1'))
     expect(host.ctx.get<{ flag: string }>('demoSvc').flag).toBe('v1')
     expect(host.nodeStore.types.has('demo')).toBe(true)
@@ -79,7 +79,7 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
   })
 
   it('api.uninstallPlugin 回收副作用 + 服务 + nodeStore type', async () => {
-    const { host, api } = await createMiniCanvasHost()
+    const { host, api } = await createPlumeHost()
     api.installPlugin(demoPlugin('v1'))
     expect(api.uninstallPlugin('demo')).toBe(true)
     expect(host.ctx.get('demoSvc')).toBeUndefined()
@@ -89,7 +89,7 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
   })
 
   it('api.reloadPlugin 先卸旧再装新（同 name 更新实现）', async () => {
-    const { host, api } = await createMiniCanvasHost()
+    const { host, api } = await createPlumeHost()
     api.installPlugin(demoPlugin('old'))
     expect(host.ctx.get<{ flag: string }>('demoSvc').flag).toBe('old')
 
@@ -100,16 +100,16 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
   })
 
   it('reloadPlugin 不带 nextMod = 仅卸载', async () => {
-    const { api } = await createMiniCanvasHost()
+    const { api } = await createPlumeHost()
     api.installPlugin(demoPlugin('v1'))
     api.reloadPlugin('demo') // 不传新模块 → 等同卸载
     expect(api.listPlugins()).not.toContain('demo')
   })
 
   it('exposeToWindow 把 api 挂到 globalThis[windowKey]', async () => {
-    const { api, exposeToWindow } = await createMiniCanvasHost()
-    exposeToWindow() // 默认 key = 'MiniCanvas'
-    expect((globalThis as Record<string, unknown>)['MiniCanvas']).toBe(api)
+    const { api, exposeToWindow } = await createPlumeHost()
+    exposeToWindow() // 默认 key = 'Plume'
+    expect((globalThis as Record<string, unknown>)['Plume']).toBe(api)
     // 自定义 key
     exposeToWindow('Foo')
     expect((globalThis as Record<string, unknown>)['Foo']).toBe(api)
@@ -118,7 +118,7 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
   it('seedDefault 首次启动生成默认画布，持久化恢复走同一 runtime', async () => {
     const storage = new MemoryStorageAdapter()
     const mk = () =>
-      createMiniCanvasHost({
+      createPlumeHost({
         adapter: storage,
         seedDefault: () => [{ id: '1', type: 'x', position: { x: 0, y: 0 }, data: {} }],
       })
@@ -135,7 +135,7 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
   it('已保存的空图在刷新后不被 seedDefault 复活', async () => {
     const storage = new MemoryStorageAdapter()
     const mk = () =>
-      createMiniCanvasHost({
+      createPlumeHost({
         adapter: storage,
         seedDefault: () => [{ id: '1', type: 'x', position: { x: 0, y: 0 }, data: {} }],
       })
@@ -155,7 +155,7 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
   it('从未保存过的首次启动仍执行 seedDefault', async () => {
     const storage = new MemoryStorageAdapter()
     const mk = () =>
-      createMiniCanvasHost({
+      createPlumeHost({
         adapter: storage,
         seedDefault: () => [{ id: '1', type: 'x', position: { x: 0, y: 0 }, data: {} }],
       })
@@ -188,7 +188,7 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
         { id: 'cfg-consumer', source: cfgPlugin, config: { edgeColor: '#16a34a' } },
       ],
     }
-    const { host, manager } = await createMiniCanvasHost({ manifest })
+    const { host, manager } = await createPlumeHost({ manifest })
     expect(manager.list().map((p) => p.name).sort()).toEqual(['cfg-consumer', 'plain'])
     expect(host.ctx.get('plainSvc')).toEqual({ on: 1 })
     expect(host.ctx.get('off')).toBeUndefined() // disabled 项确未装
@@ -201,18 +201,18 @@ describe('createMiniCanvasHost（可复用宿主门面）', () => {
 
 describe('window API 生命周期清理（P1-16）', () => {
   it('host.stop 后 exposeToWindow 挂的 API 被移除（防旧画布残留）', async () => {
-    const { api, exposeToWindow, host } = await createMiniCanvasHost()
-    exposeToWindow('MiniCanvasTest')
-    expect((globalThis as Record<string, unknown>)['MiniCanvasTest']).toBe(api)
+    const { api, exposeToWindow, host } = await createPlumeHost()
+    exposeToWindow('PlumeTest')
+    expect((globalThis as Record<string, unknown>)['PlumeTest']).toBe(api)
     host.stop()
-    expect((globalThis as Record<string, unknown>)['MiniCanvasTest']).toBeUndefined()
+    expect((globalThis as Record<string, unknown>)['PlumeTest']).toBeUndefined()
     // afterEach 兜底清理（若断言失败也不留污染）
-    delete (globalThis as Record<string, unknown>)['MiniCanvasTest']
+    delete (globalThis as Record<string, unknown>)['PlumeTest']
   })
   it('未 expose 时 stop 不抛；换 key 重新 expose 后只清最后 key', async () => {
-    const { api, exposeToWindow, host } = await createMiniCanvasHost()
+    const { api, exposeToWindow, host } = await createPlumeHost()
     host.stop() // 无 expose → no-op 不抛
-    const h2 = await createMiniCanvasHost()
+    const h2 = await createPlumeHost()
     h2.exposeToWindow('K1')
     h2.exposeToWindow('K2')
     expect((globalThis as Record<string, unknown>)['K2']).toBe(h2.api)

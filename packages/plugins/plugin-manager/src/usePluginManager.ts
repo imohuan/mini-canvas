@@ -9,7 +9,7 @@
  * - 项目页的「插件」整页 → 应用级 appPluginManager（项目页没有画布会话）。
  * 两者都操作同一个根 Context，装完立刻生效。
  */
-import { useCanvasContextOrRender } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
 import type { HostPluginManager, PluginManagerService } from './pluginManagerService'
 
 export function usePluginManager(): PluginManagerService {

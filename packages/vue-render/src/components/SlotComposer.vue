@@ -42,10 +42,10 @@ import {
   type VNodeArrayChildren,
   type VNodeChild,
 } from 'vue'
-import { orderSlotItems, type SlotOrderIssue } from '@mini-canvas/kernel'
+import { orderSlotItems, type SlotOrderIssue } from '@plume-canvas/kernel'
 import { useCanvasContextOrRender } from '../context'
 import SlotAnchor from './SlotAnchor.vue'
-import { isSlotItemId } from '@mini-canvas/kernel'
+import { isSlotItemId } from '@plume-canvas/kernel'
 import type { SlotComposerEntry } from './slotComposer'
 
 interface SlotComposerItem extends SlotComposerEntry {

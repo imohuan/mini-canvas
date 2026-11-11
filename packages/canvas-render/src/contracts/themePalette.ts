@@ -16,7 +16,7 @@
  * 切主题仍是纯 CSS 命中不同 branch，**零 JS、零重渲染**。
  *
  * 归属为什么是 canvas-render：与 `styles/ui-theme.css` 同理 —— 24 个插件里绝大多数都依赖
- * canvas-render，放这里它们自动拿到同一套色板；放 `@mini-canvas/ui` 则插件不在那棵依赖树上，
+ * canvas-render，放这里它们自动拿到同一套色板；放 `@plume-canvas/ui` 则插件不在那棵依赖树上，
  * 只能各自硬编码（那正是改造前的状况）。
  *
  * 三件事各自单一真源，别抄第二遍：
@@ -24,7 +24,7 @@
  * → ③ CSS 侧消费（`styles/ui-theme.css` 的 `var(--uic-…, 默认值)`）。
  * ②③ 不漂移由 `__tests__/themePalette.test.ts` 钉住（漏一侧 = 切主题不变色，肉眼极难发现）。
  */
-import type { ConfigSchema } from '@mini-canvas/kernel'
+import type { ConfigSchema } from '@plume-canvas/kernel'
 
 /** 主题模式：与 `<html class="dark">` 一一对应（Tailwind v4 / shadcn 通行做法） */
 export type ThemeColorMode = 'light' | 'dark'

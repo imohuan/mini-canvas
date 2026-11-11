@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-remember-panel",
+  "name": "@plume-canvas/plugin-remember-panel",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "记住面板",
     "description": "记住上次打开的面板（config 域）+ 画布草稿（canvas 域）+ 换后端重读",
     "pluginName": "remember-panel",
@@ -23,9 +23,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",

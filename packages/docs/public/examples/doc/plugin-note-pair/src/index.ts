@@ -3,8 +3,8 @@
 // 位置：一个可安装插件包的源码入口
 
 import { defineComponent, h } from 'vue'
-import type { Context } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { Context } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 
 export const name = 'note-pair'
 // ① 硬依赖：doc 没就绪，本插件停在 PENDING（而不是跑起来后拿到 undefined）

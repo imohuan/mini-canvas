@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { createCloudServer } from '../src/server.js'
 
-const root = await mkdtemp(path.join(tmpdir(), 'mc-sl-e2e-'))
+const root = await mkdtemp(path.join(tmpdir(), 'plume-sl-e2e-'))
 const pluginsDir = path.join(root, 'plugins')
 const dist = path.join(pluginsDir, 'plugin-demo', 'dist')
 await mkdir(dist, { recursive: true })
-await writeFile(path.join(pluginsDir, 'plugin-demo', 'package.json'), JSON.stringify({ miniCanvas: { pluginName: 'demo' } }))
+await writeFile(path.join(pluginsDir, 'plugin-demo', 'package.json'), JSON.stringify({ plume: { pluginName: 'demo' } }))
 await writeFile(path.join(dist, 'plugin-demo.js'), 'v1')
 
 const srv = await createCloudServer({ port: 0, dir: path.join(root, 'data'), pluginsDir, watchProviders: false, mcp: false })

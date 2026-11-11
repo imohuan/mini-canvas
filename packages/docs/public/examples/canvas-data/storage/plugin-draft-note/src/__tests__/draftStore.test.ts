@@ -3,7 +3,7 @@
 // 位置：验证“两个抽屉互不干扰”与“换后端能重读”
 
 import { describe, expect, it, vi } from 'vitest'
-import { MemoryStorageAdapter, SaveServiceImpl } from '@mini-canvas/canvas-data'
+import { MemoryStorageAdapter, SaveServiceImpl } from '@plume-canvas/canvas-data'
 import { createDraftStore, DRAFT_KEY, PANEL_KEY } from '../draftStore'
 
 describe('draftStore', () => {

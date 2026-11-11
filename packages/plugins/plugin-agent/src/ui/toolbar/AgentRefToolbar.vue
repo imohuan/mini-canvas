@@ -18,8 +18,8 @@
  * （与节点控制栏同一个 resolveNodeSlotStyle），本组件只放内容。
  */
 import { computed } from 'vue'
-import { useCapability, useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import type { SelectionCapability } from '@mini-canvas/canvas-render'
+import { useCapability, useCanvasRender, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
+import type { SelectionCapability } from '@plume-canvas/canvas-render'
 import { AGENT_REFERENCE_COMMAND_ID } from '../../plugin/agentCommands.js'
 import { ICON_NODE } from '../shared/agentResources.js'
 

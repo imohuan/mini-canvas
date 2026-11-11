@@ -28,7 +28,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useNodeCapability } from "./useNodeCapability";
 import { createResizeDragSession, type PointerEventTargetLike } from "./resizeDragSession";
-import { nodeSizePatch, isNodeRunning } from "@mini-canvas/canvas-data";
+import { nodeSizePatch, isNodeRunning } from "@plume-canvas/canvas-data";
 
 export interface NodeCardSizeOptions {
   nodeId: string;

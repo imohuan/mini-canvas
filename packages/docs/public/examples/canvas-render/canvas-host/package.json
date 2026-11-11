@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": { "dev": "vite", "build": "vite build" },
   "dependencies": {
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/plugin-node-text": "workspace:*",
-    "@mini-canvas/plugin-theme-components": "workspace:*",
-    "@mini-canvas/plugin-theme-canvas": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/plugin-node-text": "workspace:*",
+    "@plume-canvas/plugin-theme-components": "workspace:*",
+    "@plume-canvas/plugin-theme-canvas": "workspace:*",
     "@vue-flow/core": "^1.48.2",
     "vue": "^3.5.34"
   },

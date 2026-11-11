@@ -11,9 +11,9 @@ kernel  ←  canvas-data  ←  canvas-render  ←  plugins
 
 | 层 | 包名 | 一句话 | 它眼里有什么 |
 | --- | --- | --- | --- |
-| 框架 | `@mini-canvas/kernel` | 装插件的规矩 | 只有插件、服务、事件。**不认识画布，也不认识 Vue** |
-| 数据 | `@mini-canvas/canvas-data` | 画布的图纸和骨架 | 节点、边、选中、撤销、存档 |
-| 渲染 | `@mini-canvas/canvas-render` | 把数据画到屏幕上 | Vue、VueFlow、DOM、尺寸、视口 |
+| 框架 | `@plume-canvas/kernel` | 装插件的规矩 | 只有插件、服务、事件。**不认识画布，也不认识 Vue** |
+| 数据 | `@plume-canvas/canvas-data` | 画布的图纸和骨架 | 节点、边、选中、撤销、存档 |
+| 渲染 | `@plume-canvas/canvas-render` | 把数据画到屏幕上 | Vue、VueFlow、DOM、尺寸、视口 |
 | 插件 | `packages/plugins/*` | 具体功能 | 想用什么就用什么 |
 
 ## 为什么要这么切
@@ -24,7 +24,7 @@ kernel  ←  canvas-data  ←  canvas-render  ←  plugins
 - **canvas-data 只关心"数据长什么样"**，所以它不 import Vue，能被纯逻辑测试。
 - **canvas-render 只关心"怎么画"**，所以换渲染方案（甚至换成别的前端框架）只动这一层。
 
-一个硬规矩：**kernel 不依赖任何其它 `@mini-canvas` 包。** 它的依赖是零。
+一个硬规矩：**kernel 不依赖任何其它 `@plume-canvas` 包。** 它的依赖是零。
 
 ## 看一个真实例子，就明白分层了
 
@@ -54,11 +54,11 @@ canvas-data            doc 服务真正把节点删掉、进撤销栈、落盘
 
 | 包 | 给谁用 | 提供什么 |
 | --- | --- | --- |
-| `@mini-canvas/canvas-base` | **插件作者** | 一个薄入口：重导出 kernel + data 的常用东西，再加几个写插件的语法糖 |
-| `@mini-canvas/ui` | **用画布的应用** | 一行 `<CanvasApp/>` 出一张装好的画布 |
+| `@plume-canvas/canvas-base` | **插件作者** | 一个薄入口：重导出 kernel + data 的常用东西，再加几个写插件的语法糖 |
+| `@plume-canvas/ui` | **用画布的应用** | 一行 `<CanvasApp/>` 出一张装好的画布 |
 
-所以写插件的规矩很简单：**只 import `@mini-canvas/canvas-base`**。
-想要更窄的接口再单独依赖 `@mini-canvas/canvas-data` 的类型。
+所以写插件的规矩很简单：**只 import `@plume-canvas/canvas-base`**。
+想要更窄的接口再单独依赖 `@plume-canvas/canvas-data` 的类型。
 
 ## 一句话总结
 

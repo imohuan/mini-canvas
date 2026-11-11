@@ -66,12 +66,12 @@ if (!ctx.tryGet('nodeBar')) {
 内核会保证装载顺序；卸载提供方时依赖方自动回退。
 
 死规则：**业务插件之间零引用** —— 源码与 dependencies 都不允许 import 另一个
-`@mini-canvas/plugin-*`。要协作就经过服务、注册场、插槽或共享类型契约：
+`@plume-canvas/plugin-*`。要协作就经过服务、注册场、插槽或共享类型契约：
 
 ```text
 plugin-node-text / node-video / web2api-tools
        │ 往 node/bar 注册动作
-       └──► @mini-canvas/bar-contract（纯类型 + 注册糖）
+       └──► @plume-canvas/bar-contract（纯类型 + 注册糖）
 
 theme-canvas（默认皮）←── 不依赖任何节点插件（刻意解耦）
 plugin-tool-*-generation（生成工具）←── 不依赖节点插件（节点面板反向调它）

@@ -58,7 +58,7 @@ base / data / render 三层都有自己的插件身份，名字就是分层名�
 
 ```ts
 // 文件：my-plugin/src/index.ts（参照 packages/plugins/plugin-style-library/src/index.ts）
-import type { PluginModule } from '@mini-canvas/canvas-base'
+import type { PluginModule } from '@plume-canvas/canvas-base'
 
 export const name = 'my-projects-panel'
 export const inject: string[] = []   // 不依赖 doc，项目页就能启动
@@ -93,10 +93,10 @@ const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
 
 | 包 | 插件 | 作用 | 何时启动 |
 | --- | --- | --- | --- |
-| `@mini-canvas/plugin-theme-components` | `themeComponentsPlugin`（`theme-components`） | 通用 UI 目录、设置面板、外观变量、通知服务 | 应用级常驻 |
-| `@mini-canvas/plugin-theme-canvas` | `themeCanvasPlugin`（`theme-canvas`） | 节点壳、连线、背景、节点工具栏 | 进画布（`inject: ['doc']`） |
+| `@plume-canvas/plugin-theme-components` | `themeComponentsPlugin`（`theme-components`） | 通用 UI 目录、设置面板、外观变量、通知服务 | 应用级常驻 |
+| `@plume-canvas/plugin-theme-canvas` | `themeCanvasPlugin`（`theme-canvas`） | 节点壳、连线、背景、节点工具栏 | 进画布（`inject: ['doc']`） |
 
-两个包共享的纯数据（配置默认值、外观桥接、图标表）住在 `@mini-canvas/theme-contract`，
+两个包共享的纯数据（配置默认值、外观桥接、图标表）住在 `@plume-canvas/theme-contract`，
 两边都能读，但谁也不认识对方的组件。旧的聚合入口 `themeDefaultPlugin` 已删除。
 
 ## 云端插件也分两段

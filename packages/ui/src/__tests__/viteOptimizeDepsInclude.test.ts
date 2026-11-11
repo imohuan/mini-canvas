@@ -36,7 +36,7 @@ describe('dev 代理的来源边界（多 Agent 端口）', () => {
     // 浏览器带来的 Origin 会原样透过去（预检同样不被改写），所以断言真实实现的那一段。
     expect(config).toMatch(/configure\s*:\s*\(\s*proxy\s*\)\s*=>\s*\{/)
     expect(config).toMatch(/proxy\.on\(\s*['"]proxyReq['"]/)
-    expect(config).toMatch(/setHeader\(\s*['"]origin['"]\s*,\s*process\.env\.MINI_CANVAS_BACKEND\s*\|\|\s*['"]http:\/\/localhost:8865['"]\s*\)/)
+    expect(config).toMatch(/setHeader\(\s*['"]origin['"]\s*,\s*process\.env\.PLUME_BACKEND\s*\|\|\s*['"]http:\/\/localhost:8865['"]\s*\)/)
   })
 
   /**
@@ -112,7 +112,7 @@ function bareImports(text: string): string[] {
     let m: RegExpExecArray | null
     while ((m = re.exec(text))) {
       const spec = m[1]!
-      if (/^(\.|\/|@mini-canvas\/|prosemirror-editor-bundle$)/.test(spec)) continue
+      if (/^(\.|\/|@plume-canvas\/|prosemirror-editor-bundle$)/.test(spec)) continue
       if (/^(node:|data:|https?:|blob:)/.test(spec)) continue
       const pkg = spec.startsWith('@') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0]!
       found.push(pkg)
@@ -136,8 +136,8 @@ function packageDir(dirName: string): string | undefined {
   })
 }
 
-/** 源码包名 → 目录名（@mini-canvas/plugin-x → plugin-x，@mini-canvas/foo → foo） */
-const dirOf = (pkg: string): string => pkg.replace(/^@mini-canvas\//, '')
+/** 源码包名 → 目录名（@plume-canvas/plugin-x → plugin-x，@plume-canvas/foo → foo） */
+const dirOf = (pkg: string): string => pkg.replace(/^@plume-canvas\//, '')
 
 /** 合法的 npm 包名（把模板字符串、多行文本、`@/` 别名挡在外面） */
 const PKG_NAME = /^(@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/i
@@ -153,7 +153,7 @@ function coldStartedPackages(): string[] {
   const seen = new Set<string>()
   const queue: string[] = []
   const push = (spec: string): void => {
-    if (spec.startsWith('@mini-canvas/')) queue.push(spec)
+    if (spec.startsWith('@plume-canvas/')) queue.push(spec)
     else if (spec === 'prosemirror-editor-bundle') queue.push(spec)
   }
   for (const f of sources(path.join(UI, 'src'))) for (const p of bareImports(readFileSync(f, 'utf8'))) push(p)
@@ -161,7 +161,7 @@ function coldStartedPackages(): string[] {
     const pkg = queue.shift()!
     if (seen.has(pkg)) continue
     seen.add(pkg)
-    const dirName = pkg === 'prosemirror-editor-bundle' ? pkg : pkg.replace(/^@mini-canvas\//, '')
+    const dirName = pkg === 'prosemirror-editor-bundle' ? pkg : pkg.replace(/^@plume-canvas\//, '')
     const pkgDir = packageDir(dirName)
     if (!pkgDir) continue
     for (const f of sources(path.join(pkgDir, 'src'))) {
@@ -194,7 +194,7 @@ describe('vite optimizeDeps 冷启动守卫', () => {
         // 模板字符串 / `@/` 路径别名 / 非包名文本不是真依赖
         if (!PKG_NAME.test(dep) || dep.startsWith('@/')) continue
         // 别的 workspace 源码包不预构建（它们自己会现编）
-        if (exclude.includes(dep) || dep.startsWith('@mini-canvas/')) continue
+        if (exclude.includes(dep) || dep.startsWith('@plume-canvas/')) continue
         if (dep === 'prosemirror-editor-bundle') continue
         // ui / cva / @vueuse 这类同名依赖直接写名字；来自别包的用 `包 > 依赖` 精确解析
         const direct = include.includes(dep)

@@ -8,17 +8,17 @@
 import { describe, expect, it } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context } from '@mini-canvas/canvas-data'
-import type { CanvasHostHandle, MiniCanvasApi } from '../../host/createMiniCanvasHost'
+import { Context } from '@plume-canvas/canvas-data'
+import type { CanvasHostHandle, PlumeApi } from '../../host/createPlumeHost'
 import type { PluginManager } from '../../host/pluginManager'
 import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../../contracts/canvasContext'
-import SlotHost from '@mini-canvas/vue-render/SlotHost.vue'
+import SlotHost from '@plume-canvas/vue-render/SlotHost.vue'
 
 function baseContext(ctx: Context): CanvasContext {
   return {
     ctx,
     host: {} as CanvasHostHandle,
-    api: {} as MiniCanvasApi,
+    api: {} as PlumeApi,
     manager: {} as PluginManager,
   }
 }

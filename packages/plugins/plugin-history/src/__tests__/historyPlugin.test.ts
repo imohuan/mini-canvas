@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Context, GraphDocument, Selection } from '@mini-canvas/canvas-data'
-import { History, createDocService, type HistorySnapshot } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { Context, GraphDocument, Selection } from '@plume-canvas/canvas-data'
+import { History, createDocService, type HistorySnapshot } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { historyPlugin, name } from '../historyPlugin'
 
 /** 极简快照存储：外部 state 引用 + 深拷贝桥 */

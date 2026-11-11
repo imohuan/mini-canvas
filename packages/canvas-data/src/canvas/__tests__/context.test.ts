@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 
 // 扩展事件表测试插件自定义事件
 // （接口名随框架迁移由 CanvasEventMap 更名为 EventMap；此处跟随，确保声明合并真实生效）
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface EventMap {
     'hello:ping': { from: string }
   }
@@ -303,7 +303,7 @@ describe('PluginModule Cordis 形态（name/inject/apply）', () => {
 
   it('裸 export 三样(name/inject/apply) 经 ctx.plugin 装载并可用 ctx 能力', async () => {
     // 模拟插件作者只 export name/inject/apply 的模块（依赖已注入才跑）
-    const { NodeStore } = await import('@mini-canvas/canvas-data')
+    const { NodeStore } = await import('@plume-canvas/canvas-data')
     const { createDocService } = await import('../../docService')
     const { NodeRegistry } = await import('../registry/nodeRegistry')
     const ctx = new Context()

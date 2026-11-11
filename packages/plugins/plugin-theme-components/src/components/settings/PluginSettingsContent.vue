@@ -27,8 +27,8 @@
  */
 import { computed, markRaw, provide } from 'vue'
 import type { Component } from 'vue'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
-import { SETTINGS_FIELD_RENDERER } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
+import { SETTINGS_FIELD_RENDERER } from '@plume-canvas/canvas-render'
 import { useUiComponentOutside } from '../../composables/useUiComponentOutside'
 import TierTierPreview from './TierTierPreview.vue'
 import { SETTINGS_TIER_PREVIEW, SETTINGS_TIER_SPEC, tierSectionSpec } from './tierSection'

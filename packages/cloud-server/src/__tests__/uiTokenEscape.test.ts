@@ -1,8 +1,8 @@
 /**
- * 令牌注入的**转义**：`MINI_CANVAS_ADMIN_TOKEN` 不校验格式，可能含 `</script>`。
+ * 令牌注入的**转义**：`PLUME_ADMIN_TOKEN` 不校验格式，可能含 `</script>`。
  *
  * 不转义的话，页面里就会出现
- *   <script>window.__MC_ADMIN_TOKEN__="x</script><script>alert(1)</script>"</script>
+ *   <script>window.__PLUME_ADMIN_TOKEN__="x</script><script>alert(1)</script>"</script>
  * —— 脚本标签被提前闭合，后面的内容成了真脚本（同源，能读走 localStorage 里的真令牌）。
  *
  * 转义 `<` 之后，HTML 解析器看不到 `</script>`，而 JS 里拿到的值不变。
@@ -45,7 +45,7 @@ describe('令牌注入的转义', () => {
     // 危险串不能原样出现
     expect(html).not.toContain('</script><script>alert(1)')
     // 但值仍然注入了（转义成 \u003c）
-    expect(html).toContain('__MC_ADMIN_TOKEN__')
+    expect(html).toContain('__PLUME_ADMIN_TOKEN__')
     expect(html).toContain('\\u003c')
   })
 

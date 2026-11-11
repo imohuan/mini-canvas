@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-auto-layout",
+  "name": "@plume-canvas/plugin-auto-layout",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "自动布局",
     "description": "Ctrl/Cmd+L 布局 / F 聚焦选中 / R 适应视图",
     "pluginName": "auto-layout",
@@ -25,12 +25,12 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

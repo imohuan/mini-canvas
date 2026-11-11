@@ -33,10 +33,10 @@ ctx.nodes.register({ type: 'ui', /* ... */ })
 可以直接看到"节点壳 + 端口 + 连线"长什么样（可视化节点本身需要 Agent 生成内容才有画面）：
 
 <script setup>
-import MiniCanvasStage from '../../../.vitepress/theme/demos/MiniCanvasStage.vue'
+import PlumeStage from '../../../.vitepress/theme/demos/PlumeStage.vue'
 </script>
 
-<MiniCanvasStage :height="320" />
+<PlumeStage :height="320" />
 
 ## 注意事项
 

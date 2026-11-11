@@ -9,7 +9,7 @@
  * 内核为此提供了通用契约 `data.transient`（见 canvas-data 的 transient.ts），本文件只负责
  * 把该标记拼出来，避免组件的建边/建节点处处手抄字符串而漂移。
  */
-import { TRANSIENT_KEY } from '@mini-canvas/canvas-data'
+import { TRANSIENT_KEY } from '@plume-canvas/canvas-data'
 
 /** 批量连线临时节点/边的 data（标记为中间态 + 起个能认出来的名字便于调试） */
 export function transientBatchData(): Record<string, unknown> {

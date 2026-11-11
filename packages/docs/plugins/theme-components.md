@@ -12,10 +12,10 @@
 
 | 包 | 插件 | 管什么 |
 | --- | --- | --- |
-| `@mini-canvas/plugin-theme-components` | `theme-components` | 本页讲的通用组件、设置面板、外观变量、通知服务（应用级常驻） |
-| `@mini-canvas/plugin-theme-canvas` | `theme-canvas` | 节点壳 / 连线 / 背景 / 节点工具栏（进画布才启动），见 [默认主题](/plugins/theme-canvas) |
+| `@plume-canvas/plugin-theme-components` | `theme-components` | 本页讲的通用组件、设置面板、外观变量、通知服务（应用级常驻） |
+| `@plume-canvas/plugin-theme-canvas` | `theme-canvas` | 节点壳 / 连线 / 背景 / 节点工具栏（进画布才启动），见 [默认主题](/plugins/theme-canvas) |
 
-两者共享的纯数据在 `@mini-canvas/theme-contract`。
+两者共享的纯数据在 `@plume-canvas/theme-contract`。
 
 ## 二、它注册了两类东西
 
@@ -58,10 +58,10 @@
 > 通用按钮、下拉、选择器、气泡也在这张目录里：默认主题把 shadcn 原始组件按**导出名**登记，
 > 业务插件写 `const Button = useUiComponent('Button')` 或
 > `const { DropdownMenu, DropdownMenuContent } = useUiComponent()` 取件。
-> 只有默认主题插件可以直接 import `@mini-canvas/ui-kit-shadcn`，其它地方都走注册表。
+> 只有默认主题插件可以直接 import `@plume-canvas/ui-kit-shadcn`，其它地方都走注册表。
 >
 > 名字只是字符串，**不是封闭枚举**：主题可以登记自定名字，插件也可以往目录里加自己的件。
-> `UI_NAMES`（在 `@mini-canvas/canvas-render`）里列的是"约定俗成的常用名"，不必背。
+> `UI_NAMES`（在 `@plume-canvas/canvas-render`）里列的是"约定俗成的常用名"，不必背。
 
 ## 四、在画布里直接看它们跑起来
 
@@ -88,14 +88,14 @@
 | 非组件代码（工具函数 / 插件 `apply` 里） | `uiComponent(ctx, '名字')` | 组件句柄或 `undefined` | 拿一次就用（非响应式） |
 | 画布树**外**（Teleport 到 body 的浮层、资产抽屉） | `uiComponentOutside('名字')` | 组件句柄或 `undefined` | 树外取不到 provide，只能走这条一次性通道 |
 
-三条都从 `@mini-canvas/canvas-render` 导入：
+三条都从 `@plume-canvas/canvas-render` 导入：
 
 ```vue
 <!-- 文件：packages/my-plugin/src/components/MyPanel.vue -->
 <!-- 格式：Vue 单文件组件（script setup lang="ts"） -->
 <!-- 位置：插件包里的一个面板组件 —— 它要用默认主题的精细滑块 -->
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 // ① 按名取，拿到的是 Ref；模板里直接写 <PrecisionSlider ... /> 即可（Vue 自动解包）
 const PrecisionSlider = useUiComponent('slider')
@@ -116,9 +116,9 @@ function refresh() { /* ... */ }
 // 文件：packages/my-plugin/src/SomePanel.vue
 // 格式：Vue 单文件组件
 // 位置：插件包里的面板 —— 它明确就要默认主题的这一份具体实现
-import { PrecisionSlider, ToolParamField, ColorField, MediaViewer } from '@mini-canvas/plugin-theme-components'
+import { PrecisionSlider, ToolParamField, ColorField, MediaViewer } from '@plume-canvas/plugin-theme-components'
 // 渲染件在画布那一半
-import { MovingHandle, ConnectionLine, CustomEdge } from '@mini-canvas/plugin-theme-canvas'
+import { MovingHandle, ConnectionLine, CustomEdge } from '@plume-canvas/plugin-theme-canvas'
 ```
 
 **两种拿法怎么选**：想"换主题时它一起换" → **按名取**；只是同包内自己用、

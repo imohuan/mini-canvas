@@ -5,7 +5,7 @@
 // 为什么单独放一个文件：这段代码不碰 ctx、不碰 Vue，
 // 可以直接用普通对象断言 —— 把"参数算得对不对"与"注册成没成"分开看。
 
-import type { ToolDef } from '@mini-canvas/kernel'
+import type { ToolDef } from '@plume-canvas/kernel'
 
 /** 分段提示词拼成一段文字：标签展开成 @名称（名称从 resources 里按 id 查） */
 function promptText(input: { prompts?: Array<{ type: 'tag' | 'prompt'; value: string }>; resources?: Array<{ id: string; name?: string }> }): string {

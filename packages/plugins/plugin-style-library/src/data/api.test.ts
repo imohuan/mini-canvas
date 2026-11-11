@@ -31,7 +31,7 @@ afterEach(() => {
 
 describe('写接口带管理令牌', () => {
   it('★ putRoot / reload 都带 x-admin-token', async () => {
-    ;(g.localStorage as { setItem(k: string, v: string): void }).setItem('mc_admin_token', 'tok')
+    ;(g.localStorage as { setItem(k: string, v: string): void }).setItem('plume_admin_token', 'tok')
     const calls = stubFetch()
     await putRoot('', 'style', '/assets')
     await reload('', 'style')

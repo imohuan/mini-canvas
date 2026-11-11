@@ -56,6 +56,19 @@ describe('XML 标记序列化', () => {
       '<ref type="asset" name="待分类资产" folderId="f1" />',
     )
   })
+
+  /**
+   * 内容类型（用户 2026-11-11）：标签图标第二轮靠它。
+   * 节点 / 资产的名字可能是 UUID 或用户起的真名，光看名字认不出音频。
+   */
+  it('内容类型：节点与资产都能带上 kind', () => {
+    expect(formatReferenceMarkup('node', '音频 1', encodeNodeRef('c1', '9'), { contentKind: 'audio' })).toBe(
+      '<ref type="node" name="音频 1" canvasId="c1" nodeId="9" kind="audio" />',
+    )
+    expect(formatReferenceMarkup('asset', 'd4b974cd', undefined, { ext: 'mp3', contentKind: 'audio' })).toBe(
+      '<ref type="asset" name="d4b974cd" ext="mp3" kind="audio" />',
+    )
+  })
 })
 
 describe('XML 标记解析', () => {
@@ -88,6 +101,12 @@ describe('XML 标记解析', () => {
   it('资产文件夹：解析出 folderId（没有 ext）', () => {
     expect(parseReferenceMarkups('<ref type="asset" name="F" folderId="f1" />')).toEqual([
       { type: 'asset', name: 'F', folderId: 'f1' },
+    ])
+  })
+
+  it('内容类型：解析成 contentKind（老标记没有它）', () => {
+    expect(parseReferenceMarkups('<ref type="node" name="音频 1" canvasId="c1" nodeId="9" kind="audio" />')).toEqual([
+      { type: 'node', name: '音频 1', canvasId: 'c1', nodeId: '9', contentKind: 'audio' },
     ])
   })
 

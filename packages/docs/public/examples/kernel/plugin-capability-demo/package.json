@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "能力层接缝演示",
     "description": "跟着能力层篇学：自己写一个迷你能力层（notes 段 + clock 内置服务），对照装层与不装层",
     "pluginName": "capability-demo",
@@ -15,7 +15,7 @@
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
   },
   "dependencies": {
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/kernel": "workspace:*"
   }
 }
 

@@ -25,7 +25,7 @@ text 节点（前提：已装 node-text 插件）。这个"建方块"能力同�
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "随机建方块",
     "description": "画布角落按钮：随机位置建一个 text 节点；能力同时上架为服务",
     "pluginName": "block-spawner",
@@ -39,11 +39,11 @@ text 节点（前提：已装 node-text 插件）。这个"建方块"能力同�
   },
   "scripts": { "typecheck": "tsc --noEmit" },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",   // Service 基类在这层
-    "@mini-canvas/canvas-data": "workspace:*"    // DocService 类型在这层（declare module 要用）
+    "@plume-canvas/canvas-base": "workspace:*",   // Service 基类在这层
+    "@plume-canvas/canvas-data": "workspace:*"    // DocService 类型在这层（declare module 要用）
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {
@@ -55,9 +55,9 @@ text 节点（前提：已装 node-text 插件）。这个"建方块"能力同�
 
 ```ts
 // 文件：my-block-spawner/src/index.ts
-import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
+import { Service, type Context, type PluginModule } from '@plume-canvas/canvas-base'
 import { markRaw } from 'vue'
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { DocService } from '@plume-canvas/canvas-data'
 import SpawnerButton from './SpawnerButton.vue'
 
 // ① 服务形状：别的插件/宿主能调用的方法清单。写清楚注释，消费方才知道每个方法干嘛
@@ -70,7 +70,7 @@ export interface BlockSpawnerService {
 
 // ② 类型增强（declare module）：让 `ctx.get('block-spawner')` 有完整类型提示，
 //    甚至可以 `ctx.blockSpawner` 直访。声明合并发生在编译期，不产生任何运行时代码
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     blockSpawner: BlockSpawnerService
   }
@@ -130,7 +130,7 @@ export const blockSpawnerPlugin: PluginModule = { name, inject, apply }
 <!-- 文件：my-block-spawner/src/SpawnerButton.vue -->
 <!-- overlay 按钮：消费本插件自己上架的服务（同一进程内 ctx.get 永远拿同一个实例） -->
 <script setup lang="ts">
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
 
@@ -224,7 +224,7 @@ addFiles(…) }>('file-drop')` 拿服务、断言"装上了且三类文件都能
 | 真实文件 | 对应示例 | 行为 |
 | --- | --- | --- |
 | `packages/plugins/plugin-file-drop/src/fileDropPlugin.ts:46` | 步骤 ① | `export interface FileDropService { addFiles(…): Promise<number>; addPastedText(…); canHandle(…) }` |
-| `packages/plugins/plugin-file-drop/src/fileDropPlugin.ts:55` | 步骤 ② | `declare module '@mini-canvas/canvas-data' { interface Context { fileDrop: FileDropService } }` |
+| `packages/plugins/plugin-file-drop/src/fileDropPlugin.ts:55` | 步骤 ② | `declare module '@plume-canvas/canvas-data' { interface Context { fileDrop: FileDropService } }` |
 | `packages/plugins/plugin-file-drop/src/fileDropPlugin.ts:176` | 步骤 ③ | `export class FileDropServiceImpl extends Service implements FileDropService` |
 | `packages/plugins/plugin-file-drop/src/fileDropPlugin.ts:183` | 步骤 ③ | `super(ctx, 'file-drop')` —— 构造即上架 |
 | `packages/plugins/plugin-file-drop/src/fileDropPlugin.ts:188` | 步骤 ④ | `private get doc(): DocService { return this.ctx.get('doc') }` —— getter 惰性取 |
@@ -246,5 +246,5 @@ addFiles(…) }>('file-drop')` 拿服务、断言"装上了且三类文件都能
 - **服务名要全局唯一，且最好和插件名一致或相关**。服务表就是一张平坦的 Map；两个插件上架
   同名服务，后装的会响亮抛错（`[core] Service … is already injected`），装配失败。真实插件都用
   插件名相关的名字：`file-drop`、`text`、`mini-map`。
-- **类型增强的模块名要对**。`declare module '@mini-canvas/canvas-data'` 增强的是 Context ——
-  写成 `'@mini-canvas/kernel'` 或当前插件自己的包名，类型合并不生效（编译不报错，但消费者拿不到提示）。
+- **类型增强的模块名要对**。`declare module '@plume-canvas/canvas-data'` 增强的是 Context ——
+  写成 `'@plume-canvas/kernel'` 或当前插件自己的包名，类型合并不生效（编译不报错，但消费者拿不到提示）。

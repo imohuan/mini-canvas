@@ -20,10 +20,10 @@ import { fileURLToPath } from 'node:url'
 import * as vue from 'vue'
 import { parse, compileScript } from 'vue/compiler-sfc'
 import ts from 'typescript'
-import { Context } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import type { CommandService } from '@mini-canvas/kernel'
-import * as renderPkg from '@mini-canvas/canvas-render'
+import { Context } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import type { CommandService } from '@plume-canvas/kernel'
+import * as renderPkg from '@plume-canvas/canvas-render'
 import { agentPlugin } from '../plugin/agentPlugin'
 import AgentRefToolbar from '../ui/toolbar/AgentRefToolbar.vue'
 import * as commandsMod from '../plugin/agentCommands'
@@ -51,7 +51,7 @@ const ToolbarIconStub = vue.defineComponent({
   name: 'ToolbarIcon',
   props: { icon: { type: [String, Object], default: undefined } },
   setup() {
-    return () => vue.h('span', { class: 'mck-toolbar-icon' })
+    return () => vue.h('span', { class: 'pk-toolbar-icon' })
   },
 })
 
@@ -204,7 +204,7 @@ function loadComponent(): unknown {
   const mod: { exports: Record<string, unknown> } = { exports: {} }
   const requireShim = (id: string): unknown => {
     if (id === 'vue') return vue
-    if (id === '@mini-canvas/canvas-render') {
+    if (id === '@plume-canvas/canvas-render') {
       // 真实 useUiComponent 要注入 CANVAS_CONTEXT_KEY；这里给它一个响应式句柄，
       // 让被测组件仍走**真组件里的按名取件逻辑**，而不是把 Button 换掉。
       return { ...renderPkg, ToolbarIcon: ToolbarIconStub, useUiComponent: () => vue.shallowRef(ShadcnButtonStub) }

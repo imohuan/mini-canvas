@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import {
   DEFAULT_THEME_EDGE, DEFAULT_THEME_HANDLE, DEFAULT_THEME_DEBUG, DEFAULT_THEME_SNAP_ZONE,
-} from '@mini-canvas/theme-contract'
+} from '@plume-canvas/theme-contract'
 import { DRAWER_TAB_CANVAS } from '../drawerTabs'
 
 export function createUiState() {

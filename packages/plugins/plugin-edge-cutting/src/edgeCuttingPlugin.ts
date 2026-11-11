@@ -16,9 +16,9 @@
  *   .edge-hit-area[data-edge-id] 优先命中）；samplePathInClientSpace 采样屏幕点；
  *   isPolylineHitByCut 判定折线相交（纯几何，geometry.ts 可单测）。
  */
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import { registerEventName } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
+import { registerEventName } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import type { ScreenPoint } from './geometry'
 import {
   cutTrailOnly,

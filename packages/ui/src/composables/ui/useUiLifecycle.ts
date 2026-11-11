@@ -1,7 +1,7 @@
-import type { SettingsStore } from '@mini-canvas/kernel'
+import type { SettingsStore } from '@plume-canvas/kernel'
 import {
   EDGE_SETTING_KEYS, HANDLE_SETTING_KEYS, DEBUG_SETTING_KEYS, SNAP_ZONE_SETTING_KEYS,
-} from '@mini-canvas/theme-contract'
+} from '@plume-canvas/theme-contract'
 import { registerPendingSave } from '../pendingSave'
 import type { UiConfig, UiState } from './createUiState'
 import type { UiHostScope } from './useUiHost'
@@ -179,13 +179,13 @@ export function createUiLifecycle(deps: {
   }
   function bindAssetsChanged(): void {
     if (typeof window === 'undefined') return // Node 单测环境无 window：跳过副作用
-    window.removeEventListener('mini-canvas:assets-changed', onAssetsChanged)
-    window.addEventListener('mini-canvas:assets-changed', onAssetsChanged)
+    window.removeEventListener('plume-canvas:assets-changed', onAssetsChanged)
+    window.addEventListener('plume-canvas:assets-changed', onAssetsChanged)
     disposeAssetsChanged = true
   }
   function unbindAssetsChanged(): void {
     if (typeof window === 'undefined') return
-    window.removeEventListener('mini-canvas:assets-changed', onAssetsChanged)
+    window.removeEventListener('plume-canvas:assets-changed', onAssetsChanged)
     disposeAssetsChanged = false
   }
 

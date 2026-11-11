@@ -5,17 +5,17 @@
  * 节点/主题注册表容器、命令表、配置持久化桥。它**不**提供 doc / selection ——
  * 那是 `canvas-data` 会话插件的职责，只在打开某张画布时存在。
  *
- * 为什么放在 canvas-base 包：插件作者只认 `@mini-canvas/canvas-base` 这一个入口；
+ * 为什么放在 canvas-base 包：插件作者只认 `@plume-canvas/canvas-base` 这一个入口；
  * 应用装配（根级 Provider）也应该从同一处拿到这个身份，而不是去 canvas-data 里找工厂。
  * 实现直接复用 canvas-data 的工厂，逻辑只有一份。
  */
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 import {
   CANVAS_APP_BASE_PLUGIN_NAME,
   createCanvasAppBasePlugin,
   type CanvasAppBaseOptions,
   type CanvasAppBaseServices,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 
 /** 应用级底座插件名（= 'canvas-base'） */
 export const CANVAS_BASE_PLUGIN_NAME = CANVAS_APP_BASE_PLUGIN_NAME

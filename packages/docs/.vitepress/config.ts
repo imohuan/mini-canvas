@@ -296,8 +296,8 @@ export default withMermaid(defineConfig({
     },
   },
   lang: 'zh-CN',
-  title: 'mini-canvas',
-  description: 'mini-canvas 插件系统文档：入门 · 示例 · 插件 · API 参考',
+  title: 'Plume 羽画',
+  description: 'Plume 羽画：可堆叠插件的画布应用，文档含入门 · 示例 · 插件 · API 参考',
   cleanUrls: true,
   lastUpdated: true,
   themeConfig: {

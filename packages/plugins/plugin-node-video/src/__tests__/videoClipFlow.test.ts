@@ -6,7 +6,7 @@
  * 用户口径 2026-10-30（顺序）：确认后**先**建占位节点 + 连线（带进度盖层），后台完成再回填。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
 import { clipNodeWithBackend } from '../videoClipFlow'
 import { createVideoOps } from '../videoOps'
 import { resetCropBackendProbe } from '../videoCropService'

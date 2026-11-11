@@ -78,9 +78,9 @@ describe('令牌注入：只认真实对端地址', () => {
     const port = await boot()
     const html = await get(port, '127.0.0.1', 'mycanvas.example.com:' + port)
     expect(html).not.toContain(TOKEN)
-    expect(html).not.toContain('__MC_ADMIN_TOKEN__')
+    expect(html).not.toContain('__PLUME_ADMIN_TOKEN__')
     // 页面本身照常打开
-    expect(html).toContain('mini-canvas-host')
+    expect(html).toContain('plume-host')
   })
 
   /**
@@ -100,8 +100,8 @@ describe('令牌注入：只认真实对端地址', () => {
     }
     const html = await get(port, lan, '127.0.0.1:' + port)
     expect(html).not.toContain(TOKEN)
-    expect(html).not.toContain('__MC_ADMIN_TOKEN__')
-    expect(html).toContain('mini-canvas-host')
+    expect(html).not.toContain('__PLUME_ADMIN_TOKEN__')
+    expect(html).toContain('plume-host')
   })
 
   /**
@@ -115,8 +115,8 @@ describe('令牌注入：只认真实对端地址', () => {
     const port = await boot()
     const html = await get(port, '127.0.0.1', '127.0.0.1:' + port, { 'x-forwarded-for': '203.0.113.9' })
     expect(html).not.toContain(TOKEN)
-    expect(html).not.toContain('__MC_ADMIN_TOKEN__')
-    expect(html).toContain('mini-canvas-host')
+    expect(html).not.toContain('__PLUME_ADMIN_TOKEN__')
+    expect(html).toContain('plume-host')
   })
 
   it('★★ X-Real-IP / Forwarded 同样挡住（不只认 X-Forwarded-For）', async () => {

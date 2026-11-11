@@ -10,7 +10,7 @@
  * 拿不到 Vue 组件实例；字符串是两边都能用的形式。
  */
 import { h, type VNode } from 'vue'
-import { REF_ICONS, type ResourceItem } from 'prosemirror-editor-bundle'
+import { REF_ICONS, REF_KIND_ICONS, type ResourceItem } from 'prosemirror-editor-bundle'
 import type { McpRow, SkillRow } from '../../service/agentService.js'
 import { mediaKindOfExt } from './agentChipThumbs.js'
 
@@ -88,6 +88,34 @@ function renderMenuRow(svg: string, name: string, hint: string, thumb?: string):
 /** 资产图标（图片） */
 export const ICON_ASSET = REF_ICONS.asset
 
+/** 内容类型图标（图片 / 视频 / 音频 / 文本）—— 标签图标的第二轮兜底 */
+export const ICON_KIND = REF_KIND_ICONS
+
+/** 认得出的内容类型（与底栏的 chipKind 同一套） */
+export type RefKindIcon = keyof typeof REF_KIND_ICONS
+
+/**
+ * 标签左侧图标的取法（用户 2026-11-11，按顺序三轮）：
+ *   ① **真实图标**：节点类型注册时声明的 icon（音频节点就是音波，图片节点就是图片框）；
+ *   ② **类型图标**：拿不到真实图标时，按 image / video / audio / text 画对应图标；
+ *   ③ **默认图标**：类型也认不出，才用「节点 / 资产」的通用图标。
+ *
+ * 为什么必须是这个顺序：以前节点一律画通用方块、资产一律画图片，
+ * 用户截图里「音频节点显示图片图标」「图片节点显示一块面板」都是少了前两轮。
+ * icon 是 opaque 句柄（SVG 字符串或组件）：字符串直接用；组件没有 SVG 串可用，
+ * 这里退回类型图标 —— 标签是由 ProseMirror 直接造 DOM 的，挂不了 Vue 组件。
+ */
+export function resolveRefIcon(
+  kind: string | undefined,
+  ownIcon: unknown,
+  fallback: string,
+): string {
+  if (typeof ownIcon === 'string' && ownIcon.trim()) return ownIcon
+  const k = String(kind ?? '')
+  if (k === 'image' || k === 'video' || k === 'audio' || k === 'text') return REF_KIND_ICONS[k]
+  return fallback
+}
+
 /** 资产引用要用的三样东西：本地路径 / 扩展名 / 所属资产库文件夹 id */
 export interface AssetRefInput {
   id?: string
@@ -104,6 +132,13 @@ export interface AssetRefInput {
    * （「素材 v1.2」）—— 光看扩展名会把文件夹误判成文件，点一下变成弹图片预览。
    */
   isFolder?: boolean
+  /**
+   * 资产类型（image / video / audio）。
+   *
+   * 为什么不能只靠扩展名：资产名可能是 UUID（截图里的 d4b974cd-44c5-…），
+   * 没有扩展名就认不出是音频，标签会退回图片图标。
+   */
+  kind?: string
 }
 
 /** 点标签时广播出去的形状：与 `<ref type="asset" … />` 的属性一一对应 */
@@ -145,8 +180,17 @@ export function assetResource(asset: AssetRefInput, onOpen?: (ref: AssetRefOpen)
   // 文件夹不取扩展名（见 AssetRefInput.isFolder 的说明）——「没有 ext」就是给读的人看的「这是目录」
   const ext = asset.isFolder ? '' : assetExtOf(asset)
   // 文件夹没有内容可缩略；图片直接用自己的地址，视频用调用方取好的首帧。
-  const kind = mediaKindOfExt(ext)
+  // 资产清单给的类型优先，但只认三种内容类型：'other' / 'node-package' 不能盖掉扩展名
+  // （否则一张 png 会因为没有可认的类型而退回默认图标）。
+  const declared = asset.kind === 'image' || asset.kind === 'video' || asset.kind === 'audio' ? asset.kind : ''
+  const kind = declared || mediaKindOfExt(ext)
   const thumb = asset.isFolder ? '' : asset.thumb || (kind === 'image' ? asset.url : '')
+  /**
+   * 图标三轮（用户 2026-11-11）：资产没有「类型注册的 icon」这一份，
+   * 所以第一轮跳过，直接按类型画；认不出类型（folder / other）才用资产默认图标。
+   * 以前资产一律画图片图标 —— 音频资产显示成一张图片就是这里。
+   */
+  const icon = resolveRefIcon(kind, undefined, ICON_ASSET)
   const open: AssetRefOpen = {
     name: asset.name,
     ...(asset.path ? { path: asset.path } : {}),
@@ -169,8 +213,8 @@ export function assetResource(asset: AssetRefInput, onOpen?: (ref: AssetRefOpen)
       ...(ext ? { ext } : {}),
       ...(asset.folderId ? { folderId: asset.folderId } : {}),
     },
-    renderItem: () => renderMenuRow(ICON_ASSET, asset.name, '资产', thumb),
-    renderEditor: () => renderTag(ICON_ASSET, asset.name, thumb),
+    renderItem: () => renderMenuRow(icon, asset.name, '资产', thumb),
+    renderEditor: () => renderTag(icon, asset.name, thumb),
     // 点输入框里这颗 chip = 与点对话气泡里的标签同一件事（预览 / 打开所在文件夹）。
     // 不传 onOpen（纯展示场景）就不带点击行为 —— 与技能 / MCP 标签一致。
     ...(onOpen ? { onClick: () => onOpen(open) } : {}),
@@ -258,6 +302,11 @@ export interface CanvasNodeRow {
   kind?: string
   /** 能直接塞进 <img> 的缩略图（图片节点：图片地址；视频节点：已取到的首帧） */
   thumb?: string
+  /**
+   * 节点类型注册时声明的**真实图标**（opaque 句柄，通常是 SVG 字符串）。
+   * 标签图标第一轮用它；拿不到才按 kind 兜底（见 resolveRefIcon）。
+   */
+  icon?: unknown
 }
 
 /** 节点图标（按类型粗分；装饰用，认不出就当通用节点） */
@@ -274,18 +323,25 @@ export function nodeResources(
   canvasId: string,
   onClick?: (nodeId: string) => void,
 ): ResourceItem[] {
-  return nodes.map((n) => ({
-    id: 'node:' + n.id,
-    name: n.name || n.id,
-    category: '节点',
-    value: n.id,
-    ...(n.kind === 'image' || n.kind === 'video' || n.kind === 'audio' || n.kind === 'text'
-      ? { chipKind: n.kind }
-      : {}),
-    ...(n.thumb ? { thumbnail_url: n.thumb } : {}),
-    ref: { kind: 'node', name: n.name || n.id, value: canvasId + '#' + n.id },
-    ...(onClick ? { onClick: () => onClick(n.id) } : {}),
-    renderItem: () => renderMenuRow(ICON_NODE, n.name || n.id, n.type, n.thumb),
-    renderEditor: () => renderTag(ICON_NODE, n.name || n.id, n.thumb),
-  }))
+  return nodes.map((n) => {
+    /**
+     * 图标三轮（用户 2026-11-11）：节点类型自己的 icon 优先；
+     * 没有就按类型（image / video / audio / text）；最后才用节点默认图标。
+     */
+    const icon = resolveRefIcon(n.kind, n.icon, ICON_NODE)
+    return {
+      id: 'node:' + n.id,
+      name: n.name || n.id,
+      category: '节点',
+      value: n.id,
+      ...(n.kind === 'image' || n.kind === 'video' || n.kind === 'audio' || n.kind === 'text'
+        ? { chipKind: n.kind }
+        : {}),
+      ...(n.thumb ? { thumbnail_url: n.thumb } : {}),
+      ref: { kind: 'node', name: n.name || n.id, value: canvasId + '#' + n.id },
+      ...(onClick ? { onClick: () => onClick(n.id) } : {}),
+      renderItem: () => renderMenuRow(icon, n.name || n.id, n.type, n.thumb),
+      renderEditor: () => renderTag(icon, n.name || n.id, n.thumb),
+    }
+  })
 }

@@ -22,10 +22,10 @@ import { normalizeApiBase } from './config.js'
 /**
  * 管理令牌的键名与头名（就地内联 —— 本插件产物必须零 import）。
  *
- * 与 `@mini-canvas/canvas-base` 的 ADMIN_TOKEN_KEY / ADMIN_TOKEN_HEADER 必须一致，
+ * 与 `@plume-canvas/canvas-base` 的 ADMIN_TOKEN_KEY / ADMIN_TOKEN_HEADER 必须一致，
  * `constants.test` 会用那边的 setAdminToken 写一份、这里读到的必须是同一个值。
  */
-const ADMIN_TOKEN_KEY = 'mc_admin_token'
+const ADMIN_TOKEN_KEY = 'plume_admin_token'
 const ADMIN_TOKEN_HEADER = 'x-admin-token'
 
 /** 读本机浏览器里存的管理令牌；没有/读不到就返回 undefined（与 canvas-base 同口径） */
@@ -554,7 +554,7 @@ export class CloudApi {
     const factory = this.opts.createEventSource
     const url = this.absolute('/api/kv/events')
 
-    // 先复用宿主（@mini-canvas/ui）挂在全局上的**共享连接**：本应用里首页 / 画布 /
+    // 先复用宿主（@plume-canvas/ui）挂在全局上的**共享连接**：本应用里首页 / 画布 /
     // 本插件都在订阅同一条 /api/kv/events，各开各的会让一个页面上出现好几条
     // **永不关闭**的长连接。浏览器对单个域名的并发上限是 6 条，占满之后页面里
     // 所有普通请求只能排队（用户报的"网页卡住、请求停在待处理"）。
@@ -634,7 +634,7 @@ export class CloudApi {
  * 所以约定走全局键。取不到（别的宿主 / 单测 / 纯 Node）就返回 undefined，
  * 调用方退回自己开一条 —— 行为不因缺这个全局而坏掉。
  */
-const KV_EVENTS_GLOBAL_KEY = '__miniCanvasKvEvents'
+const KV_EVENTS_GLOBAL_KEY = '__plumeKvEvents'
 
 interface SharedKvEvents {
   subscribe(path: string, onEvent: (e: ChangeEvent) => void): () => void

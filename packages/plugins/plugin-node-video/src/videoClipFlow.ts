@@ -4,7 +4,7 @@
  * 与 videoCropFlow 同一条结构（读 data → 解析可显示地址 → 调后台 → 新建节点），
  * 分开成两个文件是因为两条链路的产物形状不同：裁剪带回新宽高，剪辑只带回时长。
  */
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import { resolveVideoSrc } from './videoRefs'
 import { canCropOnBackend, cutVideoOnBackend } from './videoCropService'
 import { createPendingVideoNode, failVideoNode, writeVideoResult, type VideoOpsContext } from './videoOps'

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Selection } from '@mini-canvas/canvas-data'
+import { Selection } from '@plume-canvas/canvas-data'
 import { useCanvasNodeDrag } from '../canvas-host/useCanvasNodeDrag'
 
 /**

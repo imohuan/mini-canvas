@@ -3,7 +3,7 @@
  * CursorEffectOverlay —— 光标特效的**全页面**渲染层。
  *
  * 三件事：
- * 1. **藏原生指针**：给 <html> 挂 `mc-cursor-hidden` 类（全局 CSS 把光标换成透明图）——
+ * 1. **藏原生指针**：给 <html> 挂 `plume-cursor-hidden` 类（全局 CSS 把光标换成透明图）——
  *    不是只藏在画布里，而是整个 document 都生效；
  * 2. **跟随元素**：一个**零延迟**跟着鼠标的元素（图标/GIF 都可）——光标必须实时贴手，不做平滑；
  * 3. **特效 canvas**：跟随拖尾 + 点击特效共用一层画布（拖尾才有动画），粒子用预渲染精灵绘制、设上限。
@@ -17,7 +17,7 @@
  * 配置从内核 settings 读（键见 catalog.ts），改动实时生效；插件热卸由组件卸载顺带清干净。
  */
 import { onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import {
   cursorById, cursorEffectConfigFrom, DEFAULTS,
   CUSTOM_CURSOR_ID,
@@ -40,7 +40,7 @@ const { ctx } = useCanvasRender()
 defineOptions({ inheritAttrs: false })
 
 /** <html> 上挂这个类 = 原生光标被藏掉（全局 CSS 见文件末尾非 scoped 样式） */
-const HIDE_CLASS = 'mc-cursor-hidden'
+const HIDE_CLASS = 'plume-cursor-hidden'
 
 const rootEl = ref<HTMLElement | null>(null)
 const canvasEl = ref<HTMLCanvasElement | null>(null)
@@ -349,17 +349,17 @@ function applyCursorSkin(): void {
   const enabled = cfg.value.cursorFxEnabled
   // 自定义上传：用透明光标藏原生指针（绘图交给跟随层的 <img>）
   if (enabled && cfg.value.cursorFxCursor === CUSTOM_CURSOR_ID) {
-    html.style.setProperty('--mc-cursor', TRANSPARENT_CURSOR)
+    html.style.setProperty('--plume-cursor', TRANSPARENT_CURSOR)
     html.classList.add(HIDE_CLASS)
     return
   }
   const c = cursorById(cfg.value.cursorFxCursor)
   if (!enabled || c.kind === 'native') {
     html.classList.remove(HIDE_CLASS)
-    html.style.removeProperty('--mc-cursor')
+    html.style.removeProperty('--plume-cursor')
     return
   }
-  html.style.setProperty('--mc-cursor', c.kind === 'img'
+  html.style.setProperty('--plume-cursor', c.kind === 'img'
     ? 'url("' + dataUri(svgIcon(c.icon, 40, c.color)) + '") ' + Math.round(c.hx * 40) + ' ' + Math.round(c.hy * 40) + ', auto'
     : TRANSPARENT_CURSOR)
   html.classList.add(HIDE_CLASS)
@@ -470,7 +470,7 @@ onBeforeUnmount(() => {
   if (ro) { ro.disconnect(); ro = null }
   const html = document.documentElement
   html.classList.remove(HIDE_CLASS)
-  html.style.removeProperty('--mc-cursor')
+  html.style.removeProperty('--plume-cursor')
   parts.length = 0; rings.length = 0; dots.length = 0; ghosts.length = 0; bubbles.length = 0; ants.length = 0
 })
 </script>
@@ -528,5 +528,5 @@ onBeforeUnmount(() => {
 
 <style>
 /* 非 scoped：把**整个 document** 的原生光标换成透明图。挂在 <html> 上，所以画布/设置面板/下拉/弹窗里都生效 */
-html.mc-cursor-hidden, html.mc-cursor-hidden * { cursor: var(--mc-cursor, none) !important; }
+html.plume-cursor-hidden, html.plume-cursor-hidden * { cursor: var(--plume-cursor, none) !important; }
 </style>

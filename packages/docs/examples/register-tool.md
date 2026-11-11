@@ -21,7 +21,7 @@ my-echo-tool/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "回声工具",
     "description": "把用户输入的提示词原样重复一遍（演示 ctx.tools.register）",
     "pluginName": "echo-tool",
@@ -34,7 +34,7 @@ my-echo-tool/
     "./*": "./src/*"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"   // 工具插件的类型都从这里拿
+    "@plume-canvas/canvas-base": "workspace:*"   // 工具插件的类型都从这里拿
   }
 }
 ```
@@ -42,7 +42,7 @@ my-echo-tool/
 ```ts
 // 文件：my-echo-tool/src/echoTools.ts
 // 一个纯 ts 文件就能当插件：不需要 Vue、不需要 DOM，node 测试也能跑。
-import type { Context, ToolDef } from '@mini-canvas/canvas-base'
+import type { Context, ToolDef } from '@plume-canvas/canvas-base'
 
 export const name = 'echo-tool'
 
@@ -130,7 +130,7 @@ export function apply(ctx: Context): void {
 ```ts
 // 文件：my-echo-tool/src/echoTools.ts（进阶变体）
 // 把 echo 的 run 换成下面这样，就从「本地回显」升级成「走后台任务」。
-import type { ToolResult, ToolPollFn } from '@mini-canvas/canvas-base'
+import type { ToolResult, ToolPollFn } from '@plume-canvas/canvas-base'
 // baseUrl 从插件的 Config 拿（见进阶 2）；这里示意为已解析好的字符串。
 
 async run(input, runCtx): Promise<ToolResult | ToolPollFn> {
@@ -180,7 +180,7 @@ async run(input, runCtx): Promise<ToolResult | ToolPollFn> {
 
 ```ts
 // 文件：my-echo-tool/src/echoTools.ts（追加）
-import type { ConfigSchema, InferConfig } from '@mini-canvas/canvas-base'
+import type { ConfigSchema, InferConfig } from '@plume-canvas/canvas-base'
 
 export const Config = {
   // ① 键名带本插件前缀 echo…：设置面板是全局同一张表，先声明者独占键名，
@@ -246,7 +246,7 @@ export function apply(ctx: Context, config?: EchoToolConfig): void {
 | run 先提交、后轮询的异步形态 | 同上 `run(input, runCtx)` | POST `/api/tasks` 拿 taskId，返回 ToolPollFn；失败收敛成 `{ ok:false, error }`，不返回假 running |
 | 「批量注册多个模型」的复用入口 | 同上 `createTextGenerationTools` / `registerTextGenerationTools` | `models.map(cap => createTextGenerationTool(cap, options))` 后逐个 `registrar.register(def)` |
 | 面板按声明画参数、组装 invoke 输入 | `packages/plugins/plugin-node-image/src/panelSource.ts` + `ImageGeneratePanel.vue` | `resolveToolParams` 算默认值；点发送时 `{ prompts, resources, params }` 传给 `tools.invoke` |
-| package.json 的 miniCanvas 段 | `packages/plugins/plugin-tool-text-generation/package.json` | `title / description / pluginName / installable` |
+| package.json 的 plume 段 | `packages/plugins/plugin-tool-text-generation/package.json` | `title / description / pluginName / installable` |
 
 ## 常见坑
 

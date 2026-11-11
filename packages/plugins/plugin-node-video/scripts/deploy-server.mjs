@@ -5,9 +5,9 @@
  * 而走安装接口要带管理令牌 + confirm + 与清单一致的可信 sha256。
  * 少一步的表现都是「路由 404 / 仍报源视频不是画布资源」，很难看出是哪一步。
  *
- * 用法（默认 http://127.0.0.1:8865，数据目录 packages/cloud-server/.mini-canvas）：
+ * 用法（默认 http://127.0.0.1:8865，数据目录 packages/cloud-server/.plume）：
  *   node scripts/deploy-server.mjs
- *   MINI_CANVAS_URL=http://127.0.0.1:8866 node scripts/deploy-server.mjs
+ *   PLUME_URL=http://127.0.0.1:8866 node scripts/deploy-server.mjs
  *
  * 前置：先跑一次 build（build 脚本里已包含 build:server）。
  */
@@ -18,7 +18,7 @@ import path from 'node:path'
 const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 /** 后台地址 */
-const base = (process.env.MINI_CANVAS_URL ?? 'http://127.0.0.1:8865').replace(/\/+$/, '')
+const base = (process.env.PLUME_URL ?? 'http://127.0.0.1:8865').replace(/\/+$/, '')
 
 /** 安装后的文件名（也是清单里的插件 id） */
 const id = 'plugin-node-video'
@@ -28,13 +28,13 @@ const id = 'plugin-node-video'
  * 默认数据目录按「从仓库根跑」与「在包目录里跑」两种姿势都试一下。
  */
 async function readAdminToken() {
-  const fromEnv = (process.env.MINI_CANVAS_ADMIN_TOKEN ?? '').trim()
+  const fromEnv = (process.env.PLUME_ADMIN_TOKEN ?? '').trim()
   if (fromEnv) return fromEnv
   const roots = [
-    process.env.MINI_CANVAS_DATA_DIR,
-    'packages/cloud-server/.mini-canvas',
-    path.resolve(PKG, '../../cloud-server/.mini-canvas'),
-    '.mini-canvas',
+    process.env.PLUME_DATA_DIR,
+    'packages/cloud-server/.plume',
+    path.resolve(PKG, '../../cloud-server/.plume'),
+    '.plume',
   ].filter((v) => typeof v === 'string' && v.length > 0)
   for (const dir of roots) {
     try {
@@ -76,7 +76,7 @@ async function main() {
 
   const token = await readAdminToken()
   if (!token) {
-    console.error('[deploy] 没找到管理令牌：设 MINI_CANVAS_ADMIN_TOKEN，或指定 MINI_CANVAS_DATA_DIR。')
+    console.error('[deploy] 没找到管理令牌：设 PLUME_ADMIN_TOKEN，或指定 PLUME_DATA_DIR。')
     process.exitCode = 1
     return
   }

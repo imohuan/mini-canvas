@@ -36,32 +36,32 @@ const code = computed(() => reg.value?.code ?? '')
 </script>
 
 <template>
-  <div class="mc-preview">
-    <div class="mc-preview__bar">
-      <span class="mc-preview__title">{{ title ?? reg?.title ?? '组件预览' }}</span>
-      <span v-if="description ?? reg?.description" class="mc-preview__desc">
+  <div class="plume-preview">
+    <div class="plume-preview__bar">
+      <span class="plume-preview__title">{{ title ?? reg?.title ?? '组件预览' }}</span>
+      <span v-if="description ?? reg?.description" class="plume-preview__desc">
         {{ description ?? reg?.description }}
       </span>
-      <span class="mc-preview__spacer" />
-      <button class="mc-preview__btn" @click="nonce++">刷新</button>
-      <button v-if="code" class="mc-preview__btn" @click="showCode = !showCode">
+      <span class="plume-preview__spacer" />
+      <button class="plume-preview__btn" @click="nonce++">刷新</button>
+      <button v-if="code" class="plume-preview__btn" @click="showCode = !showCode">
         {{ showCode ? '隐藏代码' : '显示代码' }}
       </button>
-      <button class="mc-preview__btn" @click="expanded = !expanded">
+      <button class="plume-preview__btn" @click="expanded = !expanded">
         {{ expanded ? '退出全屏' : '全屏' }}
       </button>
     </div>
 
-    <div v-if="missing" class="mc-preview__stage">
-      <div class="mc-empty">
+    <div v-if="missing" class="plume-preview__stage">
+      <div class="plume-empty">
         注册表里没有名字为 “{{ name }}” 的组件。请到
-        <span class="mc-code">.vitepress/theme/preview-registry.ts</span> 里登记。
+        <span class="plume-code">.vitepress/theme/preview-registry.ts</span> 里登记。
       </div>
     </div>
 
     <template v-else>
       <ClientOnly>
-        <div :class="['mc-preview__stage', { 'mc-preview__stage--fullscreen': expanded }]">
+        <div :class="['plume-preview__stage', { 'plume-preview__stage--fullscreen': expanded }]">
           <component :is="Comp" v-if="Comp" :key="nonce" />
           <div v-else :key="nonce" :style="{ minHeight: (height ?? 320) + 'px' }">
             <slot />
@@ -69,13 +69,13 @@ const code = computed(() => reg.value?.code ?? '')
         </div>
       </ClientOnly>
 
-      <pre v-if="showCode && code" class="mc-preview__code"><code>{{ code }}</code></pre>
+      <pre v-if="showCode && code" class="plume-preview__code"><code>{{ code }}</code></pre>
     </template>
   </div>
 </template>
 
 <style scoped>
-.mc-preview__desc {
+.plume-preview__desc {
   color: var(--vp-c-text-2);
   font-size: 12px;
 }

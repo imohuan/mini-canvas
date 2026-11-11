@@ -12,8 +12,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
-import { componentConfig, resetComponentConfig } from '@mini-canvas/ui-kit-shadcn/componentConfig'
-import type { SettingEntry, SettingsPanelSource } from '@mini-canvas/canvas-render'
+import { componentConfig, resetComponentConfig } from '@plume-canvas/ui-kit-shadcn/componentConfig'
+import type { SettingEntry, SettingsPanelSource } from '@plume-canvas/canvas-render'
 import SettingsSchemaField from '../SettingsSchemaField.vue'
 import ShadcnSettingsRow from '../ShadcnSettingsRow.vue'
 
@@ -87,7 +87,7 @@ describe('设置面板控件跟「尺寸」档位走', () => {
   })
 
   /**
-   * 设置行的行高来自 --mct-size-control-h：themeBridge 按尺寸档写进 <html>，
+   * 设置行的行高来自 --plume-size-control-h：themeBridge 按尺寸档写进 <html>，
    * 行组件用自己的 min-height 读它。
    *
    * 为什么分两段量：happy-dom 不做布局、也不解析 CSS 自定义属性继承，
@@ -95,9 +95,9 @@ describe('设置面板控件跟「尺寸」档位走', () => {
    * 一段量**组件样式确实引用这个变量**；中间那层继承是浏览器标准行为。
    */
   it('尺寸档把行高变量写进根节点（小 < 标准 < 大）', async () => {
-    const { applyThemeBridge } = await import('@mini-canvas/theme-contract')
+    const { applyThemeBridge } = await import('@plume-canvas/theme-contract')
     const rowVar = (): number => {
-      const value = document.documentElement.style.getPropertyValue('--mct-size-control-h').trim()
+      const value = document.documentElement.style.getPropertyValue('--plume-size-control-h').trim()
       const rem = /^([\d.]+)rem$/.exec(value)
       expect(rem, '行高变量没有写到根节点：' + value).toBeTruthy()
       return Number(rem![1]) * 16
@@ -130,7 +130,7 @@ describe('设置面板控件跟「尺寸」档位走', () => {
     const rule = /\.shadcn-settings-row\s*\{([^}]*)\}/s.exec(rowSource)?.[1] ?? ''
     expect(rule, '设置行样式块没找到').toBeTruthy()
     expect(rule).toContain('min-height')
-    expect(rule).toContain('--mct-size-control-h')
+    expect(rule).toContain('--plume-size-control-h')
     expect(rule, '行高不该写死像素').not.toMatch(/min-height:\s*\d+px/)
   })
 })

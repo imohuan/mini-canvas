@@ -1,5 +1,5 @@
 /**
- * capabilityLayer —— 画布能力层（挂在 @mini-canvas/kernel 的"能力层"接缝上的那一层）。
+ * capabilityLayer —— 画布能力层（挂在 @plume-canvas/kernel 的"能力层"接缝上的那一层）。
  *
  * 框架（kernel）只认识"插件"这件事，不认识 node/theme/command/settings 这些画布概念。
  * 画布需要的那些能力段（ctx.nodes/theme/commands/slots/settings）由本层产出、并声明其内置服务：
@@ -9,9 +9,9 @@
  *
  * 依赖方向：canvas → kernel（只借通用容器与类型），零 Vue。
  */
-import type { CapabilityLayer } from '@mini-canvas/kernel'
-import { SettingsStore, SlotRegistry, isScalarField, optionValues, selectOptionEntry } from '@mini-canvas/kernel'
-import type { ConfigField, ConfigSchema, PluginScope, SettingSchema } from '@mini-canvas/kernel'
+import type { CapabilityLayer } from '@plume-canvas/kernel'
+import { SettingsStore, SlotRegistry, isScalarField, optionValues, selectOptionEntry } from '@plume-canvas/kernel'
+import type { ConfigField, ConfigSchema, PluginScope, SettingSchema } from '@plume-canvas/kernel'
 import { buildCapabilities } from './capabilities'
 import { SettingsMenuRegistry } from './settingsMenu'
 

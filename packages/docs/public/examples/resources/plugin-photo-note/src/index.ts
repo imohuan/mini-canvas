@@ -2,7 +2,7 @@
 // 格式：TypeScript 模块（插件的入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
 
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import PhotoContent from './PhotoContent.vue'
 
 export const name = 'photo-note'

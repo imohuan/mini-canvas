@@ -3,7 +3,7 @@
      位置：插件包内部；它拿到的是统一设置数据源，不自己读内核 -->
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasRender, type SettingsPanelSource } from '@mini-canvas/canvas-render'
+import { useCanvasRender, type SettingsPanelSource } from '@plume-canvas/canvas-render'
 
 // ① 设置面板宿主会把数据源当 prop 传进来（名字固定叫 settings）
 const props = defineProps<{ settings: SettingsPanelSource }>()

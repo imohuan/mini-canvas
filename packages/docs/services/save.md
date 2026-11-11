@@ -97,5 +97,5 @@ export const inject = ['save'] as string[]
 5. **读不到时返回 `undefined`，不抛 —— 但"没存过"和"存了一个 `undefined`"分不开。**
    这是 `ctx.get` 家族的一贯语义（缺服务也是返回 `undefined`）。要区分"从没保存过"和"保存过空值"，
    得存一个显式的空值（比如空数组）当标记 —— 宿主的画布恢复就是这么做的：
-   `packages/canvas-render/src/host/createMiniCanvasHost.ts` 里专门判断 `saved === undefined` 才算"从未保存过"。
+   `packages/canvas-render/src/host/createPlumeHost.ts` 里专门判断 `saved === undefined` 才算"从未保存过"。
 

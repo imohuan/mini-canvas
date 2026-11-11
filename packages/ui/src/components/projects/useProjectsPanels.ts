@@ -16,7 +16,7 @@
  * 组件自己按「有没有 doc」决定是整页还是浮层（见 plugin-style-library 的用法）。
  */
 import { computed, onBeforeUnmount, ref, watch, type Component, type Ref } from 'vue'
-import { useCanvasContextOrRender } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
 
 /** 页签槽名：项目页左栏（插件整页） */
 export const PROJECTS_TABS_SLOT = 'app.projects.tabs'

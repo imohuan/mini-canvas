@@ -1,5 +1,5 @@
 import { computed } from 'vue'
-import { readNodeVisualState } from '@mini-canvas/canvas-data'
+import { readNodeVisualState } from '@plume-canvas/canvas-data'
 
 /**
  * 节点的任务态（全局三态：loading / error / ready）与它的派生量。

@@ -29,37 +29,37 @@ const filtered = computed(() => {
 </script>
 
 <template>
-  <div class="mc-plugin-toolbar">
+  <div class="plume-plugin-toolbar">
     <input v-model="keyword" type="search" placeholder="搜索插件名 / 标识 / 说明…" />
-    <label class="mc-badge">
+    <label class="plume-badge">
       <input v-model="onlyInstallable" type="checkbox" style="margin-right: 6px" />
       只看可安装
     </label>
-    <span class="mc-badge">共 {{ filtered.length }} / {{ plugins.length }} 个</span>
+    <span class="plume-badge">共 {{ filtered.length }} / {{ plugins.length }} 个</span>
   </div>
 
-  <div v-if="plugins.length === 0" class="mc-empty">
-    没扫到插件。请确认 packages/plugins 下有声明 miniCanvas.builtin / installable 的插件。
+  <div v-if="plugins.length === 0" class="plume-empty">
+    没扫到插件。请确认 packages/plugins 下有声明 plume.builtin / installable 的插件。
   </div>
 
-  <div v-else-if="filtered.length === 0" class="mc-empty">没有匹配的插件。</div>
+  <div v-else-if="filtered.length === 0" class="plume-empty">没有匹配的插件。</div>
 
-  <div v-else class="mc-plugin-grid">
-    <div v-for="p in filtered" :key="p.id" class="mc-plugin-card">
+  <div v-else class="plume-plugin-grid">
+    <div v-for="p in filtered" :key="p.id" class="plume-plugin-card">
       <h4>{{ p.title }}</h4>
       <p v-if="p.description">{{ p.description }}</p>
-      <p class="mc-code">{{ p.npmName }}@{{ p.version }}</p>
-      <div class="mc-badges">
-        <span class="mc-badge">标识 {{ p.name }}</span>
-        <span :class="['mc-badge', p.builtin ? 'mc-badge--on' : 'mc-badge--off']">
+      <p class="plume-code">{{ p.npmName }}@{{ p.version }}</p>
+      <div class="plume-badges">
+        <span class="plume-badge">标识 {{ p.name }}</span>
+        <span :class="['plume-badge', p.builtin ? 'plume-badge--on' : 'plume-badge--off']">
           {{ p.builtin ? '自带' : '非自带' }}
         </span>
-        <span :class="['mc-badge', p.installable ? 'mc-badge--on' : 'mc-badge--off']">
+        <span :class="['plume-badge', p.installable ? 'plume-badge--on' : 'plume-badge--off']">
           {{ p.installable ? '可安装' : '不可装卸' }}
         </span>
-        <span v-if="p.hasServer" class="mc-badge mc-badge--on">有后台</span>
-        <span v-if="p.hasWeb" class="mc-badge mc-badge--on">独立产物</span>
-        <span v-for="perm in p.serverPermissions" :key="perm" class="mc-badge">
+        <span v-if="p.hasServer" class="plume-badge plume-badge--on">有后台</span>
+        <span v-if="p.hasWeb" class="plume-badge plume-badge--on">独立产物</span>
+        <span v-for="perm in p.serverPermissions" :key="perm" class="plume-badge">
           权限 {{ perm }}
         </span>
       </div>

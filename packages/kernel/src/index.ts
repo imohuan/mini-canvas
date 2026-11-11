@@ -1,5 +1,5 @@
 /**
- * @mini-canvas/kernel —— 纯插件框架（Cordis 风格）：装载 / 依赖编排 / 事件 / 作用域回收 / 开槽。
+ * @plume-canvas/kernel —— 纯插件框架（Cordis 风格）：装载 / 依赖编排 / 事件 / 作用域回收 / 开槽。
  *
  * 这个包里**没有任何画布概念**：不认识 node / edge / command / tool。
  * 画布相关的一切（ctx.nodes/theme/commands/tools、nodeStore/selection/… 、渲染）住在别处，

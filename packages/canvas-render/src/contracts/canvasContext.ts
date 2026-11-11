@@ -1,7 +1,7 @@
 /**
  * CanvasContext —— 转发件。
  *
- * 实现只有一份，住在 `@mini-canvas/vue-render/context`（通用渲染底座）。这里保留旧路径，
+ * 实现只有一份，住在 `@plume-canvas/vue-render/context`（通用渲染底座）。这里保留旧路径，
  * 现有 import 不用改；新代码直接从 vue-render 取。
  *
  * 为什么必须删掉本地那份实现：以前这里自己写了一个 `useCanvasContextOrRender`，
@@ -9,14 +9,14 @@
  * 从哪个路径 import 决定拿到真的还是假的，很难查。
  */
 import type { InjectionKey } from 'vue'
-import type { Context } from '@mini-canvas/canvas-data'
-import type { CanvasHostHandle, MiniCanvasApi } from '../host/createMiniCanvasHost'
+import type { Context } from '@plume-canvas/canvas-data'
+import type { CanvasHostHandle, PlumeApi } from '../host/createPlumeHost'
 import type { PluginManager } from '../host/pluginManager'
 import {
   CANVAS_CONTEXT_KEY as BASE_KEY,
   useCanvasContext as useBaseContext,
   useCanvasContextOrRender as useBaseContextOrRender,
-} from '@mini-canvas/vue-render/context'
+} from '@plume-canvas/vue-render/context'
 
 /** 外壳与画布共用的一份基础上下文（不含 VueFlow 专属的 flow / 渲染快照）。 */
 export interface CanvasContext {
@@ -25,7 +25,7 @@ export interface CanvasContext {
   /** 宿主句柄（ctx 的超集：数据服务 + 落盘/停止语义）。 */
   host: CanvasHostHandle
   /** 宿主统一门面：安装/卸载插件、读写节点等。 */
-  api: MiniCanvasApi
+  api: PlumeApi
   /** 宿主统一安装句柄（热装/热卸/清单）。 */
   manager: PluginManager
 }

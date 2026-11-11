@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "作用域回收演示",
     "description": "跟着作用域篇学：定时器 / 监听 / 注册场条目 / 服务，四种副作用随插件卸载自动清光",
     "pluginName": "scope-demo",
@@ -15,7 +15,7 @@
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
   },
   "dependencies": {
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/kernel": "workspace:*"
   }
 }
 

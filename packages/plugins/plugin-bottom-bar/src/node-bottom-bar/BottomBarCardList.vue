@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { VueDraggable } from 'vue-draggable-plus'
 import { formatVideoDuration, videoOverLimit, type RefTile } from '../refTiles'
 

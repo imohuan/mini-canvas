@@ -4,9 +4,9 @@
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { Context, ThemeRegistry, createCanvasAppBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { Context, ThemeRegistry, createCanvasAppBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 import { themeComponentsPlugin } from '../../../index'
-import { shortcutManagerPlugin } from '@mini-canvas/plugin-shortcut-manager'
+import { shortcutManagerPlugin } from '@plume-canvas/plugin-shortcut-manager'
 import { buildNavEntries } from '../settings/settingsMenuModel'
 
 const read = (rel: string): string => readFileSync(new URL(rel, import.meta.url), 'utf-8')

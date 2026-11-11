@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-hello/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：把三种形态的插件装进同一个内核
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import * as helloPlugin from './index'
 import { GreeterService } from './greeterPlugin'
 import { heartbeat } from './heartbeatPlugin'

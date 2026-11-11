@@ -4,8 +4,8 @@
  * 用本插件自己的几何与样式函数（computeSelectionFrameGeometry / frameStrokeCss /
  * resolveMultiSelectFrameConfig）把内外两个框画在预览节点上；插件没装 → 这一层不存在。
  */
-import type { Context } from '@mini-canvas/canvas-base'
-import { THEME_PREVIEW_SLOT, type PreviewLayer, type PreviewPaintCtx } from '@mini-canvas/canvas-render'
+import type { Context } from '@plume-canvas/canvas-base'
+import { THEME_PREVIEW_SLOT, type PreviewLayer, type PreviewPaintCtx } from '@plume-canvas/canvas-render'
 import { computeSelectionFrameGeometry, type MultiSelectRect } from './multiSelectEngine'
 import { framePaddingsOf, frameStrokeCss, resolveMultiSelectFrameConfig } from './multiSelectConfig'
 

@@ -16,8 +16,8 @@
  *
  * 依赖方向：只依赖内核服务 + canvas-render 只读上下文/服务；不反向依赖宿主 demo / 其它插件。
  */
-import { Service, type PluginModule, type Context } from '@mini-canvas/canvas-base'
-import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
+import { Service, type PluginModule, type Context } from '@plume-canvas/canvas-base'
+import type { DocService, SelectionService, CanvasNode } from '@plume-canvas/canvas-data'
 import BoxSelectLayer from './BoxSelectLayer.vue'
 import SelectionFrame from './SelectionFrame.vue'
 import SelectionGroupToolbar from './SelectionGroupToolbar.vue'
@@ -40,7 +40,7 @@ export interface MultiSelectService {
   clearSelection(): void
 }
 
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     'multi-select': MultiSelectService
   }

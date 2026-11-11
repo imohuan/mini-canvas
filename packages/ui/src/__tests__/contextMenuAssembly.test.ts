@@ -13,14 +13,14 @@
  * 4. 菜单组装**真产出**删除项（命令表 + 类型表 → buildMenuItems 这条链是通的）。
  */
 import { describe, it, expect } from 'vitest'
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { buildMenuItems, contextMenuPlugin } from '@mini-canvas/plugin-context-menu'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { buildMenuItems, contextMenuPlugin } from '@plume-canvas/plugin-context-menu'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 
 describe('右键菜单整装（menu 服务删除后）', () => {
   it('menu 服务消失、doc 到位、context-menu 插件 active 且菜单真产出删除项', async () => {
-    const { host } = await createMiniCanvasHost({
+    const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
       coldPlugins: [contextMenuPlugin, nodeTextPlugin],
     })

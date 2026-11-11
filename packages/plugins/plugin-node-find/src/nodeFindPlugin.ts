@@ -12,7 +12,7 @@
  * 依赖方向：只依赖内核服务（doc/view，宿主恒在注入）。不依赖宿主 demo / 其它插件。
  */
 import { createApp, h } from 'vue'
-import type { PluginModule, Context } from '@mini-canvas/canvas-base'
+import type { PluginModule, Context } from '@plume-canvas/canvas-base'
 import NodeFindOverlay from './NodeFindOverlay.vue'
 
 // view 的直访类型（ctx.view）由 canvas-data 集中声明

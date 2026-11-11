@@ -15,7 +15,7 @@ export interface ImageFitLimitsLike {
  * 等比缩放，最长边不超过 maxLongSide、最短边不小于 minShortSide，冲突时短边优先。
  * 转发 canvas-base 的 fitMediaCard，避免跨插件包依赖；默认限制与 mediaFit 相同。
  */
-import { fitMediaCard } from '@mini-canvas/canvas-base'
+import { fitMediaCard } from '@plume-canvas/canvas-base'
 
 export function fitCardSize(
   imageWidth: unknown,

@@ -31,7 +31,7 @@ export function apply(ctx) {
 }
 ```
 
-验证：服务启动后，把 `http://127.0.0.1:8865/mcp` 配给 AI 客户端（如 Claude Desktop、Cursor），工具清单里会出现 `demo.add`；也可以 `npx mini-canvas-cloud list-tools` 看内置工具（插件注册的在运行期动态合入）。
+验证：服务启动后，把 `http://127.0.0.1:8865/mcp` 配给 AI 客户端（如 Claude Desktop、Cursor），工具清单里会出现 `demo.add`；也可以 `npx plume-canvas list-tools` 看内置工具（插件注册的在运行期动态合入）。
 
 ## 每一步在干什么
 

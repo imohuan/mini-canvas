@@ -91,7 +91,7 @@ const stub = async () => {
 const seed = async () => {
   await page.evaluate(
     ([img, video]) => {
-      const h = window.MiniCanvasUI.getHost()
+      const h = window.PlumeUI.getHost()
       const doc = h.ctx.get('doc')
       const old = doc.getNodes()
       if (old.length) doc.removeNodes(old.map((n) => n.id))
@@ -138,7 +138,7 @@ check('第一个下拉显示的是具体模型（不是平台名）', triggers[0
 
 // 模型清单从底栏服务里读（点开下拉会动选中态，后续还要用这个节点）
 const models = await page.evaluate(() =>
-  window.MiniCanvasUI.getHost()
+  window.PlumeUI.getHost()
     .ctx.get('nodeBar')
     .list({ type: 'image' })
     .filter((a) => a.id.startsWith('web2api:'))
@@ -157,7 +157,7 @@ await page.click('.nb-run')
 await page.waitForTimeout(3500)
 
 const during = await page.evaluate(() => {
-  const node = window.MiniCanvasUI.getHost().ctx.get('doc').getNode('target')
+  const node = window.PlumeUI.getHost().ctx.get('doc').getNode('target')
   const ov = document.querySelector('[data-testid="task-overlay"]')
   return {
     runState: node.data.runState,
@@ -208,7 +208,7 @@ await page.click('.task-overlay-cancel')
 // 轮询间隔默认 3s，取消后要等下一拍循环才发现 abort —— 断言前留够一拍
 await page.waitForTimeout(4500)
 const afterCancel = await page.evaluate(() => ({
-  runState: window.MiniCanvasUI.getHost().ctx.get('doc').getNode('target').data.runState,
+  runState: window.PlumeUI.getHost().ctx.get('doc').getNode('target').data.runState,
   cancels: window.__cancels,
 }))
 check('取消后本地状态收敛（不再 running）', afterCancel.runState.status !== 'running', JSON.stringify(afterCancel.runState))
@@ -228,7 +228,7 @@ const failStates = [
 ]
 for (const [name, message, expect] of failStates) {
   await page.evaluate((msg) => {
-    window.MiniCanvasUI.getHost().ctx.get('doc').updateNodeRuntime('target', {
+    window.PlumeUI.getHost().ctx.get('doc').updateNodeRuntime('target', {
       data: { runState: { status: 'error', message: msg, actionId: 'web2api:doubao-image-seedream45' } },
     })
   }, message)
@@ -261,7 +261,7 @@ await page.screenshot({ path: OUT + '/web2api-failed.png' })
 phase = 'resume'
 await boot()
 await page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost()
+  const h = window.PlumeUI.getHost()
   const doc = h.ctx.get('doc')
   const old = doc.getNodes()
   if (old.length) doc.removeNodes(old.map((n) => n.id))
@@ -341,7 +341,7 @@ await page.evaluate(() => {
 })
 await page.waitForTimeout(5000)
 const resumed = await page.evaluate(() => ({
-  runState: window.MiniCanvasUI.getHost().ctx.get('doc').getNode('n1').data.runState,
+  runState: window.PlumeUI.getHost().ctx.get('doc').getNode('n1').data.runState,
   getTask: window.__getTask,
 }))
 check(
@@ -352,7 +352,7 @@ check(
 // 收尾：给任务一个终态，让续查循环停下来（否则它会一直轮询，后续场景清空画布时
 // 会去写一个已不存在的节点，制造与产品无关的页内错误）
 await page.evaluate(() => {
-  window.MiniCanvasUI.getHost().ctx
+  window.PlumeUI.getHost().ctx
     .get('doc')
     .updateNodeRuntime('n1', { data: { runState: { status: 'error', message: '测试收尾', actionId: 'x' } } })
 })

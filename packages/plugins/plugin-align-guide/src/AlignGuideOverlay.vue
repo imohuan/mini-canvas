@@ -31,7 +31,7 @@
  * 原因是吸附只写"被抓的那一个节点"，会把整组节点之间的相对位置弄乱（见 shouldAlignOnDrag）。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender, RenderEvents, type NodeLayoutService } from '@mini-canvas/canvas-render'
+import { useCanvasRender, RenderEvents, type NodeLayoutService } from '@plume-canvas/canvas-render'
 import { computeAlignGuides, toVisualPosition, SNAP_THRESHOLD, shouldAlignOnDrag } from './alignGuideEngine'
 
 const { ctx, interaction, flow, visibleNodes } = useCanvasRender()

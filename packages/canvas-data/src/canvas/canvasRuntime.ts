@@ -8,7 +8,7 @@
  * 为什么不用全局单例：两个画布宿主会各有一份运行时。绑定随基础插件 fiber
  * 的 apply/回收成对发生；读取方每次现取，不缓存。
  */
-import type { CommandService, SettingsStore } from '@mini-canvas/kernel'
+import type { CommandService, SettingsStore } from '@plume-canvas/kernel'
 import type { NodeFactory } from './nodeFactory'
 import type { NodeRegistry } from './registry/nodeRegistry'
 import type { ThemeRegistry } from './registry/themeRegistry'

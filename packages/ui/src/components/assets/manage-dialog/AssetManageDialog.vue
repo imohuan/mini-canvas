@@ -59,7 +59,7 @@ function onEscKey(e: KeyboardEvent): void {
 onMounted(() => document.addEventListener('keydown', onEscKey))
 onBeforeUnmount(() => document.removeEventListener('keydown', onEscKey))
 
-// 「节点」= 节点包（.mcnode）用的标签；与 LeftDrawer / composables/ui.ts 同一份口径
+// 「节点」= 节点包（.plumenode）用的标签；与 LeftDrawer / composables/ui.ts 同一份口径
 const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效', '节点'] as const
 const ASSET_KINDS = ['全部', '图片', '视频', '音频', '其他'] as const
 /** 当前浏览的文件夹（空 = 根=个人资产库） */
@@ -352,7 +352,7 @@ const {
     </ManageDialogShell>
 
     <!-- 文件夹「添加到画布」确认（数量 > 10 时出现；与左侧抽屉同一个服务，用户口径：一次加太多会卡死） -->
-    <div v-if="folderConfirm" class="mc-layer-dialog-raised fixed inset-0 grid place-items-center"
+    <div v-if="folderConfirm" class="plume-layer-dialog-raised fixed inset-0 grid place-items-center"
       @pointerdown.self="onFolderConfirmCancel">
       <div class="absolute inset-0 bg-veil" aria-hidden="true" @click="onFolderConfirmCancel"></div>
       <div
@@ -376,7 +376,7 @@ const {
 
   <!--
     上传资产弹窗（与左侧抽屉同一个组件、同一条保存口径；保存位置默认 = 当前所在层）。
-    层级：两个弹窗都走默认主题的 mc-layer-dialog；本组件在源码里排在资产管理面板之后，
+    层级：两个弹窗都走默认主题的 plume-layer-dialog；本组件在源码里排在资产管理面板之后，
     同挂 body 时渲染在上层 —— 上传弹窗不会被资产管理盖住（反过来也不会盖住它的子浮层）。
     Esc 联动见上面的 onEscKey（上传开着时让位 + stopPropagation，一次 Esc 只关一层）。
   -->

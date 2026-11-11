@@ -8,7 +8,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
-import type { SettingEntry, SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingEntry, SettingsPanelSource } from '@plume-canvas/canvas-render'
 import SettingsSchemaField from '../SettingsSchemaField.vue'
 
 function settingsWith(entry: SettingEntry): SettingsPanelSource {

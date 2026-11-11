@@ -5,7 +5,7 @@
  * 按钮从画布 ctx 的 ui 注册表按名取（默认主题插件登记的 shadcn 原始件），
  * 外观完全走 shadcn 自己的 variant / size，不再由宿主下发按钮组件。
  */
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const props = defineProps<{
   variant?: 'icon' | 'text'

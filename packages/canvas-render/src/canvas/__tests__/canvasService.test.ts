@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { CanvasService } from '../canvasService'
-import { clearCommandRuntime, setCommandRuntime } from '@mini-canvas/canvas-data'
+import { clearCommandRuntime, setCommandRuntime } from '@plume-canvas/canvas-data'
 
 function fakeCtx(overrides: Record<string, unknown> = {}) {
   const services: Record<string, unknown> = {

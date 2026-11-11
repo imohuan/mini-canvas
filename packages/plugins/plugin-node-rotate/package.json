@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-node-rotate",
+  "name": "@plume-canvas/plugin-node-rotate",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "旋转与镜像",
     "description": "图片节点顶栏的「旋转与镜像」模式：向右旋转 90°、水平翻转、垂直翻转",
     "pluginName": "node-rotate",
@@ -20,9 +20,9 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

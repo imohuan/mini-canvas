@@ -1,5 +1,5 @@
 /**
- * @mini-canvas/theme-contract —— 主题的**纯数据 / 纯函数**契约层。
+ * @plume-canvas/theme-contract —— 主题的**纯数据 / 纯函数**契约层。
  *
  * 为什么单独成包：默认主题拆成 plugin-theme-components（通用组件）与
  * plugin-theme-canvas（画布外观）两个互不 import 的插件包，但两边都要用同一份
@@ -21,7 +21,7 @@ export * from "./edgeGeometry";
 export * from "./nodeLoadingTier";
 export { createNotifyService } from "./notifyService";
 
-import type { ConfigSchema } from "@mini-canvas/canvas-base";
+import type { ConfigSchema } from "@plume-canvas/canvas-base";
 import { AppearanceConfig } from "./appearanceConfig";
 import { CanvasConfig } from "./canvasConfig";
 

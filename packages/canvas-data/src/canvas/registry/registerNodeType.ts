@@ -15,11 +15,11 @@
  * 依赖方向：内核→插件为空（内核不 import 插件）；插件/宿主 → 内核（import 本助手）。
  * content 组件句柄 opaque，内核不 import Vue。
  *
- * 生命周期：本注册面向"启动时一次性装载"，宿主在 createMiniCanvasHost 里 create NodeRegistry 并注入 ctx
+ * 生命周期：本注册面向"启动时一次性装载"，宿主在 createPlumeHost 里 create NodeRegistry 并注入 ctx
  * ('nodeRegistry')，插件 apply 时调用即完成落表；装载一次不卸载。HMR/热重载的可逆注销
  * 后续再按 dsh effect 语义补。
  */
-import type { PluginScope } from '@mini-canvas/kernel'
+import type { PluginScope } from '@plume-canvas/kernel'
 // PortDef 是端口约束的**单一来源**（nodeStore 定义、connection 消费）。
 // 这里以前手抄了一份字段列表，于是新增字段（evictOnFull）时插件写了会被类型拦下 —— 直接复用，不再重复。
 import type { PortDef, CanvasNodeType, TitleExtraSource } from '../../nodeStore'

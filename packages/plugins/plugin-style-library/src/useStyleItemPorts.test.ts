@@ -14,7 +14,7 @@ import { styleItemDepsOf } from './useStyleItemPorts'
 type CapabilityFactory = (node?: unknown) => unknown
 
 /**
- * 最小注册场替身（本插件没把 @mini-canvas/kernel 列进依赖，测试就地造一个）。
+ * 最小注册场替身（本插件没把 @plume-canvas/kernel 列进依赖，测试就地造一个）。
  * 只实现本文件用到的 top/add；语义与 RegistryImpl 一致：后加的 order 小的赢。
  */
 function fieldOf<T>() {
@@ -37,7 +37,7 @@ function ctxOf(extra: { setLabel?: (id: string, label: string | undefined) => vo
     put: vi.fn(async (_blob: Blob, _opts?: unknown) => 'default/deadbeefdeadbeef.png'),
     resolve: vi.fn(async (_id: string) => '/api/canvases/default/resources/deadbeefdeadbeef.png'),
   }
-  // 宿主标准能力（与 createMiniCanvasHost 里的注册同一份工厂）
+  // 宿主标准能力（与 createPlumeHost 里的注册同一份工厂）
   const ctx = {
     get: (name: string) => (name === 'resources' ? resources : undefined),
     registryOf: (kind: string) => {

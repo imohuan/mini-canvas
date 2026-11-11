@@ -10,7 +10,7 @@
  *   3. 后台报错（例如无声视频）→ 原因写在那个音频节点上，不建第二个节点。
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
 import { videoToAudio } from '../videoAudioFlow'
 import { resetCropBackendProbe } from '../videoCropService'
 

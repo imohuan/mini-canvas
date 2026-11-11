@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExistingEdge, NodeConnectionDef } from '@mini-canvas/canvas-data'
+import type { ExistingEdge, NodeConnectionDef } from '@plume-canvas/canvas-data'
 import {
   CARD_BORDER,
   CARD_PADDING_Y,

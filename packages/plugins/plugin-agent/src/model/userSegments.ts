@@ -8,7 +8,8 @@
  *
  * 与 turnBlocks.ts / branchNav.ts 同一种做法：会算东西的都放 .ts，SFC 只渲染。
  */
-import { ICON_ASSET, ICON_MCP, ICON_NODE, ICON_SKILL } from '../ui/shared/agentResources.js'
+import { ICON_ASSET, ICON_MCP, ICON_NODE, ICON_SKILL, resolveRefIcon } from '../ui/shared/agentResources.js'
+import { mediaKindOfExt } from '../ui/shared/agentChipThumbs.js'
 
 export interface UserSegment {
   type: 'text' | 'tag'
@@ -26,6 +27,13 @@ export interface UserSegment {
   ext?: string
   /** 资产：资产库文件夹 id（目录引用必有） */
   folderId?: string
+  /**
+   * 内容类型（image / video / audio / text）。
+   *
+   * 用途：气泡标签的图标第二轮兜底（用户 2026-11-11）。
+   * 标记里没有类型字段 —— 解析时用当前**资源清单**按名字回查。
+   */
+  kind?: string
 }
 
 const ICON_OF: Record<string, string> = { asset: ICON_ASSET, node: ICON_NODE, skill: ICON_SKILL, mcp: ICON_MCP }
@@ -46,8 +54,18 @@ export function extOfPath(path: string | undefined): string {
   return m ? m[1].toLowerCase() : ''
 }
 
+/**
+ * 解析时可以顺带查到的**真实信息**（气泡标签的图标）。
+ *
+ * 为什么不写进标记：标记里只放「引用谁」（用户拍板的格式，不加展示字段）；
+ * 图标与类型属于界面，由当前画布 / 资源清单现查。
+ */
+export interface SegmentLookup {
+  node?: (nodeId: string) => { kind?: string; icon?: unknown } | undefined
+}
+
 /** 一段纯文本 → 片段列表（没有引用标记时就是单个文字片段） */
-export function parseUserSegments(text: string): UserSegment[] {
+export function parseUserSegments(text: string, lookup?: SegmentLookup): UserSegment[] {
   const plain = (value: string): UserSegment => ({ type: 'text', value, name: '', category: '', icon: '' })
   if (!text.includes('<ref ')) return [plain(text)]
   const out: UserSegment[] = []
@@ -69,13 +87,21 @@ export function parseUserSegments(text: string): UserSegment[] {
     //      推出来会把目录误判成文件、点一下弹图片预览）
     //   ③ 两者都没有          → 老数据（那时只有文件引用）→ 从 path 末尾补一个
     const ext = isAsset ? (attrs.ext || (attrs.folderId ? '' : extOfPath(attrs.path))) : ''
+    // 第一轮：节点类型注册的真实图标（资产没有这一份）
+    const own = type === 'node' && attrs.nodeId ? lookup?.node?.(attrs.nodeId) : undefined
+    // 第二轮：按类型 —— 先看标记里自带的内容类型（刷新后仍认得），
+    // 再回查当前画布 / 按扩展名；都没有就留空（第三轮默认图标）
+    const marked = attrs.kind || ''
+    const kind = marked || own?.kind || (isAsset ? mediaKindOfExt(ext) : '')
+    const icon = resolveRefIcon(kind, own?.icon, ICON_OF[type] ?? ICON_ASSET)
     out.push({
       type: 'tag',
       value: m[0],
       name: attrs.name || '',
       category: CATEGORY_OF[type] ?? '引用',
-      icon: ICON_OF[type] ?? ICON_ASSET,
+      icon,
       refType: type,
+      ...(kind && kind !== 'other' ? { kind } : {}),
       ...(type === 'node' && attrs.nodeId ? { nodeId: attrs.nodeId } : {}),
       // 资产要把 path / ext / folderId 带出来：只看名字分不出「文件」还是「文件夹」
       ...(isAsset && attrs.path ? { path: attrs.path } : {}),

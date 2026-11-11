@@ -1,6 +1,6 @@
 # 复制粘贴 clipboard
 
-> 插件解析 · `@mini-canvas/plugin-clipboard` · 自带件
+> 插件解析 · `@plume-canvas/plugin-clipboard` · 自带件
 
 **一句话**：Ctrl/Cmd+C / V / X / D 四条快捷键背后的能力 —— 复制、剪切、粘贴、就地复制一份选中节点，
 支持跨页面粘贴（经系统剪贴板）。
@@ -19,9 +19,9 @@
 | 项 | 值 | 来源 |
 | --- | --- | --- |
 | 插件名（`name`） | `'clipboard'` | `src/clipboardPlugin.ts` |
-| 包名 | `@mini-canvas/plugin-clipboard` | `package.json` |
+| 包名 | `@plume-canvas/plugin-clipboard` | `package.json` |
 | 硬依赖（`inject`） | `['doc', 'selection']` | 同上 |
-| 自带件 | `miniCanvas.builtin: true` | `package.json` |
+| 自带件 | `plume.builtin: true` | `package.json` |
 
 ## 注意事项
 

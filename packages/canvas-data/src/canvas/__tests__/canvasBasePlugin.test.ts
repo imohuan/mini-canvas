@@ -5,7 +5,7 @@
  * 1. **它声明了核心身份**：core: true，且真被内核记下（uninstallPlugin 返回 false、服务仍可用）；
  * 2. **基础服务件件到位**，容器/工厂/命令收在内部运行时；
  * 3. **换一个宿主（headless）能跑通建节点 / 撤销 / 落盘全链** —— 不依赖浏览器，
- *    这就是"步骤 4 完成标准③"的证据：画布能力不再绑死在 createMiniCanvasHost 里。
+ *    这就是"步骤 4 完成标准③"的证据：画布能力不再绑死在 createPlumeHost 里。
  */
 import { describe, it, expect } from 'vitest'
 import { Context } from '../context'
@@ -21,7 +21,7 @@ import type { CanvasEdge } from '../../edgeStore'
  * 最小 headless 宿主：建 ctx → 装基础插件 → start → 恢复上次画布 → 启动配置持久化桥。
  *
  * 注意"恢复图"这一步**属宿主职责**（基础插件只管服务与落盘通道，不知道"首启该种什么"）——
- * 这也是本测试的价值：证明画布全链不需要 createMiniCanvasHost，宿主自己两行就能接起来。
+ * 这也是本测试的价值：证明画布全链不需要 createPlumeHost，宿主自己两行就能接起来。
  */
 async function bootHeadless(adapter?: MemoryStorageAdapter) {
   const store = adapter ?? new MemoryStorageAdapter()

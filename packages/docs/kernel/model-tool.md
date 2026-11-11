@@ -322,7 +322,7 @@ plugin-model-tool-demo/
 // 文件：packages\docs\public\examples\kernel\plugin-model-tool-demo/src/toolProvider.ts
 // 格式：TypeScript 模块（插件入口：导出 name / apply）
 // 位置：注册模型可调用工具的插件
-import { defineTool, type Context, type PluginModule, type ToolSpec } from '@mini-canvas/kernel'
+import { defineTool, type Context, type PluginModule, type ToolSpec } from '@plume-canvas/kernel'
 
 export const name = 'model-tool-provider'
 
@@ -375,7 +375,7 @@ export const modelToolProviderPlugin: PluginModule = { name, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-model-tool-demo/src/toolLogger.ts
 // 格式：TypeScript 模块（插件入口，观察者）
 // 位置：打印每一次模型工具调用 —— 它不需要 inject 任何服务
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'model-tool-logger'
 
@@ -407,7 +407,7 @@ export const modelToolLoggerPlugin: PluginModule = { name, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-model-tool-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：注册 → 调用 → 看事件
-import { Context, runToolCall, TOOL_KIND, type ToolSpec } from '@mini-canvas/kernel'
+import { Context, runToolCall, TOOL_KIND, type ToolSpec } from '@plume-canvas/kernel'
 import { modelToolLoggerPlugin } from './toolLogger'
 import { modelToolProviderPlugin } from './toolProvider'
 

@@ -11,17 +11,17 @@ export default defineConfig({
   build: {
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-      name: 'MiniCanvasPluginNodeUi',
+      name: 'PlumePluginNodeUi',
       formats: ['umd'],
       fileName: () => 'plugin-node-ui.js',
     },
     rollupOptions: {
-      external: ['vue', '@mini-canvas/canvas-data', '@mini-canvas/canvas-render'],
+      external: ['vue', '@plume-canvas/canvas-data', '@plume-canvas/canvas-render'],
       output: {
         globals: {
           vue: 'Vue',
-          '@mini-canvas/canvas-data': 'MiniCanvasCore',
-          '@mini-canvas/canvas-render': 'MiniCanvasRender',
+          '@plume-canvas/canvas-data': 'PlumeCore',
+          '@plume-canvas/canvas-render': 'PlumeRender',
         },
       },
     },

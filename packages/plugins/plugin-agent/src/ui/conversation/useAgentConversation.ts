@@ -21,7 +21,7 @@
  *    引用了谁由正文里的标记决定 —— 删掉 chip 引用即失效，不再切开关。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
-import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
+import { useUiComponent, useCanvasRender } from '@plume-canvas/canvas-render'
 // 输入框工具行与发送键使用主题登记的 shadcn Button；两个下拉的**内容 UI 不改**，只换触发按钮。
 import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
@@ -261,8 +261,8 @@ function onQueuePrefsChanged(e: Event): void {
   const d = (e as CustomEvent).detail as { showSending?: unknown } | undefined
   if (d && typeof d.showSending === 'boolean') showSendingQueue.value = d.showSending
 }
-onMounted(() => window.addEventListener('mini-canvas:agent-queue-prefs-changed', onQueuePrefsChanged))
-onBeforeUnmount(() => window.removeEventListener('mini-canvas:agent-queue-prefs-changed', onQueuePrefsChanged))
+onMounted(() => window.addEventListener('plume-canvas:agent-queue-prefs-changed', onQueuePrefsChanged))
+onBeforeUnmount(() => window.removeEventListener('plume-canvas:agent-queue-prefs-changed', onQueuePrefsChanged))
 
 // 「发送键」设置页改完 ⇒ 同页立即生效（与上面队列开关同一套：设置页发本地广播；
 // 跨标签页的那份由 agentSettings 自己的 KV 订阅负责）。
@@ -270,8 +270,8 @@ function onComposerPrefsChanged(e: Event): void {
   const d = (e as CustomEvent).detail as { submitKeyMode?: unknown } | undefined
   if (d && d.submitKeyMode !== undefined) submitKeyMode.value = normalizeSubmitKeyMode(d.submitKeyMode)
 }
-onMounted(() => window.addEventListener('mini-canvas:agent-composer-prefs-changed', onComposerPrefsChanged))
-onBeforeUnmount(() => window.removeEventListener('mini-canvas:agent-composer-prefs-changed', onComposerPrefsChanged))
+onMounted(() => window.addEventListener('plume-canvas:agent-composer-prefs-changed', onComposerPrefsChanged))
+onBeforeUnmount(() => window.removeEventListener('plume-canvas:agent-composer-prefs-changed', onComposerPrefsChanged))
 
 onMounted(() => {
   if (typeof ResizeObserver === 'undefined') return

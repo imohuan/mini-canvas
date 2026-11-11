@@ -10,19 +10,19 @@ export default defineConfig({
   build: {
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-      name: 'MiniCanvasPluginNode3dPreview',
+      name: 'PlumePluginNode3dPreview',
       formats: ['umd'],
       fileName: () => 'plugin-node-3d-preview.js',
     },
     rollupOptions: {
-      external: ['vue', 'three', '@mini-canvas/canvas-data', '@mini-canvas/canvas-base', '@mini-canvas/canvas-render'],
+      external: ['vue', 'three', '@plume-canvas/canvas-data', '@plume-canvas/canvas-base', '@plume-canvas/canvas-render'],
       output: {
         globals: {
           vue: 'Vue',
           three: 'THREE',
-          '@mini-canvas/canvas-data': 'MiniCanvasCore',
-          '@mini-canvas/canvas-base': 'MiniCanvasBase',
-          '@mini-canvas/canvas-render': 'MiniCanvasRender',
+          '@plume-canvas/canvas-data': 'PlumeCore',
+          '@plume-canvas/canvas-base': 'PlumeBase',
+          '@plume-canvas/canvas-render': 'PlumeRender',
         },
       },
     },

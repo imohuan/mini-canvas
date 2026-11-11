@@ -11,9 +11,9 @@
 import { describe, expect, it } from 'vitest'
 import { createSSRApp, defineComponent, h, type InjectionKey } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context } from '@mini-canvas/canvas-data'
-import { CANVAS_CONTEXT_KEY } from '@mini-canvas/vue-render/context'
-import SlotHost from '@mini-canvas/vue-render/SlotHost.vue'
+import { Context } from '@plume-canvas/canvas-data'
+import { CANVAS_CONTEXT_KEY } from '@plume-canvas/vue-render/context'
+import SlotHost from '@plume-canvas/vue-render/SlotHost.vue'
 
 const RENDER_KEY: InjectionKey<{ ctx: Context }> = Symbol.for('canvas-v2-render-context') as never
 

@@ -3,8 +3,8 @@
  *
  * 目标：docs/plan/plugin-cordis-migration-plan.md P2a。作者写一个 Service 子类：
  * ```ts
- * import { Service, type Context } from '@mini-canvas/kernel'
- * declare module '@mini-canvas/kernel' {
+ * import { Service, type Context } from '@plume-canvas/kernel'
+ * declare module '@plume-canvas/kernel' {
  *   interface Services { greeter: GreeterService }
  * }
  * export class GreeterService extends Service {

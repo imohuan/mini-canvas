@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { BarRegistry } from '../barRegistry'
 import type { BarAction } from '../barTypes'
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 
 function action(id: string, types?: string[]): BarAction {
   return { id, types, title: id, run: () => ({ ok: true }) }

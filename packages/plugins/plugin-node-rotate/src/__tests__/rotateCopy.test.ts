@@ -14,7 +14,7 @@ import {
   NodeStore,
   Selection,
   createDocService,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import { duplicateImageForRotate } from '../rotateCopy'
 import { ROTATE_MODE_ID, closeRotateMode, rotateMode } from '../rotateSession'
 

@@ -66,7 +66,7 @@ describe('removeCustomCursor', () => {
 
 describe('常量', () => {
   it('广播事件名稳定（设置页写、渲染层听，必须同一个）', () => {
-    expect(CUSTOM_CHANGED_EVENT).toBe('mc-cursor-effect:custom-changed')
+    expect(CUSTOM_CHANGED_EVENT).toBe('plume-cursor-effect:custom-changed')
   })
 })
 

@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore } from '@plume-canvas/canvas-data'
 import { createDocService } from '../../docService'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { registerNodeType } from '../registry/registerNodeType'
 import { resolveSegment } from '../registry/nodeRenderer'
-import type { PluginScope } from '@mini-canvas/kernel'
+import type { PluginScope } from '@plume-canvas/kernel'
 
 /** 测试 content stub（内核不 import Vue，opaque 句柄即可） */
 const TextContentStub = { name: 'TextContent' }

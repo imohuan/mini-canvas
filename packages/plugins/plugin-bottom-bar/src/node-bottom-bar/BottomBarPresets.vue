@@ -13,8 +13,8 @@
  * 已有内容就接在后面，不覆盖用户正在写的东西。
  */
 import { computed, nextTick, ref, watch } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
-import type { NotifyContract } from '@mini-canvas/canvas-base'
+import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
+import type { NotifyContract } from '@plume-canvas/canvas-base'
 import {
   addPreset,
   createTypedPreset,
@@ -28,7 +28,7 @@ import {
 } from '../promptPresets'
 import { loadPresets, savePresets } from '../presetStore'
 import { resolveAgentBaseUrl } from '../aiActions'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import type { ModelIcon } from './modelIcons'
 import { resolveActionIcon, type ModelIconServiceLike } from './actionIcon'
 import ChoicePickerMenu from './ChoicePickerMenu.vue'

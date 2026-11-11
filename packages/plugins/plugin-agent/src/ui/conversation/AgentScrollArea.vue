@@ -8,7 +8,7 @@
  * 这两件事都收在这一层，业务模板只关心内容。
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const ScrollArea = useUiComponent('ScrollArea')
 

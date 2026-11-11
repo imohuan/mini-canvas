@@ -1,12 +1,12 @@
 /**
- * 证明 cloud-server 能用 @mini-canvas/kernel（打包内联的前提）。
+ * 证明 cloud-server 能用 @plume-canvas/kernel（打包内联的前提）。
  *
  * 为什么单测这一条：后台插件系统要跑在**同一个 kernel** 上（不另造一套）。
  * 这条测试证明"Node 侧的 cloud-server 能 import 并运行 kernel"——是后面所有 Task 的地基。
  * 注意：这里 import 的是**真实包名**（不是 vendored 副本），与业务代码的写法一致。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 
 describe('cloud-server 能用内核（打包内联的前提）', () => {
   it('能建 Context、装插件、apply 被调用', async () => {

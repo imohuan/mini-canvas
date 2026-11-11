@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-fiber-demo/src/main.ts
 // 格式：TypeScript 模块（诊断脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：把四个插件装进同一个内核，逐个诊断
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { badConfigPlugin, healthyPlugin, throwingPlugin, waitingPlugin } from './demoPlugins'
 
 const ctx = new Context({ dev: true })

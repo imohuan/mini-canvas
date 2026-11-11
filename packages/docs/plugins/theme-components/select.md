@@ -4,7 +4,7 @@
 触发器、内容层、选项各写各的，想加图标、分组或自定义行都直接改模板。
 
 ```ts
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Select = useUiComponent('Select')
 const SelectContent = useUiComponent('SelectContent')
@@ -66,7 +66,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 文件：packages/my-plugin/src/ModelPicker.vue -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Select = useUiComponent('Select')
 const SelectContent = useUiComponent('SelectContent')

@@ -5,10 +5,10 @@
  * 但不该为此注册节点壳 / 连线 / 背景。这里按真实装配跑一遍注册表，不测像素。
  */
 import { describe, expect, it } from 'vitest'
-import { Context, canvasRuntime, createCanvasAppBasePlugin } from '@mini-canvas/canvas-data'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
-import { shortcutSettingsPlugin } from '@mini-canvas/plugin-shortcut-manager'
+import { Context, canvasRuntime, createCanvasAppBasePlugin } from '@plume-canvas/canvas-data'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+import { shortcutSettingsPlugin } from '@plume-canvas/plugin-shortcut-manager'
 
 async function boot(plugins: unknown[]) {
   const ctx = new Context()

@@ -29,15 +29,15 @@ const CONFIG_BODY = {
   context: {
     baseUrl: 'http://127.0.0.1:8865',
     dirs: [
-      { label: '数据根', path: 'D:/d/.mini-canvas' },
-      { label: '画布', path: 'D:/d/.mini-canvas/canvases' },
+      { label: '数据根', path: 'D:/d/.plume' },
+      { label: '画布', path: 'D:/d/.plume/canvases' },
     ],
     placeholders: [
       {
         token: '{{BACKEND_BASE_URL}}',
         value: 'http://127.0.0.1:8865',
         description: '这台后台的地址（含真实端口）',
-        source: 'mini-canvas',
+        source: 'plume-canvas',
       },
       { token: '{{CWD}}', value: '', description: '本会话的工作目录', source: 'harness' },
     ],

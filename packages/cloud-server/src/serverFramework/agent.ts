@@ -21,7 +21,7 @@
  * 中间件登记在内核注册场（`server/agent-mw`），条目归注册方插件，
  * 用 `ctx.registryOf` 的自动回收 → **卸载插件即摘掉它的中间件**（有测试锁）。
  */
-import type { PluginScope, Registry } from '@mini-canvas/kernel'
+import type { PluginScope, Registry } from '@plume-canvas/kernel'
 import { MCP_TOOL_FIELD, type McpToolDef } from './mcp.js'
 
 /** 注册场名：Agent 中间件 */

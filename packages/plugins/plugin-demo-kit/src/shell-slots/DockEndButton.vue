@@ -2,7 +2,7 @@
 /**
  * 底栏末尾按钮：点击动作由组件自己从上下文取 command 服务。
  */
-import { useCanvasContext } from '@mini-canvas/canvas-render'
+import { useCanvasContext } from '@plume-canvas/canvas-render'
 
 const context = useCanvasContext()
 const { ctx, host: { command } } = context

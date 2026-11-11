@@ -1,7 +1,7 @@
 
 # 渲染层
 
-**一句话定位**：**@mini-canvas/canvas-render 是「把数据层的数据画到屏幕上」的那一层 —— 它既渲染画布，又是整套插件系统的装配入口。**
+**一句话定位**：**@plume-canvas/canvas-render 是「把数据层的数据画到屏幕上」的那一层 —— 它既渲染画布，又是整套插件系统的装配入口。**
 
 **它属于哪一档**：三个包里的**渲染层**。依赖方向是单向的：`kernel ← canvas-data ← canvas-render ← plugins`。它上面是插件（`packages/plugins/*`），下面是数据层与内核；它自己**不定义任何画布数据**，只把数据层的节点/边翻译成 Vue 与 VueFlow 认的格式，再把画布画出来。
 
@@ -13,9 +13,9 @@
 
 | 包 | 一句话 | 它管什么 |
 | --- | --- | --- |
-| `@mini-canvas/kernel` | 纯插件框架 | 装插件、排依赖、发事件、回收副作用、注册场。**零画布概念、零 Vue** |
-| `@mini-canvas/canvas-data` | 数据 + 画布语义 | 节点/边数据、撤销历史、选中、落盘、连接校验、数据契约与上游遍历。**零 Vue** |
-| **`@mini-canvas/canvas-render`（本包）** | **渲染层 + 装配入口** | 建宿主、把数据翻译成屏幕上的图形、给插件发「渲染上下文」、装配插件 |
+| `@plume-canvas/kernel` | 纯插件框架 | 装插件、排依赖、发事件、回收副作用、注册场。**零画布概念、零 Vue** |
+| `@plume-canvas/canvas-data` | 数据 + 画布语义 | 节点/边数据、撤销历史、选中、落盘、连接校验、数据契约与上游遍历。**零 Vue** |
+| **`@plume-canvas/canvas-render`（本包）** | **渲染层 + 装配入口** | 建宿主、把数据翻译成屏幕上的图形、给插件发「渲染上下文」、装配插件 |
 | `packages/plugins/*` | 插件 | 真正的内容与外观：文本节点、图片节点、默认皮肤…… |
 
 类比：数据层是**剧本**（谁在哪儿、谁和谁连着），渲染层是**舞台与灯光**（把剧本变成看得见的画面），插件是**演员**（谁演什么由插件决定）。剧本改了舞台不一定重搭，但舞台上的一切都必须从剧本里来。
@@ -41,19 +41,19 @@
 | 入口 | 形态 | 什么时候用 |
 | --- | --- | --- |
 | `CanvasHost` | Vue 组件 | 你的项目本来就是 Vue。一行渲染出完整画布（含插件装配、上下文、交互、落盘） |
-| `createMiniCanvasHost()` | 异步函数 | 不在 Vue 里（Node 测试、自己手写渲染），或者你要拿宿主句柄自己驱动数据 |
+| `createPlumeHost()` | 异步函数 | 不在 Vue 里（Node 测试、自己手写渲染），或者你要拿宿主句柄自己驱动数据 |
 
-两个入口的关系：**`CanvasHost` 内部就是调 `createMiniCanvasHost()`**。所以「用哪个」其实是在问「要不要顺手把画面也给我画好」。
+两个入口的关系：**`CanvasHost` 内部就是调 `createPlumeHost()`**。所以「用哪个」其实是在问「要不要顺手把画面也给我画好」。
 
 ```vue
 <!-- 文件：你的应用里的某个页面组件（例如 src/CanvasPage.vue）
      格式：Vue 单文件组件（声明式路线）
      位置：告诉它装哪些插件，剩下的它全包 -->
 <script setup lang="ts">
-import { CanvasHost } from '@mini-canvas/canvas-render'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@mini-canvas/plugin-theme-canvas'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { CanvasHost } from '@plume-canvas/canvas-render'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 
 // ① 顺序即装载顺序：先装「皮」（它提供节点壳/边/背景），再装业务节点
 const plugins = [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin]
@@ -62,7 +62,7 @@ const plugins = [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin]
 <template>
   <!-- ② CanvasHost 自己不吃尺寸，铺满谁由父容器决定 -->
   <div style="width: 100vw; height: 100vh">
-    <CanvasHost :plugins="plugins" window-key="MiniCanvas" />
+    <CanvasHost :plugins="plugins" window-key="Plume" />
   </div>
 </template>
 ```
@@ -71,10 +71,10 @@ const plugins = [themeComponentsPlugin, themeCanvasPlugin, nodeTextPlugin]
 // 文件：scripts/build-graph.ts
 // 格式：TypeScript 模块（Node 环境直接跑）
 // 位置：命令式路线 —— 不要画面，只要宿主句柄，自己建节点/存盘
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 
-const { host, api, exposeToWindow } = await createMiniCanvasHost({
+const { host, api, exposeToWindow } = await createPlumeHost({
   coldPlugins: [nodeTextPlugin],   // ① 冷启动清单：不传就一个插件都不装
   dev: true,                       // ② 开发态：能力缺项当场抛错，而不是静默 undefined
 })
@@ -87,11 +87,11 @@ await host.save.flush()            // ⑤ 落盘
 host.stop()                        // ⑥ 回收全部插件副作用 + 清掉 window 挂载
 ```
 
-两篇专门的用法手册：[createMiniCanvasHost 用法](/canvas-render/create-host)、[CanvasHost / CanvasSurface](/canvas-render/canvas-host)。
+两篇专门的用法手册：[createPlumeHost 用法](/canvas-render/create-host)、[CanvasHost / CanvasSurface](/canvas-render/canvas-host)。
 
 ## 它注入的三件服务
 
-`createMiniCanvasHost` 的装配顺序是：**建 Context → 装基础插件（canvas-data 的画布服务）→ 注入渲染层三件 → 冷启动业务插件 → start**。
+`createPlumeHost` 的装配顺序是：**建 Context → 装基础插件（canvas-data 的画布服务）→ 注入渲染层三件 → 冷启动业务插件 → start**。
 
 渲染层独有的两个服务（**内核与数据层都拿不到**，因为都要 DOM、或要管画布动作）：
 
@@ -101,7 +101,7 @@ host.stop()                        // ⑥ 回收全部插件副作用 + 清掉 w
 | `canvas` | `new CanvasService(ctx)` | 建节点、选中、模式、提示、命令执行要统一门面 | 建节点、取景、打组、提示、跑命令 |
 
 ```ts
-// 片段：插件里怎么硬依赖这三件（真实装配见 packages/canvas-render/src/host/createMiniCanvasHost.ts）
+// 片段：插件里怎么硬依赖这三件（真实装配见 packages/canvas-render/src/host/createPlumeHost.ts）
 export const inject = ['view'] as string[]      // ① 硬依赖：没有就不启动（停在 pending 等）
 const view = ctx.get('view')                     // ② 拿到的是渲染层注入的那个实例
 const rect = view.getNodeRect(nodeId)            // ③ { id, x, y, w, h }，flow 绝对坐标
@@ -120,7 +120,7 @@ const rect = view.getNodeRect(nodeId)            // ③ { id, x, y, w, h }，flo
 | --- | --- | --- |
 | 渲染上下文 | `RENDER_CONTEXT_KEY`、`useCanvasRender`、`CanvasRenderContext` | 渲染子树里**唯一入口**：ctx / host / flow / registry / nodeWrite / 外观 / 交互 / 只读数据 |
 | 宿主组件 | `CanvasHost`、`SettingsHost`、`SettingsShell`、`SlotHost`、`RegionEntryHost` | 一行渲染的官方宿主；设置面板宿主；通用槽宿主；区域条目宿主 |
-| 宿主门面 | `createMiniCanvasHost`、`MiniCanvasOptions`、`MiniCanvasApi`、`CanvasHostHandle` | 建宿主 + `window.MiniCanvas` 那把 API |
+| 宿主门面 | `createPlumeHost`、`PlumeOptions`、`PlumeApi`、`CanvasHostHandle` | 建宿主 + `window.Plume` 那把 API |
 | 插件安装 | `createPluginManager`、`sourceKind`、`PluginManager`、`PluginManifest` | 热装/热卸/重载/清单装配/外部来源 |
 | store→flow 纯逻辑 | `nodesFromStore`、`edgesFromStore`、`pruneDanglingEdges`、`assembleTheme`、`nodeShellSlot`、`FlowNode`、`FlowEdge`、`ThemeAssembly` | 数据 → VueFlow 数组；主题槽 → 组件表 |
 | 默认外观 | `DEFAULT_EDGE_VISUAL`、`DEFAULT_HANDLE_VISUAL`、`DEFAULT_DEBUG_VISUAL` | 宿主没传外观参数时的回落值 |
@@ -155,7 +155,7 @@ const rect = view.getNodeRect(nodeId)            // ③ { id, x, y, w, h }，flo
 ```
 你的 Vue 组件
   └─ <CanvasHost :plugins="[皮肤, 业务节点…]" />
-       │ ① onMounted 里 await createMiniCanvasHost() 建宿主 host（ctx 已 start）
+       │ ① onMounted 里 await createPlumeHost() 建宿主 host（ctx 已 start）
        │ ② host.ctx 里服务齐了：doc/save/selection/command/…（数据层给的）
        │                            + view/canvas（本包给的）
        │ ③ boot 完成后才挂载内层 <CanvasSurface>
@@ -178,14 +178,14 @@ const rect = view.getNodeRect(nodeId)            // ③ { id, x, y, w, h }，flo
 | `packages/ui/src/App.vue` | 成品应用：`<CanvasHost :plugins="APP_PLUGINS" …>` 一行挂真画布，`#ui` 插槽里塞 SettingsHost / 小地图 / Agent 面板 |
 | `packages/ui/src/assembly.ts` | `APP_PLUGINS`：成品应用的装配清单（数组顺序即装载顺序） |
 | `packages/canvas-render/src/host/CanvasHost.vue` | 建宿主 + 订阅数据自动重灌 + 主题装配 + 转发 VueFlow 事件 |
-| `packages/canvas-render/src/host/__tests__/createMiniCanvasHost.test.ts` | 门面行为的测试：seed、热装热卸、manifest、`exposeToWindow` 清理 |
+| `packages/canvas-render/src/host/__tests__/createPlumeHost.test.ts` | 门面行为的测试：seed、热装热卸、manifest、`exposeToWindow` 清理 |
 | `packages/plugins/plugin-theme-components/src/index.ts` | 往 `ui` 目录注册通用件、注册 settingsPanel 与外观变量 |
 | `packages/plugins/plugin-theme-canvas/src/index.ts` | 往 `ctx.theme` 注册 nodeShell / edge / background / connectionLine |
 
 ## 阅读顺序
 
 1. 想马上抄一个能跑的画布 → [端到端可运行 Demo](/canvas-render/demo)。
-2. 想搞清两个装配入口 → [createMiniCanvasHost 用法](/canvas-render/create-host)、[CanvasHost / CanvasSurface](/canvas-render/canvas-host)。
+2. 想搞清两个装配入口 → [createPlumeHost 用法](/canvas-render/create-host)、[CanvasHost / CanvasSurface](/canvas-render/canvas-host)。
 3. 想写插件里的 `.vue` 组件（尤其节点内容） → [渲染上下文与 content 组件](/canvas-render/render-context)。
 4. 想做设置面板、往画布上叠浮层 → [SettingsHost / SlotHost](/canvas-render/settings-slot-host)。
 5. 想懂 VueFlow 桥接与性能合帧 → [vueFlowBridge 与 coalesce](/canvas-render/vueflow-bridge)。

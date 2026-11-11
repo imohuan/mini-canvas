@@ -4,9 +4,9 @@ import tailwindcss from '@tailwindcss/vite'
 import { catalogPlugin } from './catalogPlugin.mjs'
 import { sseProxyPlugin } from './sseProxyPlugin.mjs'
 import { fileURLToPath } from 'node:url'
-import { uiKitDebugLocPlugin } from '@mini-canvas/ui-kit-shadcn/vite-plugin-debug-loc'
+import { uiKitDebugLocPlugin } from '@plume-canvas/ui-kit-shadcn/vite-plugin-debug-loc'
 
-// @mini-canvas/ui —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
+// @plume-canvas/ui —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
 // 用 CanvasHost + 各插件渲染真实画布（本包是"用来显示画布"的应用，index.html 在包根、代码在 src/）。
 export default defineConfig({
   plugins: [
@@ -16,7 +16,7 @@ export default defineConfig({
     // 这样单开 ui dev 也能用插件管理；生产形态由 cloud-server 提供同两条路由。
     catalogPlugin({ pluginsDir: '../../packages/plugins' }),
     // 实时通道单独转发：vite 内置代理转发这条长响应会挂住（详见插件注释）
-    sseProxyPlugin({ target: process.env.MINI_CANVAS_BACKEND || 'http://localhost:8865' }),
+    sseProxyPlugin({ target: process.env.PLUME_BACKEND || 'http://localhost:8865' }),
     // 放在最后：enforce:'pre' 的 transform 仍会先于 vue 插件跑，改的是原始 SFC。
     // 只在 vite serve 生效（插件内部 apply:'serve'）；生产构建不会打标。
     uiKitDebugLocPlugin({ root: fileURLToPath(new URL('../..', import.meta.url)) }),
@@ -30,9 +30,9 @@ export default defineConfig({
     // 否则全部回落 index.html（表现为「列表空 / 建文件夹没反应」）。
     proxy: {
       '/api': {
-        // 多 Agent 并行开发时各用各的后台：启动前设置 MINI_CANVAS_BACKEND，
+        // 多 Agent 并行开发时各用各的后台：启动前设置 PLUME_BACKEND，
         // 不设置才回落到默认的 8865。
-        target: process.env.MINI_CANVAS_BACKEND || 'http://localhost:8865',
+        target: process.env.PLUME_BACKEND || 'http://localhost:8865',
         changeOrigin: true,
         /**
          * 代理不是"另一个网站"，而是开发页面的同源后端入口 —— 请求到了这里，
@@ -51,7 +51,7 @@ export default defineConfig({
           // 浏览器带来的 `Origin: http://localhost:5299` 会原样透过去，后台照样 403。
           // 预检（OPTIONS）也要改：预检不过，带 x-admin-token 的请求根本发不出去。
           proxy.on('proxyReq', (req: { setHeader(name: string, value: string): void }) => {
-            req.setHeader('origin', process.env.MINI_CANVAS_BACKEND || 'http://localhost:8865')
+            req.setHeader('origin', process.env.PLUME_BACKEND || 'http://localhost:8865')
           })
         },
         // 把后台的 CORS 头**原样**带回来。
@@ -82,23 +82,23 @@ export default defineConfig({
       'vue-router',
       '@vue-flow/core',
       // vue-draggable-plus 只在 plugin-bottom-bar 的依赖里（ui 顶层解析不到）
-      '@mini-canvas/plugin-bottom-bar > vue-draggable-plus',
+      '@plume-canvas/plugin-bottom-bar > vue-draggable-plus',
       'lucide-vue-next',
       'motion-v',
       'imagesloaded',
       'masonry-layout',
-      // 组织/格式组件（@mini-canvas/ui-kit-shadcn）
-      '@mini-canvas/ui-kit-shadcn > cn',
-      '@mini-canvas/ui-kit-shadcn > reka-ui',
-      '@mini-canvas/ui-kit-shadcn > @vueuse/core',
-      '@mini-canvas/ui-kit-shadcn > class-variance-authority',
-      '@mini-canvas/ui-kit-shadcn > vue-sonner',
-      '@mini-canvas/ui-kit-shadcn > @lucide/vue',
-      '@mini-canvas/ui-kit-shadcn > @vuelor/picker',
+      // 组织/格式组件（@plume-canvas/ui-kit-shadcn）
+      '@plume-canvas/ui-kit-shadcn > cn',
+      '@plume-canvas/ui-kit-shadcn > reka-ui',
+      '@plume-canvas/ui-kit-shadcn > @vueuse/core',
+      '@plume-canvas/ui-kit-shadcn > class-variance-authority',
+      '@plume-canvas/ui-kit-shadcn > vue-sonner',
+      '@plume-canvas/ui-kit-shadcn > @lucide/vue',
+      '@plume-canvas/ui-kit-shadcn > @vuelor/picker',
       // 默认主题的通用组件半边（plugin-theme-components）
-      '@mini-canvas/plugin-theme-components > @ckpack/vue-color',
+      '@plume-canvas/plugin-theme-components > @ckpack/vue-color',
       // 3D 节点（plugin-node-3d-preview）
-      '@mini-canvas/plugin-node-3d-preview > three',
+      '@plume-canvas/plugin-node-3d-preview > three',
       // 富文本编辑器（prosemirror-editor-bundle）
       'prosemirror-editor-bundle > prosemirror-view',
       'prosemirror-editor-bundle > prosemirror-state',
@@ -109,33 +109,33 @@ export default defineConfig({
       'prosemirror-editor-bundle > prosemirror-schema-basic',
     ],
     exclude: [
-    '@mini-canvas/canvas-data',
-    '@mini-canvas/canvas-render',
-    '@mini-canvas/kernel',
-    '@mini-canvas/canvas-base',
-    '@mini-canvas/ui-kit-shadcn',
-    '@mini-canvas/plugin-theme-components',
-    '@mini-canvas/plugin-theme-canvas',
-    '@mini-canvas/theme-contract',
-    '@mini-canvas/plugin-node-text',
-    '@mini-canvas/plugin-node-ui',
-    '@mini-canvas/plugin-node-image',
-    '@mini-canvas/plugin-node-3d-preview',
-    '@mini-canvas/plugin-node-image-compare',
-    '@mini-canvas/plugin-group',
-    '@mini-canvas/plugin-multi-select',
-    '@mini-canvas/plugin-auto-layout',
-    '@mini-canvas/plugin-align-guide',
-    '@mini-canvas/plugin-align-arrange',
-    '@mini-canvas/plugin-context-menu',
-    '@mini-canvas/plugin-clipboard',
-    '@mini-canvas/plugin-canvas-export',
-    '@mini-canvas/plugin-node-find',
-    '@mini-canvas/plugin-mini-map',
-    '@mini-canvas/plugin-shortcut-manager',
-    '@mini-canvas/plugin-edge-cutting',
-    '@mini-canvas/plugin-cloud-client',
-    '@mini-canvas/canvas-base',
+    '@plume-canvas/canvas-data',
+    '@plume-canvas/canvas-render',
+    '@plume-canvas/kernel',
+    '@plume-canvas/canvas-base',
+    '@plume-canvas/ui-kit-shadcn',
+    '@plume-canvas/plugin-theme-components',
+    '@plume-canvas/plugin-theme-canvas',
+    '@plume-canvas/theme-contract',
+    '@plume-canvas/plugin-node-text',
+    '@plume-canvas/plugin-node-ui',
+    '@plume-canvas/plugin-node-image',
+    '@plume-canvas/plugin-node-3d-preview',
+    '@plume-canvas/plugin-node-image-compare',
+    '@plume-canvas/plugin-group',
+    '@plume-canvas/plugin-multi-select',
+    '@plume-canvas/plugin-auto-layout',
+    '@plume-canvas/plugin-align-guide',
+    '@plume-canvas/plugin-align-arrange',
+    '@plume-canvas/plugin-context-menu',
+    '@plume-canvas/plugin-clipboard',
+    '@plume-canvas/plugin-canvas-export',
+    '@plume-canvas/plugin-node-find',
+    '@plume-canvas/plugin-mini-map',
+    '@plume-canvas/plugin-shortcut-manager',
+    '@plume-canvas/plugin-edge-cutting',
+    '@plume-canvas/plugin-cloud-client',
+    '@plume-canvas/canvas-base',
       // 编辑器组件包：workspace 源码（内部用带 .ts 后缀的相对导入），与其它源码包一样交给 vite 转换
       'prosemirror-editor-bundle',
     ],

@@ -36,7 +36,7 @@ export interface CloudClientConfig {
 /**
  * 后台根地址校验（**就地内联** —— 本插件产物必须零 import，见 vite.config.ts）。
  *
- * 与 `@mini-canvas/bar-contract` 的 `normalizeApiBase` 保持同一规则，
+ * 与 `@plume-canvas/bar-contract` 的 `normalizeApiBase` 保持同一规则，
  * `apiBaseParity.test.ts` 会逐条比对两边。
  */
 const ABSOLUTE_HTTP = /^https?:\/\/[^/\s]+/i

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** 插件页顶部：中转地址、刷新、全部安装、计数和管理令牌。 */
 import { Download, RefreshCw } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { PluginManagerService } from '../../../pluginManagerService'
 
 defineProps<{

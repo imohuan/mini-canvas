@@ -1,4 +1,4 @@
-# @mini-canvas/ui-kit-shadcn
+# @plume-canvas/ui-kit-shadcn
 
 基于 shadcn-vue（preset `a2vfIHS`，reka-ui + Lucide）的组件库，附带取色器与可视化组件配置。
 
@@ -20,13 +20,13 @@ pnpm -C packages/ui-kit-shadcn dev
 ## 引入
 
 ```ts
-import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@mini-canvas/ui-kit-shadcn'
+import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@plume-canvas/ui-kit-shadcn'
 ```
 
 宿主样式入口里引入一次（Tailwind v4）：
 
 ```css
-@import "@mini-canvas/ui-kit-shadcn/styles.css";
+@import "@plume-canvas/ui-kit-shadcn/styles.css";
 @source "../../ui-kit-shadcn/src";
 ```
 
@@ -38,9 +38,9 @@ import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, Dropdow
 
 | 配置项 | 写入的变量 | 谁消费 |
 | --- | --- | --- |
-| 圆角 `themeRadius` | `--mct-radius` | `styles/host.css` 按 `data-slot` 覆盖按钮 / 输入框 / 卡片 / 浮层 |
-| 正文字体 `themeFont` | `--mct-font-body` | `<html>` + 外壳 / 设置壳 / 节点壳（都写 `var(--mct-font-body, 原栈)`） |
-| 标题字体 `themeHeadingFont` | `--mct-font-heading` | 组件标题（`cn-font-heading`）+ 设置页小标题 |
+| 圆角 `themeRadius` | `--plume-radius` | `styles/host.css` 按 `data-slot` 覆盖按钮 / 输入框 / 卡片 / 浮层 |
+| 正文字体 `themeFont` | `--plume-font-body` | `<html>` + 外壳 / 设置壳 / 节点壳（都写 `var(--plume-font-body, 原栈)`） |
+| 标题字体 `themeHeadingFont` | `--plume-font-heading` | 组件标题（`cn-font-heading`）+ 设置页小标题 |
 
 颜色不在这里另写一份：`styles.css` 已经把 shadcn 语义色映射到 `--ui-*`，
 而 `--ui-*` 由 canvas-render 的主题色板（设置 → 外观 → 主题配色）驱动。
@@ -51,7 +51,7 @@ import { Button, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, Dropdow
 （`src/componentConfig.ts` 的 `setComponentConfig`），读写方式只有这一个入口：
 
 ```ts
-import { componentConfig, setComponentConfig, resetComponentConfig } from '@mini-canvas/ui-kit-shadcn'
+import { componentConfig, setComponentConfig, resetComponentConfig } from '@plume-canvas/ui-kit-shadcn'
 
 setComponentConfig({ size: 'sm', arrowVisible: true, gap: 8, offset: 4, subGap: 12 })
 resetComponentConfig() // 主题卸载时复位，避免幽灵配置挡住下一个主题

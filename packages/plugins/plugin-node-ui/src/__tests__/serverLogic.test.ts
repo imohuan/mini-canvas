@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 /** 用例里用的空脚本目录（不存在 = 一个脚本都没有，正是 listScripts 的既定语义） */
-const EMPTY_SCRIPTS_DIR = path.join(os.tmpdir(), 'mc-node-ui-empty-scripts')
+const EMPTY_SCRIPTS_DIR = path.join(os.tmpdir(), 'plume-node-ui-empty-scripts')
 
 /** 造一个最小的后台 ctx：收下注册的 MCP 工具/REST 路由，供断言 */
 function fakeServerCtx(opts: {

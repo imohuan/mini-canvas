@@ -13,8 +13,8 @@
  * 本包存在的价值：给「只想要老版 history 命令名、不想依赖 canvas-commands 的宿主」一个
  * 独立可装配的撤销/重做命令入口，并把内核缺口显式列出。
  */
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 
 export const name = 'history'
 // 5c 起撤销栈不再是独立服务名（并进 doc）；本包薄适配的那个名字也随之改到 doc。

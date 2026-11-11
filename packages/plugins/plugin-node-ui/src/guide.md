@@ -68,7 +68,7 @@
 
        canvas_ui_export(canvasId, nodeId, name?)
 
-     它把「这个节点的界面 + 它用到的脚本」打成一个 .mcnode 包，**自动保存到本机下载目录**，
+     它把「这个节点的界面 + 它用到的脚本」打成一个 .plumenode 包，**自动保存到本机下载目录**，
      返回值里给**绝对路径**。为什么要这一步（用户原话）：
      「你的这个节点一删，后台就完全没有意义了，还要重新写 HTML 代码」——
      落了盘，节点删了也能从包里原样恢复（或换个画布用）。
@@ -376,7 +376,7 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
 
 ### 7.3 节点包（导出 / 导入）
 
-  POST {base}/api/node-packages/build    { canvasId, nodeId }        → .mcnode 字节
+  POST {base}/api/node-packages/build    { canvasId, nodeId }        → .plumenode 字节
   POST {base}/api/node-packages/save     { canvasId, nodeId, name?, folderId? }  // 打包并存库
   POST {base}/api/node-packages/export   { canvasId, nodeId, name? }   // 打包 + **写到本机下载目录**
   POST {base}/api/node-packages/inspect  (body=包字节)              // 先体检：会不会升版本

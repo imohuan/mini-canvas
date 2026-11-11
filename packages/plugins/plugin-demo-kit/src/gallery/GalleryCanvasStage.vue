@@ -13,9 +13,9 @@
  * "Failed to resolve component: ClientOnly"，然后把它当成未知原生元素直接渲染出来
  * （等于白写，还留一条控制台告警）。画布宿主本来就只在浏览器里跑，不需要这层 SSR 兜底。
  */
-import { CanvasHost, CanvasProvider } from '@mini-canvas/canvas-render'
-import { MemoryStorageAdapter, GRAPH_KEY, GRAPH_EDGES_KEY, scopedKey, type CanvasNode, type CanvasEdge } from '@mini-canvas/canvas-data'
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { CanvasHost, CanvasProvider } from '@plume-canvas/canvas-render'
+import { MemoryStorageAdapter, GRAPH_KEY, GRAPH_EDGES_KEY, scopedKey, type CanvasNode, type CanvasEdge } from '@plume-canvas/canvas-data'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
 import { galleryDemoNodesPlugin } from './demoNodes'
 
 withDefaults(defineProps<{ height?: number }>(), { height: 300 })

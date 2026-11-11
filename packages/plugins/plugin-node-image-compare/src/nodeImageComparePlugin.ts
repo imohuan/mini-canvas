@@ -11,8 +11,8 @@
  * UI 与逻辑同包：ImageCompareContent.vue 是 content 组件，二者在 apply(ctx) 里一次注册。
  * 依赖方向：只依赖内核 + 渲染层类型，不反向依赖宿主。
  */
-import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { Service, type Context, type PluginModule } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import ImageCompareContent from './ImageCompareContent.vue'
 import {
   INPUT_CAPACITY,
@@ -41,7 +41,7 @@ export interface ImageCompareNodeService {
 }
 
 /** 类型增强缝：宿主/作者 ctx.imageCompare 直访时类型为本服务 */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     imageCompare: ImageCompareNodeService
   }

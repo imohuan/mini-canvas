@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "配置演示",
     "description": "声明两项配置，演示 ctx.settings 的登记、读取与订阅",
     "pluginName": "demo-settings",
@@ -15,7 +15,7 @@
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

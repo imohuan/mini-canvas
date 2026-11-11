@@ -8,7 +8,7 @@
  *   （与 icon 同一条链：插件 ctx.nodes.register → nodeStore 类型表 → 菜单项），
  *   本层不再按 type 名字维护对照表 —— 那样每加一个节点类型都要回来改这里，必漏。
  */
-import { iconRenderMode } from '@mini-canvas/kernel'
+import { iconRenderMode } from '@plume-canvas/kernel'
 import type { ContextMenuItem } from './menuBuilder'
 
 /** 通用描边图标路径集（viewBox 0 0 24 24, stroke=currentColor, 2px） */

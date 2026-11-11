@@ -24,7 +24,7 @@ interface NodesLabelPort {
 /** 能力工厂：收节点上下文，返回该能力实例（与 canvas-render 的 CapabilityFactory 同形） */
 type CapabilityFactory = (node: unknown) => unknown
 
-/** 能力场名（与 canvas-render 的 createMiniCanvasHost 注册用的一致） */
+/** 能力场名（与 canvas-render 的 createPlumeHost 注册用的一致） */
 const CAPABILITY_FIELD = 'capability'
 
 /**

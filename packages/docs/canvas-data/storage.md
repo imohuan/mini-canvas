@@ -189,7 +189,7 @@ export interface StorageAdapter {
 // 格式：TypeScript 模块（两个文本适配器的用法）
 // 位置：测试 / 宿主装配
 
-import { MemoryStorageAdapter, LocalStorageAdapter } from '@mini-canvas/canvas-data'
+import { MemoryStorageAdapter, LocalStorageAdapter } from '@plume-canvas/canvas-data'
 
 const mem = new MemoryStorageAdapter()
 mem.id                        // 'memory'
@@ -282,7 +282,7 @@ export function isResourceAdapter(a: unknown): a is ResourceAdapter
 | 谁 | 在哪 | 用它干什么 |
 | --- | --- | --- |
 | 基础插件 | `packages/canvas-data/src/canvas/canvasBasePlugin.ts` | 建 `SaveServiceImpl`、`useAdapterForAll(host adapter)`、接图提交回调、装本地资源后端 |
-| 渲染宿主门面 | `packages/canvas-render/src/host/createMiniCanvasHost.ts` | 从存档恢复画布（`save.get(GRAPH_KEY, 'canvas')`）、`persistSettings` 桥 |
+| 渲染宿主门面 | `packages/canvas-render/src/host/createPlumeHost.ts` | 从存档恢复画布（`save.get(GRAPH_KEY, 'canvas')`）、`persistSettings` 桥 |
 | 渲染宿主组件 | `packages/canvas-render/src/host/CanvasHost.vue` | 读写视口键、在 hidden / pagehide 时 flush |
 | 配置持久化桥 | `packages/canvas-data/src/settingsPersist.ts` | 整份配置快照存 `'config'`、订阅 `onAdapterChange` 重读（入口是 `save.settings`） |
 | 资源服务 | `packages/canvas-data/src/resourceService.ts` | 现取 `save.adapterOf('resource')` —— 不自己攥后端 |
@@ -306,7 +306,7 @@ export function isResourceAdapter(a: unknown): a is ResourceAdapter
 
 ~~~
 plugin-draft-note/
-├── package.json           # 清单：包名 / 入口 / miniCanvas 元信息
+├── package.json           # 清单：包名 / 入口 / plume 元信息
 └── src/
     ├── index.ts           # 插件入口：两条命令（存草稿 / 念草稿）
     ├── draftStore.ts      # 薄封装：裸 key 从哪来、adapter 被换时怎么办
@@ -318,11 +318,11 @@ plugin-draft-note/
 
 ~~~json
 {
-  "name": "@mini-canvas/plugin-draft-note",
+  "name": "@plume-canvas/plugin-draft-note",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：草稿便签",
     "description": "把草稿与面板记忆分别放进 canvas / config 两个抽屉，并演示换后端后重读",
     "pluginName": "draft-note",
@@ -339,9 +339,9 @@ plugin-draft-note/
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
@@ -357,7 +357,7 @@ plugin-draft-note/
 // 格式：TypeScript 模块（薄封装：一处管住 key 与换后端重读）
 // 位置：插件包里唯一碰 save 的地方
 
-import type { SaveService } from '@mini-canvas/canvas-data'
+import type { SaveService } from '@plume-canvas/canvas-data'
 
 /** 裸 key 统一小写 kebab —— 前缀由 save 自己加（canvas:draft-note / config:draft-note-panel） */
 export const DRAFT_KEY = 'draft-note'
@@ -421,8 +421,8 @@ export function createDraftStore(save: SaveService, onReload: (lines: string[]) 
 // 格式：TypeScript 模块（插件入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
 
-import type { Context } from '@mini-canvas/canvas-base'
-import type { SaveService } from '@mini-canvas/canvas-data'
+import type { Context } from '@plume-canvas/canvas-base'
+import type { SaveService } from '@plume-canvas/canvas-data'
 import { createDraftStore } from './draftStore'
 
 export const name = 'draft-note'
@@ -484,7 +484,7 @@ export function apply(ctx: Context) {
 // 位置：验证“两个抽屉互不干扰”与“换后端能重读”
 
 import { describe, expect, it, vi } from 'vitest'
-import { MemoryStorageAdapter, SaveServiceImpl } from '@mini-canvas/canvas-data'
+import { MemoryStorageAdapter, SaveServiceImpl } from '@plume-canvas/canvas-data'
 import { createDraftStore, DRAFT_KEY, PANEL_KEY } from '../draftStore'
 
 describe('draftStore', () => {

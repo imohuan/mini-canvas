@@ -15,7 +15,7 @@ import {
   DEFAULT_MULTI_RADIO,
   MULTI_RADIO_SIZE_MIN,
   MULTI_RADIO_SIZE_MAX,
-} from '@mini-canvas/theme-contract'
+} from '@plume-canvas/theme-contract'
 
 describe('多选标记的 Config 声明（设置页面里要能看到这两项）', () => {
   it('两项都在 Config 里（大小 / 低缩放显示）', () => {

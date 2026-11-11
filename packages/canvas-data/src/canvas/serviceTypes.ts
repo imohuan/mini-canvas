@@ -15,7 +15,7 @@
  * 看到。canvas-render 是 canvas-data 的下游，把类型留在那边，纯逻辑插件就得为了服务名
  * import 整个渲染包（或手写窄端口，类型对错全靠人抄）。契约是结构类型，故放上游不引入反向依赖。
  */
-import type { SettingsStore } from '@mini-canvas/kernel'
+import type { SettingsStore } from '@plume-canvas/kernel'
 import type { SettingsMenuRegistry } from './settingsMenu'
 import type { DocService } from '../docService'
 import type { SelectionService } from '../selection'
@@ -38,7 +38,7 @@ export interface NodeToolbarContract {
   activeModeId(nodeId: string): string
 }
 
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface Services {
     /** 设置菜单注册表：0/1/2 级菜单 + order / before / after 解析 */
     settingsMenu: SettingsMenuRegistry
@@ -77,7 +77,7 @@ declare module '@mini-canvas/kernel' {
  * 渲染层注入的 view / nodeToolbar 也在本文件登记；插件自己提供的服务（text/image/group/
  * clipboard/…）仍由各自 declare，那是它们的私有契约。
  */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     /** 文档门面（节点 + 边 + 事务 + 撤销 + 快照） */
     doc: DocService

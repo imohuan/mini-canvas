@@ -16,9 +16,9 @@
 /** 默认上限：50MB。够放一段短视频 / 一张大图，又不至于一次把盘写满。 */
 export const DEFAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
 
-/** 从环境变量读上限（`MINI_CANVAS_MAX_UPLOAD_MB`，非法值回落默认）。 */
+/** 从环境变量读上限（`PLUME_MAX_UPLOAD_MB`，非法值回落默认）。 */
 export function maxUploadBytes(env: Record<string, string | undefined> = process.env): number {
-  const raw = env.MINI_CANVAS_MAX_UPLOAD_MB
+  const raw = env.PLUME_MAX_UPLOAD_MB
   if (!raw) return DEFAULT_MAX_UPLOAD_BYTES
   const n = Number(raw)
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_MAX_UPLOAD_BYTES

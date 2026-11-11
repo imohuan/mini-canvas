@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '../canvas/context'
-import { SettingsStore } from '@mini-canvas/kernel'
+import { SettingsStore } from '@plume-canvas/kernel'
 import { createCanvasBasePlugin } from '../canvas/canvasBasePlugin'
 import { MemoryStorageAdapter } from '../storage/memoryAdapter'
 import { createAutoSaveEngine } from '../autoSave'

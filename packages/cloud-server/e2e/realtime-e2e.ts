@@ -40,7 +40,7 @@ function check(label: string, ok: boolean, extra?: unknown): void {
 
 /** 在浏览器里取一段画布状态（所有断言都走这里，避免拼一堆表达式） */
 const PROBE = `(() => {
-  const api = window.MiniCanvasUI
+  const api = window.PlumeUI
   const host = api && api.getHost()
   const st = host ? host.ctx.get("cloud-client").status() : null
   return {
@@ -175,7 +175,7 @@ async function main(): Promise<void> {
     // 让画布改一个节点位置 → 触发一次正常的保存（原来这一步会把 ai-keep-1 整份覆盖掉）
     await page.ev(
       `(() => {
-         const host = window.MiniCanvasUI.getHost()
+         const host = window.PlumeUI.getHost()
          const all = host.nodeStore.getNodes()
          const n = all.find((x) => x.id !== 'ai-keep-1') ?? all[0]
          if (!n) return false
@@ -203,7 +203,7 @@ async function main(): Promise<void> {
     // ==================== 本地正在做的事不被冲掉 ====================
    console.log("\n--- 本地新建节点后再让 AI 改：本地那个不能丢 ---")
     const localId = await page.ev<string>(
-      `(() => window.MiniCanvasUI.getHost().graph.createNode('text', { x: 700, y: 500 }, { text: '本地建的' }))()`,
+      `(() => window.PlumeUI.getHost().graph.createNode('text', { x: 700, y: 500 }, { text: '本地建的' }))()`,
     )
     const localRound = await client.callTool({
       name: 'canvas_batch_nodes',

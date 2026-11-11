@@ -11,11 +11,11 @@
  * 本组件只管画框：确认/取消按钮在上下控制栏（用户要求），所以这里不出现任何按钮。
  */
 import { computed } from 'vue'
-import { useCanvasRender, fitEditingNodeIntoView } from '@mini-canvas/canvas-render'
-import type { Rect } from '@mini-canvas/canvas-render'
-import { MediaFrameOverlay } from '@mini-canvas/canvas-render'
+import { useCanvasRender, fitEditingNodeIntoView } from '@plume-canvas/canvas-render'
+import type { Rect } from '@plume-canvas/canvas-render'
+import { MediaFrameOverlay } from '@plume-canvas/canvas-render'
 import { editDraft, endEdit, isCropping, isExpanding, setEditDraft } from './cropSession'
-import { DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
+import { DEFAULT_CROP_RATIO_VALUE } from '@plume-canvas/canvas-render'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 

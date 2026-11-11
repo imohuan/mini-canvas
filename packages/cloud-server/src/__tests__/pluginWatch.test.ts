@@ -19,7 +19,7 @@ async function makePlugin(root: string, pkg: string, file: string, content: stri
 describe('pluginsDirSignature', () => {
   let root: string
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), 'mc-plugin-watch-'))
+    root = await mkdtemp(path.join(tmpdir(), 'plume-plugin-watch-'))
   })
   afterEach(async () => {
     await rm(root, { recursive: true, force: true })
@@ -62,7 +62,7 @@ describe('pluginsDirSignature', () => {
 describe('watchPluginDirs', () => {
   let root: string
   beforeEach(async () => {
-    root = await mkdtemp(path.join(tmpdir(), 'mc-plugin-watch-'))
+    root = await mkdtemp(path.join(tmpdir(), 'plume-plugin-watch-'))
   })
   afterEach(async () => {
     await rm(root, { recursive: true, force: true })
@@ -89,11 +89,11 @@ describe('watchPluginDirs', () => {
     }
   })
 
-  it('读得到 package.json 的 miniCanvas.pluginName（报的是运行时名）', async () => {
+  it('读得到 package.json 的 plume.pluginName（报的是运行时名）', async () => {
     await makePlugin(root, 'plugin-style-library', 'plugin-style-library.js', 'v1', 1_000_000)
     await writeFile(
       path.join(root, 'plugin-style-library', 'package.json'),
-      JSON.stringify({ name: '@mini-canvas/plugin-style-library', miniCanvas: { pluginName: 'style-library' } }),
+      JSON.stringify({ name: '@plume-canvas/plugin-style-library', plume: { pluginName: 'style-library' } }),
       'utf8',
     )
     const w = watchPluginDirs(root, () => {}, 50)

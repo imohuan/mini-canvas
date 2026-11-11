@@ -65,7 +65,7 @@
 // 文件：某渲染类插件（例如自定义节点壳）里的 import
 // 格式：TypeScript / Vue 单文件组件的 script 段
 // 位置：插件源码 —— 一切都从 canvas-render 走，不直接 import @vue-flow/core
-import { Handle, Position, type NodeProps } from '@mini-canvas/canvas-render'
+import { Handle, Position, type NodeProps } from '@plume-canvas/canvas-render'
 
 const props = defineProps<NodeProps>()   // ① 引擎给的 props（id / type / data / selected …）
 ```
@@ -97,8 +97,8 @@ export function createCoalescer(
 // 格式：Vue 单文件组件 script setup
 // 位置：插件里的设置控件 —— 连续拖动值不要每次都写 store
 import { onBeforeUnmount } from 'vue'
-import { createCoalescer } from '@mini-canvas/canvas-render'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import { createCoalescer } from '@plume-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 
 const props = defineProps<{ settings: SettingsPanelSource; fieldKey: string }>()
 
@@ -127,7 +127,7 @@ function onCommit(value: number) {
 // 格式：TypeScript 测试模块（vitest）
 // 位置：验证「同 key 只留最后一次」「不同 key 一起提交」「dispose 后不再提交」
 import { expect, it } from 'vitest'
-import { createCoalescer, manualScheduler } from '@mini-canvas/canvas-render'
+import { createCoalescer, manualScheduler } from '@plume-canvas/canvas-render'
 
 it('一帧内多次 push 合并成一次 apply', () => {
   const applied: Array<Array<[string, unknown]>> = []
@@ -182,7 +182,7 @@ plugin-zoom-logger/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "缩放记录器",
     "description": "演示 coalesce：视口高频变化合帧后写设置",
     "pluginName": "zoom-logger",
@@ -191,8 +191,8 @@ plugin-zoom-logger/
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": { ".": { "types": "./src/index.ts", "default": "./src/index.ts" } },
-  "dependencies": { "@mini-canvas/canvas-base": "workspace:*" },
-  "peerDependencies": { "@mini-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
+  "dependencies": { "@plume-canvas/canvas-base": "workspace:*" },
+  "peerDependencies": { "@plume-canvas/canvas-render": "workspace:*", "vue": "^3.5.34" }
 }
 ```
 
@@ -202,8 +202,8 @@ plugin-zoom-logger/
 // 文件：plugin-zoom-logger/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
-import { createCoalescer, RenderEvents } from '@mini-canvas/canvas-render'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
+import { createCoalescer, RenderEvents } from '@plume-canvas/canvas-render'
 import ZoomReadout from './ZoomReadout.vue'
 
 export const name = 'zoom-logger'
@@ -263,7 +263,7 @@ export const zoomLoggerPlugin: PluginModule = { name, inject, apply }
      位置：插件包内部；只读配置 + 只读视口 -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { ctx, flow } = useCanvasRender()
 
@@ -301,11 +301,11 @@ const live = computed(() => flow.viewport.value?.zoom ?? 1)   // ② 实时视�
 1. 装配后画布右下角出现小角标，形如「记录 100% · 实时 100%」。
 2. 滚轮缩放画布：**实时**数字立刻跟手；**记录**数字在移动结束后更新（合帧 + 事件驱动）。
 3. 打开设置面板的「缩放记录器」分组：`zoomLoggerLast` 应该就是记录值。
-4. 执行命令 `zoom-logger:commit`（控制台：`MiniCanvas.getContext().get('canvas').runCommand('zoom-logger:commit')`）：记录值**立刻**变成实时值（这条走 `flush()`，不等帧尾）。
+4. 执行命令 `zoom-logger:commit`（控制台：`Plume.getContext().get('canvas').runCommand('zoom-logger:commit')`）：记录值**立刻**变成实时值（这条走 `flush()`，不等帧尾）。
 
 ## 常见坑
 
-1. **插件不要直接 `import '@vue-flow/core'`**。要用 `Handle` / `Position` / `getBezierPath` / `useVueFlow` / `useConnection` 或那批类型，全从 `@mini-canvas/canvas-render` 取。自己 import 的代价是「多一份 VueFlow 实例」——现象是「不报错、就是不生效」。
+1. **插件不要直接 `import '@vue-flow/core'`**。要用 `Handle` / `Position` / `getBezierPath` / `useVueFlow` / `useConnection` 或那批类型，全从 `@plume-canvas/canvas-render` 取。自己 import 的代价是「多一份 VueFlow 实例」——现象是「不报错、就是不生效」。
 2. **bridge 是精选出口，不是整库转发**。想用的成员不在导出清单里时，先想清楚：它是不是本该走渲染上下文（`useCanvasRender()`）？确实需要更多 VueFlow 能力时，应该往 bridge 里加一条（并说明理由），而不是在插件里偷偷 import。
 3. **`dispose()` 必须调**。合帧器会挂着一个 rAF 和一个计时器；组件卸载 / 插件卸载时不 `dispose`，待办回调会在卸载后继续跑（轻则白写一次，重则碰到已经销毁的引用）。
 4. **`maxWaitMs` 的兜底不是可选项**。默认 120ms 的意义是：标签页切到后台 / 无头环境里 rAF 会停，只靠 rAF 的合帧会让提交**永远不落地**（用户看到「拖了没反应」）。除非你明确知道不需要，否则别改成 `Infinity`。

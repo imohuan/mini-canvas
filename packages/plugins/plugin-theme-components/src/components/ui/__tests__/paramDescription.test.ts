@@ -15,7 +15,7 @@
 import { describe, expect, it } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 import ToolParamField from '../ToolParamField.vue'
 import ToolOptionGrid from '../ToolOptionGrid.vue'
 import ToolParamSlider from '../ToolParamSlider.vue'

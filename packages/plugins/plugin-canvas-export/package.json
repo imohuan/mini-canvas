@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-canvas-export",
+  "name": "@plume-canvas/plugin-canvas-export",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "导出图片",
     "description": "Ctrl/Cmd+E 整图 / Ctrl/Cmd+Shift+E 选中",
     "pluginName": "canvas-export",
@@ -24,9 +24,9 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "html-to-image": "^1.11.13"
   },
   "devDependencies": {

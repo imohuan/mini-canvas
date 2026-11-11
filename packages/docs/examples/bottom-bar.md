@@ -23,7 +23,7 @@ my-archive-action/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "归档动作",
     "description": "往节点底栏注册一个「归档」按钮（跨插件协作演示）",
     "pluginName": "archive-action",
@@ -36,18 +36,18 @@ my-archive-action/
     "./*": "./src/*"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/plugin-bottom-bar": "workspace:*"  // ① 只 import 它的注册函数（类型），不写进 inject
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/plugin-bottom-bar": "workspace:*"  // ① 只 import 它的注册函数（类型），不写进 inject
   }
 }
 ```
 
 ```ts
 // 文件：my-archive-action/src/archivePlugin.ts
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 // registerBarAction 是 bottom-bar 包导出的「注册糖」：一条函数调用，动作落进底栏的注册表。
-import { registerBarAction } from '@mini-canvas/plugin-bottom-bar'
+import { registerBarAction } from '@plume-canvas/plugin-bottom-bar'
 
 export const name = 'archive-action'
 
@@ -147,7 +147,7 @@ function promptText(input: { prompts?: Array<{ type: string; value: string }>; r
 
 ```ts
 // 文件：my-archive-action/src/archivePlugin.ts（追加变体）
-import { publishToolActions, registerBarApplier } from '@mini-canvas/plugin-bottom-bar'
+import { publishToolActions, registerBarApplier } from '@plume-canvas/plugin-bottom-bar'
 
 // 放进上面 registerBar() 的 tryGet 之后、registerBarAction 之前即可：
 publishToolActions(ctx, {

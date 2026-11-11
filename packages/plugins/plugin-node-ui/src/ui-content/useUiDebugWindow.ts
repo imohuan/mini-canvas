@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
-import { withAdminToken } from '@mini-canvas/canvas-base'
+import { withAdminToken } from '@plume-canvas/canvas-base'
 import {
   UI_DEBUG_INVITE_KEY,
   appendSdkScript,
@@ -12,7 +12,7 @@ import {
 import { emitUiDebugEvent } from '../debugEventBus'
 import { openDebugWindow } from '../debugWindow'
 import { errText } from '../hostFetch'
-import { feedbackService } from '@mini-canvas/canvas-render'
+import { feedbackService } from '@plume-canvas/canvas-render'
 
 export interface DebugWindow {
   readonly closed: boolean
@@ -224,7 +224,7 @@ export function useUiDebugWindow(options: UseUiDebugWindowOptions) {
     if (!options.hasHtml()) return
     const r = await openDebugWindow({
       openWindow: () =>
-        window.open('about:blank', 'mc-ui-debug-' + options.nodeId, 'width=960,height=720') as unknown as DebugWindow | null,
+        window.open('about:blank', 'plume-ui-debug-' + options.nodeId, 'width=960,height=720') as unknown as DebugWindow | null,
       fetchDocUrl: async () => {
         const made = await pushDebugDocs(true)
         return made.ok ? made : { ok: false as const, error: made.error }

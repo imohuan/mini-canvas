@@ -14,7 +14,7 @@ import type {
   ToolOutcome,
   ToolPromptSegment,
   ToolTemplate,
-} from '@mini-canvas/kernel'
+} from '@plume-canvas/kernel'
 
 /** 一次动作调用的输入（与内核 ToolInput 同构的子集，底栏仅组装这三样） */
 export interface BarRunInput {

@@ -57,8 +57,8 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 位置：直接用预设件渲染一个参数 -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import { useUiComponent } from '@plume-canvas/canvas-render'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 
 const ToolOptionGrid = useUiComponent('toolParamGrid')
 

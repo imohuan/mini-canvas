@@ -4,7 +4,7 @@ import { dragSelectNode } from '../selectionInteractions'
 import { RenderEvents, toDragPayload } from '../renderEvents'
 import type { CanvasInteractionState } from '../../contracts/interactionContext'
 import type { CanvasInteractionSettings } from '../../contracts/canvasInteractionSettings'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 import type { CanvasSurfaceHandle } from './types'
 
 export function useCanvasNodeDrag(opts: {

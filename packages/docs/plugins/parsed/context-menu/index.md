@@ -1,6 +1,6 @@
 # 右键菜单 context-menu
 
-> 插件解析 · `@mini-canvas/plugin-context-menu` · 自带件
+> 插件解析 · `@plume-canvas/plugin-context-menu` · 自带件
 
 **一句话**：在画布空白、节点、连线上点右键弹出的菜单 —— 空白处新建节点、节点上删除、连线上删除；
 它还把**拖线落到空白处**变成一张"连线菜单卡"（直接选要连到哪种节点）。
@@ -20,9 +20,9 @@
 | 项 | 值 | 来源 |
 | --- | --- | --- |
 | 插件名（`name`） | `'context-menu'` | `src/contextMenuPlugin.ts` |
-| 包名 | `@mini-canvas/plugin-context-menu` | `package.json` |
+| 包名 | `@plume-canvas/plugin-context-menu` | `package.json` |
 | 硬依赖（`inject`） | `['doc', 'selection', 'nodeFactory']` | 同上 |
-| 自带件 | `miniCanvas.builtin: true` | `package.json` |
+| 自带件 | `plume.builtin: true` | `package.json` |
 
 ## 注意事项
 

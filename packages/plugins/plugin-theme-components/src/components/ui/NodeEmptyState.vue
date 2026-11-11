@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Button } from '@mini-canvas/ui-kit-shadcn'
+import { Button } from '@plume-canvas/ui-kit-shadcn'
 /**
  * NodeEmptyState —— 节点内容区的**统一空状态**（默认主题提供，节点插件按名取用）。
  *

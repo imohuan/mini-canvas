@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { ToolParamDef } from '@mini-canvas/kernel'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import type { ToolParamDef } from '@plume-canvas/kernel'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { AiActionConfig } from '../aiActions'
 import type { ModelIcon } from './modelIcons'
 import { ICON_AT } from './icons'

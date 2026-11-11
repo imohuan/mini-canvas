@@ -4,15 +4,15 @@
  * 环境：node（无 DOM），故 window keydown 绑定跳过；快捷键语义经 handleMultiSelectKey 纯函数直测。
  */
 import { describe, it, expect } from 'vitest'
-import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import type { MultiSelectService } from '@mini-canvas/plugin-multi-select'
-import { multiSelectPlugin, handleMultiSelectKey } from '@mini-canvas/plugin-multi-select'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import type { TextNodeService } from '@mini-canvas/plugin-node-text'
+import { createPlumeHost } from '../createPlumeHost'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import type { MultiSelectService } from '@plume-canvas/plugin-multi-select'
+import { multiSelectPlugin, handleMultiSelectKey } from '@plume-canvas/plugin-multi-select'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
+import type { TextNodeService } from '@plume-canvas/plugin-node-text'
 
 async function boot() {
-  const { host } = await createMiniCanvasHost({
+  const { host } = await createPlumeHost({
     adapter: new MemoryStorageAdapter(),
     coldPlugins: [nodeTextPlugin, multiSelectPlugin],
   })

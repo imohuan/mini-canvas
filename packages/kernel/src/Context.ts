@@ -53,7 +53,7 @@ export { runPlugin } from './contextServices'
  * - 类型化事件：on / once / emit（单源）
  * - 作用域副作用：effect
  *
- * 类型增强缝（cordis ch3 声明合并）：作者 declare module '@mini-canvas/kernel'
+ * 类型增强缝（cordis ch3 声明合并）：作者 declare module '@plume-canvas/kernel'
  * { interface Context { greeter: GreeterService } } 与下方 class Context 同名 interface 合并，
  * 使 `ctx.greeter` 在本文件声明的 Context 类型上也可见（运行时靠服务解析 Proxy / ctx.get 提供）。
  */

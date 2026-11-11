@@ -25,15 +25,15 @@ import {
   Service, type Context, type PluginModule,
   DEFAULT_IMAGE_CARD_LIMITS, DEFAULT_VIDEO_CARD_LIMITS,
   IMAGE_CARD_LIMIT_KEYS, VIDEO_CARD_LIMIT_KEYS, readMediaCardLimits,
-} from '@mini-canvas/canvas-base'
-import type { DocService, SelectionService, ResourceService } from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-base'
+import type { DocService, SelectionService, ResourceService } from '@plume-canvas/canvas-data'
 import {
   CLIPBOARD_PASTE_KIND,
   CLIPBOARD_PASTE_KEY,
   hasCanvasClipboardMarker,
   type ClipboardPasteHandler,
   type ClipboardPastePayload,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import {
   classifyFile,
   clampText,
@@ -67,7 +67,7 @@ export interface FileDropService {
   canHandle(file: { name: string; type: string }): boolean
 }
 
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     fileDrop: FileDropService
   }

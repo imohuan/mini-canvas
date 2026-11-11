@@ -233,7 +233,7 @@ export function apply(ctx) {
 /** 起 ffmpeg：crop + 重编码 H.264（音频流原样复制；时长不变，只裁画面） */
 function runFfmpegCrop(bytes, rect) {
   return new Promise((resolve, reject) => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'mc-crop-'))
+    const dir = mkdtempSync(path.join(tmpdir(), 'plume-crop-'))
     const src = path.join(dir, 'src' + guessExt(bytes))
     const dst = path.join(dir, 'out.mp4')
     const cleanup = () => { void fs.rm(dir, { recursive: true, force: true }).catch(() => undefined) }
@@ -274,7 +274,7 @@ function runFfmpegCrop(bytes, rect) {
  */
 function runFfmpegCut(bytes, start, length) {
   return new Promise((resolve, reject) => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'mc-cut-'))
+    const dir = mkdtempSync(path.join(tmpdir(), 'plume-cut-'))
     const src = path.join(dir, 'src' + guessExt(bytes))
     const dst = path.join(dir, 'out.mp4')
     const cleanup = () => { void fs.rm(dir, { recursive: true, force: true }).catch(() => undefined) }
@@ -319,7 +319,7 @@ function runFfmpegCut(bytes, start, length) {
  */
 function runFfmpegAudio(bytes) {
   return new Promise((resolve, reject) => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'mc-audio-'))
+    const dir = mkdtempSync(path.join(tmpdir(), 'plume-audio-'))
     const src = path.join(dir, 'src' + guessExt(bytes))
     const dst = path.join(dir, 'out.mp3')
     const cleanup = () => { void fs.rm(dir, { recursive: true, force: true }).catch(() => undefined) }
@@ -357,7 +357,7 @@ function runFfmpegAudio(bytes) {
 /** 用 ffprobe 量出视频真实时长（秒）；失败给 undefined（调用方回落请求的长度） */
 function probeDuration(bytes) {
   return new Promise((resolve) => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'mc-probe-'))
+    const dir = mkdtempSync(path.join(tmpdir(), 'plume-probe-'))
     const src = path.join(dir, 'probe.mp4')
     const cleanup = () => { void fs.rm(dir, { recursive: true, force: true }).catch(() => undefined) }
     fs.writeFile(src, bytes)

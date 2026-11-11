@@ -7,7 +7,7 @@
  * 本浮层只做一件事：把 mediaPreviewBus 的会话状态翻译成 item prop 交给它。
  */
 import { computed } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { closePreview, previewItem } from './mediaPreviewBus'
 
 /**

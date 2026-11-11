@@ -17,7 +17,7 @@
  * Agent 没装（取不到组件）时：退回原来的动作下拉（由父组件决定），这里只负责报告。
  */
 import { computed, nextTick, ref, watch } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 import { resolveModelRowIcon, type ModelIcon, type ModelIconServiceLike } from './actionIcon'
 import type { ModelRowLike } from './modelPickerBridge'
 

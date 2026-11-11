@@ -49,7 +49,7 @@ describe('ColorField', () => {
     )
     // Vuelor 根节点自带的是 Tailwind 的 w-60 / p-4，必须经 ui.picker.root 注入类名才能覆盖。
     expect(picker).toMatch(/picker:\s*\{[^}]*root:\s*'[^']*w-full[^']*p-0/s)
-    const rootStyle = picker.match(/\.mck-cp :deep\(\.mck-cp-root\)\s*\{([^}]*)\}/s)?.[1] ?? ''
+    const rootStyle = picker.match(/\.pk-cp :deep\(\.pk-cp-root\)\s*\{([^}]*)\}/s)?.[1] ?? ''
     expect(rootStyle).toMatch(/padding:\s*0/)
     expect(rootStyle).toMatch(/width:\s*100%/)
   })
@@ -85,9 +85,9 @@ describe('ColorField', () => {
   /**
    * 圆角回归（用户 2026-11-02 截图：「所有 select 的圆角没有生效」）：
    * 设置字段自己写死 var(--radius-control) 会压过组件库的全局圆角规则，
-   * 必须让它们走 --mct-radius。下拉触发器 / 输入框 / 数字框都不例外。
+   * 必须让它们走 --plume-radius。下拉触发器 / 输入框 / 数字框都不例外。
    */
-  it('设置字段的圆角走全局 --mct-radius，不再写死 --radius-control', () => {
+  it('设置字段的圆角走全局 --plume-radius，不再写死 --radius-control', () => {
     const here = fileURLToPath(new URL('.', import.meta.url))
     const field = readFileSync(here + '../../settings/SettingsSchemaField.vue', 'utf8')
 
@@ -98,7 +98,7 @@ describe('ColorField', () => {
 
     // 组件库的宿主样式必须回落到项目 token，而不是 revert-layer
     const host = readFileSync(here + '../../../../../../ui-kit-shadcn/src/styles/host.css', 'utf8')
-    expect(host).not.toMatch(/border-radius:\s*var\(--mct-radius,\s*revert-layer\)/)
+    expect(host).not.toMatch(/border-radius:\s*var\(--plume-radius,\s*revert-layer\)/)
     expect(host).toMatch(/\[data-slot='select-trigger'\][\s\S]{0,200}var\(--radius-control/)
   })
 

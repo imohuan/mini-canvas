@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/settings-persist/plugin-theme-toggle/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / Config / apply）
 // 位置：一个可安装插件包的源码入口
-import type { Context, PluginModule, ConfigSchema } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule, ConfigSchema } from '@plume-canvas/canvas-base'
 
 export const name = 'theme-toggle'
 

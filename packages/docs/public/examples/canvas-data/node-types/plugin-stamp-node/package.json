@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-stamp-node",
+  "name": "@plume-canvas/plugin-stamp-node",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：邮票节点",
     "description": "注册一种新节点 + 往标题位叠角标 + 给图片节点和多选框挂按钮",
     "pluginName": "stamp-node",
@@ -19,9 +19,9 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

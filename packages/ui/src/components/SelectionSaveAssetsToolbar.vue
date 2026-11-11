@@ -16,9 +16,9 @@
  * 上下文走能力包（needs:['selection']），与打组按钮同一条规矩。
  */
 import { computed } from 'vue'
-import { ToolbarIcon, useUiComponent } from '@mini-canvas/canvas-render'
-import type { SelectionCapability } from '@mini-canvas/canvas-render'
-import { useCapability, useCanvasRender } from '@mini-canvas/canvas-render'
+import { ToolbarIcon, useUiComponent } from '@plume-canvas/canvas-render'
+import type { SelectionCapability } from '@plume-canvas/canvas-render'
+import { useCapability, useCanvasRender } from '@plume-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
 import { queueUploadsFromNodeIds } from '../composables/assetUploadBus'

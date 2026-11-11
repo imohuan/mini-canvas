@@ -10,7 +10,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, Teleport, watch } from 'vue'
 import { X, Minus } from 'lucide-vue-next'
-import { useCanvasContextOrRender } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
 import type { LibraryService } from '../data/store'
 import StyleLibraryContent from './StyleLibraryContent.vue'
 

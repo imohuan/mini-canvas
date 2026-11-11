@@ -13,8 +13,8 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import { AlertTriangle, Check, RotateCcw, Save } from 'lucide-vue-next'
-import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
-import type { FeedbackService } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender, useUiComponent } from '@plume-canvas/canvas-render'
+import type { FeedbackService } from '@plume-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import PromptEditor from './components/PromptEditor.vue'
 import './settings.css'

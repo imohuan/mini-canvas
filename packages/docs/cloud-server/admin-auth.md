@@ -14,7 +14,7 @@ x-admin-token: <64 位 hex>
 
 令牌从哪来（按优先级）：
 
-1. 环境变量 `MINI_CANVAS_ADMIN_TOKEN`（设了就不读也不写文件）；
+1. 环境变量 `PLUME_ADMIN_TOKEN`（设了就不读也不写文件）；
 2. `<数据目录>/admin-token`（第一次启动自动生成，64 位 hex）；
 3. 启动日志里会打印一份，并写明用的是哪一种来源。
 
@@ -22,7 +22,7 @@ x-admin-token: <64 位 hex>
 所有前端都要重填。
 
 **本机浏览器直连时不用手填**：后台发托管页（index.html）时会把令牌写进页面
-（`window.__MC_ADMIN_TOKEN__`），前端启动时读它存进 localStorage，然后立刻删掉那个全局变量。
+（`window.__PLUME_ADMIN_TOKEN__`），前端启动时读它存进 localStorage，然后立刻删掉那个全局变量。
 
 注入的条件很严，**三个都满足**才给：
 
@@ -47,16 +47,16 @@ x-admin-token: <64 位 hex>
 另外几条要知道的：
 
 - **手填优先**：本地已有、且不是上一轮注入写进去的令牌时，注入**不会覆盖**它
-  （`localStorage` 的 `mc_admin_token_injected` 记着上一轮注入的值）。
+  （`localStorage` 的 `plume_admin_token_injected` 记着上一轮注入的值）。
   所以你给另一套后台手填的令牌不会被悄悄换掉；只有「本地为空」或「与上一轮注入相同」时才写。
 - **反代被配成透传 Host / 删转发头时**，三个判定会被同时满足。部署者知道自己要挂反代，
-  设 `MINI_CANVAS_NO_TOKEN_INJECTION=1` 一刀切关掉注入，所有用户去面板手填。
-- `MINI_CANVAS_ADMIN_TOKEN` **不校验格式**（只有读文件那条路校验 hex），但空串/全空白会**拒绝启动**
+  设 `PLUME_NO_TOKEN_INJECTION=1` 一刀切关掉注入，所有用户去面板手填。
+- `PLUME_ADMIN_TOKEN` **不校验格式**（只有读文件那条路校验 hex），但空串/全空白会**拒绝启动**
   —— 否则等于 verify('') 永远 missing，鉴权被悄悄关掉。注入时会转义 `<`，
   所以含 `</script>` 也不会变成脚本；但令牌本身仍建议只用十六进制。
 
 令牌文件在 Linux / macOS 上会被改成 `0600`；**Windows 上不收紧 ACL**，同一个 Windows
-账户下的其它程序能读到它。多用户共用一台机器时，用环境变量 `MINI_CANVAS_ADMIN_TOKEN`
+账户下的其它程序能读到它。多用户共用一台机器时，用环境变量 `PLUME_ADMIN_TOKEN`
 自己管，或把数据目录放到只有你能进的位置。
 
 ### 哪些接口要令牌
@@ -115,7 +115,7 @@ x-admin-token: <64 位 hex>
   `--host 0.0.0.0`（或 `::`）时会自动把 `127.0.0.1:<端口>` 与 `[::1]:<端口>` 也加进来 ——
   监听所有网卡之后，本机浏览器打开 `127.0.0.1` 是最常见的写法，漏了它会只回一句
   「请求来源不受信任」，看不出是白名单少了本机回环；
-- 带 `Origin` 时必须同源，或在 `--trusted-origin` / `MINI_CANVAS_TRUSTED_ORIGINS` 里；
+- 带 `Origin` 时必须同源，或在 `--trusted-origin` / `PLUME_TRUSTED_ORIGINS` 里；
 - `Sec-Fetch-Site: cross-site` 一律拒绝；
 - `Origin: null`（沙箱 iframe）一律拒绝。
 
@@ -231,7 +231,7 @@ Failed to fetch，而不是 403）。但调试源**不进**受信任来源白名
 发现不了；有了头文件，行数少了或末行对不上都会直接报出来。
 
 ```bash
-node packages/cloud-server/dist/cli.js audit-verify -d .mini-canvas
+node packages/cloud-server/dist/cli.js audit-verify -d .plume
 ```
 
 链断了会打印第一处断裂的行号与原因（被删、被改、首行有 prev、末行被截断、行数与头文件不符）。
@@ -249,7 +249,7 @@ node packages/cloud-server/dist/cli.js audit-verify -d .mini-canvas
 ## 六、关闭鉴权
 
 ```bash
-MINI_CANVAS_ALLOW_INSECURE=1 pnpm -C packages/cloud-server serve --no-admin-auth
+PLUME_ALLOW_INSECURE=1 pnpm -C packages/cloud-server serve --no-admin-auth
 ```
 
 必须同时给这个环境变量，单写 `--no-admin-auth` 会直接报错退出。关掉之后任何网页都能装插件、
@@ -267,7 +267,7 @@ MINI_CANVAS_ALLOW_INSECURE=1 pnpm -C packages/cloud-server serve --no-admin-auth
 | 审计的 head 文件 | 与日志同目录；整目录一起被换掉时发现不了 |
 | 调试页能往外发数据 | 独立源页面上是你自己写的 HTML，没有 CSP；它能联网。换源挡住的是"读画布令牌"，不是"把内容发出去" |
 | 资源回读的 CORP | `cross-origin-resource-policy: same-site`：同站（含换端口）能嵌，跨站不能。要跨站分享资源得单独放开 |
-| 反代的 Host 改写 | 标准反代会带转发头，那种会被拦；被配成「透传 Host + 删所有转发头」的静默代理仍能骗过判定，靠 `MINI_CANVAS_NO_TOKEN_INJECTION=1` 兜底 |
+| 反代的 Host 改写 | 标准反代会带转发头，那种会被拦；被配成「透传 Host + 删所有转发头」的静默代理仍能骗过判定，靠 `PLUME_NO_TOKEN_INJECTION=1` 兜底 |
 | 网络与子进程限制 | 任务脚本可随意出网、可 spawn |
 | 调试页 `CanvasUI.task` 的超时 | 15 分钟（脚本可能跑十分钟，但不能永远挂着）；`api` / `cancel` 仍是 30 秒 |
 

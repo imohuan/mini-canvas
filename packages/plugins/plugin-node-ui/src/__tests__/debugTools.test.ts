@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 /** 空脚本目录（与 serverLogic.test 同口径：不指会让手册列出环境相关的样例） */
-const EMPTY_SCRIPTS_DIR = path.join(os.tmpdir(), 'mc-node-ui-debug-empty')
+const EMPTY_SCRIPTS_DIR = path.join(os.tmpdir(), 'plume-node-ui-debug-empty')
 
 /** 最小后台 ctx：收工具 / 路由 / 写入；节点可从 nodes 里换出 */
 function fakeCtx(opts: { nodes?: Array<Record<string, unknown>> } = {}) {

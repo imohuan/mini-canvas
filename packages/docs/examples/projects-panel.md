@@ -50,7 +50,7 @@ my-project-panel/
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "我的工作台",
     "description": "项目页上的插件面板示例",
     "pluginName": "my-project-panel",
@@ -63,10 +63,10 @@ my-project-panel/
     "./*": "./src/*"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*"
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   }
 }
@@ -75,7 +75,7 @@ my-project-panel/
 ```ts
 // 文件：my-project-panel/src/index.ts（参照 packages/plugins/plugin-style-library/src/index.ts）
 import { markRaw } from 'vue'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import ProjectPanel from './ProjectPanel.vue'
 
 export const name = 'my-project-panel'
@@ -99,7 +99,7 @@ export const projectPanelPlugin: PluginModule = { name, inject, apply }
 <!-- 文件：my-project-panel/src/ProjectPanel.vue -->
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContext, useUiComponent } from '@plume-canvas/canvas-render'
 
 /** 项目数据服务的最小形状（按名取，不 import 宿主） */
 interface ProjectSummary { id: string; name: string; createdAt: number; canvasCount: number }

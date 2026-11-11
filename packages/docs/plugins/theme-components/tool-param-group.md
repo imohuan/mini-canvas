@@ -60,8 +60,8 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 位置：节点底栏的参数区 —— 把一排参数收敛成一个下拉 -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
-import type { ToolParamDef } from '@mini-canvas/kernel'
+import { useUiComponent } from '@plume-canvas/canvas-render'
+import type { ToolParamDef } from '@plume-canvas/kernel'
 
 const ToolParamGroup = useUiComponent('toolParamGroup')
 
@@ -93,6 +93,6 @@ function onChange(key: string, value: string | number | boolean): void {
 2b. **只有一个普通下拉时它会"消失"**：那时组件本身不画摘要按钮，直接把那个下拉铺出来
     （DOM 上是 `.tpg-inline`）。想让参数始终留在面板里，就再给它配一个参数（≥2 个即收面板）。
 3. **它不存状态**：`values` 是受控的，改完你得自己回写，否则摘要行不会变。
-4. **浮层实现只有一份**：面板外框用 `@mini-canvas/ui-kit-shadcn` 的 `Popover`，
+4. **浮层实现只有一份**：面板外框用 `@plume-canvas/ui-kit-shadcn` 的 `Popover`，
    单个参数仍旧由 [ToolParamField](/plugins/theme-components/tool-param-field) 走 shadcn `Select`。
    定位、点外关闭、键盘导航都以组件库为准。

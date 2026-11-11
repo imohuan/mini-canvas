@@ -57,7 +57,7 @@ GET  {base}/api/assets  ·  POST {base}/api/assets                         // �
 
 | 方法 | 路径 | 干什么 |
 | --- | --- | --- |
-| POST | `/build` | `{ canvasId, nodeId }` → `.mcnode` 字节 |
+| POST | `/build` | `{ canvasId, nodeId }` → `.plumenode` 字节 |
 | POST | `/save` | `{ canvasId, nodeId, name?, folderId? }` |
 | POST | `/inspect` | 体检（body = 包字节）：会不会升版本 |
 | POST | `/import` | 真落地（body = 包字节） |

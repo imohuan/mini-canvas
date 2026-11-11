@@ -12,7 +12,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { seedForkTrace, tracesDirOf } from '@mini-canvas/plugin-agent/server/agent/traceFork.js'
+import { seedForkTrace, tracesDirOf } from '@plume-canvas/plugin-agent/server/agent/traceFork.js'
 
 let root: string
 

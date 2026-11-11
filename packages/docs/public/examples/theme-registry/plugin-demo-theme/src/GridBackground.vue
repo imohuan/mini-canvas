@@ -4,7 +4,7 @@
 <script setup lang="ts">
 // ① 渲染上下文里的 viewport 是响应式的：x/y/zoom 一变，style 自动重算
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { flow } = useCanvasRender()
 

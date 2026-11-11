@@ -2,7 +2,7 @@
 // 格式：TypeScript 模块（纯逻辑的持久化封装，不 import Vue）
 // 位置：插件包内部的小模块，被 src/index.ts 引用
 
-import type { SaveService } from '@mini-canvas/canvas-data'
+import type { SaveService } from '@plume-canvas/canvas-data'
 
 /** 面板名（本插件只认这三种） */
 export type PanelName = 'settings' | 'assets' | 'history'

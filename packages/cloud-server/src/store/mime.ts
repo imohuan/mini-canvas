@@ -33,7 +33,7 @@ export const MIME_BY_EXT: Record<string, string> = {
   // 为什么必须是"已知扩展名"：资产库的 saveUpload 会拿 safeExt 判安全后缀 ——
   // 白名单外的一律落成空扩展名，那样左侧抽屉就看不出它是"能拖出节点的东西"，
   // 只能当成一个普通文件（2026-10-13 加节点包时一并补上）。
-  '.mcnode': 'application/x-mini-canvas-node',
+  '.plumenode': 'application/x-plume-node',
 }
 
 /** 允许的扩展名（上传时按它过滤，白名单外的回落空串） */

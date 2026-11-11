@@ -10,7 +10,7 @@
  * plugin-edge-cutting 占用，本插件必须用 alignGuideEnabled，否则开关会静默失效。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { Config, alignGuideConfigFrom } from '../alignGuideConfig'
 
 /** 用真实 Config schema 装配一个探针插件（不 import .vue，跑的是内核 config 登记链路） */

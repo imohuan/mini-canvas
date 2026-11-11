@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createMiniCanvasHost } from '../createMiniCanvasHost'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { createPlumeHost } from '../createPlumeHost'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 
 /**
  * Spec 3.1 / 验收 8.1：基础服务只剩 7 个名字；旧名一律不可取。
@@ -9,7 +9,7 @@ import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
  */
 describe('基础服务名收敛', () => {
   it('基础七名 + 渲染层辅助 nodeToolbar', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
     const names = host.ctx.injectedServices().sort()
     // injectedServices() 只列「服务表」里的名字；`tools` 是内核内置、不在表里，
     // 由 hasService/get 仍可取到，故这里不列它。
@@ -27,14 +27,14 @@ describe('基础服务名收敛', () => {
   })
 
   it('渲染层辅助服务 nodeToolbar 仍存在（Spec D4），但不并入基础 7 个', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
     expect(host.ctx.hasService('nodeToolbar')).toBe(true)
     expect(host.ctx.injectedServices()).toContain('nodeToolbar')
     host.stop()
   })
 
   it('旧名不可取：nodeLayout / viewport / tip / pluginManager / nodeFactory / command', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
     for (const name of [
       'nodeLayout',
       'viewport',
@@ -54,7 +54,7 @@ describe('基础服务名收敛', () => {
   })
 
   it('旧场不可取：五个零读取 kind 在 surface() 里不出现', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
     const kinds = host.ctx.surface().registries.map((r) => r.kind)
     for (const kind of ['node/type', 'node/creator', 'setting', 'theme', 'slot', 'node/bar-applier']) {
       expect(kinds).not.toContain(kind)
@@ -63,7 +63,7 @@ describe('基础服务名收敛', () => {
   })
 
   it('surface() 仍列得出基础插件直注册的四条画布命令（command 服务已下线）', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
     const ids = host.ctx.surface().commands.map((c) => c.id)
     for (const id of ['command:delete', 'command:create-node', 'command:undo', 'command:redo']) {
       expect(ids).toContain(id)

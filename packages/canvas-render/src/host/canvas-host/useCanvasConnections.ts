@@ -1,6 +1,6 @@
 import { shallowRef } from 'vue'
 import type { Connection } from '@vue-flow/core'
-import { validateConnection, typeConnectionDef, type ValidationResult } from '@mini-canvas/canvas-data'
+import { validateConnection, typeConnectionDef, type ValidationResult } from '@plume-canvas/canvas-data'
 import { beginConnection, endConnection, createConnectionState } from '../connectionState'
 import { RenderEvents } from '../renderEvents'
 import { reasonText as reasonTextFrom } from '../../connection/reasonText'
@@ -13,7 +13,7 @@ import type {
   HoverFeedback,
   AimedTarget,
 } from '../../contracts/connectionContext'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 import type { CanvasSurfaceHandle } from './types'
 
 export function useCanvasConnections(opts: {

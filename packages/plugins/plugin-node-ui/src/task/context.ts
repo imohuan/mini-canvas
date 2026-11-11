@@ -85,7 +85,7 @@ export interface TaskContextData {
  * 一次调用一个目录 → 跑完 `rm -rf` 这一个目录就完事，不留垃圾、也不用猜它写了什么。
  */
 export async function createWorkspace(): Promise<string> {
-  return fs.mkdtemp(path.join(os.tmpdir(), 'minicanvas-task-'))
+  return fs.mkdtemp(path.join(os.tmpdir(), 'plume-task-'))
 }
 
 /** 删掉工作目录（失败不抛：清了是好事，清不掉不该把这次调用的结果带崩） */

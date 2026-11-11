@@ -29,7 +29,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { History, MessageSquarePlus, PanelRight, PictureInPicture2, Settings2, SlidersHorizontal, X } from 'lucide-vue-next'
 // 面板头部动作按钮与历史下拉从画布 ctx 的 ui 注册表按名取。
-import { SlotHost, broadcastCloseAllDropdowns, useUiComponent } from '@mini-canvas/canvas-render'
+import { SlotHost, broadcastCloseAllDropdowns, useUiComponent } from '@plume-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')
@@ -215,7 +215,7 @@ function startCornerResize(e: PointerEvent): void {
 <template>
   <section
     v-show="ui.agent.open"
-    class="agent-shell mc-layer-app-panel"
+    class="agent-shell plume-layer-app-panel"
     :class="{ 'is-docked': ui.agent.docked }"
     :style="ui.agent.docked
       ? { width: ui.agent.width + 'px' }
@@ -301,7 +301,7 @@ function startCornerResize(e: PointerEvent): void {
 
 <style scoped>
 /* 外框 / 圆角 / 阴影 / 头部归本组件；内容的样式在插件里（各管各的） */
-/* 浮动态是应用级浮面板：由默认主题的 mc-layer-app-panel 统一压过画布节点、
+/* 浮动态是应用级浮面板：由默认主题的 plume-layer-app-panel 统一压过画布节点、
    节点上下控制栏与外壳顶栏 / 底栏；任何 Dialog 又会再压过它。 */
 /* 浮动态（= LiBTV 的「浮窗」/ 小窗口）：28 圆角 + 1px 浅线 + **不透明底**。
    早期照参考页实测做过半透明底 + 毛玻璃（rgba(31,31,31,.75) / blur(5px)），

@@ -14,7 +14,7 @@
  * 为什么还要工厂：宿主在 start() 之前就要拿到 nodeStore（建视口）、doc 等实例，
  * 所以实例在调用时建好，`plugin` 只负责在 apply 里把它们注入内核。
  */
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 import { createCanvasBasePlugin, type CanvasBaseOptions, type CanvasBaseServices } from './canvasBasePlugin'
 
 /** 画布数据会话插件名 */

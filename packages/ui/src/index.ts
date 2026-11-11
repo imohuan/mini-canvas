@@ -2,7 +2,7 @@
  * 库入口（不是应用启动入口）：`package.json` 的 `main`/`types`/`exports` 都指这里；
  * 浏览器里启动这一版应用用的是同目录的 `main.ts`（见 `index.html`）。
  *
- * @mini-canvas/ui —— 成品应用出口。
+ * @plume-canvas/ui —— 成品应用出口。
  *
  * 这一份公开面说清两件事，别的都不该从这里出去：
  *
@@ -13,7 +13,7 @@
  *    装了哪些插件、用哪个存储、空画布塞什么。换一套组合不用改组件，改这里（或 `./assembly`）即可。
  *
  * 有意不从这里导出：`CanvasHost` / `SettingsHost` 等渲染层原语。想要"自己组装一套"的调用方
- * 应当直接依赖 `@mini-canvas/canvas-render` + 自己挑插件 —— 那是另一条路，不是本包的成品出口。
+ * 应当直接依赖 `@plume-canvas/canvas-render` + 自己挑插件 —— 那是另一条路，不是本包的成品出口。
  *
  * 注意：VueFlow 的样式表要由宿主自己引入（本文件刻意不 import CSS，免得非 vite 环境直接报错）：
  *

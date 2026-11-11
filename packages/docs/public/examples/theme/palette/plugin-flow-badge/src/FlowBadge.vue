@@ -4,7 +4,7 @@
 <script setup lang="ts">
 // ① SVG 表现属性吃不到 var() —— :fill="color" 是属性，不是 CSS 声明。
 //    所以颜色必须经 useThemeColor 取具体色值（JS 通道）。
-import { useThemeColor } from '@mini-canvas/canvas-render'
+import { useThemeColor } from '@plume-canvas/canvas-render'
 
 const flow = useThemeColor('edgeFlowColor')   // 可留空 token：清空 = 跟随强调色，这里拿到的就是跟随后的值
 const rail = useThemeColor('edgeRailColor')

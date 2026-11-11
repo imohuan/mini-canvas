@@ -5,7 +5,7 @@
 // 调用方管：菜单里有哪些条目（默认插槽，自己摆 shadcn 的 Item / Sub）。
 // 右键与「⋯」两个入口共用同一个菜单实例与同一份条目，避免两套定位逻辑漂移。
 import { computed, nextTick, ref, watch } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
@@ -131,7 +131,7 @@ defineExpose({ openAt })
 }
 .rms-menu {
   padding: 4px;
-  border-radius: var(--mct-radius, 16px);
+  border-radius: var(--plume-radius, 16px);
   background: var(--ui-overlay-solid, #fff);
 }
 </style>

@@ -9,12 +9,12 @@
  * - **配置**声明一个分组 `集成/插件`，由设置菜单收进「集成 → 插件」。
  *
  * 数据来源（用户口径）：请求一个 JSON 清单拿到每个插件的 js 地址，再按地址加载 ——
- * 清单由 **cloud-server** 提供（`/plugin-catalog.json`；mini-canvas-cloud serve 默认 8865）。
+ * 清单由 **cloud-server** 提供（`/plugin-catalog.json`；plume-canvas serve 默认 8865）。
  * 真正的后台还没定放哪；将来只要发同形状清单，本插件一行不用改。
  */
 import { markRaw, reactive } from 'vue'
 import { Puzzle, Server } from 'lucide-vue-next'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import {
   DEFAULT_CATALOG_URL,
   createPluginManagerService,
@@ -45,7 +45,7 @@ export const Config = {
     group: '集成/插件',
     placeholder: '/plugin-catalog.json 或 http://127.0.0.1:{端口}/plugin-catalog.json',
     description:
-      '插件清单地址。默认取同源的 /plugin-catalog.json（cloud-server 提供：mini-canvas-cloud serve）。' +
+      '插件清单地址。默认取同源的 /plugin-catalog.json（cloud-server 提供：plume-canvas serve）。' +
       '若画布界面与服务不同源（如 ui 单独 dev），在这里填服务的绝对地址，再点「刷新」重拉。',
   },
 }

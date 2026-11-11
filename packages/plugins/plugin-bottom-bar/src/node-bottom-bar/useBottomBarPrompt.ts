@@ -1,5 +1,5 @@
 import { computed, ref, watch, type ComputedRef } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { initialPromptDoc, initialPromptText } from '../promptPersist'
 
 interface PromptDeps {

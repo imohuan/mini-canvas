@@ -2,7 +2,7 @@
  * capabilityTypes —— 后台能力段的**类型**（声明合并回框架的 PluginCapabilities）。
  *
  * 与前端对称（见 canvas-data 的 canvas/capabilityTypes.ts）：
- * 框架（@mini-canvas/kernel）只声明通用段（tools）；后台独有的段（routes，
+ * 框架（@plume-canvas/kernel）只声明通用段（tools）；后台独有的段（routes，
  * 将来还有 agent/store/jobs/mcp）由本文件经声明合并补上。
  *
  * 只要本文件被加载，`ctx.routes` 就有完整类型提示；框架包保持干净（不认识"路由"这种后台概念）。
@@ -14,7 +14,7 @@ import type { StoreRegistrar } from './store.js'
 import type { JobsRegistrar } from './jobs.js'
 import type { McpRegistrar } from './mcp.js'
 
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface PluginCapabilities {
     /**
      * 后台路由注册（用户点 1：**后台新增一个接口 = 装一个插件**）。

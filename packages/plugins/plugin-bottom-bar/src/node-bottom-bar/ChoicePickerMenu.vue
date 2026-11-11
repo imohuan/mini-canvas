@@ -9,7 +9,7 @@
  *   调用方不再传 platform，杜绝「传错一个字段整排图标变通用」的坑。
  */
 import { computed, ref, watch, nextTick } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { ModelIcon } from './modelIcons'
 
 export interface PickerItem {

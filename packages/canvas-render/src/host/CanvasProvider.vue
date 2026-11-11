@@ -3,7 +3,7 @@
  * CanvasProvider —— 应用最外层的“上下文初始化器”，没有自己的业务 UI。
  *
  * 它只做三件事：
- * 1. 建唯一的内核宿主（createMiniCanvasHost）；
+ * 1. 建唯一的内核宿主（createPlumeHost）；
  * 2. 把 ctx / host / api / manager 通过 CANVAS_CONTEXT_KEY 提供给整棵子树；
  * 3. 卸载时先落盘、再在子组件全部卸载后停内核。
  *
@@ -13,7 +13,7 @@
  * 启动失败时默认插槽不渲染，避免半截外壳拿着空 ctx 去渲染。
  */
 import { onBeforeUnmount, onMounted, onUnmounted, provide, ref, shallowRef } from 'vue'
-import { createMiniCanvasHost, type CanvasHostHandle, type MiniCanvasApi } from './createMiniCanvasHost'
+import { createPlumeHost, type CanvasHostHandle, type PlumeApi } from './createPlumeHost'
 import type { PluginManager } from './pluginManager'
 import type { CanvasHostBootProps, CanvasProviderEmits } from './canvasHostTypes'
 import { CANVAS_CONTEXT_KEY, type CanvasContext } from '../contracts/canvasContext'
@@ -26,7 +26,7 @@ const emit = defineEmits<CanvasProviderEmits>()
 
 interface Boot {
   host: CanvasHostHandle
-  api: MiniCanvasApi
+  api: PlumeApi
   manager: PluginManager
 }
 
@@ -60,7 +60,7 @@ provide(CANVAS_CONTEXT_KEY, context)
 
 onMounted(async () => {
   try {
-    const r = await createMiniCanvasHost({
+    const r = await createPlumeHost({
       adapter: props.adapter,
       manifest: props.manifest,
       coldPlugins: props.plugins,

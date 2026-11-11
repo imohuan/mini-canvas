@@ -54,7 +54,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 位置：插件设置面板里的一个颜色项 -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const ColorField = useUiComponent('color')
 

@@ -13,7 +13,7 @@
  * （plugin-cloud-client 的 jobsWatcher）负责兜底对账。
  */
 import type { BarAction, BarLookup, BarRunContext, BarRunInput } from './barTypes'
-import type { ToolOutcome, ToolResult } from '@mini-canvas/kernel'
+import type { ToolOutcome, ToolResult } from '@plume-canvas/kernel'
 import { errorState, runningState, type NodeRunState } from './runState'
 
 /** 执行依赖（组件装配真实现，测试注假货；node 可单测的关键） */

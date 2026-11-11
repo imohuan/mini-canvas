@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 /**
  * 构建期数据加载器：扫 packages/plugins，把每个插件的「声明」抽出来给文档用。
  *
- * 数据来源是各插件自己的 package.json（miniCanvas 字段），所以：
+ * 数据来源是各插件自己的 package.json（plume 字段），所以：
  * **装一个新插件 = 文档自动多一行**，不用手写目录。
  *
  * 这里只取「静态声明」（插件名、标题、说明、有没有前端半/后台半、权限、版本）。
@@ -20,9 +20,9 @@ const PLUGINS_DIR = path.resolve(HERE, '../../../..', 'packages/plugins')
 export interface PluginDocEntry {
   /** 目录名，稳定身份 */
   id: string
-  /** 插件在画布里的真实名字（miniCanvas.pluginName） */
+  /** 插件在画布里的真实名字（plume.pluginName） */
   name: string
-  /** 显示名（miniCanvas.title） */
+  /** 显示名（plume.title） */
   title: string
   description: string
   version: string
@@ -42,7 +42,7 @@ export interface PluginDocEntry {
   link: string
 }
 
-interface MiniCanvasMeta {
+interface PlumeMeta {
   title?: string
   description?: string
   pluginName?: string
@@ -78,13 +78,13 @@ export default defineLoader({
 
       const raw = await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8').catch(() => '')
       if (!raw) continue
-      let pkg: { name?: string; version?: string; miniCanvas?: MiniCanvasMeta }
+      let pkg: { name?: string; version?: string; plume?: PlumeMeta }
       try {
         pkg = JSON.parse(raw)
       } catch {
         continue
       }
-      const mc = pkg.miniCanvas ?? {}
+      const mc = pkg.plume ?? {}
       const builtin = mc.builtin === true
       const installable = mc.installable === true
       // 两个标记都没有 = 不是给文档展示的插件（与插件管理口径一致）

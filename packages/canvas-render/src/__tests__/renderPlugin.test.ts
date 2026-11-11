@@ -4,7 +4,7 @@
  * 锁三件事：能力包确实注册进来了；它不假装提供画布会话服务；卸载/停止后能力条目真正被回收。
  */
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import type { CapabilityFactory } from '../contracts/capabilities'
 import {
   canvasRenderPlugin,
@@ -74,7 +74,7 @@ describe('canvasRenderPlugin', () => {
     const field = ctx.registryOf<CapabilityFactory>('capability')
     const before = field.list('node')
 
-    // 模拟 createMiniCanvasHost 在插件已启动后再走一次注册：同 id 应被跳过。
+    // 模拟 createPlumeHost 在插件已启动后再走一次注册：同 id 应被跳过。
     registerStandardCapabilities(ctx)
 
     expect(field.ids('node')).toEqual(['host:standard'])

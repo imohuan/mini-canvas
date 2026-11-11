@@ -5,10 +5,10 @@
  * 扩展框是**包住原图**的，框比原图大的部分就是新增的画布。确认时把原图按框内的偏移画到
  * 一块更大的透明画布上 —— 扩出来的区域是透明的，等着交给生成模型去填内容（这正是 outpaint 的输入）。
  *
- * 框的拖拽/夹边界在通用件（@mini-canvas/canvas-render 的 crop/mediaFit，expand 模式）里，
+ * 框的拖拽/夹边界在通用件（@plume-canvas/canvas-render 的 crop/mediaFit，expand 模式）里，
  * 这里只负责「把框变成一张新位图」这一步纯计算 —— 它同时被命令与组件调用。
  */
-import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
+import { toPixelRect, type Rect } from '@plume-canvas/canvas-render'
 
 /**
  * 由原图 + 扩展框算出新图该多大、原图该画在哪儿（**不碰 canvas**，可直接断言）。

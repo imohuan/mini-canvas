@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, shallowRef, watch, type Ref } from 'vue'
-import { setUiCatalogHost, uiComponentStatic } from '@mini-canvas/canvas-render'
+import { setUiCatalogHost, uiComponentStatic } from '@plume-canvas/canvas-render'
 import { createOutsideComponentTracker } from '../uiCatalogOutside'
 import type { HostApi } from './types'
 

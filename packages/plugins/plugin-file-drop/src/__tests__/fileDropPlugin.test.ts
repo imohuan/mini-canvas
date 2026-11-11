@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, type CanvasEdge, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, type CanvasEdge, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { fileDropPlugin, FileDropServiceImpl, type FileDropService, type FileDropReaders } from '../fileDropPlugin'
 
 /** 测试本地信封形状（与渲染层宿主 GraphEnvelope 同构；避免插件测试依赖 canvas-render） */
@@ -239,7 +239,7 @@ describe('file-drop 插件集成（真实内核服务）', () => {
   it('注入 resources 时图片节点登记 resourceId；无 resources 时保持纯 url', async () => {
     const { ctx, svc, nodeStore } = makeService()
     // 注入带内存资源后端的 ResourceStore：拖入的字节真的会被存下来并写回持久引用
-    const { ResourceStore } = await import('@mini-canvas/canvas-data')
+    const { ResourceStore } = await import('@plume-canvas/canvas-data')
     const blobs = new Map<string, Blob>()
     let seq = 0
     const adapter = {
@@ -266,7 +266,7 @@ describe('file-drop 插件集成（真实内核服务）', () => {
   })
   it('disposeUnreferenced 经 host flush 语义：被引用 resourceId 存活、图内消失的被回收', async () => {
     const { ctx, svc, nodeStore } = makeService()
-    const { ResourceStore } = await import('@mini-canvas/canvas-data')
+    const { ResourceStore } = await import('@plume-canvas/canvas-data')
     const blobs = new Map<string, Blob>()
     let seq = 0
     const adapter = {

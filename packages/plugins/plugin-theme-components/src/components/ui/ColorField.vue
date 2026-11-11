@@ -10,7 +10,7 @@
  */
 import { computed, ref } from 'vue'
 import { Chrome, type Payload } from '@ckpack/vue-color'
-import { Popover, PopoverContent, PopoverTrigger } from '@mini-canvas/ui-kit-shadcn'
+import { Popover, PopoverContent, PopoverTrigger } from '@plume-canvas/ui-kit-shadcn'
 import { colorAlpha, normalizeHexColor } from './colorValue'
 
 const props = withDefaults(

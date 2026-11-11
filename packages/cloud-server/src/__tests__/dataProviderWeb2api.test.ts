@@ -21,13 +21,13 @@ const HERE = path.dirname(fileURLToPath(import.meta.url))
 /**
  * 仓库里可版本化的源文件：packages/cloud-server/providers/*.js
  *
- * 运行时那三个文件在数据根（默认 <仓库>/.mini-canvas/providers/，被 .gitignore 忽略），
+ * 运行时那三个文件在数据根（默认 <仓库>/.plume/providers/，被 .gitignore 忽略），
  * 由部署脚本从这份源文件复制过去。测试测源文件，另有一条守卫检查两边是否同步。
  */
 const PROVIDERS_DIR = path.resolve(HERE, '../../providers')
-/** 运行时数据目录（本地开发时就是仓库根的 .mini-canvas） */
+/** 运行时数据目录（本地开发时就是仓库根的 .plume） */
 const REPO_ROOT = path.resolve(HERE, '../../../..')
-const DEPLOYED_DIR = path.join(REPO_ROOT, '.mini-canvas', 'providers')
+const DEPLOYED_DIR = path.join(REPO_ROOT, '.plume', 'providers')
 
 /** 按数据根装载真实 provider 文件（与 load.ts 同一手法：data: URL） */
 async function load(file: string): Promise<Provider> {

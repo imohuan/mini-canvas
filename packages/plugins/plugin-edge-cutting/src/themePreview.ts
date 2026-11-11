@@ -4,8 +4,8 @@
  * 复刻真实刀光：一段斜切过连线的轨迹 + 末端短尾迹 + 火花。
  * 轨迹点按预览节点的居中位置算，节点挪动时刀光跟着挪；几何用本插件的 toSmoothPathData。
  */
-import type { Context } from '@mini-canvas/canvas-base'
-import { THEME_PREVIEW_SLOT, type PreviewLayer, type PreviewPaintCtx } from '@mini-canvas/canvas-render'
+import type { Context } from '@plume-canvas/canvas-base'
+import { THEME_PREVIEW_SLOT, type PreviewLayer, type PreviewPaintCtx } from '@plume-canvas/canvas-render'
 import { toSmoothPathData, type ScreenPoint } from './edgeCuttingCore'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'

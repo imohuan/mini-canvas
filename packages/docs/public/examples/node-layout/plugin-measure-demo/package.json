@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：按实测尺寸排列",
     "description": "跟着 view 学：用真实 DOM 尺寸把选中节点排成一行",
     "pluginName": "measure-demo",
@@ -15,6 +15,6 @@
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*"
   }
 }

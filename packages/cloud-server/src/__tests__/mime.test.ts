@@ -68,10 +68,10 @@ describe('白名单自身', () => {
     }
   })
 
-  it('含节点包 .mcnode —— 没有它，资产库存进来的包会被抹掉后缀、抽屉认不出它是"能拖出节点的东西"', () => {
-    expect(ALLOWED_EXT).toContain('.mcnode')
-    expect(safeExt('视频可视化.mcnode')).toBe('.mcnode')
-    expect(mimeFromName('x.mcnode')).toBe('application/x-mini-canvas-node')
+  it('含节点包 .plumenode —— 没有它，资产库存进来的包会被抹掉后缀、抽屉认不出它是"能拖出节点的东西"', () => {
+    expect(ALLOWED_EXT).toContain('.plumenode')
+    expect(safeExt('视频可视化.plumenode')).toBe('.plumenode')
+    expect(mimeFromName('x.plumenode')).toBe('application/x-plume-node')
   })
 
   it('含文本类 .txt —— 任务脚本用 ctx.save("内容","note.txt") 交产物时，没有它后缀会被抹掉', () => {

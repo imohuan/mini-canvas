@@ -172,7 +172,7 @@ onBeforeUnmount(() => {
   display: none !important;
 }
 
-body.mc-pointer-down .selection-frame-batch-slot {
+body.plume-pointer-down .selection-frame-batch-slot {
   display: none !important;
 }
 

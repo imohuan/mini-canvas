@@ -1,7 +1,7 @@
 import type { EdgeMouseEvent, NodeMouseEvent } from '@vue-flow/core'
 import { RenderEvents } from '../renderEvents'
 import type { CanvasContextMenuPayload } from '../canvasHostTypes'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 
 export function useCanvasContextMenu(opts: {
   hostRef: { value: CanvasHostHandle | undefined }

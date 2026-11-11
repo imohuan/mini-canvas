@@ -13,7 +13,7 @@ import type {
   ViewportState,
   FlowPoint,
   FocusInsets,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import { NodeLayoutService } from '../layout/nodeLayout'
 import { ViewportService, type ViewportBackend } from '../viewport/viewportService'
 import { computeFitTo, resolvePadding, type FitToOptions } from './fitTo'

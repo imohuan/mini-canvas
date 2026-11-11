@@ -1,8 +1,8 @@
 # 内核
 
-**一句话定位**：**`@mini-canvas/kernel` 是整套系统的插件框架 —— 它只管四件事：装插件、排依赖、发事件、回收副作用。画布上的东西（节点、连线、主题）它一概不认识。**
+**一句话定位**：**`@plume-canvas/kernel` 是整套系统的插件框架 —— 它只管四件事：装插件、排依赖、发事件、回收副作用。画布上的东西（节点、连线、主题）它一概不认识。**
 
-**它属于哪一档**：**框架层（最底下那一层）**。源码入口 `packages/kernel/src/index.ts`。它不依赖任何其它 `@mini-canvas/*` 包，也不依赖 Vue、不碰 DOM —— 纯 Node 里就能跑、能单测。
+**它属于哪一档**：**框架层（最底下那一层）**。源码入口 `packages/kernel/src/index.ts`。它不依赖任何其它 `@plume-canvas/*` 包，也不依赖 Vue、不碰 DOM —— 纯 Node 里就能跑、能单测。
 
 ## 它是什么
 
@@ -33,11 +33,11 @@ kernel  ←  canvas-data  ←  canvas-render  ←  plugins
 
 | 包 | 一句话 | 装它的 ctx 长什么样 |
 | --- | --- | --- |
-| `@mini-canvas/kernel` | 插件框架（本文这一组） | `ctx.tools` + 六个原语，**不认识画布** |
-| `@mini-canvas/canvas-data` | 数据层 + 画布语义 | 上面那些 + `ctx.nodes` / `ctx.theme` / `ctx.commands` / `ctx.slots` / `ctx.settings` |
-| `@mini-canvas/canvas-render` | 渲染层（Vue / VueFlow / DOM） | 画布服务里再多 `view` / `canvas` |
-| `@mini-canvas/canvas-base` | 插件作者的薄入口（重导出 kernel + canvas-data） | 与 canvas-data 一样 |
-| `@mini-canvas/ui` | 成品应用出口（一行 `CanvasHost` 出画布） | 与 canvas-render 一样 |
+| `@plume-canvas/kernel` | 插件框架（本文这一组） | `ctx.tools` + 六个原语，**不认识画布** |
+| `@plume-canvas/canvas-data` | 数据层 + 画布语义 | 上面那些 + `ctx.nodes` / `ctx.theme` / `ctx.commands` / `ctx.slots` / `ctx.settings` |
+| `@plume-canvas/canvas-render` | 渲染层（Vue / VueFlow / DOM） | 画布服务里再多 `view` / `canvas` |
+| `@plume-canvas/canvas-base` | 插件作者的薄入口（重导出 kernel + canvas-data） | 与 canvas-data 一样 |
+| `@plume-canvas/ui` | 成品应用出口（一行 `CanvasHost` 出画布） | 与 canvas-render 一样 |
 
 分层怎么分工看 [三层是怎么分工的](/intro/three-layers)；每个服务是谁提供的、怎么用，看 [内置服务](/services/)。
 
@@ -69,7 +69,7 @@ kernel  ←  canvas-data  ←  canvas-render  ←  plugins
 // 文件：quick-start.ts
 // 格式：TypeScript 模块（可直接用 `npx tsx quick-start.ts` 跑）
 // 位置：一个独立的 Node 脚本；不需要浏览器、不需要 Vue
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 
 // ① 建一个上下文：这就是「内核」。
 //    纯内核 Context 只有六个原语 + ctx.tools，没有 ctx.nodes。
@@ -92,8 +92,8 @@ ctx.stop() // 倒着把每个插件的副作用清干净；之后还能再 plugi
 
 三句话记牢：**建（`new Context`）→ 装（`ctx.plugin`）→ 启（`await ctx.start`）**。
 
-> ⚠️ `@mini-canvas/kernel` 导出的是**纯插件内核**，`ctx.get('doc')` 之类画布服务一律是 `undefined`。
-> 要带画布能力的 `ctx`，用 `@mini-canvas/canvas-data` 导出的 `Context`（构造参数一样，它默认装好画布能力层）。
+> ⚠️ `@plume-canvas/kernel` 导出的是**纯插件内核**，`ctx.get('doc')` 之类画布服务一律是 `undefined`。
+> 要带画布能力的 `ctx`，用 `@plume-canvas/canvas-data` 导出的 `Context`（构造参数一样，它默认装好画布能力层）。
 
 ## 三种插件写法
 
@@ -111,7 +111,7 @@ ctx.stop() // 倒着把每个插件的副作用清干净；之后还能再 plugi
 // 文件：my-plugin/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：一个插件包的源码入口
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 
 export const name = 'my-plugin'
 export const inject = [] as string[] // 没有硬依赖就写空数组
@@ -131,7 +131,7 @@ export function apply(ctx: Context): void {
 // 文件：my-plugin/src/greeterPlugin.ts
 // 格式：TypeScript 模块（类形态插件：类本身就是插件）
 // 位置：需要「上架一个服务」时用这种写法
-import { Service, type Context } from '@mini-canvas/kernel'
+import { Service, type Context } from '@plume-canvas/kernel'
 
 export class GreeterService extends Service {
   constructor(ctx: Context) {
@@ -152,7 +152,7 @@ export class GreeterService extends Service {
 // 文件：my-plugin/src/heartbeatPlugin.ts
 // 格式：TypeScript 模块（函数形态插件：函数名就是插件名）
 // 位置：极简插件
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 
 export function heartbeat(ctx: Context): void {
   ctx.on('ping', () => console.log('pong'))
@@ -177,7 +177,7 @@ export function heartbeat(ctx: Context): void {
 | 停机 | `ctx.stop()` / `await ctx.stopAsync()` | 状态为 `started` | 倒序卸光，可重新 start |
 
 ```ts
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 
 const ctx = new Context()
 await ctx.start()                                   // 先空内核启动
@@ -264,8 +264,8 @@ const ctx = new Context({ dev: true })
 
 它决定了「dev 白名单警告」这类开关：`dev: true` 时，`emit` 一个**没登记过**的事件名会在控制台给一条 warn（每个名字只给一次）。
 
-画布链路上的来源是：宿主组件 `CanvasHost` 把 `import.meta.env.DEV` 传给 `createMiniCanvasHost({ dev })`，
-工厂里落到 `new Context({ dev: opts.dev ?? false })`（`packages/canvas-render/src/host/createMiniCanvasHost.ts:164`）；
+画布链路上的来源是：宿主组件 `CanvasHost` 把 `import.meta.env.DEV` 传给 `createPlumeHost({ dev })`，
+工厂里落到 `new Context({ dev: opts.dev ?? false })`（`packages/canvas-render/src/host/createPlumeHost.ts:164`）；
 成品应用在 `packages/ui/src/App.vue:69` 写 `const DEV = import.meta.env.DEV`。
 
 > **库侧为什么不自己读 `import.meta.env`**：打包器的环境替换只作用于**应用自身的源码**，
@@ -278,8 +278,8 @@ const ctx = new Context({ dev: true })
 | `packages/kernel/src/Context.ts` | 内核本体：装载 / 依赖多轮激活 / 服务表 / 注册场表 / 自省 |
 | `packages/kernel/src/__tests__/kernelBoundary.test.ts` | 边界测试：锁住「纯内核只有 `tools`，没有画布服务」这条铁律 |
 | `packages/canvas-data/src/canvas/context.ts` | 画布版 `Context`：`new Context()` 默认装画布能力层 |
-| `packages/canvas-render/src/host/createMiniCanvasHost.ts:164` | 宿主装配点：`new Context({ dev })` + 注入渲染层两件服务 + 启动 |
-| `packages/ui/src/App.vue:171` | 成品应用：`<CanvasHost :dev="DEV" window-key="MiniCanvasUI">` |
+| `packages/canvas-render/src/host/createPlumeHost.ts:164` | 宿主装配点：`new Context({ dev })` + 注入渲染层两件服务 + 启动 |
+| `packages/ui/src/App.vue:171` | 成品应用：`<CanvasHost :dev="DEV" window-key="PlumeUI">` |
 
 ## 完整例子
 
@@ -305,7 +305,7 @@ plugin-hello/
 // 文件：packages\docs\public\examples\kernel\plugin-hello/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 
 export const name = 'hello'
 export const inject = [] as string[]
@@ -324,7 +324,7 @@ export function apply(ctx: Context): void {
 // 文件：packages\docs\public\examples\kernel\plugin-hello/src/greeterPlugin.ts
 // 格式：TypeScript 模块（类形态插件）
 // 位置：插件包里「提供一项服务」的那一件
-import { Service, type Context } from '@mini-canvas/kernel'
+import { Service, type Context } from '@plume-canvas/kernel'
 
 export class GreeterService extends Service {
   constructor(ctx: Context) {
@@ -342,7 +342,7 @@ export class GreeterService extends Service {
 // 文件：packages\docs\public\examples\kernel\plugin-hello/src/heartbeatPlugin.ts
 // 格式：TypeScript 模块（函数形态插件：函数名就是插件名）
 // 位置：插件包里的极简插件
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 
 export function heartbeat(ctx: Context): void {
   ctx.on('ping', () => console.log('[heartbeat] pong'))
@@ -355,7 +355,7 @@ export function heartbeat(ctx: Context): void {
 // 文件：packages\docs\public\examples\kernel\plugin-hello/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：把三种形态的插件装进同一个内核
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import * as helloPlugin from './index'
 import { GreeterService } from './greeterPlugin'
 import { heartbeat } from './heartbeatPlugin'

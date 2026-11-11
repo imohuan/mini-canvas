@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NodeStore } from '@mini-canvas/canvas-data'
+import { NodeStore } from '@plume-canvas/canvas-data'
 import { NodeLayoutService } from '../../layout/nodeLayout'
 import { computeVisibleIds, makeVisiblePredicate, VISIBLE_CULL_DEFAULTS } from '../visibleCull'
 import { nodesFromStore } from '../canvasHostCore'

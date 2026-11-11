@@ -4,12 +4,12 @@
  * 从 server.ts 原样搬出，避免入口文件过长；导出路径仍是 `server.js`（由 server.ts 重导出）。
  */
 import type { Hono } from 'hono'
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 
 export interface CloudServerOptions {
   /** 监听端口（缺省 8865；0 = 让系统分配，单测/多实例用） */
   port?: number
-  /** 数据根目录（缺省 .mini-canvas）：其下 kv/（小数据）与 canvases/（一个画布一个文件夹） */
+  /** 数据根目录（缺省 .plume）：其下 kv/（小数据）与 canvases/（一个画布一个文件夹） */
   dir?: string
   /** 监听地址（缺省 127.0.0.1：本机自用，不对外暴露） */
   hostname?: string
@@ -45,11 +45,11 @@ export interface CloudServerOptions {
   /**
    * 管理令牌鉴权（缺省**开**）。
    *
-   * 关掉要配合 `MINI_CANVAS_ALLOW_INSECURE=1`（命令行 `--no-admin-auth` 也是这条规则），
+   * 关掉要配合 `PLUME_ALLOW_INSECURE=1`（命令行 `--no-admin-auth` 也是这条规则），
    * 否则任何人都能用一个环境变量把整个管理面敞开。
    */
   adminAuth?: boolean
-  /** 固定管理令牌（缺省读 `MINI_CANVAS_ADMIN_TOKEN`；都没有就生成/复用 <数据根>/admin-token） */
+  /** 固定管理令牌（缺省读 `PLUME_ADMIN_TOKEN`；都没有就生成/复用 <数据根>/admin-token） */
   adminToken?: string
   /**
    * 请求来源边界（Host/Origin）。缺省**开**。

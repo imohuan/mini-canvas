@@ -6,7 +6,7 @@
  * 再显示这一页；返回按钮明确告诉用户怎么回去。
  */
 import { ArrowLeft } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
 

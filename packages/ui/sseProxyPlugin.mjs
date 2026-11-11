@@ -26,7 +26,7 @@ const SSE_PATH = '/api/kv/events'
 export function sseProxyPlugin(options = {}) {
   const target = options.target || 'http://localhost:8865'
   return {
-    name: 'mini-canvas-sse-proxy',
+    name: 'plume-canvas-sse-proxy',
     apply: 'serve',
     configureServer(server) {
       // 必须在 vite 内置代理之前挂上：`configureServer` 返回的函数在内部中间件之**后**跑，

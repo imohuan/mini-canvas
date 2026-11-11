@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-services-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：把提供方与两个消费方装进同一个内核
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { GreeterService } from './greeterService'
 import { consumerPlugin } from './consumerPlugin'
 import { optionalPlugin } from './optionalPlugin'

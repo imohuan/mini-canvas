@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-capability-demo/src/miniLayer.ts
 // 格式：TypeScript 模块（自定义能力层实现）
 // 位置：演示「内核不认识段，段由能力层产出」
-import type { CapabilityLayer, PluginScope } from '@mini-canvas/kernel'
+import type { CapabilityLayer, PluginScope } from '@plume-canvas/kernel'
 
 /** 段 / 内置服务的运行时状态（每 Context 一份 —— 所以要用工厂产出） */
 export function createMiniCapabilityLayer(): CapabilityLayer {

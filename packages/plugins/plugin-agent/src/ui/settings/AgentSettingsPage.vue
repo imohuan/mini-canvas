@@ -6,11 +6,11 @@
  *   ① 一行页签（模型接入 / 技能 / MCP / 审批规则 / 三种提示词…）
  *   ② 下面只渲染当前选中的那一块
  *
- * 页签与页面壳子都用 @mini-canvas/ui-kit-shadcn 的 Tabs；业务页面各自负责内容，
+ * 页签与页面壳子都用 @plume-canvas/ui-kit-shadcn 的 Tabs；业务页面各自负责内容，
  * 本文件只换 UI 层，不改任何数据与调用。
  */
 import { onMounted, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import './settings.css'
 import ModelsPage from './ModelsPage.vue'

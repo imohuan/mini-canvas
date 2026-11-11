@@ -9,7 +9,7 @@
  *
  * attach 的语义（浮层组件即全部实现）：挂载 = 订阅拖拽、吸附、画线；卸载 = 三者一起停。
  */
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import { alignGuideConfigFrom } from './alignGuideConfig'
 
 /** settings 的最小订阅面（与内核 SettingsStore / ctx.settings 能力对齐） */

@@ -17,8 +17,8 @@ import {
   NodeStore,
   Selection,
   type CanvasEdge,
-} from '@mini-canvas/canvas-data'
-import { RegistryImpl } from '@mini-canvas/kernel'
+} from '@plume-canvas/canvas-data'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import {
   createMediaCapability,
   MEDIA_CREATOR_FIELD,

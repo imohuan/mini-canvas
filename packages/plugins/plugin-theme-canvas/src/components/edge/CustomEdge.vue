@@ -21,10 +21,10 @@ import {
   useThemeColor,
   RenderEvents,
   type DragEventPayload,
-} from '@mini-canvas/canvas-render'
-import { isTransient } from '@mini-canvas/canvas-data'
-import { Button } from '@mini-canvas/ui-kit-shadcn'
-import type { EdgeVisual } from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
+import { isTransient } from '@plume-canvas/canvas-data'
+import { Button } from '@plume-canvas/ui-kit-shadcn'
+import type { EdgeVisual } from '@plume-canvas/canvas-render'
 import {
   getSourcePosition,
   getTargetPosition,

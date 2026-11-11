@@ -24,7 +24,7 @@
  */
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import type { PluginModule } from '@mini-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 
 /** 默认的后台插件目录名（挂在数据根下，与 kv / canvases / providers 并列） */
 export const DEFAULT_SERVER_PLUGINS_DIR = 'server-plugins'

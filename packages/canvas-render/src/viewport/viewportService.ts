@@ -13,7 +13,7 @@
  * 不进契约（拖拽视觉读写由 flow facade 承担）。
  */
 
-import type { ViewportContract, ViewportState, FlowPoint } from '@mini-canvas/canvas-data'
+import type { ViewportContract, ViewportState, FlowPoint } from '@plume-canvas/canvas-data'
 
 export type { ViewportState, FlowPoint }
 

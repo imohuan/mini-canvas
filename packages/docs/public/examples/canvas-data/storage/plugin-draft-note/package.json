@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-draft-note",
+  "name": "@plume-canvas/plugin-draft-note",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：草稿便签",
     "description": "把草稿与面板记忆分别放进 canvas / config 两个抽屉，并演示换后端后重读",
     "pluginName": "draft-note",
@@ -20,9 +20,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",

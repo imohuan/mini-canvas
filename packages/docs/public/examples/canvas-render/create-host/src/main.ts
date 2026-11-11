@@ -2,10 +2,10 @@
 // 格式：TypeScript 模块（入口，跑完即退出）
 // 位置：演示宿主句柄 / 门面 / 安装句柄三件怎么配合
 import { boot } from './host'
-import type { TextNodeService } from '@mini-canvas/plugin-node-text'
+import type { TextNodeService } from '@plume-canvas/plugin-node-text'
 
 const { host, api, manager, exposeToWindow } = await boot()
-exposeToWindow('MiniCanvasDemo')   // ① Node 里挂到 globalThis；浏览器里就挂在 window 上
+exposeToWindow('PlumeDemo')   // ① Node 里挂到 globalThis；浏览器里就挂在 window 上
 
 // ② 宿主句柄：服务名走 ctx，数据门面走 doc
 const doc = host.ctx.get('doc')

@@ -7,7 +7,7 @@
  * 显隐自己判：有图才出现，编辑态由壳切换。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { beginSplit, isSplitting } from './splitSession'
 import { validRowsCols } from './gridSplit'
 import GridSizePicker from './GridSizePicker.vue'

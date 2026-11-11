@@ -12,8 +12,8 @@
  * 它挂在 CanvasHost 的 #ui 槽里。
  */
 import { onBeforeUnmount } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { REF_CLICK_EVENT, type RefClickPayload } from '@mini-canvas/plugin-agent'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
+import { REF_CLICK_EVENT, type RefClickPayload } from '@plume-canvas/plugin-agent'
 import { assetManager, assetPreview } from './assetUiBus'
 import { assetUrlOf, kindOfExt } from './assetRefOpen'
 

@@ -14,7 +14,7 @@
  * 4. 多账号只出现在下拉的二级菜单里，模型本身仍是一行。
  */
 import { reactive } from 'vue'
-import { withAdminToken, type Context } from '@mini-canvas/canvas-base'
+import { withAdminToken, type Context } from '@plume-canvas/canvas-base'
 
 /** 一个配置字段（与后台 ProviderConfigField 同形） */
 export interface ProviderField {

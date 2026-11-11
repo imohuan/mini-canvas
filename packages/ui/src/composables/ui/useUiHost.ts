@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import type { SettingsStore } from '@mini-canvas/kernel'
+import type { SettingsStore } from '@plume-canvas/kernel'
 import type { FullHost, HostApi, HostLike, HostRef } from './types'
 import { readyHost } from './hostRuntime'
 
@@ -7,7 +7,7 @@ import { readyHost } from './hostRuntime'
  * 宿主句柄 + 各种按名取服务的小入口。
  *
  * 原样从 ui.ts 拆出：hostEl 的写入方式、hostCtx 的回落顺序（hostEl.host ?? hostEl，
- * 再退 window.MiniCanvasUI）都不改，避免设置/命令/建节点走到不同宿主。
+ * 再退 window.PlumeUI）都不改，避免设置/命令/建节点走到不同宿主。
  */
 export function createUiHostScope() {
   // ===== 宿主 =====
@@ -52,7 +52,7 @@ export function createUiHostScope() {
   /** 取画布宿主（hostEl 优先；没有就退到 window 上暴露的那份） */
   function canvasHost(): FullHost | undefined {
     const host = (hostEl.value?.host ?? hostEl.value) as FullHost | undefined
-    return host ?? (window as unknown as { MiniCanvasUI?: { getHost(): FullHost } }).MiniCanvasUI?.getHost()
+    return host ?? (window as unknown as { PlumeUI?: { getHost(): FullHost } }).PlumeUI?.getHost()
   }
 
   /** 取内核 ctx（画布服务都挂在它下面）；宿主未就绪或没装插件 → undefined */

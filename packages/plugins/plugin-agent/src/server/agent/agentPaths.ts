@@ -35,7 +35,7 @@ export function canvasDir(root: string, id: string): string {
 }
 
 /** penguin 项目 id（全局一个；模型/技能/MCP 都挂它下面） */
-export const AGENT_PROJECT_ID = 'mini-canvas'
+export const AGENT_PROJECT_ID = 'plume-canvas'
 /** Agent id（全局一个；会话不按 agent 分，按画布分） */
 export const AGENT_ID = 'canvas-agent'
 

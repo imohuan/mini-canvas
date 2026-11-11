@@ -31,9 +31,9 @@ function walk(dir: string, out: string[] = []): string[] {
     if (name === 'node_modules' || name === 'dist' || name === 'assets' || name === '__tests__' || name === 'e2e') continue
     const full = path.join(dir, name)
     if (statSync(full).isDirectory()) {
-      // backup 目录跳过；`.mini-canvas-backup-*` 是后台跑起来时留下的数据快照（git 忽略），
-      // 里面是技能自带脚本的副本，不是产品源码。
-      if (name === 'backup' || name.startsWith('.mini-canvas-backup-')) continue
+      // backup 跳过；`.plume` / `.plume-backup-*` 是后台运行数据（git 忽略），
+      // 里面的东西是画布数据与 Agent 技能脚本副本，不是产品源码。
+      if (name === 'backup' || name === '.plume' || name.startsWith('.plume-backup-')) continue
       walk(full, out)
     } else if (SOURCE_EXT.has(path.extname(name))) {
       out.push(full)

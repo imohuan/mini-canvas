@@ -5,12 +5,12 @@
  * 只管**调试这一侧**：列出 watch 上报过哪些插件、内核里装没装、状态如何，
  * 并提供重装 / 卸载。它不读也不写「插件管理」的安装名单 —— 两边是两个独立插件。
  *
- * 「是否已安装」的唯一判据 = 内核里有没有这个**插件自己的名字**（`window.MiniCanvasUI.listPlugins()`），
+ * 「是否已安装」的唯一判据 = 内核里有没有这个**插件自己的名字**（`window.PlumeUI.listPlugins()`），
  * 与谁装的、从哪装的无关。同名只会有这一份（内核按名字索引，重复装会被拒）。
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RefreshCw, RotateCcw, Trash2, Bug } from 'lucide-vue-next'
-import { useCanvasRender, useUiComponent, type FeedbackService } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, type FeedbackService } from '@plume-canvas/canvas-render'
 import { presenceStatusOf, type DebugPluginRow, type DebugPresenceStatus, type HotReload } from '../../data/hotReload'
 
 /** 从内核取热重载服务（本插件自己上架的，与插件管理无关） */

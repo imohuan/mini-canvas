@@ -12,7 +12,7 @@
 
 ```ts
 // 文件：my-plugin/src/index.ts 里的一小段
-import { F, type ConfigSchema, type InferConfig } from '@mini-canvas/canvas-base'
+import { F, type ConfigSchema, type InferConfig } from '@plume-canvas/canvas-base'
 
 export const Config = {
   glowEnabled: F.boolean(true),               // 简写：默认值 true

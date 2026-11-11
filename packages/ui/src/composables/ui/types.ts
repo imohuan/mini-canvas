@@ -17,7 +17,7 @@ export interface HostApi {
   nodeStore?: { getNodes(): unknown[] }
 }
 
-/** CanvasHost 暴露的完整宿主（与 window.MiniCanvasUI.getHost() 同源） */
+/** CanvasHost 暴露的完整宿主（与 window.PlumeUI.getHost() 同源） */
 export type FullHost = HostApi & {
   command: { execute(id: string, payload?: unknown): void }
   nodeStore: { getNodes(): unknown[] }

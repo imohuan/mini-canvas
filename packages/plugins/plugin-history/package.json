@@ -1,5 +1,5 @@
 {
-  "name": "@mini-canvas/plugin-history",
+  "name": "@plume-canvas/plugin-history",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -17,9 +17,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",

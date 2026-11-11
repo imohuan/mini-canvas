@@ -155,7 +155,7 @@ function loadSendButton(): { render: (ctx: unknown, cache: unknown[]) => unknown
   const mod: { exports: Record<string, unknown> } = { exports: {} }
   const requireShim = (id: string): unknown => {
     if (id === 'vue') return vue
-    if (id === '@mini-canvas/ui-kit-shadcn') return { Button: ShadcnButtonStub }
+    if (id === '@plume-canvas/ui-kit-shadcn') return { Button: ShadcnButtonStub }
     throw new Error('不认识这个依赖（测试的 require 只放 vue）：' + id)
   }
   new Function('module', 'exports', 'require', js)(mod, mod.exports, requireShim)

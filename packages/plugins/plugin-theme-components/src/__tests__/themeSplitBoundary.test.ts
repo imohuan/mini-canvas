@@ -1,5 +1,5 @@
 /**
- * 拆包边界守卫：两个主题包互不 import，只共享 @mini-canvas/theme-contract 的纯数据。
+ * 拆包边界守卫：两个主题包互不 import，只共享 @plume-canvas/theme-contract 的纯数据。
  *
  * 为什么钉成测试：拆包的目标是让项目页只启动通用组件、画布外观进画布才启动。
  * 一旦 components 为了某个组件去 import canvas（或反过来），两个包就重新焊在一起，
@@ -36,7 +36,7 @@ function collectSources(dir: string, out: string[] = []): string[] {
   return out
 }
 
-const SIBLING = '@mini-canvas/plugin-theme-canvas'
+const SIBLING = '@plume-canvas/plugin-theme-canvas'
 
 describe('主题拆包边界', () => {
   it('components 不声明、也不 import 画布包', () => {

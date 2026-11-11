@@ -11,7 +11,7 @@
  * 避免拖格子把节点拖走。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import { readStoryboardLayout, slotIndexAt, slotRects } from './storyboard'
 import { setHoverCell, splitState, toggleCell } from './splitSession'
 import { gridMaskUri, type MaskCell } from './gridMask'

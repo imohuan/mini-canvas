@@ -10,7 +10,7 @@
  */
 import { computed } from 'vue'
 import { useUiComponentOutside } from '../../composables/useUiComponentOutside'
-import { THEME_SIZE_CHOICES, THEME_SIZE_HINTS, THEME_SIZE_LABELS } from '@mini-canvas/theme-contract'
+import { THEME_SIZE_CHOICES, THEME_SIZE_HINTS, THEME_SIZE_LABELS } from '@plume-canvas/theme-contract'
 
 defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()

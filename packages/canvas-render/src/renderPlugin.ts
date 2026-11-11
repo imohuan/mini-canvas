@@ -5,10 +5,10 @@
  * 它**不**注入 doc / selection / view：这三个是画布会话的服务，由 canvas-data 在进入画布时提供；
  * 渲染层插件在根级常驻，项目页也要能用，不能把画布会话的生命周期绑在自己身上。
  *
- * 为什么能力注册要收进插件：宿主（createMiniCanvasHost）也走同一条装配路径，
+ * 为什么能力注册要收进插件：宿主（createPlumeHost）也走同一条装配路径，
  * 把注册逻辑留在这里，宿主与插件就不会各写一份、order/id 各说各话。
  */
-import type { PluginModule, PluginScope, Registry } from '@mini-canvas/kernel'
+import type { PluginModule, PluginScope, Registry } from '@plume-canvas/kernel'
 import type { CapabilityFactory } from './contracts/capabilities'
 import { createStandardCapabilities } from './contracts/standardCapabilities'
 

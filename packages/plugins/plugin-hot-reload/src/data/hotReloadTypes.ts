@@ -34,7 +34,7 @@ export interface HotReloadLogEntry {
 export interface HotReloadState {
   sources: HotReloadSource[]
   logs: HotReloadLogEntry[]
-  /** 自动重装时用哪个 reload 函数（缺省 window.MiniCanvasPlugin.reload） */
+  /** 自动重装时用哪个 reload 函数（缺省 window.PlumePlugin.reload） */
   ready: boolean
 }
 
@@ -46,7 +46,7 @@ export interface HotReload {
   removeSource(id: number): void
   /** 改一条源（地址/名字/类型/开关） */
   updateSource(id: number, patch: Partial<Omit<HotReloadSource, 'id'>>): void
-  /** 手动重装一个插件（转发给 window.MiniCanvasPlugin.reload） */
+  /** 手动重装一个插件（转发给 window.PlumePlugin.reload） */
   reload(target: string): Promise<void>
   /** 立刻 (重)连接所有已启用的源；改完地址调它 */
   reconnect(): void
@@ -206,23 +206,23 @@ export interface HotReloadDeps {
     close(): void
     readyState: number
   }
-  /** 重装一个插件（缺省转发 window.MiniCanvasPlugin.reload） */
+  /** 重装一个插件（缺省转发 window.PlumePlugin.reload） */
   reload?: (target: string) => Promise<void>
   /**
-   * 按**产物地址**重装一个插件（缺省转发 window.MiniCanvasPlugin.reload(target, { url })）。
+   * 按**产物地址**重装一个插件（缺省转发 window.PlumePlugin.reload(target, { url })）。
    *
    * 为什么需要它：watch 上报的 value 里已经带了前端产物地址，直接照这个地址拉新产物，
    * 不必再去清单里按名字猜位置 —— 插件放在哪个目录、从哪个后台构建，都由上报方说了算。
    */
   reloadByUrl?: (name: string, url: string) => Promise<void>
   /**
-   * 内核当前已装插件名（缺省读 window.MiniCanvasUI.listPlugins）。
+   * 内核当前已装插件名（缺省读 window.PlumeUI.listPlugins）。
    *
    * 这是「是否已安装」的唯一判据：**按插件自己的唯一名字**，不看插件管理页的名单。
    * 两个插件各自独立，谁也不读谁的记录。
    */
   listInstalled?: () => string[]
-  /** 从内核卸载一个插件（缺省 window.MiniCanvasUI.uninstallPlugin）；返回是否卸到 */
+  /** 从内核卸载一个插件（缺省 window.PlumeUI.uninstallPlugin）；返回是否卸到 */
   uninstall?: (name: string) => boolean
   /** 拉调试插件清单（缺省读 /api/kv/config?values=1 里 plugin-watch: 前缀的项） */
   fetchJson?: (url: string, init?: RequestInit) => Promise<unknown>
@@ -283,13 +283,13 @@ export const PRESENCE_KEY = 'plugin-presence'
  * 给受保护的写请求补管理令牌（与 canvas-base 的同名工具同一份约定）。
  *
  * 为什么不直接 import 那一份：热重载插件要保持对 canvas-base 零依赖（可能被别的宿主单独装），
- * 而令牌的存储键与请求头在仓库里是**定死的契约**（mc_admin_token / x-admin-token）。
+ * 而令牌的存储键与请求头在仓库里是**定死的契约**（plume_admin_token / x-admin-token）。
  * 名字保持一致，好让「管理令牌覆盖」那条守卫能追溯到这里。
  */
 export function withAdminToken(headers: Record<string, string> = {}): Record<string, string> {
   let token = ''
   try {
-    token = (typeof localStorage !== 'undefined' ? localStorage.getItem('mc_admin_token') : '')?.trim() ?? ''
+    token = (typeof localStorage !== 'undefined' ? localStorage.getItem('plume_admin_token') : '')?.trim() ?? ''
   } catch {
     token = ''
   }

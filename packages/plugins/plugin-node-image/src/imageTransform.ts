@@ -8,7 +8,7 @@
  * 上传/裁剪/旋转/扩展产出的字节统一交给宿主**资源库**（浏览器里是 IndexedDB）保存，
  * 节点 data 里只留 `resourceId` 引用；刷新后由资源库按 id 重建可显示地址（见 canvas-render 的恢复流程）。
  */
-import { toPixelRect, type Rect } from '@mini-canvas/canvas-render'
+import { toPixelRect, type Rect } from '@plume-canvas/canvas-render'
 
 /** 加工产物：图片字节（交给资源库）与它的像素尺寸 */
 export interface TransformBlobResult {

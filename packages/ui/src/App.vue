@@ -8,8 +8,8 @@
 //   4. 全局键盘（Esc / Ctrl+/）
 //
 // 区域组件共享 useUi() 单例状态（composables/ui.ts），互相之间不需要 prop 透传。
-import { CanvasHost, SettingsHost, SlotHost, mountCanvas, unmountCanvas } from '@mini-canvas/canvas-render'
-import type { CanvasHostHandle } from '@mini-canvas/canvas-render'
+import { CanvasHost, SettingsHost, SlotHost, mountCanvas, unmountCanvas } from '@plume-canvas/canvas-render'
+import type { CanvasHostHandle } from '@plume-canvas/canvas-render'
 import { MessageSquarePlus, Video, Type, Image as ImageIcon } from 'lucide-vue-next'
 import CanvasShell from './components/CanvasShell.vue'
 import TopLeftArea from './components/areas/TopLeftArea.vue'
@@ -48,7 +48,7 @@ const UiKitDebugOverlay = useUiComponentOutside('uiKitDebugOverlay')
 const s = ui.state
 
 // 外壳命令（打开抽屉 / 切页签 / 收起展开）：注册在 Provider 的 ctx 上，
-// 插件按钮通过 command 调用，不反向依赖 @mini-canvas/ui 的状态。
+// 插件按钮通过 command 调用，不反向依赖 @plume-canvas/ui 的状态。
 let shellCommandDisposers: Array<{ dispose(): void }> = []
 
 // 根级应用底座：由 Root.vue 的 AppProvider 提供。画布会话在 onMounted 里挂上。

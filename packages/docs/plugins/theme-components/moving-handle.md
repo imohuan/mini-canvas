@@ -74,7 +74,7 @@
 <!-- 格式：Vue 单文件组件（script setup lang="ts"） -->
 <!-- 位置：插件浮层上的一个"临时端口" —— 复用默认主题的端口外观开始批量连线 -->
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 // preview 模式：不注册真实连接点，只在按下时把事件交给我
 const MovingHandle = useUiComponent('movingHandle')

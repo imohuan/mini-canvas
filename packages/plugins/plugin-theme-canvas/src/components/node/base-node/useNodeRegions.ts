@@ -1,12 +1,12 @@
 import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import {
   createCapabilityCache,
   createCapabilityNodeContext,
   capabilityField,
-} from '@mini-canvas/canvas-render'
-import { nodeRegionStackEntries } from '@mini-canvas/canvas-data'
-import type { NodeWrite } from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
+import { nodeRegionStackEntries } from '@plume-canvas/canvas-data'
+import type { NodeWrite } from '@plume-canvas/canvas-render'
 
 export interface NodeRegionsInput {
   ctx: CanvasRenderContext['ctx']

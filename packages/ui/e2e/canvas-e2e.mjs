@@ -48,7 +48,7 @@ const boot = async () => {
   await page.waitForTimeout(2200);
 };
 const state = () => page.evaluate(() => {
-  const api = window.MiniCanvasUI;
+  const api = window.PlumeUI;
   const h = api && api.getHost();
   if (!h) return null;
   const nodes = h.nodeStore.getNodes();
@@ -63,7 +63,7 @@ const state = () => page.evaluate(() => {
   };
 });
 const posOf = (id) => page.evaluate((nid) => {
-  const n = window.MiniCanvasUI.getHost().nodeStore.getNodes().find((x) => x.id === nid);
+  const n = window.PlumeUI.getHost().nodeStore.getNodes().find((x) => x.id === nid);
   return n ? { x: n.position.x, y: n.position.y } : null;
 }, id);
 
@@ -78,7 +78,7 @@ check('画布渲染出节点 DOM', (await page.locator('.vue-flow__node').count(
 
 // ② 宿主/服务/插件
 const s0 = await state();
-check('宿主句柄可读（window.MiniCanvasUI）', !!s0);
+check('宿主句柄可读（window.PlumeUI）', !!s0);
 check('seed 生效（2 个默认节点）', s0?.count === 2, `实际 ${s0?.count}: ${s0?.types.join(',')}`);
 check('doc 门面已装配（步骤 5a）', s0?.hasDoc === true);
 check('canvas-base 不可卸载（决策 1 core）', s0?.canUninstallBase.ok === false && s0?.canUninstallBase.reason === 'core', JSON.stringify(s0?.canUninstallBase));
@@ -165,7 +165,7 @@ check('Esc 能关闭设置面板', !(await panelOpen()));
 
 // ⑧ 注册场运行时放/取/回收 + source 可诊断
 const field = await page.evaluate(() => {
-  const ctx = window.MiniCanvasUI.getContext();
+  const ctx = window.PlumeUI.getContext();
   const f = ctx.registryOf('node/region');
   const before = f.ids('text/out:top').length;
   const h = f.add('text/out:top', { component: { name: 'Probe' }, id: 'probe-e2e' }, { order: 0 });
@@ -183,7 +183,7 @@ check('注册场运行时放/取/回收（node/region）', field.after === field
 // 插件给 image 节点的上控制栏加一个按钮、下控制栏加一个面板，两者共享同一份"展开"能力实例。
 // 这条此前会红：BaseNode 在挂载那刻读出条目就定了，之后往场里 add 不重渲染（静默失效）。
 const scenario = await page.evaluate(async () => {
-  const api = window.MiniCanvasUI;
+  const api = window.PlumeUI;
   const ctx = api.getContext();
   const h = api.getHost();
   const MARK = 'E2E_SCENARIO';
@@ -218,7 +218,7 @@ check('wrap/resolve（叠层可合成）', field.hasResolve === true);
 // ⑧b 多选框区域场（selection/region）：用户要求"多选时只显示多选框自己的状态栏"。
 //     两个断言：① 多选时节点控制栏被壳压掉；② 插件往 selection/region 挂的条目真的渲染在框上。
 const selToolbar = await page.evaluate(async () => {
-  const api = window.MiniCanvasUI;
+  const api = window.PlumeUI;
   const ctx = api.getContext();
   const h = api.getHost();
   const MARK = 'E2E_SELTOOLBAR';
@@ -246,7 +246,7 @@ check('selection/region 条目 dispose 后从框上摘除', selToolbar.gone, JSO
 
 // ⑨ core 插件拒卸（真实宿主）
 const core = await page.evaluate(() => {
-  const api = window.MiniCanvasUI;
+  const api = window.PlumeUI;
   const ctx = api.getContext();
   const r = api.uninstallPlugin('canvas-base');
   // 5c 起老名 graph 下线；数据统一走 doc 门面（get('graph') 应为 undefined）
@@ -256,7 +256,7 @@ check('真实宿主上 canvas-base 卸不掉、doc 可用、老名 graph 已下�
 
 // 9b. ctx.surface() 自省：真实宿主上一次列出服务 / 注册场 / 命令 / 工具（新原语）
 const surf = await page.evaluate(() => {
-  const s = window.MiniCanvasUI.getContext().surface();
+  const s = window.PlumeUI.getContext().surface();
   return {
     services: s.services.map((x) => x.name),
     docSource: (s.services.find((x) => x.name === 'doc') || {}).source,
@@ -289,7 +289,7 @@ console.log('surface 快照: services=' + surf.services.length + ' kinds=[' + su
 
 // 9c. surface 是活快照：运行时往 tool 场注册一条，再读一次必须能看见（证明不是启动时缓存）
 const live = await page.evaluate(() => {
-  const ctx = window.MiniCanvasUI.getContext();
+  const ctx = window.PlumeUI.getContext();
   const before = ctx.surface().modelTools.map((t) => t.name);
   const h = ctx.registryOf('tool').add('e2e-probe', {
     description: 'e2e 探针',
@@ -307,7 +307,7 @@ check('surface 是活快照：运行时注册的模型工具立刻可见、注�
 // ⑩ 控制台：零 error（favicon 404 不算）
 // 9d. ui 目录场（设计文档 §4.5 / 案例 4）：主题登记的设计系统件按名可取
 const uiDir = await page.evaluate(() => {
-  const ctx = window.MiniCanvasUI.getContext();
+  const ctx = window.PlumeUI.getContext();
   const f = ctx.registryOf('ui');
   const before = f.keys().sort();
   const btn = f.top('button')?.value;
@@ -325,7 +325,7 @@ check('ui 目录支持换主题（叠层：order 小者赢，原值仍在）', u
 // 9d-2. 目录**真有生产消费者**（reviewer 指出过：只有登记没有消费 = 机制在但零收益）。
 // 换掉 ui 目录里的 button，节点上控制栏渲染出来的按钮必须跟着换 —— 这就是"换主题业务插件零改动"。
 const uiSwap = await page.evaluate(async () => {
-  const api = window.MiniCanvasUI;
+  const api = window.PlumeUI;
   const h = api.getHost();
   const ctx = api.getContext();
   // 先选中一个 image 节点，让它的上控制栏浮出来（ImageTopToolbar 经目录取 button）
@@ -363,7 +363,7 @@ check('ui 目录换主题真的生效（节点控制栏按钮跟着换，撤回�
 
 // 9e. 能力包（设计文档 §4.5 案例 5 / 决策 9）：宿主注册的标准四件在真实画布上按名可取
 const caps = await page.evaluate(() => {
-  const ctx = window.MiniCanvasUI.getContext();
+  const ctx = window.PlumeUI.getContext();
   const f = ctx.registryOf('capability');
   const names = f.keys().sort();
   const src = f.top('node')?.source ?? null;
@@ -386,14 +386,14 @@ check('能力包：正常装配下零条 [capability] 提示', capWarns.length =
 
 // 9g. dev 开关真的接通了（决策 9 的"needs 缺项 dev 抛错"只有它是 true 时才可能生效）。
 // 用 dev server 跑时必须是 true；这条也反向守住"别再把 isDev 静默钉死为 false"。
-const devFlag = await page.evaluate(() => window.MiniCanvasUI.getContext().isDev);
+const devFlag = await page.evaluate(() => window.PlumeUI.getContext().isDev);
 check('dev 开关接通（ctx.isDev === true，dev server 下）', devFlag === true, 'isDev=' + devFlag);
 
 // 9h. node/shell 场（设计文档 §4.5 / 案例 3/8）：换壳**真的生效** —— 此前这张场只有写入端、
 // 没有读取端，作者照文档写 add/wrap 会"不报错也不生效"（最怕的静默失效）。
 // 断言不是"场上多了一条"，而是**节点上渲染出来的内容真的换了**（用一个吐标记文本的假壳）。
 const shellSwap = await page.evaluate(async () => {
-  const ctx = window.MiniCanvasUI.getContext();
+  const ctx = window.PlumeUI.getContext();
   const f = ctx.registryOf('node/shell');
   // 控制栏 DOM 被 Teleport 到画布级层（.csurface-node-toolbars），取样要含它
   const textOf = () =>
@@ -420,7 +420,7 @@ check('node/shell 场换壳真的生效（假壳渲染到节点上，撤回即�
 // 根因是尺寸换算写成"屏幕位移 ÷ 当前 zoom"，只在缩放全程不变时成立；现在按当前视口换算。
 // 判据用**可观测不变式**：整个拖拽过程中「卡片右下角 − 鼠标」恒定（等于起手抓点偏移）。
 const resizeZoom = await page.evaluate(async () => {
-  const api = window.MiniCanvasUI;
+  const api = window.PlumeUI;
   const h = api.getHost();
   const doc = h.ctx.get('doc');
   const vp = h.view;
@@ -480,9 +480,9 @@ if (resizeZoom.skipped) {
 await page.goto(BASE, { waitUntil: 'load' }).catch(() => {});
 await page.waitForSelector('.vue-flow__node', { timeout: 30000 }).catch(() => null);
 // 独立画布可能还没渲染出任何节点（seed 只在空存储时给），先等宿主就绪再自己灌节点。
-await page.waitForFunction(() => !!window.MiniCanvasUI?.getHost?.(), null, { timeout: 30000 }).catch(() => {});
+await page.waitForFunction(() => !!window.PlumeUI?.getHost?.(), null, { timeout: 30000 }).catch(() => {});
 const dragZoomCull = await page.evaluate(() => {
-  const h = window.MiniCanvasUI.getHost();
+  const h = window.PlumeUI.getHost();
   const doc = h.ctx.get('doc');
   const old = doc.getNodes();
   if (old.length) doc.removeNodes(old.map((n) => n.id));
@@ -506,7 +506,7 @@ await page.waitForTimeout(1200);
 const cullBox = await page.locator('.vue-flow__node[data-id="e2e-cull-0-0"]').boundingBox();
 const cullNode = () => page.evaluate(() => {
   const el = document.querySelector('.vue-flow__node[data-id="e2e-cull-0-0"]');
-  const n = window.MiniCanvasUI.getHost().ctx.get('doc').getNode('e2e-cull-0-0');
+  const n = window.PlumeUI.getHost().ctx.get('doc').getNode('e2e-cull-0-0');
   return { transform: el?.style.transform ?? null, doc: { ...n.position }, nodeEls: document.querySelectorAll('.vue-flow__node').length };
 });
 const cullRows = [await cullNode()];
@@ -542,13 +542,13 @@ check(
 {
   // 防御：前序用例可能触发了页面导航，这里确保画布可用
   await page.waitForLoadState('load', { timeout: 10000 }).catch(() => {});
-  if (!(await page.evaluate(() => !!window.MiniCanvasUI).catch(() => false))) {
+  if (!(await page.evaluate(() => !!window.PlumeUI).catch(() => false))) {
     await page.goto(BASE, { waitUntil: 'load' });
     await page.waitForTimeout(2200);
   }
   const bar2 = page.locator('[data-testid="node-bottom-bar"]');
   const assembled = await page.evaluate(() => {
-    const ctx = window.MiniCanvasUI.getContext();
+    const ctx = window.PlumeUI.getContext();
     const field = ctx.registryOf('node/region');
     const slots = ctx.get('slots');
     // overlay 槽是多 occupant（分组控制栏/多选框也在里面），按 id 精确认领底栏那一条
@@ -572,7 +572,7 @@ check(
     // 不能按下标取：本轮用例已把画布换成 text-only 的 64 节点网格。
     // 按类型找图片节点（seed 场景下一定有），没有就造一个。
     const hasImage = await page.evaluate(() => {
-      const doc = window.MiniCanvasUI.getHost().ctx.get('doc');
+      const doc = window.PlumeUI.getHost().ctx.get('doc');
       if (doc.getNodes().some((n) => n.type === 'image')) return true;
       doc.addNodes([{ id: 'e2e-bottom-bar-image', type: 'image', position: { x: 80, y: 80 }, data: {} }]);
       return true;
@@ -590,7 +590,7 @@ check(
   const ran = await (async () => {
     if ((await bar2.count()) === 0) return { overlayShown: false };
     const runPromise = page.evaluate(() => {
-      const ctx = window.MiniCanvasUI.getContext();
+      const ctx = window.PlumeUI.getContext();
       const doc = ctx.get('doc');
       const node = doc.getNodes().find((n) => n.type === 'image');
       // 注册一条测试动作（id 带 e2e 前缀，一眼看得出是测试用的）
@@ -620,11 +620,11 @@ check(
         .catch((e) => ({ kind: 'threw', error: e?.message || String(e) }));
     });
     const stateProbe = await page.evaluate(() => {
-      const ctx = window.MiniCanvasUI.getContext();
+      const ctx = window.PlumeUI.getContext();
      const doc = ctx.get('doc');
       const wrCalls = window.__wrCalls;
       const node = doc.getNodes().find((n) => n.type === 'image');
-    const host = window.MiniCanvasUI.getHost();
+    const host = window.PlumeUI.getHost();
     const hostDoc = host.ctx.get('doc');
      const field = ctx.registryOf('node/bar');
      const applierKeys = field.keys().filter((k) => k.startsWith('appliers/'));
@@ -656,7 +656,7 @@ check(
     for (let i = 0; i < 60; i++) {
       await page.waitForTimeout(250);
       const rs = await page.evaluate(() => {
-        const h = window.MiniCanvasUI.getHost();
+        const h = window.PlumeUI.getHost();
         const node = h.nodeStore.getNodes().find((n) => n.type === 'image');
         return node?.data?.runState ?? null;
       });
@@ -674,7 +674,7 @@ check(
   await page.reload({ waitUntil: 'load' });
   await page.waitForTimeout(2200);
   const after = await page.evaluate(() => {
-    const h = window.MiniCanvasUI.getHost();
+    const h = window.PlumeUI.getHost();
     const node = h.nodeStore.getNodes().find((n) => n.type === 'image');
     return node?.data?.runState ?? null;
   });
@@ -693,7 +693,7 @@ check(
 {
   // 先选中图片节点并等一帧（这段跑在"刷新不悬挂"之后，刷新会清空选中，底栏要下一帧才出来）
   await page.evaluate(() => {
-    const ctx = window.MiniCanvasUI.getContext();
+    const ctx = window.PlumeUI.getContext();
     const img = ctx.get('doc').getNodes().find((n) => n.type === 'image');
     if (img) ctx.get('selection').set([img.id]);
   });

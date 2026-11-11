@@ -10,7 +10,7 @@
  * 目录还没就绪时用本包自带的 SettingsSchemaField 兜底，目录就绪后换成赢家。
  */
 import { onBeforeUnmount, onMounted, shallowRef, watch, type Ref } from 'vue'
-import { uiComponentStatic } from '@mini-canvas/canvas-render'
+import { uiComponentStatic } from '@plume-canvas/canvas-render'
 
 /** 宿主的 ui 目录句柄（宿主就绪时注入；宿主换新会重读并重订阅） */
 interface UiCatalogLike {

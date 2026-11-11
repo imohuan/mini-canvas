@@ -3,7 +3,7 @@ import { computed, nextTick, ref } from 'vue'
 import { AnimatePresence, motion } from 'motion-v'
 import { Check } from 'lucide-vue-next'
 import LibIcon from '../../LibIcon.vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useUi } from '../../../composables/ui'
 
 const props = defineProps<{

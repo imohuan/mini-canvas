@@ -20,8 +20,8 @@
  * 按钮内容仍是 GroupTopToolbar（与挂在节点里时**同一份组件**，观感与行为完全一致）。
  */
 import { computed, onBeforeUnmount, ref } from 'vue'
-import { useCanvasRender, resolveNodeSlotStyle, useToolbarOffsets, RenderEvents } from '@mini-canvas/canvas-render'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { useCanvasRender, resolveNodeSlotStyle, useToolbarOffsets, RenderEvents } from '@plume-canvas/canvas-render'
+import type { DocService } from '@plume-canvas/canvas-data'
 import GroupTopToolbar from './GroupTopToolbar.vue'
 
 // 常量从 groupEngine 取（纯逻辑、零依赖）。不能从 groupPlugin 取：那会成环（见该常量处的说明）。

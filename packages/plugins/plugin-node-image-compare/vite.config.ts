@@ -10,18 +10,18 @@ export default defineConfig({
   build: {
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-      name: 'MiniCanvasPluginNodeImageCompare',
+      name: 'PlumePluginNodeImageCompare',
       formats: ['umd'],
       fileName: () => 'plugin-node-image-compare.js',
     },
     rollupOptions: {
-      external: ['vue', '@mini-canvas/canvas-data', '@mini-canvas/canvas-base', '@mini-canvas/canvas-render'],
+      external: ['vue', '@plume-canvas/canvas-data', '@plume-canvas/canvas-base', '@plume-canvas/canvas-render'],
       output: {
         globals: {
           vue: 'Vue',
-          '@mini-canvas/canvas-data': 'MiniCanvasCore',
-          '@mini-canvas/canvas-base': 'MiniCanvasBase',
-          '@mini-canvas/canvas-render': 'MiniCanvasRender',
+          '@plume-canvas/canvas-data': 'PlumeCore',
+          '@plume-canvas/canvas-base': 'PlumeBase',
+          '@plume-canvas/canvas-render': 'PlumeRender',
         },
       },
     },

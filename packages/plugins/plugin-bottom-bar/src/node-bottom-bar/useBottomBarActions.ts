@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, ref, watch, type ComputedRef } from 'vue'
-import type { ToolParamDef } from '@mini-canvas/kernel'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { ToolParamDef } from '@plume-canvas/kernel'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import type { BarAction } from '../barTypes'
 import { FALLBACK_TYPE_ICONS } from './icons'
 import type { ModelIcon } from './modelIcons'

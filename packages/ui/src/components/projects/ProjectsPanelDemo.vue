@@ -6,7 +6,7 @@
  * 需要画布能力时用 ctx.tryGet('doc') 判断；拿不到就禁用自己的动作。
  */
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue'
-import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContext, useUiComponent } from '@plume-canvas/canvas-render'
 import { FolderOpenIcon } from 'lucide-vue-next'
 
 const { ctx } = useCanvasContext()

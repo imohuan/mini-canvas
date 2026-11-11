@@ -2,7 +2,7 @@
      兼容示例：旧 settings.nav 槽的自绘导航项；新插件优先用 ctx.settingsMenu
      位置：插件包内部；仍由设置面板渲染，但外观要自己画 -->
 <script setup lang="ts">
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 
 // 默认设置皮会把设置数据源与导航回调当 props 传给导航项（不给就会是 undefined）
 const props = defineProps<{

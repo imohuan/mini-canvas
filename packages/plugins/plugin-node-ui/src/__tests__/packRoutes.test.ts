@@ -15,7 +15,7 @@ import { apply } from '../server'
 let dir = ''
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-packroutes-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-packroutes-'))
   await fs.writeFile(path.join(dir, 'scale.mjs'), 'export const run = () => 1\n')
 })
 afterEach(async () => {
@@ -38,7 +38,7 @@ function fakeCtx(opt: {
     readCanvas: async () => ({ nodes: opt.storedNode ? [opt.storedNode] : [], edges: [] }),
     writeCanvas: async () => undefined,
     list: async () => ['default'],
-    dataRoot: () => '/tmp/mc-root',
+    dataRoot: () => '/tmp/plume-root',
   }
   const ctx = {
     routes: {
@@ -83,7 +83,7 @@ describe('打包路由：取节点', () => {
       callCtx({ canvasId: 'c-other', nodeId: 'grid1' }),
     )) as Response
     expect(res.status).toBe(200)
-    expect(res.headers.get('content-type')).toContain('mini-canvas-node')
+    expect(res.headers.get('content-type')).toContain('x-plume-node')
     expect(res.headers.get('x-pack-scripts')).toBe('scale')
   })
 
@@ -136,7 +136,7 @@ describe('打包路由：缺依赖声明的提示（用户那句"规则没提供
       callCtx({ canvasId: 'c-other', nodeId: 'grid1' }),
     )) as Response
     expect(res.status).toBe(200)
-    expect(res.headers.get('content-type')).toContain('mini-canvas-node')
+    expect(res.headers.get('content-type')).toContain('x-plume-node')
     expect(res.headers.get('x-pack-name')).toBeTruthy()
   })
 })

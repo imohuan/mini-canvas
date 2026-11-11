@@ -16,9 +16,9 @@
  * 这也意味着**裁剪中必须显示完整画面**（否则用户看不到自己框外的内容没法调框）。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RenderEvents, useCanvasRender, useSoleNodeSelected, useUiComponent } from '@mini-canvas/canvas-render'
+import { RenderEvents, useCanvasRender, useSoleNodeSelected, useUiComponent } from '@plume-canvas/canvas-render'
 // 加载态视觉已随节点壳搬进 plugin-theme-canvas（同一份实现直接复用，不再走 ui 目录）
-import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'
+import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
 import { framingStyle, isCroppedRect, type Rect } from './videoCrop'
 import { readClipRange } from './videoClip'
 import VideoPlayerBar from './VideoPlayerBar.vue'
@@ -192,7 +192,7 @@ const isFramed = computed(() => !cropping.value && Object.keys(videoStyle.value)
 const posterStyle = computed<Record<string, string>>(() => videoStyle.value)
 
 /** 卡片尺寸：视频地址一变就量一次，量到就按尺寸显示 */
-const { mountSize, onMeta: onVideoMeta, measure } = useVideoCardSize({
+const { mountSize, onMeta: onVideoMeta, measure, measureSize } = useVideoCardSize({
   nodeId: () => props.id,
   data: () => props.data,
   ops,
@@ -215,6 +215,27 @@ onMounted(() => {
  * 地址到手就量一次，不用等悬停播放或平移缩放（用户 2026-11-11 口径）。
  */
 watch(videoUrl, (url) => { if (url) void measure(url) }, { immediate: true })
+
+/**
+ * 缩略图加载完成：这是视频节点**平时真正显示的东西**（不悬停就不会挂 `<video>`）。
+ *
+ * 帧图是「整幅原片等比缩进档位框」的产物，**比例与原片一致**（档位框不匹配时按短边
+ * 补足，仍然等比）；只有裁过的节点才不能拿它算比例 —— 那种情况用下面的已存宽高。
+ * 这里只做一次核对，不额外请求、不解码视频。
+ */
+function onPosterLoad(e: Event): void {
+  const el = e.target as HTMLImageElement | null
+  if (!el?.naturalWidth || !el?.naturalHeight) return
+  // 先按节点里记着的真实分辨率纠正（拖入/换源时写入，最准）；
+  // 没记过才用这张图的比例（同比例，量一次没有额外成本）
+  const w = positiveNum(props.data?.videoWidth)
+  const h = positiveNum(props.data?.videoHeight)
+  if (w !== null && h !== null && !cropRect.value) {
+    measureSize(w, h)
+    return
+  }
+  measureSize(el.naturalWidth, el.naturalHeight)
+}
 
 /**
  * 点画布空白：只负责退出裁剪。
@@ -307,7 +328,7 @@ watch(videoUrl, (prev) => {
              没有 blob 重建空窗，不会白屏一闪。 -->
         <img v-if="posterDisplaySrc" v-show="keepPosterOverVideo" class="video-media is-poster"
           :class="{ 'is-cropping': cropping }" :style="posterStyle" :src="posterDisplaySrc"
-          alt="视频帧" draggable="false" />
+          alt="视频帧" draggable="false" @load="onPosterLoad" />
         <!--
           加载态（用户 2026-10-30 要求）：缩略图还没拿到时不能只留一块空底色 ——
           用户分不清"在加载"和"坏了"。统一用默认主题的加载件（流光 + 文字），

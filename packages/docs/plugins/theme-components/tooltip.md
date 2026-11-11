@@ -4,7 +4,7 @@
 `Tooltip / TooltipTrigger / TooltipContent` 分离件。
 
 ```ts
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Tooltip = useUiComponent('Tooltip')
 const TooltipContent = useUiComponent('TooltipContent')
@@ -52,7 +52,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 
 ```vue
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
 const Tooltip = useUiComponent('Tooltip')

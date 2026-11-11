@@ -14,8 +14,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { GoalRuntime, writeInitialGoal, findSessionTrace } from '@mini-canvas/plugin-agent/server/agent/goalRuntime.js'
-import { readGoalState } from '@mini-canvas/plugin-agent/server/agent/goalState.js'
+import { GoalRuntime, writeInitialGoal, findSessionTrace } from '@plume-canvas/plugin-agent/server/agent/goalRuntime.js'
+import { readGoalState } from '@plume-canvas/plugin-agent/server/agent/goalState.js'
 
 let root: string
 let scratch: string

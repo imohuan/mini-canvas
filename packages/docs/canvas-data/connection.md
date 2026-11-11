@@ -271,7 +271,7 @@ outputs: [{ port: 'source', contentType: 'video' }],
 
 ~~~
 plugin-conn-demo/
-├── package.json            # 清单：包名 / 入口 / miniCanvas 元信息
+├── package.json            # 清单：包名 / 入口 / plume 元信息
 └── src/
     ├── index.ts            # 插件入口：注册节点类型 + 两条命令（校验 / 批量连）
     ├── connRules.ts        # 从 doc 组装 ValidateContext 的小助手（校验的输入从哪来）
@@ -283,11 +283,11 @@ plugin-conn-demo/
 
 ~~~json
 {
-  "name": "@mini-canvas/plugin-conn-demo",
+  "name": "@plume-canvas/plugin-conn-demo",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：连接规则",
     "description": "声明式端口约束 + 自己跑一遍连接校验，把每种失败原因都演示出来",
     "pluginName": "conn-demo",
@@ -304,9 +304,9 @@ plugin-conn-demo/
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",
@@ -322,8 +322,8 @@ plugin-conn-demo/
 // 格式：TypeScript 模块（纯逻辑小助手）
 // 位置：把 doc 的当前状态组装成连接校验要的 ValidateContext
 
-import { typeConnectionDef, validateConnection } from '@mini-canvas/canvas-data'
-import type { ConnectionInput, DocService, ValidateContext, ValidationResult } from '@mini-canvas/canvas-data'
+import { typeConnectionDef, validateConnection } from '@plume-canvas/canvas-data'
+import type { ConnectionInput, DocService, ValidateContext, ValidationResult } from '@plume-canvas/canvas-data'
 
 /**
  * 从 doc 现场组装校验上下文。
@@ -380,8 +380,8 @@ export function findPair(doc: DocService, sourceType: string, targetType: string
 // 格式：TypeScript 模块（插件入口，导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
 
-import type { Context } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import type { Context } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { checkEdge, describe } from './connRules'
 
 export const name = 'conn-demo'
@@ -466,8 +466,8 @@ export function apply(ctx: Context) {
 // 位置：连接规则的逐条验证 —— 纯函数，不需要浏览器
 
 import { describe, expect, it } from 'vitest'
-import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { checkEdge } from '../connRules'
 import * as connDemo from '../index'
 

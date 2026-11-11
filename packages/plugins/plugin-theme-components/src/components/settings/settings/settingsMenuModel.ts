@@ -5,7 +5,7 @@
  * 注册场、插件装卸、滚动锁等有状态逻辑在 useSettingsNavigation.ts。
  */
 import type { Component } from 'vue'
-import type { SettingsMenuView } from '@mini-canvas/canvas-data'
+import type { SettingsMenuView } from '@plume-canvas/canvas-data'
 import { asSettingsIcon, metaIcon, metaPage, metaPageGroup, metaText } from '../navCategory'
 
 export const SEP = '/'

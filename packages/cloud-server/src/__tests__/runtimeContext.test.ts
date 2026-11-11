@@ -15,9 +15,9 @@ import {
   expandAgentContext,
   renderRuntimeContext,
   runtimeContextSection,
-} from '@mini-canvas/plugin-agent/server/agent/runtimeContext.js'
+} from '@plume-canvas/plugin-agent/server/agent/runtimeContext.js'
 
-const DATA = path.join('D:', 'data', '.mini-canvas')
+const DATA = path.join('D:', 'data', '.plume')
 const ctx = buildRuntimeContext({ baseUrl: 'http://127.0.0.1:8865/', dataRoot: DATA })
 
 describe('运行环境上下文', () => {
@@ -30,11 +30,11 @@ describe('运行环境上下文', () => {
     expect(ctx.assetsRoot).toBe(path.join(DATA, 'assets'))
     expect(ctx.taskScriptsDir).toBe(path.join(DATA, 'task-scripts'))
     expect(ctx.agentStateDir).toBe(
-      path.join(DATA, 'agent', 'mini-canvas', 'agents', 'canvas-agent', 'agent_state'),
+      path.join(DATA, 'agent', 'plume-canvas', 'agents', 'canvas-agent', 'agent_state'),
     )
     expect(ctx.skillsDir).toBe(path.join(ctx.agentStateDir, 'skills'))
     expect(ctx.scratchpadRoot).toBe(
-      path.join(DATA, 'agent', 'mini-canvas', 'agents', 'canvas-agent', 'scratchpad'),
+      path.join(DATA, 'agent', 'plume-canvas', 'agents', 'canvas-agent', 'scratchpad'),
     )
   })
 
@@ -59,7 +59,7 @@ describe('运行环境上下文', () => {
     if (process.platform !== 'win32') return
     const text = renderRuntimeContext(ctx)
     // 正斜杠：JSON 里不用转义，shell 里也认（SDK 的 modelVisiblePath 同口径）
-    expect(text).toContain('D:/data/.mini-canvas/canvases')
+    expect(text).toContain('D:/data/.plume/canvases')
     // 一个反斜杠都不许留（留了就要在 JSON 里转义，漏一次就是解析错）
     expect(text).not.toContain('\\')
   })
@@ -82,7 +82,7 @@ describe('运行环境上下文', () => {
     for (const t of ['{{CWD}}', '{{SESSION_ID}}', '{{SKILLS}}', '{{MEMORY}}', '{{AGENTS_MD}}']) {
       expect(harness).toContain(t)
       // 本服务那一组里不许出现同名
-      expect(list.filter((p) => p.source === 'mini-canvas' && p.token === t)).toHaveLength(0)
+      expect(list.filter((p) => p.source === 'plume-canvas' && p.token === t)).toHaveLength(0)
     }
     // 按会话 / 按模型才定的值不给假值（用户会以为自己看到的就是模型看到的）
     expect(list.find((p) => p.token === '{{CWD}}')?.value).toBe('')

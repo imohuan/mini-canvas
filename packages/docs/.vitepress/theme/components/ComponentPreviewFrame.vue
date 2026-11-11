@@ -25,23 +25,23 @@ const expanded = ref(false)
 </script>
 
 <template>
-  <div class="mc-preview">
-    <div class="mc-preview__bar">
-      <span class="mc-preview__title">{{ title ?? '整页预览' }}</span>
-      <span class="mc-code">{{ src }}</span>
-      <span class="mc-preview__spacer" />
-      <button class="mc-preview__btn" @click="nonce++">刷新</button>
-      <a class="mc-preview__btn" :href="src" target="_blank" rel="noopener">新窗口打开</a>
-      <button class="mc-preview__btn" @click="expanded = !expanded">
+  <div class="plume-preview">
+    <div class="plume-preview__bar">
+      <span class="plume-preview__title">{{ title ?? '整页预览' }}</span>
+      <span class="plume-code">{{ src }}</span>
+      <span class="plume-preview__spacer" />
+      <button class="plume-preview__btn" @click="nonce++">刷新</button>
+      <a class="plume-preview__btn" :href="src" target="_blank" rel="noopener">新窗口打开</a>
+      <button class="plume-preview__btn" @click="expanded = !expanded">
         {{ expanded ? '退出全屏' : '全屏' }}
       </button>
     </div>
 
     <ClientOnly>
-      <div :class="['mc-preview__stage', { 'mc-preview__stage--fullscreen': expanded }]">
+      <div :class="['plume-preview__stage', { 'plume-preview__stage--fullscreen': expanded }]">
         <iframe
           :key="nonce"
-          class="mc-preview__frame"
+          class="plume-preview__frame"
           :src="src"
           :style="{ height: (height ?? 480) + 'px' }"
           title="preview"

@@ -45,7 +45,7 @@ const epoch = ref(0)
  * 存 globalThis：顶栏与底栏可能来自不同模块实例。
  */
 function ctrlSuppressionKey(): string {
-  return '__miniCanvasCtrlSuppressed'
+  return '__plumeCtrlSuppressed'
 }
 
 export function suppressCtrlUntilRelease(): void {
@@ -112,13 +112,13 @@ function snapshot(): SelectionSnapshot {
 /** 把状态写给跨模块实例 + 广播一次 */
 function publish(): void {
   const s = snapshot()
-  ;(globalThis as { __miniCanvasSelection?: SelectionSnapshot }).__miniCanvasSelection = s
-  globalThis.dispatchEvent?.(new CustomEvent('mini-canvas:selection-mode'))
+  ;(globalThis as { __plumeSelection?: SelectionSnapshot }).__plumeSelection = s
+  globalThis.dispatchEvent?.(new CustomEvent('plume-canvas:selection-mode'))
 }
 
 /** 节点盖层用：优先读 globalThis 快照，拿不到才读本模块 ref */
 export function readSelectionSnapshot(): SelectionSnapshot {
-  const g = (globalThis as { __miniCanvasSelection?: SelectionSnapshot }).__miniCanvasSelection
+  const g = (globalThis as { __plumeSelection?: SelectionSnapshot }).__plumeSelection
   return g && typeof g === 'object' ? g : snapshot()
 }
 

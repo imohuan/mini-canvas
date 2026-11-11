@@ -4,10 +4,10 @@ import {
   capabilityField,
   resolveNodeSlotStyle,
   useToolbarOffsets,
-} from '@mini-canvas/canvas-render'
+} from '@plume-canvas/canvas-render'
 import { selectionRegionEntries } from '../selectionRegion'
 import type { SelectionFrameGeometry } from '../multiSelectEngine'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 
 /** 读取选择框的上/下控制栏条目与定位。 */
 export function useToolbarAnchor(input: {

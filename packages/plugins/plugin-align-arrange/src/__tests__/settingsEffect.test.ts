@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type CanvasNode } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService, type CanvasNode } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { alignArrangePlugin } from '../alignArrangePlugin'
 
 /** 最小 nodeLayout stub（本插件只用 nodeSize） */

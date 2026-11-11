@@ -25,8 +25,8 @@
  * 只依赖内核（canvas-base / canvas-data）+ 渲染层；**不 import 底栏、不 import Agent**。
  * 与 Agent 的协作走「服务 + 命令」这两条公开缝：Agent 调得到我们，我们不需要认识它。
  */
-import { Service, type Context, type ConfigSchema, bindTypeDefaultSize, type PluginModule } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { Service, type Context, type ConfigSchema, bindTypeDefaultSize, type PluginModule } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { extractHtml, normalizeInputs, normalizeUpstream, type UiInputDecl } from './uiData'
 import DebugBadge from './DebugBadge.vue'
 import { fetchBackendOrigin } from './uiOrigin'
@@ -80,7 +80,7 @@ export interface UiNodeService {
 }
 
 /** 类型增强缝（cordis 声明合并）：宿主/作者 ctx.uiNode 直访时类型为本服务 */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     uiNode: UiNodeService
   }

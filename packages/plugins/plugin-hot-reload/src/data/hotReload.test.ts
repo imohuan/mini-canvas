@@ -160,7 +160,7 @@ describe('createHotReload', () => {
   })
 })
 
-/** 假 KV 通道：模拟宿主挂的 __miniCanvasKvEvents，测试里手动触发一次通知 */
+/** 假 KV 通道：模拟宿主挂的 __plumeKvEvents，测试里手动触发一次通知 */
 function fakeKvChannel() {
   let handler: ((e: { type: string; key: string }) => void) | undefined
   const registry = {
@@ -179,7 +179,7 @@ describe('watch 上报地址（value 里的 front）', () => {
   it('收到通知 → 读 value 的 front → 按地址重装（不再查清单）', async () => {
     const w = globalThis as Record<string, unknown>
     const kv = fakeKvChannel()
-    w.__miniCanvasKvEvents = kv.registry
+    w.__plumeKvEvents = kv.registry
     const calls: Array<{ url: string; name?: string }> = []
     try {
       // 清单：故意给一个**不同**的地址。若代码还在查清单，这里就会被用到 → 测试失败。
@@ -224,14 +224,14 @@ describe('watch 上报地址（value 里的 front）', () => {
       expect(calls, '必须用 value 里的 front，而不是清单里的地址').toHaveLength(1)
       expect(calls[0]).toEqual({ name: 'demo', url: 'http://other:9000/plugins/demo/dist.js' })
     } finally {
-      delete w.__miniCanvasKvEvents
+      delete w.__plumeKvEvents
     }
   })
 
   it('老格式（value 只有 t，没有地址）→ 退回清单反查，行为不变', async () => {
     const w = globalThis as Record<string, unknown>
     const kv = fakeKvChannel()
-    w.__miniCanvasKvEvents = kv.registry
+    w.__plumeKvEvents = kv.registry
     const calls: string[] = []
     try {
       const fetchImpl = (async (input: string | URL) => {
@@ -266,14 +266,14 @@ describe('watch 上报地址（value 里的 front）', () => {
       }
       expect(calls).toEqual(['demo'])
     } finally {
-      delete w.__miniCanvasKvEvents
+      delete w.__plumeKvEvents
     }
   })
 
   it('value 读取失败（404）→ 退回清单；两者都没有 → 记一条 error，不重装', async () => {
     const w = globalThis as Record<string, unknown>
     const kv = fakeKvChannel()
-    w.__miniCanvasKvEvents = kv.registry
+    w.__plumeKvEvents = kv.registry
     const calls: string[] = []
     try {
       const fetchImpl = (async () => ({ ok: false, status: 404, headers: new Headers(), json: async () => ({}), text: async () => '' } as Response)) as unknown as typeof fetch
@@ -293,7 +293,7 @@ describe('watch 上报地址（value 里的 front）', () => {
       expect(calls).toEqual([])
       expect(hr.state.logs.some((l) => l.action === 'error')).toBe(true)
     } finally {
-      delete w.__miniCanvasKvEvents
+      delete w.__plumeKvEvents
     }
   })
 })
@@ -555,7 +555,7 @@ describe('调试监听状态（心跳 / 失联 / 未知）', () => {
   it('配置了调试服务地址 → 订阅与快照走同一个后台（不能一个跨源、一个同源）', () => {
     const w = globalThis as Record<string, unknown>
     const paths: string[] = []
-    w.__miniCanvasKvEvents = {
+    w.__plumeKvEvents = {
       subscribe(path: string) {
         paths.push(path)
         return () => {}
@@ -570,7 +570,7 @@ describe('调试监听状态（心跳 / 失联 / 未知）', () => {
       hr.watchDebugPresence(() => {})
       expect(paths).toEqual(['http://127.0.0.1:8865/api/kv/events'])
     } finally {
-      delete w.__miniCanvasKvEvents
+      delete w.__plumeKvEvents
     }
   })
 })
@@ -580,7 +580,7 @@ describe('通知稳定性：等长修改也要触发重装 + 失败要能看见'
   function boot(content: { text: string }) {
     const w = globalThis as Record<string, unknown>
     let handler: ((e: { type: string; key: string }) => void) | undefined
-    w.__miniCanvasKvEvents = {
+    w.__plumeKvEvents = {
       subscribe(_p: string, onEvent: (e: { type: string; key: string }) => void) {
         handler = onEvent
         return () => { handler = undefined }
@@ -613,7 +613,7 @@ describe('通知稳定性：等长修改也要触发重装 + 失败要能看见'
     const fire = () => handler?.({ type: 'config', key: 'plugin-watch:demo' })
     const done = async () => {
       globalThis.fetch = originalFetch
-      delete w.__miniCanvasKvEvents
+      delete w.__plumeKvEvents
     }
     hr.watchPluginChanges()
     return { hr, reloads, fire, done }
@@ -655,7 +655,7 @@ describe('通知稳定性：等长修改也要触发重装 + 失败要能看见'
   it('重装失败 → 走 onReloadFailed（不再只写在日志里）', async () => {
     const w = globalThis as Record<string, unknown>
     let handler: ((e: { type: string; key: string }) => void) | undefined
-    w.__miniCanvasKvEvents = {
+    w.__plumeKvEvents = {
       subscribe(_p: string, onEvent: (e: { type: string; key: string }) => void) {
         handler = onEvent
         return () => { handler = undefined }
@@ -689,7 +689,7 @@ describe('通知稳定性：等长修改也要触发重装 + 失败要能看见'
       expect(failures[0]!.error).toContain('加载器炸了')
     } finally {
       globalThis.fetch = originalFetch
-      delete w.__miniCanvasKvEvents
+      delete w.__plumeKvEvents
     }
   })
 })

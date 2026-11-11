@@ -27,7 +27,7 @@ export interface RenderShell {
 }
 
 /** 与历史 APP_SHELL_KEY 同一个注入名：外部插件包自带一份实现也能对上。 */
-export const RENDER_SHELL_KEY: InjectionKey<RenderShell> = Symbol.for('mini-canvas-app-shell')
+export const RENDER_SHELL_KEY: InjectionKey<RenderShell> = Symbol.for('plume-canvas-app-shell')
 
 /** bootstrap 的返回值：Provider 只负责在卸载时调用 dispose。 */
 export interface RenderBootstrapResult {

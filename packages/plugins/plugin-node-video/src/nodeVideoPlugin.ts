@@ -21,8 +21,8 @@
 import {
   Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize,
   DEFAULT_VIDEO_CARD_LIMITS, VIDEO_CARD_LIMIT_KEYS, isMediaCardLimitKey,
-} from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { videoThumbTierFields, videoThumbTierKeys } from './videoThumbTier'
 import { defaultTransform, videoTitleExtra, type VideoTransform } from './videoOps'
 import { followedVideoCardSizePatch, readVideoFitLimits, videoCardSizePatch } from './videoFit'
@@ -33,7 +33,7 @@ import VideoFullscreenOverlay from './VideoFullscreenOverlay.vue'
 import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
-import { publishToolActions } from '@mini-canvas/bar-contract'
+import { publishToolActions } from '@plume-canvas/bar-contract'
 import { beginOverlay, endOverlay, isClipPending, onOverlayModeChange, setClipPending, setCropPending } from './videoSession'
 import { clearClipPrefs } from './videoClipStore'
 import {
@@ -50,7 +50,7 @@ import type { Rect } from './videoCrop'
 import { cropNodeWithBackend } from './videoCropFlow'
 import { clipNodeWithBackend } from './videoClipFlow'
 import { videoToAudio } from './videoAudioFlow'
-import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
+import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@plume-canvas/canvas-render'
 import { captureVideoThumb } from './videoThumbService'
 import { unifiedThumbOf, type ThumbIdentity, type ThumbResourcePort } from './videoThumbUnified'
 import { resolveVideoSrc } from './videoRefs'
@@ -102,7 +102,7 @@ export interface VideoNodeService {
 }
 
 /** 类型增强缝（cordis 声明合并）：宿主/作者 ctx.video 直访时类型为本服务 */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     video: VideoNodeService
   }

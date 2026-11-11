@@ -5,7 +5,7 @@
  * 菜单层用两个 section 收同一 group，再按字段前缀切片，用户就不必在
  * 一张卡里先翻过图片的 7 项再找视频的 7 项。持久化 key 不变。
  */
-import type { SettingEntry } from '@mini-canvas/canvas-render'
+import type { SettingEntry } from '@plume-canvas/canvas-render'
 
 export const TIER_FIELD_KEYS = [
   'Tier2Zoom',

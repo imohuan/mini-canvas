@@ -1,4 +1,4 @@
-# 插件开发指南 —— mini-canvas v2（dsh 范式）
+# 插件开发指南 —— plume-canvas v2（dsh 范式）
 
 > 本指南讲"新增一个节点插件"怎么走。它证明了一条已跑通的架构链路：
 > **插件 = 一个独立 workspace 包（放在 `packages/plugins/`），UI(.vue 区域组件) 和逻辑(apply) 放一起，
@@ -9,8 +9,8 @@
 
 ```
 packages/plugins/plugin-node-<你的类型>/
-  package.json            # name:@mini-canvas/plugin-node-xxx
-                          #   dependencies: @mini-canvas/canvas-base: workspace:*（= kernel + canvas-data 的薄入口）
+  package.json            # name:@plume-canvas/plugin-node-xxx
+                          #   dependencies: @plume-canvas/canvas-base: workspace:*（= kernel + canvas-data 的薄入口）
                           #   peerDependencies: vue ^3.5
   tsconfig.json           # moduleResolution: Bundler + DOM lib + src 下放 env.d.ts(*.vue shim)
   src/
@@ -24,8 +24,8 @@ packages/plugins/plugin-node-<你的类型>/
 
 ```ts
 // nodeTextPlugin.ts —— 样板（plugin-node-text 实况）
-import type { PluginModule } from '@mini-canvas/kernel'
-import { registerNodeType } from '@mini-canvas/canvas-data'
+import type { PluginModule } from '@plume-canvas/kernel'
+import { registerNodeType } from '@plume-canvas/canvas-data'
 import TextContent from './TextContent.vue'   // UI 在同包，一次 registerNodeType 一起注册
 
 export const nodeTextPlugin: PluginModule = {
@@ -61,12 +61,12 @@ export const nodeTextPlugin: PluginModule = {
 ## 三、宿主怎么加载（manifest 即 plugins 数组）
 
 宿主(任何消费方)把想启用的插件列进 `<CanvasHost :plugins="…">` 的数组（或
-`createMiniCanvasHost({ coldPlugins })` / 给一份 `manifest`，见 `packages/ui/src/assembly.ts`）：
+`createPlumeHost({ coldPlugins })` / 给一份 `manifest`，见 `packages/ui/src/assembly.ts`）：
 ```ts
-import { CanvasHost } from '@mini-canvas/canvas-render'
-import { LocalStorageAdapter } from '@mini-canvas/canvas-data'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
+import { CanvasHost } from '@plume-canvas/canvas-render'
+import { LocalStorageAdapter } from '@plume-canvas/canvas-data'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
+import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
 import { APP_PLUGINS } from './assembly'
 ```
 ```html
@@ -133,14 +133,14 @@ export function apply(ctx: Context) {
 
 ## 六a、底栏动作（plugin-bottom-bar）：可替换底部状态栏
 
-text/image/video 节点的底部控制栏统一由 `@mini-canvas/plugin-bottom-bar` 渲染
+text/image/video 节点的底部控制栏统一由 `@plume-canvas/plugin-bottom-bar` 渲染
 （一个 `BottomBarHost` 挂在 `out:bottom`，读 `themeRegistry.winner('bottomBar')`）。
 各节点插件不再自己挂 `out:bottom` 基座段。
 
 **怎么往底栏加一个动作**（在你的插件 `apply(ctx)` 里）：
 
 ```ts
-import { registerBarAction, registerBarApplier, publishToolActions } from '@mini-canvas/plugin-bottom-bar'
+import { registerBarAction, registerBarApplier, publishToolActions } from '@plume-canvas/plugin-bottom-bar'
 
 // 1) 注册一个动作（条目落在**你的插件**作用域：卸载自动摘除、同 id 替换）
 registerBarAction(ctx, {

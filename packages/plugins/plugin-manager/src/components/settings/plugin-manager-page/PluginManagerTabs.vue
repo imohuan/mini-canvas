@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** 插件页页签：市场、已装、本地清单、自带，以及卡片筛选和网格。 */
 import { Loader2, PackageSearch, Search } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import PluginCard from '../PluginCard.vue'
 import type { PluginManagerCardView } from '../pluginCardTypes'
 import type { PluginManagerService } from '../../../pluginManagerService'
@@ -76,7 +76,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
         </Button>
       </form>
 
-      <p class="pmp-hint">只列出声明了 miniCanvas.installable、并在允许前缀里的 NPM 包。</p>
+      <p class="pmp-hint">只列出声明了 plume.installable、并在允许前缀里的 NPM 包。</p>
 
       <div v-if="npmSearching && !marketCards.length" class="pmp-loading">
         <Loader2 class="spin" :size="16" aria-hidden="true" />

@@ -10,7 +10,7 @@
  * 依赖经 `inject` 声明、从 ctx 取（`server.ts` 里 `ctx.inject('名', 实例)` 上架）。
  * 这样「这组接口依赖什么」写在插件上，一眼可见，且装载顺序由依赖决定。
  */
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 import { eventsRoutes } from '../../routes/events.js'
 import { canvasesRoutes } from '../../routes/canvases.js'
 import { actionsRoutes } from '../../routes/actions.js'
@@ -265,10 +265,10 @@ export const serverPluginsPlugin: PluginModule = {
         // 热装/热卸：装完/卸完当场生效，用户不必重启服务（见 serverFramework/hotLoad.ts）
         hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.serverPluginsDir), id),
         hotUninstall: async (id) => hotUninstallServerPlugin(ctx, id),
-        // 调试用「按路径安装」：只有显式设置 MINI_CANVAS_DEBUG_PLUGIN_INSTALL=1 才挂这条路由。
+        // 调试用「按路径安装」：只有显式设置 PLUME_DEBUG_PLUGIN_INSTALL=1 才挂这条路由。
         // 为什么不默认开：它按**本机磁盘路径**读文件，等于给一条"读文件 + 执行"的通道，
         // 生产环境不该存在。允许的根目录是插件目录（真正的插件产物都在各自 dist/ 下）。
-        ...(process.env.MINI_CANVAS_DEBUG_PLUGIN_INSTALL === '1'
+        ...(process.env.PLUME_DEBUG_PLUGIN_INSTALL === '1'
           ? {
               debugInstall: {
                 allowRoots: [
@@ -296,7 +296,7 @@ export const pluginCatalogPlugin: PluginModule = {
 /**
  * plugin-watch —— 插件热重载：盯插件产物目录，变了经 SSE（/api/plugin-events）通知前端重装。
  *
- * 前端（window.MiniCanvasPlugin）连这条 SSE，收到 { id, name } 就调 reload(id) 拉最新产物重装。
+ * 前端（window.PlumePlugin）连这条 SSE，收到 { id, name } 就调 reload(id) 拉最新产物重装。
  * 目录经 S.pluginsDir 取（与 plugin-routes 同一个服务）。监视器按需起停（见 pluginWatch.ts）。
  */
 export const pluginWatchPlugin: PluginModule = {
@@ -319,10 +319,10 @@ export const npmPluginsPlugin: PluginModule = {
       createNpmPluginsRoutes({
         pluginsDir: ctx.tryGet<string>(S.pluginsDir),
         serverPluginsDir: need<string>(ctx, S.serverPluginsDir),
-        // scope 白名单：环境变量 MINI_CANVAS_NPM_SCOPES 可覆盖（逗号分隔，如 "@imohuan/,@acme/"）
-        ...(process.env.MINI_CANVAS_NPM_SCOPES
+        // scope 白名单：环境变量 PLUME_NPM_SCOPES 可覆盖（逗号分隔，如 "@imohuan/,@acme/"）
+        ...(process.env.PLUME_NPM_SCOPES
           ? {
-              scopeAllowlist: process.env.MINI_CANVAS_NPM_SCOPES.split(',')
+              scopeAllowlist: process.env.PLUME_NPM_SCOPES.split(',')
                 .map((s) => s.trim())
                 .filter(Boolean)
                 .map((s) => (s.endsWith('/') ? s : s + '/')),

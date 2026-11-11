@@ -1,9 +1,9 @@
 /**
- * @mini-canvas/kernel —— 插件框架核心类型（纯插件，无任何画布概念）。
+ * @plume-canvas/kernel —— 插件框架核心类型（纯插件，无任何画布概念）。
  *
  * 这里只有"插件"这件事：插件模块形态、生命周期、事件表、作用域类型，
  * 以及内核自带的 `tools` 能力（"注册一个外部能力、别人按名调用"，通用、与画布无关）。
- * 画布相关类型（节点/连线/命令）住在 @mini-canvas/canvas-data。
+ * 画布相关类型（节点/连线/命令）住在 @plume-canvas/canvas-data。
  */
 import type { ConfigSchema } from './configSchema'
 import type {
@@ -74,7 +74,7 @@ export type EventName = keyof EventMap & string
 /**
  * 全局"事件表"（cordis ch4 声明合并缝）：作者 declare module 扩展：
  * ```ts
- * declare module '@mini-canvas/kernel' {
+ * declare module '@plume-canvas/kernel' {
  *   interface Events { 'stats/report'(name: string, count: number): void }
  * }
  * ```
@@ -124,7 +124,7 @@ export interface Services {}
  * 分两类：
  * - **内核自带**：`tools`（注册外部能力、按名调用；通用、与画布无关，恒在）。
  * - **能力层提供**：如画布的 `nodes/theme/commands/slots/settings`——框架不认识它们，
- *   形状由能力层经声明合并补进本接口（见 @mini-canvas/canvas-data 的 canvas/capabilityTypes.ts）。
+ *   形状由能力层经声明合并补进本接口（见 @plume-canvas/canvas-data 的 canvas/capabilityTypes.ts）。
  */
 export interface PluginCapabilities {
   /**

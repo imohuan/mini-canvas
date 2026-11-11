@@ -18,7 +18,7 @@ function read(rel: string): string {
 describe('CanvasProvider 启动责任', () => {
   it('Provider 是唯一启动点，并在卸载后 stop', () => {
     const src = read('../CanvasProvider.vue')
-    expect(src).toContain('createMiniCanvasHost')
+    expect(src).toContain('createPlumeHost')
     expect(src).toContain('exposeToWindow(props.windowKey)')
     expect(src).toContain('onUnmounted')
     expect(src).toContain('host.stop()')

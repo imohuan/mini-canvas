@@ -9,8 +9,8 @@
  * 边界：本服务不认识具体插件，只认清单行的「地址 + 全局名」。装什么、从哪装由清单决定。
  */
 import { reactive } from 'vue'
-import { withAdminToken, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import type { FeedbackService } from '@mini-canvas/canvas-render'
+import { withAdminToken, type Context, type PluginModule } from '@plume-canvas/canvas-base'
+import type { FeedbackService } from '@plume-canvas/canvas-render'
 import {
   normalizeCatalog,
   resolveDesiredIds,
@@ -166,7 +166,7 @@ export interface NpmInstalledEntry {
 }
 
 /**
- * 默认清单地址：指向 **cloud-server**（mini-canvas-cloud serve，默认 8865）。
+ * 默认清单地址：指向 **cloud-server**（plume-canvas serve，默认 8865）。
  *
  * 用**同源相对地址**而不是写死端口：云服务既托管画布界面、又发插件清单，两者本来就同源 ——
  * 写死端口反而会在「服务换端口」「ui 单独 dev 而服务在别处」时失效。需要在别处取清单时，

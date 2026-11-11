@@ -5,17 +5,17 @@
  * 于是缩放/平移天然对齐，端点和正式连线走同一套渲染。
  * 靠内核通用契约标 `transient` 把它与正式图隔离：
  *   - 渲染层：draggable/selectable/deletable 全关（canvasHostCore.nodesFromStore/edgesFromStore）；
- *   - 历史/落盘：createMiniCanvasHost 的 snapshot/commit 过滤中间态（不入撤销栈、刷新不复活）。
+ *   - 历史/落盘：createPlumeHost 的 snapshot/commit 过滤中间态（不入撤销栈、刷新不复活）。
  *
  * 核心不变量（用户明确要求）：**鼠标松手点 = 新节点连接端口的位置**。
  *   - 从输出口拖出（新节点是 target）→ 新节点**输入口在左缘**，卡片左缘中点落在松手点；
  *   - 从输入口反向拖出（新节点是 source）→ 新节点输出口在右缘，卡片右缘中点落在松手点。
  * 临时卡片与创建出的真节点用**同一个** placeByPortAnchor，所以点菜单项时端口不跳位。
  */
-import { isTransient } from '@mini-canvas/canvas-data'
-import { validateConnection, type ExistingEdge, type NodeConnectionDef } from '@mini-canvas/canvas-data'
+import { isTransient } from '@plume-canvas/canvas-data'
+import { validateConnection, type ExistingEdge, type NodeConnectionDef } from '@plume-canvas/canvas-data'
 import type { ContextMenuItem, MenuNodeTypeLike } from './menuBuilder'
-import { registerEventName } from '@mini-canvas/canvas-base'
+import { registerEventName } from '@plume-canvas/canvas-base'
 
 /** 临时菜单节点的节点类型名（本插件经 ctx.nodes.register 注册，带菜单卡片 content） */
 export const CONNECTION_MENU_TYPE = 'connection-menu'

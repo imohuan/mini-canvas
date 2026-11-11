@@ -9,7 +9,7 @@
  * - media.addNode/applyToNode 按 kind 路由到创建器注册场，未注册 = undefined/false，不静默建节点。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import {
   createStandardCapabilities,
   MEDIA_CREATOR_FIELD,

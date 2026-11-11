@@ -3,7 +3,7 @@
  *
  * 归属：`src/canvas`（画布语义层）。这四条是**每张画布都该有的看家操作**，
  * 与同层的 nodeFactory（建节点）/ menuService（菜单聚合）同类：纯逻辑、零 Vue、可无头单测。
- * 原先住在 `@mini-canvas/plugin-canvas-commands` 独立包里 —— 宿主忘装就没 Delete / Ctrl+Z，
+ * 原先住在 `@plume-canvas/plugin-canvas-commands` 独立包里 —— 宿主忘装就没 Delete / Ctrl+Z，
  * 且它的依赖（graph/selection/nodeFactory）本就全在本包，故收进数据层由宿主 boot 时注册。
  *
  * v2 写模型：所有图变更走 `graph`（GraphDocument 唯一写入口）。
@@ -15,7 +15,7 @@
  * 命令 id / title / keys 与插件时期**逐字保持一致**，故调用方（UI 按钮、右键菜单、
  * 快捷键帮助面板）零改动。
  */
-import type { CommandDef, CommandService, Registry } from '@mini-canvas/kernel'
+import type { CommandDef, CommandService, Registry } from '@plume-canvas/kernel'
 import type { GraphDocumentService } from '../graphDocument'
 import type { SelectionService } from '../selection'
 import type { NodeFactoryService } from './nodeFactory'

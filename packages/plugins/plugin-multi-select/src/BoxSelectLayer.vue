@@ -17,9 +17,9 @@
  * 纯碰撞逻辑在 multiSelectEngine（hitTestRects），本组件只做 DOM 手势与换算。
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, beginSelecting, endSelecting } from '@mini-canvas/canvas-render'
-import type { SelectionService } from '@mini-canvas/canvas-data'
-import type { NodeLayoutService } from '@mini-canvas/canvas-render'
+import { useCanvasRender, beginSelecting, endSelecting } from '@plume-canvas/canvas-render'
+import type { SelectionService } from '@plume-canvas/canvas-data'
+import type { NodeLayoutService } from '@plume-canvas/canvas-render'
 import { hitTestRects } from './multiSelectEngine'
 import { BoxSelectClickGuard } from './boxSelectGuard'
 import {
@@ -28,7 +28,7 @@ import {
   resolveMultiSelectFrameConfig,
   applyMultiSelectFrameChange,
 } from './multiSelectConfig'
-import { currentThemeMode, watchThemeMode } from '@mini-canvas/canvas-render'
+import { currentThemeMode, watchThemeMode } from '@plume-canvas/canvas-render'
 
 const { flow, ctx, interaction } = useCanvasRender()
 const pane = flow.pane

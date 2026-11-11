@@ -23,9 +23,9 @@
  *   清单里的产物地址若落在同一个 origin 上，就是"这个源里的插件"，全重装一遍。
  *   于是"一个 vite 源支持多个插件"是自然的（一次连接、全源重载）。
  *
- * ## 与 window.MiniCanvasPlugin.reload 的关系
+ * ## 与 window.PlumePlugin.reload 的关系
  *
- * 本模块**不重复实现重装**，只调用已有的 `window.MiniCanvasPlugin.reload`。
+ * 本模块**不重复实现重装**，只调用已有的 `window.PlumePlugin.reload`。
  * 这样"怎么卸旧装新 / 怎么查清单 / 怎么纠错"只有一份实现。
  */
 
@@ -126,19 +126,19 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     return base ? base + path : path
   }
 
-  /** 默认重装：转发 window.MiniCanvasPlugin.reload */
+  /** 默认重装：转发 window.PlumePlugin.reload */
   async function defaultReload(target: string): Promise<void> {
-    const w = globalThis as unknown as { MiniCanvasPlugin?: { reload(t: string): Promise<unknown> } }
-    if (!w.MiniCanvasPlugin?.reload) throw new Error('window.MiniCanvasPlugin 不在（宿主未挂热重载器）')
-    await w.MiniCanvasPlugin.reload(target)
+    const w = globalThis as unknown as { PlumePlugin?: { reload(t: string): Promise<unknown> } }
+    if (!w.PlumePlugin?.reload) throw new Error('window.PlumePlugin 不在（宿主未挂热重载器）')
+    await w.PlumePlugin.reload(target)
   }
 
   /** 内核里当前装了哪些插件（唯一名字）。缺省读宿主门面。 */
   function installedList(): string[] {
     if (deps.listInstalled) return deps.listInstalled()
-    const w = globalThis as unknown as { MiniCanvasUI?: { listPlugins?(): string[] } }
+    const w = globalThis as unknown as { PlumeUI?: { listPlugins?(): string[] } }
     try {
-      return w.MiniCanvasUI?.listPlugins?.() ?? []
+      return w.PlumeUI?.listPlugins?.() ?? []
     } catch {
       return []
     }
@@ -147,10 +147,10 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
   /** 内核运行态（active / pending / failed） */
   function runtimeStateOf(name: string): string | undefined {
     const w = globalThis as unknown as {
-      MiniCanvasUI?: { inspectPlugins?(): Array<{ name: string; state?: string }> }
+      PlumeUI?: { inspectPlugins?(): Array<{ name: string; state?: string }> }
     }
     try {
-      return w.MiniCanvasUI?.inspectPlugins?.().find((p) => p.name === name)?.state
+      return w.PlumeUI?.inspectPlugins?.().find((p) => p.name === name)?.state
     } catch {
       return undefined
     }
@@ -159,9 +159,9 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
   /** 从内核卸一个插件；缺省走宿主门面（核心插件会抛错，原样透出） */
   function uninstallOne(name: string): boolean {
     if (deps.uninstall) return deps.uninstall(name)
-    const w = globalThis as unknown as { MiniCanvasUI?: { uninstallPlugin?(n: string): boolean } }
-    if (!w.MiniCanvasUI?.uninstallPlugin) throw new Error('window.MiniCanvasUI 不在（宿主未就绪）')
-    return w.MiniCanvasUI.uninstallPlugin(name)
+    const w = globalThis as unknown as { PlumeUI?: { uninstallPlugin?(n: string): boolean } }
+    if (!w.PlumeUI?.uninstallPlugin) throw new Error('window.PlumeUI 不在（宿主未就绪）')
+    return w.PlumeUI.uninstallPlugin(name)
   }
 
   /**
@@ -173,13 +173,13 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
    */
   async function defaultReloadByUrl(name: string, url: string): Promise<void> {
     const w = globalThis as unknown as {
-      MiniCanvasPlugin?: {
+      PlumePlugin?: {
         reload(t: string, opts?: { url?: string; name?: string }): Promise<unknown>
       }
     }
-    if (!w.MiniCanvasPlugin?.reload) throw new Error('window.MiniCanvasPlugin 不在（宿主未挂热重载器）')
+    if (!w.PlumePlugin?.reload) throw new Error('window.PlumePlugin 不在（宿主未挂热重载器）')
     // 名字 + 地址一起给：名字用来卸旧（内核按名字索引），地址用来拿新产物。
-    await w.MiniCanvasPlugin.reload(url, { url, name })
+    await w.PlumePlugin.reload(url, { url, name })
   }
   function reloadOne(target: string): Promise<void> {
     return (deps.reload ?? defaultReload)(target)
@@ -555,9 +555,9 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     if (kvWatchStarted && kvWatchStop) return kvWatchStop
     kvWatchStarted = true
     const w = globalThis as unknown as {
-      __miniCanvasKvEvents?: { subscribe(path: string, onEvent: (e: { type: string; key: string }) => void): () => void }
+      __plumeKvEvents?: { subscribe(path: string, onEvent: (e: { type: string; key: string }) => void): () => void }
     }
-    const shared = w.__miniCanvasKvEvents
+    const shared = w.__plumeKvEvents
     const KEY_PREFIX = 'plugin-watch:'
     const onEvent = (e: { type: string; key: string }): void => {
       if (e.type !== 'config') return
@@ -662,14 +662,14 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
 
   function watchDebugPresence(onChange: () => void): () => void {
     const w = globalThis as unknown as {
-      __miniCanvasKvEvents?: { subscribe(path: string, onEvent: (e: { type: string; key: string }) => void): () => void }
+      __plumeKvEvents?: { subscribe(path: string, onEvent: (e: { type: string; key: string }) => void): () => void }
     }
     const KEY = PRESENCE_KEY
     const onEvent = (e: { type: string; key: string }): void => {
       if (e.type !== 'config' || e.key !== KEY) return
       onChange()
     }
-    const shared = w.__miniCanvasKvEvents
+    const shared = w.__plumeKvEvents
     // 订阅地址必须跟「读快照」用同一个后台（配置了调试服务地址就跨源，不能还连页面同源）
     const eventsPath = backend('/api/kv/events')
     if (shared && typeof shared.subscribe === 'function') {

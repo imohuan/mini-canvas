@@ -5,7 +5,7 @@
  * 这两条一旦被改回"必填固定色"，界面上就再也清不掉、也不会跟随主题，所以用测试钉住。
  */
 import { describe, it, expect } from 'vitest'
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import { Config, edgeCuttingConfigFrom } from '../edgeCuttingConfig'
 
 /** 最小 Context 桩：只有 tryGet('settings')，返回 undefined = settings 未就绪 */

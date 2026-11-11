@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Component, ComponentPublicInstance } from 'vue'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 import ShadcnSettingsSection from '../ShadcnSettingsSection.vue'
 import type { ContentBlock, NavEntry, Section } from './settingsMenuModel'
 import TierTierPreview from '../TierTierPreview.vue'

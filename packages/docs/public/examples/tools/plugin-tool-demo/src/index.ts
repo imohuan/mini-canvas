@@ -5,7 +5,7 @@
 // 插件形态用的是仓库统一的"裸导出三样"：name + inject + apply。
 // 装载方式（宿主侧，一行）：plugins: [toolDemoPlugin]
 
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import { countTool, reverseTool } from './demoTools'
 
 export const name = 'tool-demo'

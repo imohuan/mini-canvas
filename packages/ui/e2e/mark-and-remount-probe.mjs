@@ -28,7 +28,7 @@ const ok = (name, cond, detail = '') => {
 await page.goto(CANVAS_URL, { waitUntil: 'load' })
 await page.waitForTimeout(5000)
 await page.evaluate(() => {
-  const doc = window.MiniCanvasUI?.getHost?.()?.ctx?.get?.('doc')
+  const doc = window.PlumeUI?.getHost?.()?.ctx?.get?.('doc')
   if (doc && !doc.getNodes().some((n) => n.type === 'image')) {
     doc.addNodes([{ id: 'probe-image-1', type: 'image', position: { x: 100, y: 120 }, data: {} }])
   }

@@ -2,9 +2,9 @@
  * canvas-export smoke：装配导出命令插件不抛、命令已注册（P1-15 补每包 smoke）。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { Selection } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { Selection } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { canvasExportPlugin } from '../canvasExportPlugin'
 
 function boot() {

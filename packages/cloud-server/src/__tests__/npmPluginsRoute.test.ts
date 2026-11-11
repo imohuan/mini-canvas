@@ -68,7 +68,7 @@ async function makePkg(
   // 结构上"是个插件"：有 pluginName + web 入口（现在的判定看结构，不看 installable）
   mini.web = { entry: 'dist/plugin-demo.js' }
   if (opts.withServer) mini.server = { entry: 'dist/server.js' }
-  const pkgJson = { name: '@mini-canvas/plugin-demo', version: opts.version, miniCanvas: mini }
+  const pkgJson = { name: '@plume-canvas/plugin-demo', version: opts.version, plume: mini }
   await fs.writeFile(path.join(workDir, 'payload', 'package.json'), JSON.stringify(pkgJson), 'utf8')
   const stage = path.join(workDir, 'stage')
   await fs.rm(stage, { recursive: true, force: true })
@@ -90,8 +90,8 @@ async function boot(registryUrl: string, audit?: (e: AuditAppendInput) => Promis
     pluginsDir,
     serverPluginsDir,
     recordFile: path.join(dir, '.npm-installed.json'),
-    // 测试用 @mini-canvas/ 前缀（默认白名单是 @imohuan/ + mini-canvas-）
-    scopeAllowlist: ['@mini-canvas/'],
+    // 测试用 @plume-canvas/ 前缀（默认白名单是 @imohuan/ + plume-canvas-）
+    scopeAllowlist: ['@plume-canvas/'],
     ...(audit ? { audit } : {}),
   })
   const host = createServerFramework({ root: dir })
@@ -113,7 +113,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
   it('审计成对：install 缺 confirm → attempt + rejected', async () => {
     const { entries, audit } = collector()
     const host = await boot('http://127.0.0.1:1', audit)
-    const res = await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo' })
+    const res = await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo' })
     expect(res.status).toBe(400)
     expect(entries.map((e) => e.result)).toEqual(['attempt', 'rejected'])
     expect(entries[1].reason).toBe('missing-confirm')
@@ -122,18 +122,18 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
 
   it('审计成对：update 未安装 → 404 + rejected；已是最新 → ok', async () => {
     const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
-    const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
+    const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
     registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
     }
 
     const { entries, audit } = collector()
     const host = await boot(registry.url, audit)
     const missing = await call(host, '/api/npm-plugins/update', 'POST', {
-      package: '@mini-canvas/plugin-demo',
+      package: '@plume-canvas/plugin-demo',
       confirm: true,
     })
     expect(missing.status).toBe(404)
@@ -141,8 +141,8 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     expect(entries[1].reason).toBe('not-installed')
 
     entries.length = 0
-    await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo', confirm: true })
-    const same = await call(host, '/api/npm-plugins/update', 'POST', { package: '@mini-canvas/plugin-demo', confirm: true })
+    await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true })
+    const same = await call(host, '/api/npm-plugins/update', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true })
     expect(same.status).toBe(200)
     // 第二条是 install 的 ok，之后是 update 的 attempt + ok
     expect(entries.map((e) => e.action + ':' + e.result)).toEqual([
@@ -159,7 +159,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     // 没有 registry 在跑：packument 请求会失败 → doInstall 返回 502
     const host = await boot('http://127.0.0.1:1', audit)
     const res = await call(host, '/api/npm-plugins/install', 'POST', {
-      package: '@mini-canvas/plugin-demo',
+      package: '@plume-canvas/plugin-demo',
       confirm: true,
     })
     expect(res.status).toBe(502)
@@ -170,12 +170,12 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
 
   it('browse：按前缀列出全部可安装插件（不传搜索词也能列）', async () => {
     const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
-    const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
+    const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
     registry = await startFakeRegistry(packument, {})
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
     }
     registry.close()
     registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
@@ -190,12 +190,12 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
 
   it('搜索：无关词（乱输入）不返回任何结果；包名含词才返回', async () => {
     const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
-    const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
+    const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
     registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
     }
     const host = await boot(registry.url)
     const search = async (q: string) =>
@@ -205,7 +205,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     // 无关词 → 空（用户实测的 bug：搜乱七八糟的东西下面照样有数据）
     expect((await search('乱七八糟zzz')).results).toEqual([])
     // 包名含词 → 命中
-    expect((await search('plugin-demo')).results.map((r) => r.pkg)).toEqual(['@mini-canvas/plugin-demo'])
+    expect((await search('plugin-demo')).results.map((r) => r.pkg)).toEqual(['@plume-canvas/plugin-demo'])
     host.stop()
   })
   let registry: FakeRegistry | undefined
@@ -215,7 +215,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
     const tgzPlain = await makePkg(dir + '-p', { installable: false, withServer: false, version: '1.0.0' })
     const packument = {
-      name: '@mini-canvas/plugin-demo',
+      name: '@plume-canvas/plugin-demo',
       'dist-tags': { latest: '1.0.0' },
       versions: {},
     }
@@ -225,45 +225,45 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     ver['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/plain.tgz' },
-      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
     }
-    ver['2.0.0'] = { version: '2.0.0', dist: { tarball: registry.url + '/plain2.tgz' }, miniCanvas: {} }
+    ver['2.0.0'] = { version: '2.0.0', dist: { tarball: registry.url + '/plain2.tgz' }, plume: {} }
 
     const host = await boot(registry.url)
-    const noConfirm = await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo' })
+    const noConfirm = await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo' })
     expect(noConfirm.status).toBe(400)
     const badScope = await call(host, '/api/npm-plugins/install', 'POST', { package: '@evil/x', confirm: true })
     expect(badScope.status).toBe(400)
-    const notPlugin = await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo', version: '2.0.0', confirm: true })
+    const notPlugin = await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', version: '2.0.0', confirm: true })
     expect(notPlugin.status).toBe(400)
     host.stop()
   })
 
   it('install → installed → update(已是最新) → uninstall 全流程', async () => {
     const tgz = await makePkg(dir, { installable: true, withServer: true, version: '1.0.0' })
-    const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
+    const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
     // 先起 registry（拿到端口），再用它填 tarball URL —— 顺序反了会指向未监听的端口
     registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
     }
 
     const host = await boot(registry.url)
-    const inst = await j(await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo', confirm: true }))
+    const inst = await j(await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true }))
     expect(inst.ok).toBe(true)
     expect(inst.hasServer).toBe(true)
-    await expect(fs.access(path.join(pluginsDir, 'mini-canvas__plugin-demo', 'dist', 'plugin-demo.js'))).resolves.toBeUndefined()
-    await expect(fs.access(path.join(serverPluginsDir, 'mini-canvas__plugin-demo.js'))).resolves.toBeUndefined()
+    await expect(fs.access(path.join(pluginsDir, 'plume-canvas__plugin-demo', 'dist', 'plugin-demo.js'))).resolves.toBeUndefined()
+    await expect(fs.access(path.join(serverPluginsDir, 'plume-canvas__plugin-demo.js'))).resolves.toBeUndefined()
 
     const list = await j(await call(host, '/api/npm-plugins/installed'))
-    expect((list.plugins as Array<{ pkg: string; version: string }>)[0]).toMatchObject({ pkg: '@mini-canvas/plugin-demo', version: '1.0.0' })
+    expect((list.plugins as Array<{ pkg: string; version: string }>)[0]).toMatchObject({ pkg: '@plume-canvas/plugin-demo', version: '1.0.0' })
 
-    const upd = await j(await call(host, '/api/npm-plugins/update', 'POST', { package: '@mini-canvas/plugin-demo', confirm: true }))
+    const upd = await j(await call(host, '/api/npm-plugins/update', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true }))
     expect(upd.updated).toBe(false)
 
-    const un = await call(host, '/api/npm-plugins/uninstall', 'POST', { package: '@mini-canvas/plugin-demo' })
+    const un = await call(host, '/api/npm-plugins/uninstall', 'POST', { package: '@plume-canvas/plugin-demo' })
     expect(un.status).toBe(200)
     const list2 = await j(await call(host, '/api/npm-plugins/installed'))
     expect(list2.plugins).toEqual([])
@@ -275,15 +275,15 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     const dir2 = dir + '-v11'
     await fs.mkdir(dir2, { recursive: true })
     const tgzV11 = await makePkg(dir2, { installable: true, withServer: true, version: '1.1.0' })
-    const packument = { name: '@mini-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
+    const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
     registry = await startFakeRegistry(packument, { '/v1.tgz': tgzV1, '/v11.tgz': tgzV11 })
-    ;(packument.versions as Record<string, unknown>)['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/v1.tgz' }, miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } } }
-    ;(packument.versions as Record<string, unknown>)['1.1.0'] = { version: '1.1.0', dist: { tarball: registry.url + '/v11.tgz' }, miniCanvas: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } } }
+    ;(packument.versions as Record<string, unknown>)['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/v1.tgz' }, plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } } }
+    ;(packument.versions as Record<string, unknown>)['1.1.0'] = { version: '1.1.0', dist: { tarball: registry.url + '/v11.tgz' }, plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } } }
 
     const host = await boot(registry.url)
-    await call(host, '/api/npm-plugins/install', 'POST', { package: '@mini-canvas/plugin-demo', version: '1.0.0', confirm: true })
+    await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', version: '1.0.0', confirm: true })
     packument['dist-tags'].latest = '1.1.0'
-    const upd = await j(await call(host, '/api/npm-plugins/update', 'POST', { package: '@mini-canvas/plugin-demo', confirm: true }))
+    const upd = await j(await call(host, '/api/npm-plugins/update', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true }))
     expect(upd.updated).toBe(true)
     expect(upd.to).toBe('1.1.0')
     const list = await j(await call(host, '/api/npm-plugins/installed'))

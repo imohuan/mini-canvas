@@ -9,8 +9,8 @@
  * 这条测试直接驱动真实的 NodeDrag / NodeDragEnd 事件，锁定“提示不消失”的回归。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { ViewService, createNotifyService } from '@mini-canvas/canvas-render'
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { ViewService, createNotifyService } from '@plume-canvas/canvas-render'
 import { disposeGhostSweep, onStoryboardDragEnd, onStoryboardDragMove, storyboardHover } from '../storyboardDrag'
 
 interface Harness {

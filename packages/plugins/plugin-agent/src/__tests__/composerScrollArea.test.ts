@@ -34,7 +34,7 @@ describe('Agent 面板滚动层', () => {
   it('ScrollArea 取件来自 useUiComponent，不直接 import 组件库', () => {
     const area = readFileSync(path.resolve(HERE, '../ui/conversation/AgentScrollArea.vue'), 'utf8')
     expect(area).toContain("useUiComponent('ScrollArea')")
-    expect(area).not.toMatch(/from ['"]@mini-canvas\/ui-kit-shadcn/)
+    expect(area).not.toMatch(/from ['"]@plume-canvas\/ui-kit-shadcn/)
   })
 
   it('不再写手写滚动条规则 ::-webkit-scrollbar', () => {

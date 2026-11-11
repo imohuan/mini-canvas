@@ -1,5 +1,5 @@
 /**
- * 四个节点插件的整装验证（@mini-canvas/ui 是装配壳，这里是"清单真的能一起跑"的仲裁）。
+ * 四个节点插件的整装验证（@plume-canvas/ui 是装配壳，这里是"清单真的能一起跑"的仲裁）。
  *
  * 为什么放在 ui 包：内核包不能反向依赖插件（依赖方向恒 插件→内核），而"多插件同时装载"这件事
  * 只有装配层能验。锁三件事：
@@ -10,18 +10,18 @@
  * 这一条测试不碰浏览器/WebGL：three 的球体只在组件 mount 时才会创建，这里只验装配与写模型。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
-import { nodeTextPlugin } from '@mini-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@mini-canvas/plugin-node-image'
-import { node3dPreviewPlugin } from '@mini-canvas/plugin-node-3d-preview'
-import { nodeImageComparePlugin } from '@mini-canvas/plugin-node-image-compare'
-import { nodeVideoPlugin } from '@mini-canvas/plugin-node-video'
-import { nodeAudioPlugin } from '@mini-canvas/plugin-node-audio'
-import { fileDropPlugin } from '@mini-canvas/plugin-file-drop'
-import type { ToolService } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory, NodeRegistry, ThemeRegistry } from '@plume-canvas/canvas-data'
+import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
+import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
+import { node3dPreviewPlugin } from '@plume-canvas/plugin-node-3d-preview'
+import { nodeImageComparePlugin } from '@plume-canvas/plugin-node-image-compare'
+import { nodeVideoPlugin } from '@plume-canvas/plugin-node-video'
+import { nodeAudioPlugin } from '@plume-canvas/plugin-node-audio'
+import { fileDropPlugin } from '@plume-canvas/plugin-file-drop'
+import type { ToolService } from '@plume-canvas/kernel'
 
 /** 起一个与宿主同形的内核（真服务，不 mock）并装载四个节点插件 */
 async function bootAll() {

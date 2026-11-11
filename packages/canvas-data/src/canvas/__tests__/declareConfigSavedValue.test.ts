@@ -8,9 +8,9 @@
  * 这里用真实的 canvas 能力层（Context 默认装）+ 真实 SettingsStore 走一遍。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import type { SettingsStore } from '@mini-canvas/kernel'
-import type { PluginModule } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import type { SettingsStore } from '@plume-canvas/kernel'
+import type { PluginModule } from '@plume-canvas/kernel'
 
 /** 小地图同形的插件：一个数字配置项，声明进「常规/小地图」组 */
 const miniMapLike: PluginModule = {

@@ -4,7 +4,7 @@
  * 从 plugin-bottom-bar 搬进契约包：节点插件发布工具动作时只依赖契约，
  * 不再 import 另一个业务插件。实现与语义保持不变。
  */
-import type { PluginScope, ToolDef, ToolOutcome, ToolResourceKind } from '@mini-canvas/kernel'
+import type { PluginScope, ToolDef, ToolOutcome, ToolResourceKind } from '@plume-canvas/kernel'
 import { BAR_FIELD, registerBarAction } from './registry'
 import type { BarAction, BarRunContext, BarRunInput } from './types'
 

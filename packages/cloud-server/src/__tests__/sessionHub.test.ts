@@ -9,8 +9,8 @@
  * 5. start 的 promise 在整轮结束时 resolve（队列调度器靠它串行）。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { SessionHub } from '@mini-canvas/plugin-agent/server/agent/sessionHub.js'
-import type { AgentChatEvent } from '@mini-canvas/plugin-agent/server/agent/translate.js'
+import { SessionHub } from '@plume-canvas/plugin-agent/server/agent/sessionHub.js'
+import type { AgentChatEvent } from '@plume-canvas/plugin-agent/server/agent/translate.js'
 
 function delay(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))

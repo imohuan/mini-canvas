@@ -10,8 +10,8 @@
 import { describe, expect, it } from 'vitest'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { Context } from '@mini-canvas/canvas-data'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { Context } from '@plume-canvas/canvas-data'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { themeComponentsPlugin } from '../../../index'
 import PluginSettingsContent from '../PluginSettingsContent.vue'
 

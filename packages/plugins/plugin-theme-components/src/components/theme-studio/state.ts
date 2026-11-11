@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 import {
   GROUP_ORDER,
   PLUGIN_LABELS,

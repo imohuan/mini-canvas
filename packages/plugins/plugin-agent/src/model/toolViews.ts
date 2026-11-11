@@ -155,7 +155,7 @@ function resUrl(canvasId: unknown, name: unknown): string {
  * 本机绝对路径 → **服务端已有的**资源访问地址（浏览器能真的取到字节的那条路）。
  *
  * 为什么需要它（用户实测报的「读取图片时加载错误」）：
- *   read_file 的入参是**本机绝对路径**（如 \\?\D:\\...\\.mini-canvas\\assets\\files\\faaca433.jpeg，
+ *   read_file 的入参是**本机绝对路径**（如 \\?\D:\\...\\.plume\\assets\\files\\faaca433.jpeg，
  *   模型读文件就是这么读的）。早先这里直接拼了个 /api/agent/file?path=… —— 那个路由
  *   服务端从来不存在，静态兜底会把 index.html 返回给 <img>（HTML 当图片 → 永远是裂图）。
  *   服务端真正能出字节的只有两条路（assetStore.localPathFromUrl 认的也是这两条）：
@@ -168,7 +168,7 @@ function resUrl(canvasId: unknown, name: unknown): string {
  *   read_file 的入参只有 file_path，**没有** canvasId —— 所以按参数取恒为空，
  *   图片永远退化成一行文件名（用户报的「读图片看不到图、只有文件名」）。
  *   而画布资源的真实路径长这样：
- *     …/.mini-canvas/canvases/<canvasId>/resources/<hash>.png
+ *     …/.plume/canvases/<canvasId>/resources/<hash>.png
  *   画布 id 就写在里面，直接认出来即可，不必依赖入参。
  */
 function fileUrlFromPath(p: string, canvasId: unknown): string | null {

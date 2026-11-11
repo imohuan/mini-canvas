@@ -10,7 +10,7 @@
  * 才能让卸载只摘自己那条；共用一份就分不清归属了。
  */
 import { Hono } from 'hono'
-import type { CapabilityLayer, ConfigSchema, PluginScope } from '@mini-canvas/kernel'
+import type { CapabilityLayer, ConfigSchema, PluginScope } from '@plume-canvas/kernel'
 import { createRouteRegistrar, type RouteRegistrar } from './routes.js'
 import { createAgentRegistrar, type AgentRegistrar } from './agent.js'
 import { createStoreRegistrar, type StoreRegistrar } from './store.js'

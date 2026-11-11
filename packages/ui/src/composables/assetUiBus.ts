@@ -29,7 +29,7 @@ export interface AssetPreviewItem {
   /**
    * 这份 html 是从**哪个地址**的包里解出来的。
    *
-   * 为什么要记：同层清单里可能有多个 .mcnode。切到另一个包时，外壳上的 html
+   * 为什么要记：同层清单里可能有多个 .plumenode。切到另一个包时，外壳上的 html
    * 仍是上一个包的界面 —— 不判来源就会一直显示同一张（用户 2026-10-28 实测：
    * 连切两个可视化节点，界面完全没变）。有了它，当前张与 html 来源不一致就当作
    * "还没取"，由 AssetUiSlot 现取。
@@ -142,7 +142,7 @@ export function currentAssetPreview(): AssetPreviewItem | null {
  *
  * 为什么要收成一个函数（用户口径 2026-10-14：「我当前的节点无法进行预览。
  * 或者，可以在预览中添加一个 iframe 预览框」）：
- * 节点包（.mcnode）**没有可加载的媒体地址** —— 照旧把它的 url 丢给 MediaViewer，
+ * 节点包（.plumenode）**没有可加载的媒体地址** —— 照旧把它的 url 丢给 MediaViewer，
  * 预览出来是一片空白（那就是用户看到的"无法预览"）。它得先**取回包、解出里面的 HTML**，
  * 再交给 MediaViewer 的 iframe 分支渲染。
  *

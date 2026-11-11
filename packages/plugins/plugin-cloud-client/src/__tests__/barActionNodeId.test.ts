@@ -11,7 +11,7 @@
  * 这里在插件自身的边界上验证：动作真正发给 /api/jobs 的 body 里，nodeId 是发起节点那个。
  */
 import { describe, it, expect, afterEach } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { cloudClientPlugin, onCanvasReady } from '../plugin'
 import type { BarActionLike } from '../actions'
 

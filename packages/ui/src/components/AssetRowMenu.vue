@@ -5,7 +5,7 @@
 //       （分隔）/ 下载 / 重命名 / 删除。
 // 二级菜单全部用 shadcn 的 DropdownMenuSub（组件嵌套，不手写浮层）。
 import { computed, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')
 const DropdownMenuSeparator = useUiComponent('DropdownMenuSeparator')

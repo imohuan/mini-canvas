@@ -17,12 +17,12 @@
  * 浏览器守卫：菜单浮层/DOM 绑定仅在浏览器装配（node 装配/测试安全跳过）；命令注册任何时候都做。
  */
 import { createApp, nextTick, reactive, type Component } from 'vue'
-import type { ConfigSchema, Context, PluginModule } from '@mini-canvas/canvas-base'
-import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
-import type { CommandService } from '@mini-canvas/kernel'
-import type { CanvasActions } from '@mini-canvas/canvas-data'
-import { isTransient, typeConnectionDef } from '@mini-canvas/canvas-data'
-import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@mini-canvas/canvas-render'
+import type { ConfigSchema, Context, PluginModule } from '@plume-canvas/canvas-base'
+import type { DocService, SelectionService } from '@plume-canvas/canvas-data'
+import type { CommandService } from '@plume-canvas/kernel'
+import type { CanvasActions } from '@plume-canvas/canvas-data'
+import { isTransient, typeConnectionDef } from '@plume-canvas/canvas-data'
+import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@plume-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
 import ConnectionMenuContent from './ConnectionMenuContent.vue'
 import ConnectionMenuNode from './ConnectionMenuNode.vue'
@@ -185,7 +185,7 @@ export function apply(ctx: Context): void {
   // 临时卡片是**真节点**（进 nodeStore），临时连线是**真边**（进 edgeStore），都标 `transient`：
   //   - 渲染：VueFlow 正常画 → 缩放平移天然对齐（不再自绘坐标）；
   //   - 交互：渲染层对中间态关掉 draggable/selectable/deletable（点空白不会误删、不会连另一端一起没）；
-  //   - 历史/落盘：createMiniCanvasHost 的 snapshot/commit 过滤中间态（不入撤销栈、刷新不复活）。
+  //   - 历史/落盘：createPlumeHost 的 snapshot/commit 过滤中间态（不入撤销栈、刷新不复活）。
   // 判定由内核通用契约 isTransient 提供，本插件不自造标记。
   /** 当前临时节点 id / 临时边 id（同一时刻只允许一个临时菜单） */
   let tempNodeId: string | null = null

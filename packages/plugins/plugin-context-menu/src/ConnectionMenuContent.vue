@@ -8,8 +8,8 @@
  * 因为它是**真节点**（经 nodeStore → VueFlow 渲染），位置/尺寸/缩放全部由画布负责，无需自己算坐标。
  */
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
-import { iconRenderMode } from '@mini-canvas/kernel'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
+import { iconRenderMode } from '@plume-canvas/kernel'
 import type { ContextMenuItem } from './menuBuilder'
 import { CONNECTION_MENU_PICK_EVENT } from './connectionMenu'
 

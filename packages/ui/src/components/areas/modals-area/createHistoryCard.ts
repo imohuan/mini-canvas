@@ -6,7 +6,7 @@
  *
  * 所有分支、class、文案、事件接线与原实现逐字一致；外部状态改为创建时传入。
  */
-import { createApp, h, type Component } from 'vue'
+import { createApp, h, type App as VueApp, type Component } from 'vue'
 import { esc, mediaAspect } from './historyCardText'
 
 export interface HistItem {
@@ -39,6 +39,14 @@ export interface HistoryCardDeps {
   buildFactsLine: (item: HistItem) => HTMLElement
   buildCheckOverlay: (id: string) => HTMLElement
   showBrokenResourceCard: (card: HTMLElement, item: HistItem) => void
+  /**
+   * 给卡片自己的小 Vue 应用补宿主上下文。
+   *
+   * 卡片是 createApp(...).mount() 出来的独立应用，不会继承页面的 provide；
+   * 音频/视频预览件内部要 useUiComponent 取按钮，没有画布 ctx 就在 setup 里抛错，
+   * 结果是整面墙挂不上（2026-11-11 真机：音频页签全空）。
+   */
+  provideCardContext?: (app: VueApp) => void
   onCardClick: (item: HistItem) => void
   onAudioCardClick: (item: HistItem) => void
   scheduleImageRelayout: () => void
@@ -66,6 +74,7 @@ export function createHistoryCard(deps: HistoryCardDeps) {
     onCardClick,
     onAudioCardClick,
     scheduleImageRelayout,
+    provideCardContext,
     wallApps,
   } = deps
 
@@ -178,7 +187,21 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
               : { url, name: item.title, expandable: true, onExpand: () => openHistoryItem(item) },
           ),
       })
-      app.mount(mount)
+      // 必须在 mount 之前补上下文：预览件是在 setup 里取件的，晚了就已经抛错了。
+      provideCardContext?.(app)
+      try {
+        app.mount(mount)
+      } catch (err) {
+        // 单个预览件挂不上不该带走整面墙：回落到下面的静态卡面。
+        console.warn('[history] 媒体预览件挂载失败，改用静态卡面', err)
+        try {
+          app.unmount()
+        } catch {
+          /* 半挂载的应用卸载失败可以忽略 */
+        }
+        mount.remove()
+        return buildStaticMediaCard(item, url, kind)
+      }
       // 登记：这张卡的 Vue 应用必须在墙被回收时 unmount（见 appsByWall 的说明）。
       // 一律记在「当前挂载中的墙」名下：建卡可能发生在 rebuild / append / prepend 三条路径，
       // 统一记一个桶，收墙时再整体换名到该墙的缓存 key，逐出时才能精确回收。
@@ -256,7 +279,22 @@ function buildMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): H
       }
       return finishCard(card, item)
   }
-  // 没有注册件时的兜底卡面：同样套在 media 框里，保留同一套角标与比例
+  return buildStaticMediaCard(item, url, kind)
+}
+
+/** 没有注册件 / 预览件挂载失败时的兜底卡面：同样套在 media 框里，保留同一套角标与比例 */
+function buildStaticMediaCard(item: HistItem, url: string, kind: 'audio' | 'video'): HTMLElement {
+  const isAudio = kind === 'audio'
+  const card = document.createElement('div')
+  card.className = 'hist-card'
+  if (item.id) card.dataset.histId = item.id
+  const media = document.createElement('div')
+  media.className = isAudio
+    ? 'hist-card-media hist-card-media--audio'
+    : 'hist-card-media hist-card-media--video'
+  if (isAudio) media.style.height = '96px'
+  else media.style.aspectRatio = mediaAspect(item, 16 / 9)
+  card.appendChild(media)
   const inner = document.createElement('div')
   inner.style.cssText = 'position:absolute;inset:0'
   inner.innerHTML = isAudio

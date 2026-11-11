@@ -24,7 +24,7 @@
  * 拆分说明：具体状态与事件处理在 ./canvas-host/ 的 hooks，本文件只做装配接线。
  */
 import { reactive, ref, shallowRef } from 'vue'
-import type { CanvasHostHandle } from './createMiniCanvasHost'
+import type { CanvasHostHandle } from './createPlumeHost'
 import type { CanvasHostEmits, CanvasHostRenderProps } from './canvasHostTypes'
 import { useCanvasContext } from '../contracts/canvasContext'
 import { resolveCanvasInteraction, type CanvasInteractionSettings } from '../contracts/canvasInteractionSettings'

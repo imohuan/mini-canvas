@@ -3,7 +3,7 @@
 // 位置：一个可安装插件包的源码入口
 
 import { h, ref } from 'vue'
-import { F, type ConfigSchema, type InferConfig, type Context, type PluginModule } from '@mini-canvas/canvas-base'
+import { F, type ConfigSchema, type InferConfig, type Context, type PluginModule } from '@plume-canvas/canvas-base'
 import DemoHaloOverlay from './DemoHaloOverlay.vue'
 
 export const name = 'demo-settings'

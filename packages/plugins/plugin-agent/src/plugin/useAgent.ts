@@ -8,7 +8,7 @@
  * 树外（CanvasShell 自己的具名插槽）会抛错 —— 那里改用宿主句柄：
  *   `ui.readyHost?.ctx?.get('agent')`。
  */
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import type { AgentService } from '../service/agentService.js'
 
 export function useAgent(): AgentService {

@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-hello/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 
 export const name = 'hello'
 export const inject = [] as string[]

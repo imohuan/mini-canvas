@@ -14,7 +14,7 @@
  *   - 行：[data-asset-row] + data-row-kind="folder|asset" + data-row-id
  *   - 拖拽悬停：目标行加 class is-drop-over（视觉 = **只有背景**，无阴影 / 无边框 —— 用户口径）
  *   - 行「⋯」菜单与**右键**打开的是同一个菜单（复用 AssetRowMenu）
- *   - 资产行可拖到**画布**：dragstart 里写 application/x-mini-canvas-asset（宿主在 document 捕获阶段接住，
+ *   - 资产行可拖到**画布**：dragstart 里写 application/x-plume-asset（宿主在 document 捕获阶段接住，
  *     在落点建对应类型的节点 —— 见 LeftDrawer 的 onCanvasDrop）
  *
  * 数据不在这里取：宿主（抽屉 / 弹窗）把「行列表」和「可移动目标」传进来，动作以事件抛出去
@@ -186,7 +186,7 @@ const { draggingId, dragOverId, startDrag, onDragOver, onDragLeave, onDrop, onDr
 )
 
 /**
- * 节点包（.mcnode）的**迷你窗口缩略图**（用户 2026-10-28 定的"省事路线"）：
+ * 节点包（.plumenode）的**迷你窗口缩略图**（用户 2026-10-28 定的"省事路线"）：
  * 卡片里放一个小 iframe（320px，缩到 32px 高的窗口里），把包里的界面缩着显示出来。
  * 内容来自后台 /api/node-packages/read 解出的 ui.html —— 不在前端再写一份解压。
  * 缓存一份（url → html）：同一个包重复渲染不重复取；列表里通常只有几个包，够用。

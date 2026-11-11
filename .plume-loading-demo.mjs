@@ -87,7 +87,7 @@ const body = {
   edges: [],
 }
 
-const base = process.env.MINI_CANVAS_BASE || 'http://localhost:5288'
+const base = process.env.PLUME_BASE || 'http://localhost:5288'
 const target = process.argv[2] || 'loading-ui-demo'
 const res = await fetch(base + '/api/canvases/' + target, {
   method: 'PUT',

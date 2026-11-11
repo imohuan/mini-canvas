@@ -216,7 +216,7 @@ plugin-scope-demo/
 // 文件：packages\docs\public\examples\kernel\plugin-scope-demo/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / apply）
 // 位置：演示「作者不写 uninstall」的四种副作用
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'scope-demo'
 
@@ -256,7 +256,7 @@ export const scopeDemoPlugin: PluginModule = { name, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-scope-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：验证「热卸之后一个不留」
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { scopeDemoPlugin } from './index'
 
 const ctx = new Context({ dev: true })

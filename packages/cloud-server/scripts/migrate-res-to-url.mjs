@@ -11,7 +11,7 @@
  *   node scripts/migrate-res-to-url.mjs [--dir <数据根>] [--dry-run] [--help]
  *
  *   --dir <数据根>   数据根目录（其下有 canvases/<画布id>/canvas.json）。
- *                    缺省 = 本包目录下的 .mini-canvas（不依赖当前工作目录）。
+ *                    缺省 = 本包目录下的 .plume（不依赖当前工作目录）。
  *   --dry-run        只打印将要做的改动，一个字节都不写（也不生成备份）。
  *
  * 行为：
@@ -49,10 +49,10 @@ export const RESOURCE_FIELDS = [...MEDIA_FIELDS, 'resourceId']
 /** 资源名白名单：16 位十六进制 + 可选扩展名（与后端 isSafeResourceName 同口径） */
 const RESOURCE_NAME_RE = /^[0-9a-f]{16}(\.[a-z0-9]+)?$/i
 
-/** 数据根缺省值：本包目录下的 .mini-canvas（按脚本自身位置定位，与 cwd 无关） */
+/** 数据根缺省值：本包目录下的 .plume（按脚本自身位置定位，与 cwd 无关） */
 export function defaultDataRoot() {
   const here = path.dirname(fileURLToPath(import.meta.url)) // <包>/scripts
-  return path.resolve(here, '..', '.mini-canvas')
+  return path.resolve(here, '..', '.plume')
 }
 
 /** `res:<hashName>` → `/api/canvases/<画布id>/resources/<hashName>`（与写入侧同一形态） */

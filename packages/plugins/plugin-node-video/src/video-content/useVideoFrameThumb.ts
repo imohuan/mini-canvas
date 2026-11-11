@@ -1,5 +1,5 @@
 import { computed, nextTick, ref, watch, type Ref } from 'vue'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import type { FrameResourcePort } from '../videoThumbCanvas'
 import {
   readVideoThumbTiers,

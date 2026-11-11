@@ -10,7 +10,7 @@
  * 三种页面都交给 PromptEditor 插到光标处；readonly 只是兼容其它只读展示。
  */
 import { computed, ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useAgent } from '../../../plugin/useAgent.js'
 import type { ContextPlaceholderView } from '../../../api/agentApi.js'
 
@@ -43,7 +43,7 @@ const visible = computed<ContextPlaceholderView[]>(() => {
   })
 })
 
-const own = computed(() => visible.value.filter((p) => p.source === 'mini-canvas'))
+const own = computed(() => visible.value.filter((p) => p.source === 'plume-canvas'))
 const harness = computed(() => visible.value.filter((p) => p.source === 'harness'))
 
 function pick(p: ContextPlaceholderView): void {

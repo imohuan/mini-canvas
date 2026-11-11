@@ -16,9 +16,9 @@
  */
 import { computed, ref } from 'vue'
 import { beginOverlay, endOverlay, isCropPending, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
-import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@mini-canvas/canvas-render'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
-import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'
+import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@plume-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
+import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
 import { createVideoOps, uploadVideo } from './videoOps'
 import { readVideoSourceFields } from './videoRefs'
 import type { Rect } from './videoCrop'

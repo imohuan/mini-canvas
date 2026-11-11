@@ -17,7 +17,7 @@ import { normalizeKeyForPlatform } from '../keyLabels'
  */
 async function feedbackNow(): Promise<{ showAlert(o: { title: string; description?: string }): Promise<void> } | undefined> {
   try {
-    const mod = await import('@mini-canvas/canvas-render')
+    const mod = await import('@plume-canvas/canvas-render')
     const svc = mod.feedbackService()
     if (!svc) return undefined
     // 包一层，避免把「服务方法 alert」写成裸 alert() 被全仓扫描误判成浏览器全局

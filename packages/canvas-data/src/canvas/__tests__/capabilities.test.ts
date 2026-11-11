@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore } from '@plume-canvas/canvas-data'
 import { createDocService } from '../../docService'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { resolveSegment } from '../registry/nodeRenderer'
 import { ThemeRegistry } from '../registry/themeRegistry'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { NodeFactory } from '../nodeFactory'
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 
 /** 测试组件 stub（opaque 句柄） */
 const TextContent = { name: 'TextContent' }

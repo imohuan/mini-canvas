@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-hot-reload",
+  "name": "@plume-canvas/plugin-hot-reload",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "热重载",
     "description": "开发用：手动登记几条链接（cloud-server 的 SSE / 插件自己的 vite dev server），产物一变自动重装插件",
     "pluginName": "hot-reload",
@@ -24,12 +24,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {

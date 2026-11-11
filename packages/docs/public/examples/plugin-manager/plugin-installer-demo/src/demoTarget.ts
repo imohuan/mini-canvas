@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/plugin-manager/plugin-installer-demo/src/demoTarget.ts
 // 格式：TypeScript 模块（一个很小的插件，导出 name / apply）
 // 位置：本示例的"装卸靶子"——由管理面板经 host.manager.install 装上、uninstall 卸下
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 
 export const name = 'installer-demo-target'
 

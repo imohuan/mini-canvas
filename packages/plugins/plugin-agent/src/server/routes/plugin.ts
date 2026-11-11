@@ -7,7 +7,7 @@
  *
  * 因此本文件**不 import 宿主的 serverFramework / store**：中间件通过 `runMiddleware` 注入。
  */
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 import { agentRoutes } from './agent.js'
 import { agentSessionRoutes } from './agentSessions.js'
 import { agentChatRoutes, type ChatRunner } from './agentChat.js'

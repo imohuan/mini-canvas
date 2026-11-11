@@ -3,7 +3,7 @@
  * 面板是配置页，不再只是一条“打开帮助浮层”的动作。
  */
 import { describe, expect, it } from 'vitest'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { createV2ShortcutManager } from '../v2ShortcutManager'
 import { buildSettingsShortcutGroups, filterSettingsShortcutGroups } from '../settingsPanelData'
 import { readFileSync } from 'node:fs'

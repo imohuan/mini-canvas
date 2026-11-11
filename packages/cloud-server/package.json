@@ -1,10 +1,10 @@
 {
-  "name": "@mini-canvas/cloud-server",
+  "name": "@plume-canvas/cloud-server",
   "version": "0.0.0",
   "type": "module",
   "private": true,
   "bin": {
-    "mini-canvas-cloud": "./dist/cli.js"
+    "plume-canvas": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -21,7 +21,7 @@
     "./*": "./dist/*"
   },
   "scripts": {
-    "dev": "tsx src/cli.ts serve -d ../../.mini-canvas --trusted-origin http://localhost:5288",
+    "dev": "tsx src/cli.ts serve -d ../../.plume --trusted-origin http://localhost:5288",
     "build": "pnpm typecheck && pnpm bundle",
     "bundle": "node scripts/bundle.mjs && tsc -p tsconfig.build.json",
     "build:assets": "node scripts/build-assets-parallel.mjs",
@@ -37,14 +37,14 @@
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@prismshadow/penguin-core": "0.2.13",
-    "@mini-canvas/plugin-agent": "workspace:*",
+    "@plume-canvas/plugin-agent": "workspace:*",
     "hono": "^4.6.0",
     "yaml": "^2.9.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/node": "^24.12.3",
-    "@mini-canvas/kernel": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "esbuild": "^0.28.2",
     "tsx": "^4.22.4",
     "typescript": "~6.0.2",

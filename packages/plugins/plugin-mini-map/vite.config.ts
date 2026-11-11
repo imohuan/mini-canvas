@@ -7,5 +7,5 @@ import { pluginLibBuild } from '../vite-plugin-lib'
 // external / globals 走共享表（../vite-plugin-lib），与其它插件同一份事实源。
 export default defineConfig({
   plugins: [vue(), cssInjectedByJs()],
-  build: pluginLibBuild(import.meta.url, { name: 'MiniCanvasPluginMiniMap' }),
+  build: pluginLibBuild(import.meta.url, { name: 'PlumePluginMiniMap' }),
 })

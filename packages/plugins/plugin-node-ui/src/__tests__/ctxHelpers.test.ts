@@ -22,7 +22,7 @@ let workspace = ''
 let dir = ''
 
 beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-resolve-'))
+  root = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-resolve-'))
   workspace = path.join(root, 'ws')
   dir = path.join(root, 'task-scripts')
   await fs.mkdir(path.join(root, 'canvases', 'default', 'resources'), { recursive: true })

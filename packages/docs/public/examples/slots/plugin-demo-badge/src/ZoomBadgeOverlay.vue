@@ -4,7 +4,7 @@
 <script setup lang="ts">
 // ① 从渲染层拿画布上下文（走 useCanvasRender，它带着 viewport 这份响应式数据）
 import { computed } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { flow } = useCanvasRender()
 

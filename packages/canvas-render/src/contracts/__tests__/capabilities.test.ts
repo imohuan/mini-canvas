@@ -4,7 +4,7 @@
  * ③ needs 缺项 dev 抛错 / prod undefined+warn；④ 未声明 needs = 空袋零开销。
  */
 import { describe, it, expect, vi } from 'vitest'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { RegistryImpl } from '@plume-canvas/kernel'
 import {
   capabilityField,
   createCapabilityCache,

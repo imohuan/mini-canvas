@@ -1,7 +1,7 @@
 /* 文档专用样式的统一入口。默认主题的变量在上面，这里只加我们自己的组件样式。 */
 
 /* —— 通用：卡片外壳 —— */
-.mc-card {
+.plume-card {
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
   background: var(--vp-c-bg-soft);
@@ -9,7 +9,7 @@
 }
 
 /* —— 插件功能表 —— */
-.mc-plugin-toolbar {
+.plume-plugin-toolbar {
   display: flex;
   gap: 8px;
   align-items: center;
@@ -17,7 +17,7 @@
   flex-wrap: wrap;
 }
 
-.mc-plugin-toolbar input {
+.plume-plugin-toolbar input {
   flex: 1 1 220px;
   min-width: 180px;
   padding: 8px 12px;
@@ -27,39 +27,39 @@
   color: var(--vp-c-text-1);
 }
 
-.mc-plugin-grid {
+.plume-plugin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
   margin: 16px 0;
 }
 
-.mc-plugin-card {
+.plume-plugin-card {
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
   background: var(--vp-c-bg-soft);
   padding: 14px;
 }
 
-.mc-plugin-card h4 {
+.plume-plugin-card h4 {
   margin: 0 0 6px;
   font-size: 15px;
   font-weight: 600;
 }
 
-.mc-plugin-card p {
+.plume-plugin-card p {
   margin: 6px 0 10px;
   font-size: 13px;
   color: var(--vp-c-text-2);
 }
 
-.mc-badges {
+.plume-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.mc-badge {
+.plume-badge {
   font-size: 11px;
   line-height: 1;
   padding: 4px 8px;
@@ -69,27 +69,27 @@
   background: var(--vp-c-bg);
 }
 
-.mc-badge--on {
+.plume-badge--on {
   color: var(--vp-c-green-1);
   border-color: var(--vp-c-green-1);
 }
 
-.mc-badge--off {
+.plume-badge--off {
   opacity: 0.5;
 }
 
-.mc-badge--bad {
+.plume-badge--bad {
   color: var(--vp-c-danger-1);
   border-color: var(--vp-c-danger-1);
 }
 
-.mc-code {
+.plume-code {
   font-family: var(--vp-font-family-mono);
   font-size: 12px;
   color: var(--vp-c-brand-1);
 }
 
-.mc-empty {
+.plume-empty {
   padding: 24px;
   text-align: center;
   color: var(--vp-c-text-2);
@@ -98,7 +98,7 @@
 }
 
 /* —— 组件预览台 —— */
-.mc-preview {
+.plume-preview {
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
   overflow: hidden;
@@ -106,7 +106,7 @@
   background: var(--vp-c-bg);
 }
 
-.mc-preview__bar {
+.plume-preview__bar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -116,16 +116,16 @@
   font-size: 12px;
 }
 
-.mc-preview__title {
+.plume-preview__title {
   font-weight: 600;
   color: var(--vp-c-text-1);
 }
 
-.mc-preview__spacer {
+.plume-preview__spacer {
   flex: 1;
 }
 
-.mc-preview__btn {
+.plume-preview__btn {
   border: 1px solid var(--vp-c-divider);
   border-radius: 6px;
   padding: 4px 10px;
@@ -135,17 +135,17 @@
   font-size: 12px;
 }
 
-.mc-preview__btn:hover {
+.plume-preview__btn:hover {
   color: var(--vp-c-brand-1);
   border-color: var(--vp-c-brand-1);
 }
 
-.mc-preview__stage {
+.plume-preview__stage {
   padding: 16px;
   overflow: auto;
 }
 
-.mc-preview__stage--fullscreen {
+.plume-preview__stage--fullscreen {
   position: fixed;
   inset: 0;
   z-index: 100;
@@ -153,13 +153,13 @@
   padding: 24px;
 }
 
-.mc-preview__frame {
+.plume-preview__frame {
   width: 100%;
   border: 0;
   display: block;
 }
 
-.mc-preview__code {
+.plume-preview__code {
   border-top: 1px solid var(--vp-c-divider);
   margin: 0;
 }

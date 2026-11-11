@@ -5,13 +5,13 @@
  * 这里锁三条命令真的落到宿主提供的动作上。
  */
 import { describe, expect, it } from 'vitest'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { createMiniCanvasHost } from '@mini-canvas/canvas-render'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
 import { registerShellCommands } from '../shellCommands'
 
 describe('shell 命令', () => {
   it('打开抽屉 / 切页签 / 收起展开都走命令', async () => {
-    const { host } = await createMiniCanvasHost({ adapter: new MemoryStorageAdapter() })
+    const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter() })
     const calls: string[] = []
     const disposers = registerShellCommands(host.ctx, {
       showLeftDrawer: () => calls.push('open'),

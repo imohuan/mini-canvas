@@ -46,7 +46,7 @@ await page.goto(BASE + '#/canvas/824e779f34314f86', { waitUntil: 'load' })
 await page.waitForTimeout(6500)
 
 const seed = await page.evaluate(([a, b]) => {
-  const doc = window.MiniCanvasUI?.getHost?.()?.ctx?.get?.('doc')
+  const doc = window.PlumeUI?.getHost?.()?.ctx?.get?.('doc')
   if (!doc) return { error: 'no doc' }
   const before = new Set(doc.getNodes().map((n) => n.id))
   doc.addNodes([
@@ -67,7 +67,7 @@ await page.waitForTimeout(800)
 
 // 注入一个「带输入框」的动作，让底栏出现输入区（标签才有地方插）
 await page.evaluate(() => {
-  const ctx = window.MiniCanvasUI?.getHost?.()?.ctx
+  const ctx = window.PlumeUI?.getHost?.()?.ctx
   ctx?.tryGet?.('nodeBar')?.register(ctx, {
     id: 'e2e:compose',
     types: ['text', 'image'],
@@ -94,7 +94,7 @@ const clickNode = async (id) => {
 await clickNode(seed.target)
 // 把目标节点摆到屏幕中上部：底栏完整可见，后面所有卡片坐标才可靠
 await page.evaluate((id) => {
-  const ctx = window.MiniCanvasUI?.getHost?.()?.ctx
+  const ctx = window.PlumeUI?.getHost?.()?.ctx
   const vp = ctx?.tryGet?.('view')
   const rect = ctx?.tryGet?.('view')?.getNodeRect?.(id)
   if (vp && rect) vp.setViewport({ x: 700 - (rect.x + rect.w / 2), y: 300 - (rect.y + rect.h / 2), zoom: 1 })
@@ -237,7 +237,7 @@ const focus = await page.evaluate((id) => {
   const t = document.querySelector('.vue-flow__transformationpane')?.style.transform ?? ''
   const n = document.querySelector('.vue-flow__node[data-id="' + id + '"]')
   const r = n?.getBoundingClientRect()
-  const vp = window.MiniCanvasUI?.getHost?.()?.view
+  const vp = window.PlumeUI?.getHost?.()?.view
   return {
     transform: t,
     // 缩放从 view 服务读（DOM 上的 transform 可能是 matrix(...) 形式，正则不可靠）
@@ -378,7 +378,7 @@ if (iconBox) {
   })
   if (row) { await page.mouse.click(row.x, row.y); await page.waitForTimeout(1800) }
   const after = await page.evaluate((b) => {
-    const doc = window.MiniCanvasUI.getHost().ctx.get('doc')
+    const doc = window.PlumeUI.getHost().ctx.get('doc')
     return {
       chips: [...document.querySelectorAll('.nb-editor .resource-chip')].map((c) => c.getAttribute('data-id')),
       editorText: document.querySelector('.nb-editor .ProseMirror')?.textContent ?? null,
@@ -405,7 +405,7 @@ if (hoverCard) {
   const had = await page.evaluate(() => document.querySelectorAll('.nb-hover-preview').length)
   ok('hover 时先有预览（前置）', had === 1, String(had))
   await page.evaluate((id) => {
-    window.MiniCanvasUI.getHost().ctx.get('doc').removeNodes([id])
+    window.PlumeUI.getHost().ctx.get('doc').removeNodes([id])
     // 删的是**被 hover 的那张卡**绑定的节点：换绑用例跑过时卡绑的是 seed.b（乙图），
     // 没跑过时才是 seed.a（甲图）。删错节点 = 预览当然不消失（上一轮 e2e 踩过）。
   }, (await cardBox('乙图')) ? seed.b : seed.a)

@@ -48,7 +48,7 @@ const bootWithEdge = async () => {
   await page.waitForTimeout(1200);
 };
 
-const edgeIds = () => page.evaluate(() => window.MiniCanvasUI.getHost().edgeStore.getEdges().map((e) => e.id));
+const edgeIds = () => page.evaluate(() => window.PlumeUI.getHost().edgeStore.getEdges().map((e) => e.id));
 
 /** 连线中点的屏幕坐标（经 path 的 CTM 换算，视口/缩放都算进去）。 */
 const edgeMidScreen = () => page.evaluate(() => {

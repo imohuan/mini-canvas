@@ -18,7 +18,7 @@ describe('性能探针', () => {
   })
 
   it('仍然把统计数据写进 localStorage（取证能力保留）', () => {
-    expect(src).toMatch(/mc-perf-probe-last/)
+    expect(src).toMatch(/plume-perf-probe-last/)
     expect(src).toMatch(/__readPerfProbe/)
   })
 })

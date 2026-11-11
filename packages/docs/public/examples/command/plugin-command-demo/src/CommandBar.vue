@@ -3,7 +3,7 @@
 // 格式：Vue 单文件组件（setup 语法糖）
 // 位置：注册进 overlay 槽的 UI，列出本插件分组的命令并执行
 import { onBeforeUnmount, ref } from 'vue'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const { ctx } = useCanvasRender()
 const canvas = ctx.get('canvas')

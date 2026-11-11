@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import { themeComponentsPlugin } from '../../../index'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -21,7 +21,7 @@ const read = (rel: string): string => readFileSync(path.resolve(here, rel), 'utf
 describe('设置里的快捷键动作项', () => {
   it('默认菜单把「快捷键」登记为配置页，不再只是 action', async () => {
     const ctx = new Context()
-    ctx.inject('themeRegistry', new (await import('@mini-canvas/canvas-data')).ThemeRegistry())
+    ctx.inject('themeRegistry', new (await import('@plume-canvas/canvas-data')).ThemeRegistry())
     ctx.plugin(themeComponentsPlugin)
     await ctx.start()
     const menu = ctx.get<{ resolve(groups: readonly string[]): any }>('settingsMenu')

@@ -16,7 +16,7 @@ import {
   UI_KIT_DEBUG_COMPONENT_ATTR,
   parseDebugLoc,
   type UiKitUsageLoc,
-} from '@mini-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit-shadcn'
 
 /** 圆点直径（px）；命中区略大，方便鼠标找 */
 const DOT = 7
@@ -248,7 +248,7 @@ onBeforeUnmount(() => {
     <div v-if="shown && target" ref="panelRef" class="ukdo-body" :style="panelStyle" role="tooltip">
       <div class="ukdo-head">{{ target.loc.component }}</div>
       <div class="ukdo-path">{{ locText }}</div>
-      <div class="ukdo-hint">使用点 · 来源 @mini-canvas/ui-kit-shadcn</div>
+      <div class="ukdo-hint">使用点 · 来源 @plume-canvas/ui-kit-shadcn</div>
     </div>
   </div>
 </template>

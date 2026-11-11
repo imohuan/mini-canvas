@@ -8,12 +8,12 @@
  *
  * ## 两条路，一个入口
  *
- *   导出下载：build → 把字节存成 .mcnode 文件（浏览器下载）
+ *   导出下载：build → 把字节存成 .plumenode 文件（浏览器下载）
  *   收藏进库：build → 拼成上传弹窗能吃的 prefill（复用现成的 /api/assets 上传）
  *
  * 打包本身**只能在后台做**（脚本内容在服务器上），所以这里只有"调接口 + 拼数据"。
  */
-import { withAdminToken } from '@mini-canvas/canvas-base'
+import { withAdminToken } from '@plume-canvas/canvas-base'
 
 /** 本模块用到的 fetch 最小形状（便于测试注入假货） */
 export interface FetchResponseLike {
@@ -27,8 +27,8 @@ export interface FetchResponseLike {
 }
 export type FetchLike = (url: string, init?: { method?: string; headers?: Record<string, string>; body?: unknown }) => Promise<FetchResponseLike>
 
-/** 包的后缀（与后台 mime 白名单里的 .mcnode 一致） */
-export const PACK_EXT = '.mcnode'
+/** 包的后缀（与后台 mime 白名单里的 .plumenode 一致） */
+export const PACK_EXT = '.plumenode'
 
 /** 版本后缀的写法（与后台 importPack 同一套：下划线 + 数字） */
 export const VERSION_SEP = '_v'
@@ -93,7 +93,7 @@ export async function buildPack(
   const buf = await res.arrayBuffer?.()
   if (!buf) throw new Error('后台没回字节')
   // 名字与脚本清单在**响应头**里（字节响应没有 JSON 体可以放它们）——
-  // 少了名字，收藏时只能回落成"节点包.mcnode"，用户每次都得手改。
+  // 少了名字，收藏时只能回落成"节点包.plumenode"，用户每次都得手改。
   const head = (n: string): string => res.headers?.get?.(n) ?? ''
   const name = head('x-pack-name') ? decodeURIComponent(head('x-pack-name')) : ''
   const split = (s: string): string[] => (s ? s.split(',').filter(Boolean) : [])
@@ -114,7 +114,7 @@ export function base64ToBytes(b64: string): Uint8Array {
 }
 
 /** 字节 → Blob（下载 / 上传都用它） */
-export function bytesToBlob(bytes: Uint8Array, type = 'application/x-mini-canvas-node'): Blob {
+export function bytesToBlob(bytes: Uint8Array, type = 'application/x-plume-node'): Blob {
   return new Blob([bytes as unknown as BlobPart], { type })
 }
 
@@ -213,7 +213,7 @@ export async function importPack(
   const res = await fetchImpl(input.base + '/api/node-packages/import', {
     method: 'POST',
     // 导入会往后台写脚本文件 —— 同样要令牌
-    headers: withAdminToken({ 'content-type': 'application/x-mini-canvas-node' }),
+    headers: withAdminToken({ 'content-type': 'application/x-plume-node' }),
     body: input.bytes,
   })
   if (!res.json) throw new Error('后台没回结果')

@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { createRenderer, defineComponent, h, nextTick, shallowRef, type Component } from 'vue'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 import { createSettingsFieldBridge } from '../settingsFieldBridge'
 
 interface HNode { tag: string; props: Record<string, unknown>; children: HNode[]; parent: HNode | null; text: string }

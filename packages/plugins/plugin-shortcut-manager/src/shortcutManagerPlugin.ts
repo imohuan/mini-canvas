@@ -15,12 +15,12 @@
  * UI 方式：overlay 槽 occupant（宿主已渲染 overlay 槽），面板显隐由同包模块级状态控制
  * （命令切换同一对象）。面板与本插件同包 import，不再占 shortcut-manager / shortcut-remap 服务名。
  */
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import ShortcutHelpPanel from './ShortcutHelpPanel.vue'
 import SettingsShortcutPanel from './SettingsShortcutPanel.vue'
 import { onShortcutManager, shortcutHelpState } from './shortcutState'
 import { ensureShortcutManager, getShortcutRemapEngine } from './ensureShortcutManager'
-import { commandRuntime } from '@mini-canvas/canvas-data'
+import { commandRuntime } from '@plume-canvas/canvas-data'
 
 export const name = 'shortcut-manager'
 

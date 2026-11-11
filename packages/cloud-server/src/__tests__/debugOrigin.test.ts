@@ -25,7 +25,7 @@ async function write(canvasId: string, file: string, content: string): Promise<v
 }
 
 beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-debug-origin-'))
+  root = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-debug-origin-'))
   origin = createDebugOrigin({ dataRoot: root })
   await origin.start()
 })

@@ -3,8 +3,8 @@
  *
  * 为什么住在渲染层（而不是某个主题插件里）：
  *   这份表要被**所有**下拉实现共用，才能保证互斥。现在应用里同时存在两处下拉实现 ——
- *   `@mini-canvas/ui` 的全局下拉（成品应用注册进目录的那份）与主题默认件
- *   （`@mini-canvas/plugin-theme-canvas` 的 Dropdown，它被同包的 Select 直接复用）。
+ *   `@plume-canvas/ui` 的全局下拉（成品应用注册进目录的那份）与主题默认件
+ *   （`@plume-canvas/plugin-theme-canvas` 的 Dropdown，它被同包的 Select 直接复用）。
  *   两处若各拿一份表，就会同时开出两个浮层。放在共同依赖里，两边 import 同一份。
  *
  * 为什么必须是独立模块（不写在组件的 `<script setup>` 里）：
@@ -25,7 +25,7 @@ const openClosers = new Set<() => void>()
  *   更不该 import 它。它只管广播一句"都关了吧"，谁开着的谁自己收 ——
  *   两套实现（应用全局件 / 主题默认件）都监听同一条，天然不会漏。
  */
-export const DROPDOWN_CLOSE_ALL_EVENT = 'mini-canvas:dropdown-close-all'
+export const DROPDOWN_CLOSE_ALL_EVENT = 'plume-canvas:dropdown-close-all'
 
 /**
  * 「关掉所有**二级**菜单」的广播事件名（detail = 请求方 id；null = 全部关）。
@@ -35,7 +35,7 @@ export const DROPDOWN_CLOSE_ALL_EVENT = 'mini-canvas:dropdown-close-all'
  * - 一级菜单关闭时广播 null → 挂在它下面的二级菜单全收（二级浮层是 teleport 出去的，不在父 DOM 里，收不到别的信号）；
  * - 二级菜单打开时广播自己的 id → 同级的兄弟菜单互相关掉（父菜单不受影响）。
  */
-export const SUB_MENU_CLOSE_EVENT = 'mini-canvas:submenu-close'
+export const SUB_MENU_CLOSE_EVENT = 'plume-canvas:submenu-close'
 
 /** 关掉所有二级菜单（一级菜单关闭时调用） */
 export function closeAllSubMenus(): void {

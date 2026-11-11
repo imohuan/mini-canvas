@@ -5,7 +5,7 @@
 import { computed, ref } from 'vue'
 import { X as XIcon, FolderPlus as AddIcon, FolderInput as MoveIcon,
   Tags as TagIcon, Download as DownloadIcon, Trash2 as TrashIcon } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const Button = useUiComponent('Button')
 const DropdownMenu = useUiComponent('DropdownMenu')

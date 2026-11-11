@@ -42,8 +42,8 @@ export interface AgentContextPlaceholder {
   value: string
   /** 给用户看的一句话 */
   description: string
-  /** 谁提供的：mini-canvas = 本服务加的；harness = SDK 自带（本服务不重复实现） */
-  source: 'mini-canvas' | 'harness'
+  /** 谁提供的：plume-canvas = 本服务加的；harness = SDK 自带（本服务不重复实现） */
+  source: 'plume-canvas' | 'harness'
 }
 
 /** 界面 / 路由要的上下文情报（地址 + 目录 + 占位符清单） */
@@ -126,7 +126,7 @@ function today(d = new Date()): string {
  * 可插入的占位符清单。
  *
  * 分两组：
- *   - **mini-canvas**：本服务自己展开的（后台地址 + 目录）。SDK 不认识这些名字，
+ *   - **plume-canvas**：本服务自己展开的（后台地址 + 目录）。SDK 不认识这些名字，
  *     所以由 AgentConfigService.expandContext 在建会话前替换掉；
  *   - **harness**：SDK 自带的（CWD / SESSION_ID / SKILLS …）。本服务不重复实现 ——
  *     同名两套会互相抢，反而说不清谁生效。
@@ -137,14 +137,14 @@ export function agentContextPlaceholders(ctx: AgentRuntimeContext): AgentContext
       token: '{{BACKEND_BASE_URL}}',
       value: ctx.baseUrl,
       description: '这台后台的地址（含真实端口）',
-      source: 'mini-canvas',
+      source: 'plume-canvas',
     },
-    { token: '{{CANVASES_DIR}}', value: slash(ctx.canvasesRoot), description: '画布目录的父目录（一画布一个子目录）', source: 'mini-canvas' },
-    { token: '{{ASSETS_DIR}}', value: slash(ctx.assetsRoot), description: '资产库目录（生成产物 + 上传的素材）', source: 'mini-canvas' },
-    { token: '{{TASK_SCRIPTS_DIR}}', value: slash(ctx.taskScriptsDir), description: '后台功能脚本目录', source: 'mini-canvas' },
-    { token: '{{SKILLS_DIR}}', value: slash(ctx.skillsDir), description: '技能目录（每个技能一个子目录）', source: 'mini-canvas' },
-    { token: '{{SCRATCHPAD_DIR}}', value: slash(ctx.scratchpadRoot), description: '会话草稿目录（一会话一个子目录）', source: 'mini-canvas' },
-    { token: '{{AGENT_STATE_DIR}}', value: slash(ctx.agentStateDir), description: 'Agent 状态目录（AGENTS.md / skills / memory）', source: 'mini-canvas' },
+    { token: '{{CANVASES_DIR}}', value: slash(ctx.canvasesRoot), description: '画布目录的父目录（一画布一个子目录）', source: 'plume-canvas' },
+    { token: '{{ASSETS_DIR}}', value: slash(ctx.assetsRoot), description: '资产库目录（生成产物 + 上传的素材）', source: 'plume-canvas' },
+    { token: '{{TASK_SCRIPTS_DIR}}', value: slash(ctx.taskScriptsDir), description: '后台功能脚本目录', source: 'plume-canvas' },
+    { token: '{{SKILLS_DIR}}', value: slash(ctx.skillsDir), description: '技能目录（每个技能一个子目录）', source: 'plume-canvas' },
+    { token: '{{SCRATCHPAD_DIR}}', value: slash(ctx.scratchpadRoot), description: '会话草稿目录（一会话一个子目录）', source: 'plume-canvas' },
+    { token: '{{AGENT_STATE_DIR}}', value: slash(ctx.agentStateDir), description: 'Agent 状态目录（AGENTS.md / skills / memory）', source: 'plume-canvas' },
     { token: '{{CWD}}', value: '', description: '本会话的工作目录（每个画布一个）', source: 'harness' },
     { token: '{{SESSION_ID}}', value: '', description: '本会话的 id', source: 'harness' },
     { token: '{{PROJECT_DIR}}', value: '', description: 'App Data Dir（即数据根）', source: 'harness' },
@@ -169,13 +169,13 @@ export function agentContextPlaceholders(ctx: AgentRuntimeContext): AgentContext
  * 用 split/join 而不是 replace：值里出现 `$&` 之类的字符时 replace 会当成替换语法
  * （路径里出现 $ 的概率不为零，这种错起来极难查）。
  *
- * 只展开 source === 'mini-canvas' 的那些：SDK 自带的记号交给 SDK 自己展开
+ * 只展开 source === 'plume-canvas' 的那些：SDK 自带的记号交给 SDK 自己展开
  * （它拿得到会话级的值，比如 {{CWD}}；我们这里展开会写出一个错的）。
  */
 export function expandAgentContext(text: string, placeholders: AgentContextPlaceholder[]): string {
   let out = text
   for (const p of placeholders) {
-    if (p.source !== 'mini-canvas' || !p.value) continue
+    if (p.source !== 'plume-canvas' || !p.value) continue
     out = out.split(p.token).join(p.value)
   }
   return out

@@ -17,7 +17,7 @@
 import { ref, type Ref } from 'vue'
 import { resolveAgentBaseUrl, DEFAULT_RETRY_ROUNDS, type AiRequestResult } from '../aiActions'
 import { submitAgentChatJob } from './agentJobSubmit'
-import { withAdminToken } from '@mini-canvas/canvas-base'
+import { withAdminToken } from '@plume-canvas/canvas-base'
 import { readAgentModels } from './modelPickerBridge'
 
 export interface AgentChatDeps {

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /** 截帧按钮与三帧菜单：外观/文案与原 VideoContent 内联块一致 */
 import { Camera } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 defineProps<{
   busy: boolean

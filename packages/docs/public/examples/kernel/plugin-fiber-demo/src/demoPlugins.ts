@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-fiber-demo/src/demoPlugins.ts
 // 格式：TypeScript 模块（四个插件模块，用于诊断演示）
 // 位置：演示用，集中放一起
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 /** ① 正常插件：提供一个服务 */
 export const healthyPlugin: PluginModule = {

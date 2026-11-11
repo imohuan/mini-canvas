@@ -32,7 +32,7 @@ const STAMP_FILE = path.join(PACKAGE_ROOT, ".build-stamp.json")
  * 一键启动用的数据根（与 scripts/launch-server.mjs 的 `pnpm serve` 默认一致）。
  * 只在这里拼路径、不建目录：构建脚本不该顺手改用户的运行数据。
  */
-const DATA_ROOT = path.resolve(process.env.MINI_CANVAS_DATA_DIR ?? path.join(REPO_ROOT, ".mini-canvas"))
+const DATA_ROOT = path.resolve(process.env.PLUME_DATA_DIR ?? path.join(REPO_ROOT, ".plume"))
 /** 指纹规则版本：改了本脚本的指纹算法就 +1，旧 stamp 自动作废（下次全量重建） */
 const STAMP_VERSION = 3
 
@@ -63,12 +63,12 @@ const BUILTIN_SERVER_PLUGINS = ["plugin-node-ui"]
  * vue / @vue-flow/core 来自 node_modules，本就不在源码指纹范围，列在这里只为语义完整。
  */
 const HOST_EXTERNALS = [
-  "@mini-canvas/kernel",
-  "@mini-canvas/canvas-base",
-  "@mini-canvas/canvas-data",
-  "@mini-canvas/canvas-render",
-    "@mini-canvas/ui-kit-shadcn",
-    "@mini-canvas/theme-contract",
+  "@plume-canvas/kernel",
+  "@plume-canvas/canvas-base",
+  "@plume-canvas/canvas-data",
+  "@plume-canvas/canvas-render",
+    "@plume-canvas/ui-kit-shadcn",
+    "@plume-canvas/theme-contract",
   "prosemirror-editor-bundle",
   "vue",
   "@vue-flow/core",
@@ -205,7 +205,7 @@ async function readStamp() {
   return { version: STAMP_VERSION, tasks: {} }
 }
 
-/** 可装卸插件目录名（对应 @mini-canvas/<name>）。手写部分用于固定构建顺序。 */
+/** 可装卸插件目录名（对应 @plume-canvas/<name>）。手写部分用于固定构建顺序。 */
 const INSTALLABLE_PLUGIN_DIRS = [
   // 手写清单最容易漏：新加的可装卸插件忘了加这里，就会出现「插件管理里少了这一项」
   // （用户 2026-11-05 实测：main 分支有的插件，这份清单里没有）。
@@ -239,7 +239,7 @@ function discoverInstallablePlugins() {
     if (!dir.isDirectory()) continue
     try {
       const pkg = JSON.parse(readFileSync(path.join(root, dir.name, "package.json"), "utf8"))
-      if (pkg.miniCanvas?.installable === true) names.push(dir.name)
+      if (pkg.plume?.installable === true) names.push(dir.name)
     } catch { /* 没有 package.json / JSON 坏了：跳过 */ }
   }
   return names
@@ -247,18 +247,18 @@ function discoverInstallablePlugins() {
 
 const TASKS = [
   // ui 不 external → externalize:false，指纹覆盖整个工作区依赖闭包
-  { name: "@mini-canvas/ui", label: "画布界面", dir: path.join(REPO_ROOT, "packages/ui"), externalize: false },
-  { name: "@mini-canvas/plugin-cloud-client", label: "云端客户端", dir: path.join(REPO_ROOT, "packages/plugins/plugin-cloud-client"), externalize: true },
+  { name: "@plume-canvas/ui", label: "画布界面", dir: path.join(REPO_ROOT, "packages/ui"), externalize: false },
+  { name: "@plume-canvas/plugin-cloud-client", label: "云端客户端", dir: path.join(REPO_ROOT, "packages/plugins/plugin-cloud-client"), externalize: true },
   // 自带插件的后台半：前端产物在 ui 的闭包里，这里只补 dist/server.js
   ...BUILTIN_SERVER_PLUGINS.map((d) => ({
-    name: "@mini-canvas/" + d,
+    name: "@plume-canvas/" + d,
     label: d + "（后台半）",
     dir: path.join(REPO_ROOT, "packages/plugins", d),
     externalize: false,
     script: "build:server",
   })),
   ...[...new Set([...INSTALLABLE_PLUGIN_DIRS, ...discoverInstallablePlugins()])].map((d) => ({
-    name: "@mini-canvas/" + d,
+    name: "@plume-canvas/" + d,
     label: d,
     dir: path.join(REPO_ROOT, "packages/plugins", d),
     externalize: true,

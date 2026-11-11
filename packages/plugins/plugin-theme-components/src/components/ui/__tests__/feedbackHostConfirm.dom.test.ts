@@ -9,8 +9,8 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
-import { Context } from '@mini-canvas/canvas-data'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext, type FeedbackService } from '@mini-canvas/canvas-render'
+import { Context } from '@plume-canvas/canvas-data'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext, type FeedbackService } from '@plume-canvas/canvas-render'
 import { themeComponentsPlugin } from '../../../index'
 import FeedbackHost from '../FeedbackHost.vue'
 

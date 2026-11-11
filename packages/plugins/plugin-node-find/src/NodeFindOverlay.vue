@@ -21,7 +21,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import type { CanvasNode } from '@mini-canvas/canvas-data'
+import type { CanvasNode } from '@plume-canvas/canvas-data'
 import { typeMeta, nodeLabelText, filterNodes } from './nodeFindFilter'
 
 const props = defineProps<{
@@ -82,7 +82,7 @@ onMounted(async () => {
 <style scoped>
 /* ============ 外层浮层 ============ */
 /* 配色全部走通用 UI token（--ui-*，由 <html class="dark"> 切换；值见
-   @mini-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。 */
+   @plume-canvas/canvas-render/src/styles/ui-theme.css）。本组件不带任何主题配置项。 */
 .node-find-overlay {
   position: fixed;
   inset: 0;

@@ -176,7 +176,7 @@ async function main(): Promise<void> {
 
   const seen = await page.ev<{ nodes: string[]; edges: number; texts: string[] }>(
     `(() => {
-       const host = window.MiniCanvasUI.getHost()
+       const host = window.PlumeUI.getHost()
        const nodes = host.nodeStore.getNodes()
        return {
          nodes: nodes.map((n) => n.id),
@@ -208,7 +208,7 @@ async function main(): Promise<void> {
   console.log('\n--- 反向：浏览器建节点 → MCP 读得到 ---')
   const webCreated = await page.ev<{ before: number; after: number }>(
     `(() => {
-       const host = window.MiniCanvasUI.getHost()
+       const host = window.PlumeUI.getHost()
        const before = host.nodeStore.getNodes().length
        host.command.execute('command:create-node', { type: 'text', position: { x: 200, y: 400 } })
        return { before, after: host.nodeStore.getNodes().length }

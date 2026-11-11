@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-theme-components",
+  "name": "@plume-canvas/plugin-theme-components",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "主题通用组件",
     "description": "默认主题的通用件：组件库目录 / 设置面板 / 外观变量 / 通知服务（应用级常驻）",
     "pluginName": "theme-components",
@@ -25,17 +25,17 @@
     "build": "vite build"
   },
   "peerDependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/ui-kit-shadcn": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/ui-kit-shadcn": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "vue": "^3.5.34",
     "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/plugin-shortcut-manager": "workspace:*",
-    "@mini-canvas/theme-contract": "workspace:*",
-    "@mini-canvas/ui-kit-shadcn": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/plugin-shortcut-manager": "workspace:*",
+    "@plume-canvas/theme-contract": "workspace:*",
+    "@plume-canvas/ui-kit-shadcn": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/server-renderer": "3.5.38",
     "happy-dom": "^21.0.4",
@@ -47,12 +47,12 @@
   },
   "dependencies": {
     "@ckpack/vue-color": "1.6.0",
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
-    "@mini-canvas/theme-contract": "workspace:*",
-    "@mini-canvas/ui-kit-shadcn": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
+    "@plume-canvas/theme-contract": "workspace:*",
+    "@plume-canvas/ui-kit-shadcn": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "vue-sonner": "^2.0.9"
   }

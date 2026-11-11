@@ -3,7 +3,7 @@
  * 状态条末尾徽章：节点数由组件自己从上下文订阅 doc 得到。
  */
 import { onBeforeUnmount, shallowRef } from 'vue'
-import { useCanvasContext } from '@mini-canvas/canvas-render'
+import { useCanvasContext } from '@plume-canvas/canvas-render'
 
 const { ctx } = useCanvasContext()
 const doc = ctx.tryGet<{ getNodes(): unknown[]; subscribe(fn: () => void): () => void }>('doc')

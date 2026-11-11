@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-model-tool-demo/src/toolProvider.ts
 // 格式：TypeScript 模块（插件入口：导出 name / apply）
 // 位置：注册模型可调用工具的插件
-import { defineTool, type Context, type PluginModule, type ToolSpec } from '@mini-canvas/kernel'
+import { defineTool, type Context, type PluginModule, type ToolSpec } from '@plume-canvas/kernel'
 
 export const name = 'model-tool-provider'
 

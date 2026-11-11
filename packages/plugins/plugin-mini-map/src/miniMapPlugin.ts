@@ -13,7 +13,7 @@
  * 不反向依赖宿主 demo / 其它插件。数据/几何纯逻辑在 miniMapEngine.ts（零 Vue 可单测）。
  */
 import { computed } from 'vue'
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import MiniMapOverlay from './MiniMapOverlay.vue'
 import { Config, miniMapConfigFrom } from './miniMapConfig'
 

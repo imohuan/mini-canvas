@@ -24,7 +24,7 @@ const check = (name, cond, extra = '') => {
 
 try {
   // 1) goal hook 包已装（设计 §3.4.1）
-  const hooksDir = path.join(dataDir, 'agent', 'mini-canvas', 'agents', 'canvas-agent', 'agent_state', 'hooks', 'goal')
+  const hooksDir = path.join(dataDir, 'agent', 'plume-canvas', 'agents', 'canvas-agent', 'agent_state', 'hooks', 'goal')
   const files = await fs.readdir(hooksDir).catch(() => [])
   check('goal hook 包装上了', files.includes('hooks.json') && files.includes('start.mjs') && files.includes('stop.mjs'), files.join(','))
   const manifest = JSON.parse(await fs.readFile(path.join(hooksDir, 'hooks.json'), 'utf8').catch(() => '{}'))

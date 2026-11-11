@@ -53,7 +53,7 @@
 | `waterfall` | `waterfall(name, ...args): any` | 环绕中间件（最后参数是 `next`） |
 
 内置事件（`EventMap`）：`ctx:ready`、`ctx:plugin-installed`、`ctx:plugin-uninstalled`、`ctx:lifecycle-change`。
-自定义事件用 `declare module '@mini-canvas/kernel' { interface Events { ... } }` 扩展，**单 payload** 形态
+自定义事件用 `declare module '@plume-canvas/kernel' { interface Events { ... } }` 扩展，**单 payload** 形态
 （`emit(name, obj)`）。未登记的事件名在 dev 下 `emit` 会给一次 warn。
 
 ## 作用域与状态

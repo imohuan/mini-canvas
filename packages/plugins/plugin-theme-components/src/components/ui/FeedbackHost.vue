@@ -9,12 +9,12 @@
  * - confirm / alert 用 shadcn AlertDialog（页面必须明确回答，点遮罩不消失）；
  * - prompt 用 shadcn Dialog（里面要放输入框与校验错误）。
  *
- * 服务本体在 @mini-canvas/canvas-render 的 feedback.ts：排队、Promise 都在那里，
+ * 服务本体在 @plume-canvas/canvas-render 的 feedback.ts：排队、Promise 都在那里，
  * 本组件只负责把 current 画出来并把用户的选择回填 —— 宿主/插件都从 ctx 取同一份服务。
  */
 import { computed, nextTick, ref, watch } from 'vue'
-import { useCanvasContextOrRender, splitDescription, type FeedbackService } from '@mini-canvas/canvas-render'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContextOrRender, splitDescription, type FeedbackService } from '@plume-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const AlertDialog = useUiComponent('AlertDialog')
 const AlertDialogContent = useUiComponent('AlertDialogContent')

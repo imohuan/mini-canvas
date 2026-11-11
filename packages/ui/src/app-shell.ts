@@ -5,15 +5,15 @@
  * 而 App.vue 与 AppProvider.vue 都要用同一个注入键与类型。
  */
 import type { ShallowRef } from 'vue'
-import type { Context, CanvasAppBaseServices } from '@mini-canvas/canvas-data'
-import type { CanvasHostHandle, MiniCanvasApi } from '@mini-canvas/canvas-render'
-import type { PluginManager } from '@mini-canvas/canvas-render'
-import { RENDER_SHELL_KEY } from '@mini-canvas/vue-render'
+import type { Context, CanvasAppBaseServices } from '@plume-canvas/canvas-data'
+import type { CanvasHostHandle, PlumeApi } from '@plume-canvas/canvas-render'
+import type { PluginManager } from '@plume-canvas/canvas-render'
+import { RENDER_SHELL_KEY } from '@plume-canvas/vue-render'
 
 /** 一次画布会话的三件宿主句柄。 */
 export interface AppCanvasSession {
   host: CanvasHostHandle
-  api: MiniCanvasApi
+  api: PlumeApi
   manager: PluginManager
 }
 
@@ -30,7 +30,7 @@ export interface AppShell {
 }
 
 /**
- * 外壳注入键：Provider 本体在 `@mini-canvas/vue-render`，这里只取同一个键
+ * 外壳注入键：Provider 本体在 `@plume-canvas/vue-render`，这里只取同一个键
  * （Symbol.for 同名），外壳组件按自己的 `AppShell` 类型收窄。
  */
 export const APP_SHELL_KEY = RENDER_SHELL_KEY as unknown as import('vue').InjectionKey<AppShell>

@@ -12,12 +12,12 @@
  * 这些断言只看“注册后 / 卸载后两处读到什么”，不碰内部实现。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore } from '@plume-canvas/canvas-data'
 import { createDocService } from '../../docService'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { ThemeRegistry } from '../registry/themeRegistry'
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 
 const MyEdge = { name: 'MyEdge' }
 const MyShell = { name: 'MyShell' }

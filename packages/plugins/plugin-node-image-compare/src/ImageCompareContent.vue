@@ -18,7 +18,7 @@
  * 指针一旦移出把手元素就会"拖一半断掉"（同 useNodeCardSize 的既有结论）。
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { useCanvasRender, createUpstreamCapability, useUiComponent, type UpstreamCapability } from '@mini-canvas/canvas-render'
+import { useCanvasRender, createUpstreamCapability, useUiComponent, type UpstreamCapability } from '@plume-canvas/canvas-render'
 import { clampDivider, resolveCompareEntries } from './imageCompareEngine'
 import { compareFollowPatch, resolveFollowSize } from './compareFit'
 import { resolveImageSrc } from './imageRefs'

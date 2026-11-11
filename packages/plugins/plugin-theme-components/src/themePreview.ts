@@ -8,9 +8,9 @@
  * 复用同一套语义：颜色读主题色板（readPreviewColor），连线几何用 buildEdgePath，
  * 节点内的按钮用 shadcn Button 的同一套 token（这里手写 DOM，避免预览依赖 VueFlow）。
  */
-import type { Context } from '@mini-canvas/canvas-base'
-import { THEME_PREVIEW_SLOT, type PreviewLayer, type PreviewNodeRect, type PreviewPaintCtx } from '@mini-canvas/canvas-render'
-import { buildEdgePath, Position } from '@mini-canvas/theme-contract'
+import type { Context } from '@plume-canvas/canvas-base'
+import { THEME_PREVIEW_SLOT, type PreviewLayer, type PreviewNodeRect, type PreviewPaintCtx } from '@plume-canvas/canvas-render'
+import { buildEdgePath, Position } from '@plume-canvas/theme-contract'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 

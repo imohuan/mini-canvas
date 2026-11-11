@@ -21,8 +21,8 @@
  * `tall`：宿主把它放在**大舞台**（全屏预览）里时传 true —— 控件条略大、进屏自动播放。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { useUiComponent } from '@mini-canvas/canvas-render'
-import { NodeLoadingState } from '@mini-canvas/plugin-theme-canvas'
+import { useUiComponent } from '@plume-canvas/canvas-render'
+import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
 
 const Button = useUiComponent('Button')
 import VideoPlayerBar from "./VideoPlayerBar.vue"

@@ -10,8 +10,8 @@
  * 三级各自独立排序，不跨级比较。菜单只决定“标题、图标、顺序、归属”；
  * 配置字段仍由 Config.group 归入二级分组，内容仍由 settingsGroup/<group> 渲染。
  */
-import { RegistryImpl, orderSlotItems } from '@mini-canvas/kernel'
-import type { Disposable, Registry } from '@mini-canvas/kernel'
+import { RegistryImpl, orderSlotItems } from '@plume-canvas/kernel'
+import type { Disposable, Registry } from '@plume-canvas/kernel'
 
 /** 0 级分类 */
 export interface SettingsCategoryDef {

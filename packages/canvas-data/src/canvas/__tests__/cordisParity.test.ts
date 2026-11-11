@@ -1,15 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { Service } from '@mini-canvas/kernel'
-import type { PluginScope } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { Service } from '@plume-canvas/kernel'
+import type { PluginScope } from '@plume-canvas/kernel'
 
 // ===== 类型层声明合并（能力② Context.greeter + 能力③ Events）：tsc -p 编译本文件会校验 =====
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface Events {
     'stats/report'(name: string, count: number): void
   }
 }
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     greeter: GreeterService
   }

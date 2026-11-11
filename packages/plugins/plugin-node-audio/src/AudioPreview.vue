@@ -10,7 +10,7 @@
  * 都能 useUiComponent 按名取用；换主题/换实现时一起换。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { formatClock } from "./audioPlayback"
 import AudioWavePlayer from "./AudioWavePlayer.vue"
 

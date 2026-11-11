@@ -13,8 +13,8 @@
  * - 装配时就关：从头到尾不出现（插件的存在不产生任何效果）。
  */
 import { describe, it, expect } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { alignGuidePlugin } from '@mini-canvas/plugin-align-guide'
+import { Context } from '@plume-canvas/canvas-data'
+import { alignGuidePlugin } from '@plume-canvas/plugin-align-guide'
 
 /** overlay 槽里本插件浮层的 occupant id */
 const SLOT_ID = 'align-guide/overlay'

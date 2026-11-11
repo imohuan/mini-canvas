@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs'
 let dir = ''
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-nodemcp-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-nodemcp-'))
 })
 afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true })
@@ -75,7 +75,7 @@ function fakeCtx(opts: { nodes?: Array<Record<string, unknown>>; assets?: Array<
   const assetStore = {
     list: async () => assets,
     readFile: async (name: string) => (name === 'pack1'
-      ? new Uint8Array(await fs.readFile(path.join(dir, 'p1.mcnode')))
+      ? new Uint8Array(await fs.readFile(path.join(dir, 'p1.plumenode')))
       : undefined),
   }
   const ctx = {
@@ -203,14 +203,14 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
       dir,
       Date.now(),
     )
-    await fs.writeFile(path.join(dir, 'p1.mcnode'), built.bytes)
+    await fs.writeFile(path.join(dir, 'p1.plumenode'), built.bytes)
     // 画布上已经有一个「演示节点」（比如刚拖过一次 / 上一批建的）
     const s = fakeCtx({
       nodes: [{ id: '1', type: 'ui', data: { label: '演示节点' } }],
-      assets: [{ id: 'a1', name: '演示节点.mcnode', kind: 'node-package', url: '/api/assets/files/pack1' }],
+      assets: [{ id: 'a1', name: '演示节点.plumenode', kind: 'node-package', url: '/api/assets/files/pack1' }],
     })
     apply(s.ctx)
-    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '演示节点.mcnode' })
+    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '演示节点.plumenode' })
     expect(r.ok).toBe(true)
     const sent = JSON.stringify(s.writes[0])
     expect(sent).toContain('演示节点 2')
@@ -224,16 +224,16 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
       dir,
       Date.now(),
     )
-    await fs.writeFile(path.join(dir, 'p1.mcnode'), built.bytes)
+    await fs.writeFile(path.join(dir, 'p1.plumenode'), built.bytes)
     const s = fakeCtx({
       nodes: [
         { id: '1', type: 'ui', data: { label: '演示节点' } },
         { id: '2', type: 'ui', data: { label: '演示节点 2' } },
       ],
-      assets: [{ id: 'a1', name: '演示节点.mcnode', kind: 'node-package', url: '/api/assets/files/pack1' }],
+      assets: [{ id: 'a1', name: '演示节点.plumenode', kind: 'node-package', url: '/api/assets/files/pack1' }],
     })
     apply(s.ctx)
-    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '演示节点.mcnode' })
+    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '演示节点.plumenode' })
     expect(r.ok).toBe(true)
     expect(JSON.stringify(s.writes[0])).toContain('演示节点 3')
   })
@@ -245,10 +245,10 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
       dir,
       Date.now(),
     )
-    await fs.writeFile(path.join(dir, 'p1.mcnode'), built.bytes)
-    const s = fakeCtx({ assets: [{ id: 'a1', name: '独一个.mcnode', kind: 'node-package', url: '/api/assets/files/pack1' }] })
+    await fs.writeFile(path.join(dir, 'p1.plumenode'), built.bytes)
+    const s = fakeCtx({ assets: [{ id: 'a1', name: '独一个.plumenode', kind: 'node-package', url: '/api/assets/files/pack1' }] })
     apply(s.ctx)
-    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '独一个.mcnode' })
+    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '独一个.plumenode' })
     expect(r.ok).toBe(true)
     expect(JSON.stringify(s.writes[0])).toContain('独一个')
   })
@@ -271,11 +271,11 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
       dir,
       Date.now(),
     )
-    await fs.writeFile(path.join(dir, 'p1.mcnode'), built.bytes)
+    await fs.writeFile(path.join(dir, 'p1.plumenode'), built.bytes)
 
     const s = fakeCtx({
       assets: [
-        { id: 'a1', name: '视频转宫格图.mcnode', kind: 'node-package', url: '/api/assets/files/pack1' },
+        { id: 'a1', name: '视频转宫格图.plumenode', kind: 'node-package', url: '/api/assets/files/pack1' },
         { id: 'a2', name: '一张图.png', kind: 'image', url: '/api/assets/files/xxx' },
       ],
     })
@@ -283,7 +283,7 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
     const r = await call(s.tools, 'canvas_ui_favorites')
     expect(r.total).toBe(1)
     const fav = (r.favorites as Array<Record<string, unknown>>)[0]
-    expect(fav.name).toBe('视频转宫格图.mcnode')
+    expect(fav.name).toBe('视频转宫格图.plumenode')
     expect(fav.scripts).toEqual(['video-grid'])
     expect(String(fav.doc)).toContain('把视频转九宫格')
   })
@@ -295,8 +295,8 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
       dir,
       Date.now(),
     )
-    await fs.writeFile(path.join(dir, 'p1.mcnode'), built.bytes)
-    const s = fakeCtx({ assets: [{ id: 'a1', name: 'A.mcnode', kind: 'node-package', url: '/api/assets/files/pack1' }] })
+    await fs.writeFile(path.join(dir, 'p1.plumenode'), built.bytes)
+    const s = fakeCtx({ assets: [{ id: 'a1', name: 'A.plumenode', kind: 'node-package', url: '/api/assets/files/pack1' }] })
     apply(s.ctx)
     expect((await call(s.tools, 'canvas_ui_favorites', { keyword: '宫格' })).shown).toBe(1)
     expect((await call(s.tools, 'canvas_ui_favorites', { keyword: '不存在的东西' })).shown).toBe(0)
@@ -304,28 +304,28 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
 
   it('★ canvas_ui_export 打包落到本机下载目录，并给绝对路径（用户：节点删了也要能恢复）', async () => {
     const dl = path.join(dir, 'dl')
-    const prev = process.env.MINI_CANVAS_DOWNLOAD_DIR
-    process.env.MINI_CANVAS_DOWNLOAD_DIR = dl
+    const prev = process.env.PLUME_DOWNLOAD_DIR
+    process.env.PLUME_DOWNLOAD_DIR = dl
     try {
       const painted = { id: '2', type: 'ui', data: { label: '演示', uiHtml: '<div>x</div>' } }
       const s = fakeCtx({ nodes: [painted] })
       apply(s.ctx)
       const r = await call(s.tools, 'canvas_ui_export', { nodeId: '2' })
       expect(r.ok).toBe(true)
-      expect(String(r.path)).toBe(path.join(dl, '演示.mcnode'))
+      expect(String(r.path)).toBe(path.join(dl, '演示.plumenode'))
       expect(String(r.dir)).toBe(dl)
       expect(Number(r.bytes)).toBeGreaterThan(0)
-      // 指定了 MINI_CANVAS_DOWNLOAD_DIR 就**只写那里**（不许悄悄回落到真实下载目录 —— 踩过）
+      // 指定了 PLUME_DOWNLOAD_DIR 就**只写那里**（不许悄悄回落到真实下载目录 —— 踩过）
       expect(String(r.path).startsWith(dl)).toBe(true)
       // 文件真的在盘上
       const onDisk = await fs.readFile(String(r.path))
       expect(onDisk.length).toBe(Number(r.bytes))
       // 第二次导出不覆盖（旧那份是保命符）
       const r2 = await call(s.tools, 'canvas_ui_export', { nodeId: '2' })
-      expect(path.basename(String(r2.path))).toBe('演示 (2).mcnode')
+      expect(path.basename(String(r2.path))).toBe('演示 (2).plumenode')
     } finally {
-      if (prev === undefined) delete process.env.MINI_CANVAS_DOWNLOAD_DIR
-      else process.env.MINI_CANVAS_DOWNLOAD_DIR = prev
+      if (prev === undefined) delete process.env.PLUME_DOWNLOAD_DIR
+      else process.env.PLUME_DOWNLOAD_DIR = prev
     }
   })
 
@@ -346,13 +346,13 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
       dir,
       Date.now(),
     )
-    await fs.writeFile(path.join(dir, 'p1.mcnode'), built.bytes)
+    await fs.writeFile(path.join(dir, 'p1.plumenode'), built.bytes)
     // 本机那份脚本换个内容 → 触发整包升版本（顺带验"不动本机已有脚本"）
     await fs.writeFile(path.join(dir, 'video-grid.mjs'), 'export const run = () => 999\n')
 
-    const s = fakeCtx({ assets: [{ id: 'a1', name: '视频转宫格图.mcnode', kind: 'node-package', url: '/api/assets/files/pack1' }] })
+    const s = fakeCtx({ assets: [{ id: 'a1', name: '视频转宫格图.plumenode', kind: 'node-package', url: '/api/assets/files/pack1' }] })
     apply(s.ctx)
-    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '视频转宫格图.mcnode' })
+    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '视频转宫格图.plumenode' })
     expect(r.ok).toBe(true)
     expect(r.nodeId).toBe('99') // 来自 doc.batchNodes 的 added
     expect(r.action).toBe('bump')
@@ -366,11 +366,11 @@ describe('② 收藏的可视化节点：列出 / 建到画布', () => {
   })
 
   it('指定不存在的包 → 明确报错并列出有哪些', async () => {
-    const s = fakeCtx({ assets: [{ id: 'a1', name: 'A.mcnode', kind: 'node-package', url: '/api/assets/files/pack1' }] })
+    const s = fakeCtx({ assets: [{ id: 'a1', name: 'A.plumenode', kind: 'node-package', url: '/api/assets/files/pack1' }] })
     apply(s.ctx)
-    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '不存在.mcnode' })
+    const r = await call(s.tools, 'canvas_ui_add_favorite', { name: '不存在.plumenode' })
     expect(r.ok).toBe(false)
-    expect(String(r.error)).toContain('A.mcnode')
+    expect(String(r.error)).toContain('A.plumenode')
   })
 
   it('不给 url / name → 明确报错（不是静默什么都不做）', async () => {

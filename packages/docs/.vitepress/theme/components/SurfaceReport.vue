@@ -6,7 +6,7 @@ import { computed, onMounted, ref } from 'vue'
  *
  * 数据来源按优先级依次尝试，第一个成功即用：
  *   1. 传了 url → 直接 fetch（后台的快照接口、或自建 JSON）；
- *   2. 同页跑着画布应用（window.MiniCanvasUI / window.MiniCanvas）→ 当场调 ctx.surface()；
+ *   2. 同页跑着画布应用（window.PlumeUI / window.Plume）→ 当场调 ctx.surface()；
  *   3. 仓库存的快照文件 public/surface-snapshot.json —— **真实采集**、随仓库走，
  *      页面因此永远有真数据可看；想更新就用「重新采集」下载当次快照、覆盖这个文件。
  *
@@ -19,13 +19,13 @@ import { computed, onMounted, ref } from 'vue'
 const props = withDefaults(
   defineProps<{
     url?: string
-    /** 运行中应用暴露 API 的全局名（ui 应用用 MiniCanvasUI，裸宿主用 MiniCanvas） */
+    /** 运行中应用暴露 API 的全局名（ui 应用用 PlumeUI，裸宿主用 Plume） */
     windowKey?: string
     /** 额外探测的候选地址（顺序即优先级）；传空数组可关掉自动探测 */
     autoProbe?: string[]
   }>(),
   {
-    windowKey: 'MiniCanvasUI',
+    windowKey: 'PlumeUI',
     // 只试同源桥。/mcapp 由 dev server 代理到本机画布应用（cloud-server :8865）。
    // 想换成别的地址（例如后台的快照接口）就传 autoProbe 覆盖它。
     // 兜底数据源：仓库存的真实快照（随仓库走，保证这一页永远有真数据）。
@@ -116,13 +116,13 @@ async function fetchReport(url: string): Promise<Report> {
 
 /** 「重新采集」：当前页跑着应用时，采一份快照并下载成 JSON（覆盖 public/surface-snapshot.json 即更新数据） */
 function recapture() {
-  const direct = readFromApi(w()[props.windowKey] ?? w().MiniCanvas)
+  const direct = readFromApi(w()[props.windowKey] ?? w().Plume)
   if (!direct) {
     errorMsg.value = '当前页没有运行中的画布应用，采不了新快照（' + w().location?.href + '）'
     status.value = 'error'
     return
   }
-  const snap = { capturedAt: new Date().toISOString(), source: 'window.MiniCanvasUI.getContext().surface()', ...direct }
+  const snap = { capturedAt: new Date().toISOString(), source: 'window.PlumeUI.getContext().surface()', ...direct }
   const blob = new Blob([JSON.stringify(snap, null, 2)], { type: 'application/json' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
@@ -143,7 +143,7 @@ async function load() {
       r = await fetchReport(props.url)
     } else {
       // ① 优先：同页就挂着的 API（文档站与画布应用同源同页时才成立）
-      const direct = readFromApi(w()[props.windowKey] ?? w().MiniCanvas)
+      const direct = readFromApi(w()[props.windowKey] ?? w().Plume)
       if (direct) {
         source.value = '实时 · window.' + props.windowKey + '.getContext().surface()'
         r = direct
@@ -211,41 +211,41 @@ const providedBy = computed(() => {
 })
 
 const stateBadgeClass = (s: string) =>
-  s === 'active' ? 'mc-badge mc-badge--on' : s === 'failed' ? 'mc-badge mc-badge--bad' : 'mc-badge'
+  s === 'active' ? 'plume-badge plume-badge--on' : s === 'failed' ? 'plume-badge plume-badge--bad' : 'plume-badge'
 </script>
 
 <template>
-  <div class="mc-live">
-    <div class="mc-plugin-toolbar">
-      <span class="mc-badge">数据源 {{ source || '（未取到）' }}</span>
-      <span v-if="capturedAt" class="mc-badge">采集于 {{ capturedAt.replace('T', ' ').slice(0, 19) }}</span>
-      <button class="mc-preview__btn" @click="load">刷新</button>
-      <button class="mc-preview__btn" title="把当前运行中的画布采一份快照并下载（用来更新 public/surface-snapshot.json）" @click="recapture">
+  <div class="plume-live">
+    <div class="plume-plugin-toolbar">
+      <span class="plume-badge">数据源 {{ source || '（未取到）' }}</span>
+      <span v-if="capturedAt" class="plume-badge">采集于 {{ capturedAt.replace('T', ' ').slice(0, 19) }}</span>
+      <button class="plume-preview__btn" @click="load">刷新</button>
+      <button class="plume-preview__btn" title="把当前运行中的画布采一份快照并下载（用来更新 public/surface-snapshot.json）" @click="recapture">
         重新采集
       </button>
     </div>
 
-    <div v-if="status === 'loading'" class="mc-empty">正在读取画布的自省快照…</div>
+    <div v-if="status === 'loading'" class="plume-empty">正在读取画布的自省快照…</div>
 
-    <div v-else-if="status === 'error'" class="mc-empty">
+    <div v-else-if="status === 'error'" class="plume-empty">
       <p>读不到：{{ errorMsg }}</p>
-      <p v-if="tried.length" class="mc-dim">试过这些地址：{{ tried.join('、') }}</p>
+      <p v-if="tried.length" class="plume-dim">试过这些地址：{{ tried.join('、') }}</p>
       <p>正常情况下这一页会显示内置的真实快照（public/surface-snapshot.json）。<br />
       没看到数据，多半是快照文件没随站点发布 —— 检查它是否在 public/ 下。</p>
     </div>
 
     <template v-else>
-      <div class="mc-stat-row">
-        <div class="mc-stat"><b>{{ counts.plugins }}</b><span>插件</span></div>
-        <div class="mc-stat"><b>{{ counts.services }}</b><span>服务</span></div>
-        <div class="mc-stat"><b>{{ counts.kinds }}</b><span>注册场种类</span></div>
-        <div class="mc-stat"><b>{{ counts.entries }}</b><span>场条目</span></div>
-        <div class="mc-stat"><b>{{ counts.commands }}</b><span>命令</span></div>
-        <div class="mc-stat"><b>{{ counts.tools }}</b><span>生成工具</span></div>
-        <div class="mc-stat"><b>{{ counts.events }}</b><span>事件名</span></div>
+      <div class="plume-stat-row">
+        <div class="plume-stat"><b>{{ counts.plugins }}</b><span>插件</span></div>
+        <div class="plume-stat"><b>{{ counts.services }}</b><span>服务</span></div>
+        <div class="plume-stat"><b>{{ counts.kinds }}</b><span>注册场种类</span></div>
+        <div class="plume-stat"><b>{{ counts.entries }}</b><span>场条目</span></div>
+        <div class="plume-stat"><b>{{ counts.commands }}</b><span>命令</span></div>
+        <div class="plume-stat"><b>{{ counts.tools }}</b><span>生成工具</span></div>
+        <div class="plume-stat"><b>{{ counts.events }}</b><span>事件名</span></div>
       </div>
 
-      <div class="mc-tabs">
+      <div class="plume-tabs">
         <button
           v-for="t in ([
             ['plugins', '插件'],
@@ -257,7 +257,7 @@ const stateBadgeClass = (s: string) =>
             ['events', '事件'],
           ] as const)"
           :key="t[0]"
-          :class="['mc-tab', { 'mc-tab--on': tab === t[0] }]"
+          :class="['plume-tab', { 'plume-tab--on': tab === t[0] }]"
           @click="tab = t[0]"
         >
           {{ t[1] }}
@@ -265,11 +265,11 @@ const stateBadgeClass = (s: string) =>
       </div>
 
       <!-- 插件 -->
-      <table v-if="tab === 'plugins'" class="mc-table">
+      <table v-if="tab === 'plugins'" class="plume-table">
         <thead><tr><th>插件名</th><th>状态</th><th>类型</th><th>缺依赖</th></tr></thead>
         <tbody>
           <tr v-for="p in report.plugins" :key="p.name">
-            <td class="mc-code">{{ p.name }}</td>
+            <td class="plume-code">{{ p.name }}</td>
             <td><span :class="stateBadgeClass(p.state)">{{ p.state }}</span></td>
             <td>{{ p.core ? '核心' : '业务' }}</td>
             <td>{{ p.missingDeps?.length ? p.missingDeps.join(', ') : '—' }}</td>
@@ -279,22 +279,22 @@ const stateBadgeClass = (s: string) =>
 
       <!-- 谁放了什么 -->
       <div v-else-if="tab === 'tree'">
-        <table class="mc-table">
+        <table class="plume-table">
           <thead><tr><th>来源（谁）</th><th>放了多少条</th><th>用了哪些注册场</th></tr></thead>
           <tbody>
             <tr v-for="[src, info] in bySource" :key="src">
-              <td class="mc-code">{{ src }}</td>
+              <td class="plume-code">{{ src }}</td>
               <td>{{ info.entries }}</td>
               <td>{{ [...info.kinds].join(' / ') }}</td>
             </tr>
           </tbody>
         </table>
         <h4>这些插件提供了服务</h4>
-        <table class="mc-table">
+        <table class="plume-table">
           <thead><tr><th>来源（谁）</th><th>提供了哪些服务</th></tr></thead>
           <tbody>
             <tr v-for="[src, names] in providedBy" :key="'s-' + src">
-              <td class="mc-code">{{ src }}</td>
+              <td class="plume-code">{{ src }}</td>
               <td>{{ names.join(', ') }}</td>
             </tr>
           </tbody>
@@ -302,28 +302,28 @@ const stateBadgeClass = (s: string) =>
       </div>
 
       <!-- 服务 -->
-      <table v-else-if="tab === 'services'" class="mc-table">
+      <table v-else-if="tab === 'services'" class="plume-table">
         <thead><tr><th>服务名</th><th>谁提供的</th><th>方法</th></tr></thead>
         <tbody>
           <tr v-for="s in report.services" :key="s.name">
-            <td class="mc-code">{{ s.name }}</td>
+            <td class="plume-code">{{ s.name }}</td>
             <td>{{ s.source }}</td>
-            <td class="mc-dim">{{ (s.methods ?? []).join(', ') || '—' }}</td>
+            <td class="plume-dim">{{ (s.methods ?? []).join(', ') || '—' }}</td>
           </tr>
         </tbody>
       </table>
 
       <!-- 注册场 -->
       <div v-else-if="tab === 'registries'">
-        <table class="mc-table">
+        <table class="plume-table">
           <thead><tr><th>种类</th><th>键数</th><th>条目数</th><th>键明细</th></tr></thead>
           <tbody>
             <tr v-for="k in report.registries" :key="k.kind">
-              <td class="mc-code">{{ k.kind }}</td>
+              <td class="plume-code">{{ k.kind }}</td>
               <td>{{ k.keys.length }}</td>
               <td>{{ k.keys.reduce((n, x) => n + x.count, 0) }}</td>
-              <td class="mc-dim">
-                <span v-for="x in k.keys" :key="x.key" class="mc-keychip">
+              <td class="plume-dim">
+                <span v-for="x in k.keys" :key="x.key" class="plume-keychip">
                   {{ x.key }}<i v-if="x.count > 1">×{{ x.count }}</i>
                 </span>
               </td>
@@ -333,11 +333,11 @@ const stateBadgeClass = (s: string) =>
       </div>
 
       <!-- 命令 -->
-      <table v-else-if="tab === 'commands'" class="mc-table">
+      <table v-else-if="tab === 'commands'" class="plume-table">
         <thead><tr><th>命令 id</th><th>来源</th><th>快捷键</th><th>分组</th><th>注册路径</th></tr></thead>
         <tbody>
           <tr v-for="c in report.commands" :key="c.id + c.origin">
-            <td class="mc-code">{{ c.id }}</td>
+            <td class="plume-code">{{ c.id }}</td>
             <td>{{ c.source }}</td>
             <td>{{ (c.keys ?? []).join(', ') || '—' }}</td>
             <td>{{ c.group || '—' }}</td>
@@ -347,11 +347,11 @@ const stateBadgeClass = (s: string) =>
       </table>
 
       <!-- 生成工具 -->
-      <table v-else-if="tab === 'tools'" class="mc-table">
+      <table v-else-if="tab === 'tools'" class="plume-table">
         <thead><tr><th>工具名</th><th>标题</th><th>分组</th></tr></thead>
         <tbody>
           <tr v-for="t in report.tools" :key="t.name">
-            <td class="mc-code">{{ t.name }}</td>
+            <td class="plume-code">{{ t.name }}</td>
             <td>{{ t.title || '—' }}</td>
             <td>{{ t.group || '—' }}</td>
           </tr>
@@ -359,24 +359,24 @@ const stateBadgeClass = (s: string) =>
       </table>
 
       <!-- 事件 -->
-      <div v-else-if="tab === 'events'" class="mc-chipbox">
-        <span v-for="e in report.events" :key="e" class="mc-badge">{{ e }}</span>
+      <div v-else-if="tab === 'events'" class="plume-chipbox">
+        <span v-for="e in report.events" :key="e" class="plume-badge">{{ e }}</span>
       </div>
     </template>
   </div>
 </template>
 
 <style scoped>
-.mc-live {
+.plume-live {
   margin: 16px 0;
 }
-.mc-stat-row {
+.plume-stat-row {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin: 14px 0;
 }
-.mc-stat {
+.plume-stat {
   border: 1px solid var(--vp-c-divider);
   border-radius: 10px;
   padding: 8px 14px;
@@ -385,20 +385,20 @@ const stateBadgeClass = (s: string) =>
   flex-direction: column;
   min-width: 84px;
 }
-.mc-stat b {
+.plume-stat b {
   font-size: 18px;
 }
-.mc-stat span {
+.plume-stat span {
   font-size: 12px;
   color: var(--vp-c-text-2);
 }
-.mc-tabs {
+.plume-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin: 12px 0;
 }
-.mc-tab {
+.plume-tab {
   border: 1px solid var(--vp-c-divider);
   border-radius: 999px;
   padding: 4px 12px;
@@ -407,31 +407,31 @@ const stateBadgeClass = (s: string) =>
   cursor: pointer;
   font-size: 13px;
 }
-.mc-tab--on {
+.plume-tab--on {
   color: var(--vp-c-brand-1);
   border-color: var(--vp-c-brand-1);
 }
-.mc-table {
+.plume-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
   display: table;
 }
-.mc-table th,
-.mc-table td {
+.plume-table th,
+.plume-table td {
   border-bottom: 1px solid var(--vp-c-divider);
   padding: 6px 10px;
   text-align: left;
   vertical-align: top;
 }
-.mc-table th {
+.plume-table th {
   color: var(--vp-c-text-2);
   font-weight: 600;
 }
-.mc-dim {
+.plume-dim {
   color: var(--vp-c-text-2);
 }
-.mc-keychip {
+.plume-keychip {
   display: inline-block;
   margin: 0 6px 4px 0;
   padding: 2px 6px;
@@ -440,12 +440,12 @@ const stateBadgeClass = (s: string) =>
   font-family: var(--vp-font-family-mono);
   font-size: 11px;
 }
-.mc-keychip i {
+.plume-keychip i {
   color: var(--vp-c-brand-1);
   font-style: normal;
   margin-left: 3px;
 }
-.mc-chipbox {
+.plume-chipbox {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;

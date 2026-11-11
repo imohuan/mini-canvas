@@ -1,5 +1,5 @@
 /**
- * themeBridge —— 把主题的「外观配置」交接给组件库（`@mini-canvas/ui-kit-shadcn`）。
+ * themeBridge —— 把主题的「外观配置」交接给组件库（`@plume-canvas/ui-kit-shadcn`）。
  *
  * 要解决的问题（用户口径）：组件库预览页 `src/App.vue` 里已经有一套可选的外观
  * （base color / theme / chart color / font / heading / radius），但真实应用里没人读它，
@@ -10,14 +10,14 @@
  *   用户还可在设置里逐个改）。组件库的 `styles/host.css` 已经把这些语义色映射成
  *   shadcn 的 `--primary` / `--background` / …，所以**颜色本来就已经接上了**，
  *   这里不再写第二份色板 —— 否则用户改「强调色」时组件库不跟着变，正是要避免的漂移。
- * - **形状 / 字体**：这两项项目里原本没有统一出口，这里补上。写成 `--mct-*` 变量，
+ * - **形状 / 字体**：这两项项目里原本没有统一出口，这里补上。写成 `--plume-*` 变量，
  *   由组件库的 host.css 消费（`--radius-sm/md/lg/xl`、全站 `font-family`）。
  *
- * 为什么是 `--mct-*` 而不是直接改 `--radius`：`--radius` 是 shadcn 自己的变量名，
+ * 为什么是 `--plume-*` 而不是直接改 `--radius`：`--radius` 是 shadcn 自己的变量名，
  * 组件库里只有个别文件用；直接占用它会让「以后组件库升级」与「主题包」抢同一个名字。
  * 用带前缀的变量，谁消费谁声明，边界清楚。
  *
- * 住在 @mini-canvas/theme-contract 的原因：两个主题包都要读同一套变量与档位表，
+ * 住在 @plume-canvas/theme-contract 的原因：两个主题包都要读同一套变量与档位表，
  * 放在任何一边都会让另一边反向 import 插件。这里只有纯 TS，零 .vue。
  *
  * **选项表（字体 / 圆角）不在本文件重复**：直接引用组件库导出的 `FONT_OPTIONS` /
@@ -30,7 +30,7 @@ import {
   loadFont,
   type FontOption,
   type RadiusOption,
-} from '@mini-canvas/ui-kit-shadcn/theme/fonts'
+} from '@plume-canvas/ui-kit-shadcn/theme/fonts'
 // 尺寸配置来自组件库的**纯 TS 模块**，不走包根：
 // 包根会连带 .vue 组件，纯 node 单测（theme-contract）解析不了。
 import {
@@ -38,7 +38,7 @@ import {
   resetComponentConfig,
   setComponentConfig,
   type ComponentSize,
-} from '@mini-canvas/ui-kit-shadcn/componentConfig'
+} from '@plume-canvas/ui-kit-shadcn/componentConfig'
 
 
 /** 字体选项：`inherit`（跟随宿主）在最前，其余原样取自组件库 */
@@ -144,9 +144,9 @@ export const THEME_FONT_STACKS: Readonly<Record<ThemeFontChoice, string>> = {
 
 /** 桥接要写进 `<html>` 的变量名（只在有自定义值时写，缺省一律清掉） */
 export const THEME_BRIDGE_VARS = {
-  radius: '--mct-radius',
-  fontBody: '--mct-font-body',
-  fontHeading: '--mct-font-heading',
+  radius: '--plume-radius',
+  fontBody: '--plume-font-body',
+  fontHeading: '--plume-font-heading',
   /**
    * 项目自带的三档圆角 token（ui-theme.css）。设置面板里的字段控件
    * （SettingsSchemaField / 导航项）直接读它们，且带 scoped 的 data-v 属性，
@@ -161,11 +161,11 @@ export const THEME_BRIDGE_VARS = {
    *
    * 组件库的控件高度由 `size` prop 决定，但设置面板里的导航按钮、行容器是
    * 主题自己的 CSS，没有 size prop；以前它们读一个**从没有人写**的
-   * `--mct-size-control-h`，所以改「控件尺寸」时面板里的行完全不动
+   * `--plume-size-control-h`，所以改「控件尺寸」时面板里的行完全不动
    * （用户 2026-11-05 实测：切到「大」后设置界面毫无变化）。
    * 这里按同一档位把行高落成变量，面板里的行与组件库控件才会一起变。
    */
-  sizeControlHeight: '--mct-size-control-h',
+  sizeControlHeight: '--plume-size-control-h',
 } as const
 
 /** 尺寸档位 → 设置面板行高（与 Button 的 h-8 / h-9 / h-10 对齐） */
@@ -234,7 +234,7 @@ export function resolveThemeBridgeVars(input: ThemeBridgeInput): Record<string, 
   if (body) out[THEME_BRIDGE_VARS.fontBody] = body
   // 标题：inherit = 跟随正文（写 var 引用，正文变了标题一起变）
   if (input.heading === 'inherit') {
-    if (body) out[THEME_BRIDGE_VARS.fontHeading] = 'var(--mct-font-body, inherit)'
+    if (body) out[THEME_BRIDGE_VARS.fontHeading] = 'var(--plume-font-body, inherit)'
   } else {
     const heading = THEME_FONT_STACKS[input.heading] ?? ''
     if (heading) out[THEME_BRIDGE_VARS.fontHeading] = heading

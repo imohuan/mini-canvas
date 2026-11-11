@@ -122,7 +122,7 @@ if (maybe) maybe.doIt()              // 可选能力：有就用，没有就算�
 // 位置：跟着服务定义放在一起，被同包入口 import 进来即可
 import type { GreeterService } from './greeterService'
 
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface Services {
     greeter: GreeterService   // ← 名字 → 类型；之后 ctx.get('greeter') 就认识它了
   }
@@ -145,7 +145,7 @@ declare module '@mini-canvas/kernel' {
 
 ```ts
 // 文件：my-plugin/src/greeterService.ts
-import { Service, type Context } from '@mini-canvas/kernel'
+import { Service, type Context } from '@plume-canvas/kernel'
 
 export class GreeterService extends Service {
   constructor(ctx: Context) {
@@ -187,7 +187,7 @@ abstract class Service {
 > 提供服务（宿主/根层用）；返回撤销函数。注：本根方法不自动登记清理，撤销由调用方持有并执行；
 > 插件层请走注入的 `PluginScope.provide`（撤销随插件 fiber 自动清）。
 
-宿主侧的真实用法（`packages/canvas-render/src/host/createMiniCanvasHost.ts`）：
+宿主侧的真实用法（`packages/canvas-render/src/host/createPlumeHost.ts`）：
 
 ```ts
 const view = new ViewService({ nodeStore })
@@ -214,7 +214,7 @@ export function apply(ctx: Context) {
 | 文件 | 它在干什么 |
 | --- | --- |
 | `packages/canvas-data/src/canvas/canvasBasePlugin.ts` | 基础插件一次性 `ctx.inject(...)` 上架 `doc` / `save` / `selection` / `resources` |
-| `packages/canvas-render/src/host/createMiniCanvasHost.ts` | 宿主用根 `ctx.inject` 注入 `view` / `canvas` / `nodeToolbar` |
+| `packages/canvas-render/src/host/createPlumeHost.ts` | 宿主用根 `ctx.inject` 注入 `view` / `canvas` / `nodeToolbar` |
 | `packages/kernel/src/Context.ts` | 服务表本体：`inject` / `provide` / `get` / `tryGet` / `hasService` / `depSatisfied` / `wakePending` |
 | `packages/kernel/src/service.ts` | `Service` 基类（`super(ctx, name)` → `provide`） |
 | `packages/kernel/src/__tests__/service.test.ts` | 锁住三条实测行为：上架可取、卸载即消失、重名抛错 |
@@ -245,9 +245,9 @@ plugin-services-demo/
 // 文件：packages\docs\public\examples\kernel\plugin-services-demo/src/greeterService.ts
 // 格式：TypeScript 模块（类形态插件：提供并上架一个服务）
 // 位置：插件包里「提供方」的那一件
-import { Service, type Context } from '@mini-canvas/kernel'
+import { Service, type Context } from '@plume-canvas/kernel'
 
-declare module '@mini-canvas/kernel' {
+declare module '@plume-canvas/kernel' {
   interface Services {
     greeter: GreeterService           // ① 类型登记：ctx.get('greeter') 从此自带类型
   }
@@ -270,7 +270,7 @@ export class GreeterService extends Service {
 // 文件：packages\docs\public\examples\kernel\plugin-services-demo/src/consumerPlugin.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：插件包里「依赖方」的那一件
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'consumer'
 export const inject = ['greeter'] as string[]   // ① 硬依赖：greeter 没就绪，本插件停在 pending
@@ -293,7 +293,7 @@ export const consumerPlugin: PluginModule = { name, inject, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-services-demo/src/optionalPlugin.ts
 // 格式：TypeScript 模块（插件入口，但依赖是可选的）
 // 位置：插件包里「有就用、没有就算了」的那一件
-import type { Context, PluginModule } from '@mini-canvas/kernel'
+import type { Context, PluginModule } from '@plume-canvas/kernel'
 import type { GreeterService } from './greeterService'
 
 export const name = 'optional'
@@ -316,7 +316,7 @@ export const optionalPlugin: PluginModule = { name, inject, apply }
 // 文件：packages\docs\public\examples\kernel\plugin-services-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：把提供方与两个消费方装进同一个内核
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { GreeterService } from './greeterService'
 import { consumerPlugin } from './consumerPlugin'
 import { optionalPlugin } from './optionalPlugin'

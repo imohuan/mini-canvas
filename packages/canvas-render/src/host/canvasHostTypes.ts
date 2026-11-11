@@ -8,9 +8,9 @@
  * 不再保留“旧 CanvasHost 自己启动”的合并类型：那会让调用方继续把启动参数传给
  * 一个不负责启动的组件，错误只能在运行时才暴露。
  */
-import type { CanvasNode, StorageAdapter } from '@mini-canvas/canvas-data'
-import type { PluginClassLike, PluginModule } from '@mini-canvas/kernel'
-import type { CanvasHostHandle } from './createMiniCanvasHost'
+import type { CanvasNode, StorageAdapter } from '@plume-canvas/canvas-data'
+import type { PluginClassLike, PluginModule } from '@plume-canvas/kernel'
+import type { CanvasHostHandle } from './createPlumeHost'
 import type { PluginManifest } from './pluginManager'
 import type { NodeWrite } from '../contracts/nodeRegistryKey'
 import type { EdgeVisual } from '../contracts/edgeContext'
@@ -22,7 +22,7 @@ import type { SnapZoneConfig } from '../connection/geometry'
 export interface CanvasHostBootProps {
   /** 冷启动插件（顺序即装载序）。 */
   plugins?: (PluginModule | PluginClassLike)[]
-  /** 装配清单（给则优先于 plugins，见 createMiniCanvasHost）。 */
+  /** 装配清单（给则优先于 plugins，见 createPlumeHost）。 */
   manifest?: PluginManifest
   /** 存储后端；缺省内存 adapter。 */
   adapter?: StorageAdapter

@@ -17,7 +17,7 @@
  *
  * 单值入口（register/get/set/unregister/has/types）读写基座 segments；叠加层走 registerContribution。
  */
-import { SlotRegistry } from '@mini-canvas/kernel'
+import { SlotRegistry } from '@plume-canvas/kernel'
 import { assertRegion } from '../region'
 import type { NodeRegion } from '../region'
 

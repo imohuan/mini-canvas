@@ -4,7 +4,7 @@
  * 用户口径 2026-11-06：新增 / 发布这类会改内容的动作也要走项目里的确认框，
  * 不能直接执行。文案按“发布到哪里”区分，并明确会新增多少内容。
  */
-import type { ConfirmOptions } from '@mini-canvas/canvas-render'
+import type { ConfirmOptions } from '@plume-canvas/canvas-render'
 
 export function publishConfirmText(kind: 'canvas' | 'storyboard', count: number): ConfirmOptions {
   return {

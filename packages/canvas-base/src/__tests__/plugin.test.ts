@@ -5,8 +5,8 @@
  * 说明底座又把会话服务绑进了应用生命周期，项目页就会被强行要求启动一张画布。
  */
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
+import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 import { canvasBasePlugin, createCanvasBaseAppPlugin, CANVAS_BASE_PLUGIN_NAME } from '../plugin'
 
 describe('canvas-base 插件身份', () => {

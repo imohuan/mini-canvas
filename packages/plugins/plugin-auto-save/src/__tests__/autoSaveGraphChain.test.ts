@@ -3,8 +3,8 @@
  * auto-save 周期性 flush → 数据落盘（P0-1 修复后链路完整，本测试补证据）。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, createDocService } from '@mini-canvas/canvas-data'
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import { NodeStore, EdgeStore, Selection, History, GraphDocument, SaveServiceImpl, createDocService } from '@plume-canvas/canvas-data'
 import { autoSavePlugin } from '../autoSavePlugin'
 import type { AutoSaveService } from '../autoSavePlugin'
 
@@ -21,7 +21,7 @@ function boot() {
     snapshot: () => ({ nodes: JSON.parse(JSON.stringify(nodeStore.getNodes())), edges: JSON.parse(JSON.stringify(edgeStore.getEdges())) }),
     restore: (g: { nodes: unknown[]; edges: unknown[] }) => { nodeStore.replaceAll(g.nodes as never); edgeStore.replaceAll(g.edges as never) },
   })
-  // graph commit 回调：把整图写进 save 脏队列（宿主 createMiniCanvasHost 同款）
+  // graph commit 回调：把整图写进 save 脏队列（宿主 createPlumeHost 同款）
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history, (env) => {
     save.set('graph', env.nodes, 'canvas')
   })

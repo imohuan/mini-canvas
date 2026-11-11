@@ -36,7 +36,7 @@
 
 ```vue
 <script setup lang="ts">
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 const ToolParamHint = useUiComponent('toolParamHint')
 </script>
 

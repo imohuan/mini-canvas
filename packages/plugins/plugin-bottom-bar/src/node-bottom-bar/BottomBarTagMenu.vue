@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { ResourceItem } from 'prosemirror-editor-bundle'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { nodeIdOfChip } from '../refSlots'
 import type { TagMenuEntry, TagMenuKind } from '../tagMenu'
 

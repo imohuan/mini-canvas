@@ -8,7 +8,7 @@
  * undefined / false / null；只有 runBarAction 缺执行器时明确 reject，
  * 因为那是一次用户已经触发的动作，不能假装成功。
  */
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 import type {
   CanvasActions,
   DocService,
@@ -17,9 +17,9 @@ import type {
   NodeFactoryService,
   SelectionService,
   ViewContract,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import { createNotifyService, type NotifyOptions, type NotifyService } from './notifyService'
-import { canvasRuntime, commandRuntime, type CommandRuntime } from '@mini-canvas/canvas-data'
+import { canvasRuntime, commandRuntime, type CommandRuntime } from '@plume-canvas/canvas-data'
 
 export type SelectMode = 'replace' | 'add' | 'toggle'
 

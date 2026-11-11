@@ -1,4 +1,4 @@
-# AGENTS.md — mini-canvas 项目开工入口
+# AGENTS.md — plume-canvas 项目开工入口
 
 > 本文件是项目入口：说明这是什么、有哪些包、怎么开发、怎么验证、怎么调试。
 > 历史开发文档已归档到 `backup/docs-2026-11-03/`；`docs/STATUS.md` 等旧路径按归档目录查找。
@@ -6,7 +6,7 @@
 
 ## 一、这个项目是什么
 
-mini-canvas 是一个可扩展的画布应用。画布本身只负责节点、连线、视口和保存；
+Plume（羽画，命令行与包名 `plume-canvas`）是一个可扩展的画布应用。画布本身只负责节点、连线、视口和保存；
 文本、图片、视频、音频、3D 预览、Agent 对话、插件管理这些功能，都由插件加进来。
 
 技术栈：Vue 3 + TypeScript + Vite + VueFlow。仓库用 pnpm workspace 管理多个包。
@@ -165,7 +165,7 @@ pnpm -C packages/ui typecheck
 ### 一键启动完整服务
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\启动mini-canvas-server.ps1" -Port 8865
+powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\启动plume-canvas-server.ps1" -Port 8865
 ```
 
 这个脚本会依次构建后台、构建前端与插件资源、释放端口、启动 `cloud-server`。
@@ -174,7 +174,7 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\启动m
 ### 指定端口调试
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\8060-mini-canvas.ps1"
+powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\8060-plume-canvas.ps1"
 ```
 
 这个脚本固定用 8060，适合另开一份调试环境。
@@ -186,7 +186,7 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\8060-mi
 - 后台用 `-Port 886x` 或 `-Port 806x`，例如 8865 / 8866 / 8867。
 - 前端 dev 用 `pnpm -C packages/ui dev -- --port 528x`，例如 5288 / 5289 / 5290。
 - 文档站用 `pnpm -C packages/docs dev -- --port 529x`。
-- 插件 watch 用 `MINI_CANVAS_BACKEND=http://127.0.0.1:<你的端口>` 指向自己的后台，
+- 插件 watch 用 `PLUME_BACKEND=http://127.0.0.1:<你的端口>` 指向自己的后台，
   不要指向别人的 8865。
 
 启动前先确认端口没被占用；脚本会自动释放自己指定的端口，但不要让它误杀别的 Agent。
@@ -223,7 +223,7 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
    `edge/ConnectionLine.vue`、`background/DefaultBackground.vue`。
    改动前先读 `backup/docs-2026-11-03/tmp/canvas-core-v2-survey/core-node-contract.md`，
    相关规范见 `backup/docs-2026-11-03/规则/节点区域与连接线拖拽规范.md`。
-3. **kernel 不依赖任何 @mini-canvas 包**，也不 import `.vue`。
+3. **kernel 不依赖任何 @plume-canvas 包**，也不 import `.vue`。
 4. **写 UI 前先读** `backup/docs-2026-11-03/design/ui-style-guide.md`，不自造颜色、圆角、字号。
 
 ## 十、找文档

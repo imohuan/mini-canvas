@@ -91,7 +91,7 @@ export const EDGE_TILE_MARGIN = 120
  * 与插件作者的约定（同名常量在 plugin-theme-canvas 的 BaseNode/MovingHandle 里以字面量出现，
  * 因为插件之间不互相 import —— 与下方 DEBUG_OVERLAY_CLASSES 的处理方式一致）。
  */
-export const EXPORT_IGNORE_CLASS = 'mc-export-ignore'
+export const EXPORT_IGNORE_CLASS = 'plume-export-ignore'
 
 
 /** 两个矩形并集（null 视作空；两个都空返回 null） */

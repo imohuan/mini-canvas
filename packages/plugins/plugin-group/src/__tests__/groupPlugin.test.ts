@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
-import { NodeStore, Selection, History, type CanvasNode, EdgeStore, GraphDocument, createDocService } from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/canvas-data'
+import { NodeStore, Selection, History, type CanvasNode, EdgeStore, GraphDocument, createDocService } from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { groupPlugin, GroupService, GROUP_NODE_TYPE, resolveGroupPadding, GROUP_PADDING_KEYS } from '../groupPlugin'
 import { DEFAULT_GROUP_PADDING } from '../groupEngine'
 

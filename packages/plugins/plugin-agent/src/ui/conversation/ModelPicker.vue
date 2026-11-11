@@ -18,7 +18,7 @@
  * 这样 Agent 能继续用它原来的图标按钮，底栏能用自己的胶囊触发器。
  */
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { Check, Layers, Search, X } from 'lucide-vue-next'
 import type { ModelRow } from '../../service/types.js'
 import { brandName, brandSvg, detectPlatform } from '../render/modelBrandIcons.js'

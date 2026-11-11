@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-config-demo/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / Config / apply）
 // 位置：一个可安装插件包的源码入口
-import { F, type ConfigSchema, type InferConfig, type Context, type PluginModule } from '@mini-canvas/kernel'
+import { F, type ConfigSchema, type InferConfig, type Context, type PluginModule } from '@plume-canvas/kernel'
 
 export const name = 'config-demo'
 

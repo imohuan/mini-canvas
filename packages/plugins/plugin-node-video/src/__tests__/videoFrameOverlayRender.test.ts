@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import VideoFrameOverlay from '../VideoFrameOverlay.vue'
 import { beginOverlay, endOverlay } from '../videoSession'
 

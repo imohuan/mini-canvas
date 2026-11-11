@@ -14,7 +14,7 @@
  * - 「恢复默认」= 把内置两条放回编辑副本（保存后才生效）。
  */
 import { computed, ref, watch } from 'vue'
-import { useCanvasRender, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
 // 设置界面的控件统一从画布 ui 注册表取（由默认主题登记组件库里的原始件）
 import {
   loadAiActions,

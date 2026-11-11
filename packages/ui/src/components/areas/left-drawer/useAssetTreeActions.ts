@@ -19,7 +19,7 @@ export function useAssetTreeActions() {
   /** 类型筛选：再点一次同一个 = 取消筛选（回到「全部」） */
   const ASSET_KINDS = ['全部', '图片', '视频', '音频', '其他'] as const
   /** 标签固定清单（用户口径：暂时就这几个） */
-  // 「节点」= 节点包（.mcnode）用的标签；与 composables/ui.ts 的 assetTagOptions 同一份口径
+  // 「节点」= 节点包（.plumenode）用的标签；与 composables/ui.ts 的 assetTagOptions 同一份口径
   const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效', '节点'] as const
   function pickAssetKind(k: string): void {
     s.assetFilterKind = s.assetFilterKind === k ? '全部' : (k as typeof s.assetFilterKind)
@@ -127,7 +127,8 @@ export function useAssetTreeActions() {
   function onTreeAddAgent(row: AssetTreeRow): void {
     if (row.kind === 'folder') ui.addFolderToAgent({ id: row.id, name: row.name })
     // folderId 带上（= 这行所在文件夹）：Agent 里点这颗标签要能打开资产管理并展开到该层
-    else ui.addAssetToAgent({ name: row.name, url: row.url ?? '', ...(row.path ? { path: row.path } : {}), ...(row.parentId ? { folderId: row.parentId } : {}) })
+    // assetKind 一起给：资产名可能是 UUID、没有扩展名，Agent 标签要靠它选对类型图标
+    else ui.addAssetToAgent({ name: row.name, url: row.url ?? '', ...(row.path ? { path: row.path } : {}), ...(row.parentId ? { folderId: row.parentId } : {}), ...(row.assetKind ? { kind: row.assetKind } : {}) })
   }
   function onTreeAddCanvas(row: AssetTreeRow): void {
     if (row.kind === 'folder') void folderAddToCanvas(row)

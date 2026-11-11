@@ -4,7 +4,7 @@
      说明：needs 声明要用哪些能力包 —— 组件按名拿到，不自己 ctx.get 拼 -->
 <script setup lang="ts">
 // 能力包按名取：needs: ['node'] 在 ctx.nodes.attach 里声明（忘了写会拿到 undefined，dev 有提示）
-import { useCapability } from '@mini-canvas/canvas-render'
+import { useCapability } from '@plume-canvas/canvas-render'
 
 // NodeCapability 的形状来自渲染层标准能力包（packages/canvas-render/src/contracts/standardCapabilities.ts）
 const node = useCapability<{ readonly id: string; readonly type: string }>('node')

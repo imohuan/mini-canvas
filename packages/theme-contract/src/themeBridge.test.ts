@@ -5,7 +5,7 @@
  * 颜色不在这里 —— 颜色统一走 --ui-* 语义色板，组件库 host.css 已映射过去。
  *
  * 背景：主题拆包时这份测试一度丢失，此后「尺寸档只写进组件配置、设置面板行高读一个
- * 永远没人写的 --mct-size-control-h」就没人守了（用户 2026-11-05 实测设置切大毫无反应）。
+ * 永远没人写的 --plume-size-control-h」就没人守了（用户 2026-11-05 实测设置切大毫无反应）。
  */
 import { describe, expect, it } from 'vitest'
 import {
@@ -23,7 +23,7 @@ import {
   DEFAULT_COMPONENT_CONFIG,
   componentConfig,
   resetComponentConfig,
-} from '@mini-canvas/ui-kit-shadcn/componentConfig'
+} from '@plume-canvas/ui-kit-shadcn/componentConfig'
 
 /** 最小假的 style 容器：只实现 setProperty / removeProperty */
 function fakeRoot() {
@@ -71,7 +71,7 @@ describe('外观交接：默认档不改观感', () => {
       size: 'inherit',
     })
     expect(vars[THEME_BRIDGE_VARS.fontBody]).toContain('Inter')
-    expect(vars[THEME_BRIDGE_VARS.fontHeading]).toBe('var(--mct-font-body, inherit)')
+    expect(vars[THEME_BRIDGE_VARS.fontHeading]).toBe('var(--plume-font-body, inherit)')
   })
 
   it('正文跟随宿主、标题单独选 → 只写标题，不写正文', () => {
@@ -160,7 +160,7 @@ describe('外观交接：尺寸档位', () => {
   /**
    * 用户口径 2026-11-05：设置界面切「大」时，面板里的行 / 下拉 / 输入框全都不动。
    *
-   * 根因是面板自己的 CSS 读 `--mct-size-control-h`，而**没有任何地方写它**。
+   * 根因是面板自己的 CSS 读 `--plume-size-control-h`，而**没有任何地方写它**。
    * 这条钉住：每个非 inherit 档都必须写出一个可用的行高，且三档严格递增。
    */
   it('每一档都写设置面板行高变量，且小 < 标准 < 大', () => {

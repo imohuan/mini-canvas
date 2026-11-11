@@ -12,7 +12,7 @@
  * 功能模式必须是替换，不是叠加。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { closeDemoMode, demoMode, openDemoMode } from './demoMode'
 
 interface ToolbarMenuNode {

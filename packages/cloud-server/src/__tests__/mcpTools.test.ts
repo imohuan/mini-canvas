@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { Hono } from 'hono'
-import { Context, setDefaultCapabilityLayerFactory } from '@mini-canvas/kernel'
+import { Context, setDefaultCapabilityLayerFactory } from '@plume-canvas/kernel'
 import { createServerCapabilityLayer } from '../serverFramework/capabilityLayer.js'
 import { listPluginMcpTools, type McpToolDef } from '../serverFramework/mcp.js'
 

@@ -41,7 +41,7 @@
  */
 import { markRaw } from 'vue'
 import { SparklesIcon, WandSparklesIcon } from 'lucide-vue-next'
-import type { Context, PluginModule, ConfigSchema } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule, ConfigSchema } from '@plume-canvas/canvas-base'
 import {
   createLibraryService,
   DEFAULT_ROOT,

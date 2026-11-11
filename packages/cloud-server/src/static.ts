@@ -117,7 +117,7 @@ export function resolvePluginAsset(urlPath: string): { rel: string } | { error: 
  * 候选顺序：**仓库内的路径优先**，随包 assets 兜底。
  * 理由是两种场景各取所需：
  * - 在仓库里跑（改 ui / 跑 e2e）：走 packages/ui/dist，看到的是刚构建的新产物；
- * - `npx mini-canvas-cloud serve`（空目录）：仓库路径都不存在，落到随包 assets/ui，开箱即用。
+ * - `npx plume-canvas serve`（空目录）：仓库路径都不存在，落到随包 assets/ui，开箱即用。
  * 反过来（assets 优先）会让仓库里改了 ui 却一直看到 assets 里那份旧副本，很难查。
  */
 export async function resolveUiDist(explicit?: string): Promise<string | undefined> {
@@ -189,8 +189,8 @@ export async function buildManifest(pluginsDir: string | undefined): Promise<Man
   for (const name of names.sort()) {
     if (name.startsWith('_') || name.startsWith('.')) continue
 
-    // 冷启动自带插件（miniCanvas.builtin: true）不进外部清单。
-    // 为什么必须卡：它们由应用 APP_PLUGINS 装配，产物多为「external @mini-canvas/* 的 ESM」，
+    // 冷启动自带插件（plume.builtin: true）不进外部清单。
+    // 为什么必须卡：它们由应用 APP_PLUGINS 装配，产物多为「external @plume-canvas/* 的 ESM」，
     // 被 install({ url }) 走 import(data:…) 加载时裸模块名解析不了，每次开页必炸一条
     // "Failed to resolve module specifier"（实测：plugin-bottom-bar）。
     if (await isBuiltinPlugin(path.join(pluginsDir, name))) continue
@@ -217,14 +217,14 @@ export async function buildManifest(pluginsDir: string | undefined): Promise<Man
 }
 
 /**
- * 该插件目录是否为**冷启动自带件**（package.json 声明 miniCanvas.builtin: true）。
+ * 该插件目录是否为**冷启动自带件**（package.json 声明 plume.builtin: true）。
  * 与 /plugin-catalog.json 的 builtin 判据同源（见 plugins/catalog.ts 的 isBuiltin）。
  */
 async function isBuiltinPlugin(pkgDir: string): Promise<boolean> {
   try {
     const raw = await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8')
-    const pkg = JSON.parse(raw) as { miniCanvas?: { builtin?: boolean } }
-    return pkg.miniCanvas?.builtin === true
+    const pkg = JSON.parse(raw) as { plume?: { builtin?: boolean } }
+    return pkg.plume?.builtin === true
   } catch {
     return false
   }
@@ -321,7 +321,7 @@ function stripCommentsAndStrings(src: string): string {
   return out
 }
 
-/** 插件 id：优先 package.json 的 name（去掉 @mini-canvas/ 作用域，稳定且人可读），否则用目录名 */
+/** 插件 id：优先 package.json 的 name（去掉 @plume-canvas/ 作用域，稳定且人可读），否则用目录名 */
 async function readPluginId(pkgDir: string, fallback: string): Promise<string> {
   try {
     const raw = await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8')
@@ -351,7 +351,7 @@ async function readWithin(root: string, rel: string): Promise<Uint8Array<ArrayBu
 }
 
 /** 没构建 ui 时给一句人话，而不是白屏 404 */
-const NO_UI_PAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>mini-canvas</title>
+const NO_UI_PAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>plume-canvas</title>
 <style>body{font-family:system-ui,"Microsoft YaHei",sans-serif;max-width:640px;margin:80px auto;line-height:1.7;color:#111}
 code{background:#f3f4f6;padding:2px 6px;border-radius:4px}</style></head><body>
 <h1>还没构建画布界面</h1>
@@ -380,7 +380,7 @@ export function uiRoutes(
    *
    * 为什么需要：「有转发头就不注入」的分界只能挡住**标准**反代。反代若被配成
    * `--reset-headers`（透传 Host、删掉所有转发头），三个条件会同时成立，令牌照样泄露。
-   * 部署者知道自己要挂反代时，设 `MINI_CANVAS_NO_TOKEN_INJECTION=1` 一刀切 ——
+   * 部署者知道自己要挂反代时，设 `PLUME_NO_TOKEN_INJECTION=1` 一刀切 ——
    * 所有用户都去「设置 → 插件」手填，代价只是多一次粘贴。
    */
   noTokenInjection?: boolean,
@@ -424,7 +424,7 @@ export function uiRoutes(
 }
 
 /** 宿主标记的 meta（前端 assembly.ts 的 CLOUD_HOST_FLAG 与之同名，两处必须一致） */
-const HOST_FLAG_META = '<meta name="mini-canvas-host" content="cloud-server">'
+const HOST_FLAG_META = '<meta name="plume-host" content="cloud-server">'
 
 /**
  * 把宿主标记插进 index.html 的 </head> 之前（幂等：已经有就不再插一次）。
@@ -432,7 +432,7 @@ const HOST_FLAG_META = '<meta name="mini-canvas-host" content="cloud-server">'
  */
 function injectHostFlag(html: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> {
   const text = new TextDecoder().decode(html)
-  if (text.includes('name="mini-canvas-host"')) return html
+  if (text.includes('name="plume-host"')) return html
   // 落点优先级：</head> 前 → <body 前 → 最前面。
   // 为什么要兜底：正常产物一定带 </head>，但极简/手写的 index.html（测试夹具就是这种）可能没有，
   // 那种情况下也得让标记出现在响应里 —— 前端靠它判"是不是托管版"，缺了就等于托管版不自动连后台。
@@ -442,7 +442,7 @@ function injectHostFlag(html: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> 
 }
 
 /**
- * 把管理令牌写进页面（`window.__MC_ADMIN_TOKEN__`）。
+ * 把管理令牌写进页面（`window.__PLUME_ADMIN_TOKEN__`）。
  *
  * 前端启动时读它、存进 localStorage，与「设置 → 插件」里手填的那份同一个键 ——
  * 于是同机打开画布的人不用再抄一遍令牌。只在本机回环访问时调用（见 uiRoutes）。
@@ -450,17 +450,17 @@ function injectHostFlag(html: Uint8Array<ArrayBuffer>): Uint8Array<ArrayBuffer> 
 function injectAdminToken(html: Uint8Array<ArrayBuffer>, token: string | undefined): Uint8Array<ArrayBuffer> {
   if (!token) return html
   const text = new TextDecoder().decode(html)
-  if (text.includes('__MC_ADMIN_TOKEN__')) return html
+  if (text.includes('__PLUME_ADMIN_TOKEN__')) return html
   /*
    * 把值安全地放进 `<script>`。
    *
    * 为什么要额外转义：`JSON.stringify` 不会转义 `<`，令牌万一含 `</script>`
-   * （`MINI_CANVAS_ADMIN_TOKEN` 是**不校验格式**的，任何人都能设）就会提前闭合脚本标签，
+   * （`PLUME_ADMIN_TOKEN` 是**不校验格式**的，任何人都能设）就会提前闭合脚本标签，
    * 后面的内容变成真脚本 —— 等于给本机管理页注入任意同源脚本。
    * 把 `<` 写成 `\u003c` 之后，字符串在 JS 里的值不变，但 HTML 解析器看不到 `</script>`。
    */
   const literal = JSON.stringify(token).split('<').join('\\u003c')
-  const script = '<script>window.__MC_ADMIN_TOKEN__=' + literal + '</script>\n'
+  const script = '<script>window.__PLUME_ADMIN_TOKEN__=' + literal + '</script>\n'
   const at = pickInsertAt(text)
   return new TextEncoder().encode(text.slice(0, at) + script + text.slice(at)) as Uint8Array<ArrayBuffer>
 }
@@ -549,7 +549,7 @@ export function pluginRoutes(pluginsDir: string | undefined): Hono {
   })
 
   /**
-   * 插件管理要的清单：只列**声明了 miniCanvas.installable 的 UMD 插件**。
+   * 插件管理要的清单：只列**声明了 plume.installable 的 UMD 插件**。
    * 与上面的 /plugin-manifest.json（ESM，给应用冷启动用）各管一摊，详见 plugins/catalog.ts 文件头。
    */
   app.get('/plugin-catalog.json', async (c) => {

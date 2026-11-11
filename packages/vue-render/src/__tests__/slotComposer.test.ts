@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { SlotRegistry, isSlotItemId, isSlotName } from '@mini-canvas/kernel'
+import { SlotRegistry, isSlotItemId, isSlotName } from '@plume-canvas/kernel'
 import type { ContextWithSlots } from '../context'
 import { CANVAS_CONTEXT_KEY } from '../context'
 import SlotComposer from '../components/SlotComposer.vue'

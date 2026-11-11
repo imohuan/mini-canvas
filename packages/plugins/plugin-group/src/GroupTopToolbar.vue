@@ -13,7 +13,7 @@
  * 与图片节点的 ImageTopToolbar 逐字同形：**定位不在这里**，选中态也不在这里。
  */
 import { computed, ref } from 'vue'
-import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
 import { GROUP_COLOR_SWATCHES, resolveGroupBackgroundColor, groupServiceOf } from './groupEngine'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -137,7 +137,7 @@ function pickColor(color: string): void {
   width: 152px;
   min-width: 152px;
   padding: 0;
-  border-radius: var(--mct-radius, 16px);
+  border-radius: var(--plume-radius, 16px);
   background: var(--ui-overlay-solid, #fff);
 }
 

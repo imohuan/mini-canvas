@@ -5,7 +5,7 @@
  * 那边是"某类型节点的某区域"，这边是"选择集的某区域"——**没有 type 那一维**（多选框不是某种节点），
  * 所以键就是区域词本身，也没有基座（多选框的基座就是框本身，不在场里）。
  */
-import type { NodeSegmentEntry } from '@mini-canvas/canvas-data'
+import type { NodeSegmentEntry } from '@plume-canvas/canvas-data'
 
 /** 场里一条的读回形状（component + 条目自己的 needs/props） */
 interface RegionAttachmentLike {

@@ -48,7 +48,7 @@ onBeforeUnmount(() => {
       <Badge variant="outline">shadcn-vue</Badge>
       <Badge variant="secondary">reka-ui</Badge>
       <h2 class="text-base font-semibold tracking-tight">
-        mini-canvas · shadcn UI 预览
+        plume-canvas · shadcn UI 预览
       </h2>
       <span class="text-[11px] text-muted-foreground">
         顶部改一项，卡片里的组件立刻跟着变

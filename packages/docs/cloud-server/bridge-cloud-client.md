@@ -70,7 +70,7 @@ export class MyCloudApi {
 // 文件：my-cloud-client/src/index.ts
 // 格式：TypeScript 模块（前端插件入口）
 // 位置：数据桥插件骨架；真实版 = packages/plugins/plugin-cloud-client/src/plugin.ts
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import { MyCloudApi } from './cloudApi'
 
 export const name = 'my-cloud-client'

@@ -101,7 +101,7 @@ export function findRadius(id: string): RadiusOption {
  */
 export function loadFont(font: FontOption): void {
   if (!font.family || typeof document === 'undefined') return
-  const id = `mc-font-${font.id}`
+  const id = `plume-font-${font.id}`
   if (document.getElementById(id)) return
   const link = document.createElement('link')
   link.id = id

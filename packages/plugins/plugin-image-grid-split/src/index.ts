@@ -11,7 +11,7 @@
  * 卸载本插件：插槽条目与模式注册自动回收；会话跟着包作用域一起清。
  */
 import { markRaw } from 'vue'
-import type { ConfigSchema, PluginModule, Context } from '@mini-canvas/canvas-base'
+import type { ConfigSchema, PluginModule, Context } from '@plume-canvas/canvas-base'
 import GridSplitEntry from './GridSplitEntry.vue'
 import GridSplitPanel from './GridSplitPanel.vue'
 import GridSplitOverlay from './GridSplitOverlay.vue'

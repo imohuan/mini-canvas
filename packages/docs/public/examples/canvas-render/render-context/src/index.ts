@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/canvas-render/render-context/src/index.ts
 // 格式：TypeScript 模块（插件入口：导出 name / inject / apply）
 // 位置：一个可安装插件包的源码入口
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import NoteContent from './NoteContent.vue'
 
 export const name = 'note-demo'

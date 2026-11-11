@@ -12,7 +12,7 @@ const s = ctx.surface()
 在跑着的应用里，从浏览器的 console 也能拿到：
 
 ```js
-const ctx = window.MiniCanvasUI.getContext()
+const ctx = window.PlumeUI.getContext()
 console.table(ctx.surface().services)
 ```
 
@@ -82,7 +82,7 @@ let s
 try {
   s = await (await fetch('/api/plugins/surface')).json()
 } catch {
-  s = window.MiniCanvasUI.getContext().surface()
+  s = window.PlumeUI.getContext().surface()
 }
 
 // ② 按"谁放的"归拢，画成表格

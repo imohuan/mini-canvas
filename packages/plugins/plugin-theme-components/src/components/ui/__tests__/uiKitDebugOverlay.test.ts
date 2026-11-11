@@ -9,7 +9,7 @@ import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { readFileSync } from 'node:fs'
 import UiKitDebugOverlay from '../UiKitDebugOverlay.vue'
-import { parseDebugLoc } from '@mini-canvas/ui-kit-shadcn'
+import { parseDebugLoc } from '@plume-canvas/ui-kit-shadcn'
 
 const SRC = readFileSync(new URL('../UiKitDebugOverlay.vue', import.meta.url), 'utf-8')
 /** 只看代码、不看注释：注释里也会出现 pointer-events 字样 */

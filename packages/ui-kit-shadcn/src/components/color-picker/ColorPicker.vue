@@ -40,10 +40,10 @@ const canvasType = computed<'HSL' | 'HSV'>(() => {
 
 <template>
   <!-- 包一层：让 scoped :deep() 有父元素可挂，才能覆盖取色器自带的宽高与内衬 -->
-  <div class="mck-cp">
+  <div class="pk-cp">
     <ColorPickerRoot
       :ui="{
-        picker: { root: 'mck-cp-root w-full max-w-full p-0 bg-transparent shadow-none text-inherit' },
+        picker: { root: 'pk-cp-root w-full max-w-full p-0 bg-transparent shadow-none text-inherit' },
         input: { label: 'hidden' },
       }"
       v-bind="forwarded"
@@ -66,7 +66,7 @@ const canvasType = computed<'HSL' | 'HSV'>(() => {
         </div>
       </div>
       <!-- 底部一行：格式下拉 + 色值输入，两者同高同圆角（原来一个 24px、一个 32px） -->
-      <div class="mck-cp-value-row flex items-center gap-2">
+      <div class="pk-cp-value-row flex items-center gap-2">
         <ColorPickerSelect
           v-model="format"
           class="w-16 shrink-0"
@@ -91,9 +91,9 @@ const canvasType = computed<'HSL' | 'HSV'>(() => {
  * 外面的 Popover 仍保留自己的留白。
  *
  * 注意：Vuelor 默认用 Tailwind 类，根节点**没有** `vuelor-picker-root` 类；
- * 必须经 `ui.picker.root` 注入 `mck-cp-root` 才能选到它（2026-11-02 实测）。
+ * 必须经 `ui.picker.root` 注入 `pk-cp-root` 才能选到它（2026-11-02 实测）。
  */
-.mck-cp :deep(.mck-cp-root) {
+.pk-cp :deep(.pk-cp-root) {
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
@@ -112,7 +112,7 @@ const canvasType = computed<'HSL' | 'HSV'>(() => {
  * 这里统一成 32px 高、同一档圆角、同一套底色。
  */
 /* 外层：一整条圆角输入框，和左边的 Select 同高同圆角 */
-.mck-cp-value-row :deep(> div:last-child) {
+.pk-cp-value-row :deep(> div:last-child) {
   height: 2rem;
   gap: 1px;
   border-radius: calc(var(--radius, 0.5rem) * 2.6);
@@ -121,19 +121,19 @@ const canvasType = computed<'HSL' | 'HSV'>(() => {
 }
 
 /* 内层两段（色值 / 透明度）：去掉各自的圆角，靠外层统一收边 */
-.mck-cp-value-row :deep(> div:last-child > div) {
+.pk-cp-value-row :deep(> div:last-child > div) {
   height: 100%;
   border-radius: 0;
   background-color: var(--muted);
 }
 
-.mck-cp-value-row :deep(input) {
+.pk-cp-value-row :deep(input) {
   height: 100%;
   font-size: 0.75rem;
   color: var(--foreground);
 }
 
-.mck-cp-value-row :deep(span) {
+.pk-cp-value-row :deep(span) {
   color: var(--muted-foreground);
 }
 </style>

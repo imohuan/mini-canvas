@@ -9,16 +9,16 @@
 import { beforeAll, describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
-import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@mini-canvas/canvas-render'
-import { RegistryImpl } from '@mini-canvas/kernel'
+import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
+import { RegistryImpl } from '@plume-canvas/kernel'
 // 只导入主题**插件**（走注册流程），不导入它的实现组件（与图片包同一条 T07 口径）
-import { themeComponentsPlugin } from '@mini-canvas/plugin-theme-components'
+import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
 import VideoTopToolbar from '../VideoTopToolbar.vue'
 import VideoClipDock from '../video-clip-panel/VideoClipDock.vue'
 import { beginOverlay, endOverlay, setCropPending } from '../videoSession'
 
 async function themeUiField(): Promise<{ top(name: string): { value: unknown } | undefined }> {
-  const { Context } = await import('@mini-canvas/canvas-data')
+  const { Context } = await import('@plume-canvas/canvas-data')
   const ctx = new Context()
   ctx.plugin(themeComponentsPlugin)
   await ctx.start()

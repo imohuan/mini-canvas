@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": { "start": "tsx src/main.ts" },
   "dependencies": {
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/plugin-theme-components": "workspace:*",
-    "@mini-canvas/plugin-theme-canvas": "workspace:*",
-    "@mini-canvas/plugin-node-text": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/plugin-theme-components": "workspace:*",
+    "@plume-canvas/plugin-theme-canvas": "workspace:*",
+    "@plume-canvas/plugin-node-text": "workspace:*",
     "tsx": "^4.22.4"
   }
 }

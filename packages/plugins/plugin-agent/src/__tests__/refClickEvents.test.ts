@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { REF_CLICK_EVENT, refClickPayloadOf } from '../plugin/refClickEvents'
-import { hasKnownEvent } from '@mini-canvas/kernel'
+import { hasKnownEvent } from '@plume-canvas/kernel'
 
 describe('事件名', () => {
   it('带 agent: 前缀（表示由本插件发出）', () => {

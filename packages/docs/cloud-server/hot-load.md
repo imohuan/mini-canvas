@@ -30,7 +30,7 @@
 
 ### 用 curl 走一遍热装循环
 
-前提：目录里已有插件文件（比如 showcase 的 `dist/server.js`，id 是 `mini-canvas-plugin-showcase`）且 `/plugin-catalog.json` 清单里登记了它。
+前提：目录里已有插件文件（比如 showcase 的 `dist/server.js`，id 是 `@plume-canvas/plugin-showcase`）且 `/plugin-catalog.json` 清单里登记了它。
 
 ```bash
 # ① 查已装清单（看 id 与 loaded 状态）
@@ -39,7 +39,7 @@ curl http://127.0.0.1:8865/api/server-plugins
 # ② 热装：code 是插件 JS 的完整文本；confirm 与 sha256 都必填
 curl -X POST http://127.0.0.1:8865/api/server-plugins/install ^
   -H "Content-Type: application/json" ^
-  -d "{"id":"mini-canvas-plugin-showcase","code":"<JS文本>","sha256":"<清单里那份>","confirm":true}"
+  -d "{"id":"@plume-canvas/plugin-showcase","code":"<JS文本>","sha256":"<清单里那份>","confirm":true}"
 
 # ③ 验证：装完立刻可用（不用重启）
 curl http://127.0.0.1:8865/api/showcase/hello
@@ -47,7 +47,7 @@ curl http://127.0.0.1:8865/api/showcase/hello
 # ④ 热卸：按 id 摘
 curl -X POST http://127.0.0.1:8865/api/server-plugins/uninstall ^
   -H "Content-Type: application/json" ^
-  -d "{"id":"mini-canvas-plugin-showcase"}"
+  -d "{"id":"@plume-canvas/plugin-showcase"}"
 
 # ⑤ 验证：路由立刻 404
 curl http://127.0.0.1:8865/api/showcase/hello
@@ -62,13 +62,13 @@ curl http://127.0.0.1:8865/api/showcase/hello
 ```bash
 curl -X POST http://127.0.0.1:8865/api/npm-plugins/install ^
   -H "Content-Type: application/json" ^
-  -d "{"package":"mini-canvas-plugin-showcase","confirm":true}"
+  -d "{"package":"@plume-canvas/plugin-showcase","confirm":true}"
 ```
 
 服务端按顺序做这些事（`routes/npmPlugins.ts` 的 `doInstall`）：
 
-1. **包名形状 + 前缀白名单**：默认只允许 `mini-canvas-` / `@mini-canvas/` 开头的包（可用环境变量 `MINI_CANVAS_NPM_SCOPES` 放开），防止「npm 上任意包」被装进来；
-2. **查 packument** 定版本（缺省 `dist-tags.latest`），并校验包的 `miniCanvas` 段结构（`pluginName` + web/server 入口）——不是插件就拒装；
+1. **包名形状 + 前缀白名单**：默认只允许 `plume-canvas-` / `@plume-canvas/` 开头的包（可用环境变量 `PLUME_NPM_SCOPES` 放开），防止「npm 上任意包」被装进来；
+2. **查 packument** 定版本（缺省 `dist-tags.latest`），并校验包的 `plume` 段结构（`pluginName` + web/server 入口）——不是插件就拒装；
 3. **下载 tarball**（`npmClient.ts`，默认 30 秒超时）并解包到临时目录；
 4. **拆两半落盘**：前端半 `dist/*.js` → 插件目录 `<包名>/dist/`（catalog 收录、强制补 `installable: true` + `npmInstalled: true` 标记）；后台半 `dist/server.js` → `<数据根>/server-plugins/<包名>.js`，并**服务端自己算 sha256** 记进来源记录（`.npm-installed.json`）；
 5. **热装钩子**：后台半落盘后立刻 `hotInstall(id)` 装进内核 —— 装完即时可用；
@@ -78,10 +78,10 @@ curl -X POST http://127.0.0.1:8865/api/npm-plugins/install ^
 
 ### id 与插件名：为什么可能不同
 
-- **id** = 落盘文件名（去 `.js`），比如 `mini-canvas-plugin-showcase`；
+- **id** = 落盘文件名（去 `.js`），比如 `@plume-canvas/plugin-showcase`；
 - **插件名** = 模块里 `export const name`，比如 `showcase`。
 
-两者可以不同。卸载时按 id 精确摘：`hotLoad.ts` 装载时记下 `id → 真名` 映射；**重启后**那份映射丢了，就按候选序列现推（先真名，再逐步剥离 `mini-canvas-` / `-plugin-` 前缀，最后用 id 本身），逐个试，摘到就停 —— 不然重启后卸载会留下「列表里还在、内核里没有」的幽灵项。
+两者可以不同。卸载时按 id 精确摘：`hotLoad.ts` 装载时记下 `id → 真名` 映射；**重启后**那份映射丢了，就按候选序列现推（先真名，再逐步剥离 `plume-canvas-` / `-plugin-` 前缀，最后用 id 本身），逐个试，摘到就停 —— 不然重启后卸载会留下「列表里还在、内核里没有」的幽灵项。
 
 ## 每一步在干什么
 
@@ -100,11 +100,11 @@ curl -X POST http://127.0.0.1:8865/api/npm-plugins/install ^
 | 这篇里的说法 | 真实文件 | 真实行为 |
 | --- | --- | --- |
 | 热装可行三根因 | `packages/cloud-server/src/serverFramework/hotLoad.ts` 文件头 | 内核支持运行期装载；路由代理现查注册场；Hono 冻死靠 catch-all 兜底 |
-| id→真名映射与卸载候选序列 | 同上 `hotUninstallServerPlugin` | 先真名（装时记下），再剥离 `mini-canvas-`/`-plugin-` 前缀，最后 id 本身；摘到就停 |
+| id→真名映射与卸载候选序列 | 同上 `hotUninstallServerPlugin` | 先真名（装时记下），再剥离 `plume-canvas-`/`-plugin-` 前缀，最后 id 本身；摘到就停 |
 | `serverPluginsLoaded` 活快照 | 同上 `bindHotLoadedTracking` | 热装推入、热卸移除；启动名单永不摘除 |
 | install 安全关（confirm/sha256/id 白名单/落盘不执行/跨源拒） | `packages/cloud-server/src/routes/serverPlugins.ts` 文件头 + `POST /api/server-plugins/install` | 每条约束顺序执行，任一不符返回 400 |
 | loaded 字段 | 同上 `GET /api/server-plugins` | `plugins` = 目录实况；`loaded` = `serverPluginsLoaded` 快照 + `hotLoadedNames()` 现取 |
-| NPM 前缀白名单 | `packages/cloud-server/src/routes/npmPlugins.ts` | 默认 `mini-canvas-` / `@mini-canvas/`；环境变量 `MINI_CANVAS_NPM_SCOPES` 可覆盖 |
+| NPM 前缀白名单 | `packages/cloud-server/src/routes/npmPlugins.ts` | 默认 `plume-canvas-` / `@plume-canvas/`；环境变量 `PLUME_NPM_SCOPES` 可覆盖 |
 | 下载与解包 | `packages/cloud-server/src/npm/npmClient.ts` | `packument` / `search` / `downloadTarball`（30s 超时），解包用系统 tar |
 | 两半落盘 + 服务端算哈希 | `npmPlugins.ts` `doInstall` | 前端半 → `plugins/<pkg>/dist/`；后台半 → `server-plugins/<id>.js`，sha256 记入 `.npm-installed.json` |
 | catalog 提供可信哈希 | `packages/cloud-server/src/plugins/catalog.ts` | 扫插件目录时对 `dist/server.js` 算 sha256，作为服务端信任源 |

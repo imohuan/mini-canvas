@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-ledger-demo",
+  "name": "@plume-canvas/plugin-ledger-demo",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "演示：账本（只数据层）",
     "description": "不装渲染层，把数据层单独跑起来：建节点、连边、撤销、落盘，并有 Node 单测",
     "pluginName": "ledger-demo",
@@ -23,9 +23,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~6.0.2",

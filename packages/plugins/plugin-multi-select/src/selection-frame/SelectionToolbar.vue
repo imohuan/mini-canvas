@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { RegionEntryHost } from '@mini-canvas/canvas-render'
-import type { CapabilityCache } from '@mini-canvas/canvas-render'
-import type { NodeSegmentEntry } from '@mini-canvas/canvas-data'
+import { RegionEntryHost } from '@plume-canvas/canvas-render'
+import type { CapabilityCache } from '@plume-canvas/canvas-render'
+import type { NodeSegmentEntry } from '@plume-canvas/canvas-data'
 
 defineProps<{
   toolbarAnchorStyle: Record<string, string> | null

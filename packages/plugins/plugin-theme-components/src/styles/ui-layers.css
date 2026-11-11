@@ -36,18 +36,18 @@
 }
 
 /* 应用浮面板：左抽屉、Agent 浮窗、展开的节点底栏、快捷键面板 */
-.mc-layer-app-panel {
+.plume-layer-app-panel {
   z-index: var(--ui-layer-app-panel, 1000);
 }
 
 /* 非 shadcn 的整块弹窗（资产上传 / 资产管理） */
-.mc-layer-dialog {
+.plume-layer-dialog {
   z-index: var(--ui-layer-dialog, 100000);
 }
 
 /* 在对话框里再弹一个整块确认框：必须压住父对话框。
    菜单档是它上面一级，所以确认框里打开的下拉仍能显示。 */
-.mc-layer-dialog-raised {
+.plume-layer-dialog-raised {
   z-index: var(--ui-layer-dialog-raised, 100001);
 }
 

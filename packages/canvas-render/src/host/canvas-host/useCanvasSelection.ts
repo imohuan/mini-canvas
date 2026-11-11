@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import type { EdgeMouseEvent, NodeMouseEvent } from '@vue-flow/core'
 import { clickNode, clickEdge, clickPane } from '../selectionInteractions'
 import { RenderEvents } from '../renderEvents'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 
 export function useCanvasSelection(opts: {
   hostRef: { value: CanvasHostHandle | undefined }

@@ -23,12 +23,15 @@ export function createRefsDomain(ctx: AgentServiceContext, deps: AgentServiceDep
    * 早先的写法在服务里塞了个半成品对象（没有 renderItem/renderEditor）—— 插进输入框渲染不出来，
    * 于是「添加到 Agent」看着没反应（用户报的 bug）。
    */
-  function referenceAsset(asset: { id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean }): void {
+  function referenceAsset(asset: { id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean; kind?: string }): void {
     state.pendingAsset = {
       id: asset.id, name: asset.name, url: asset.url,
       ...(asset.path ? { path: asset.path } : {}),
       ...(asset.folderId ? { folderId: asset.folderId } : {}),
       ...(asset.isFolder ? { isFolder: true } : {}),
+      // 资产类型（image / video / audio）—— 标签图标第二轮靠它（见 resolveRefIcon）。
+      // 文件名可能是 UUID、没有扩展名，只看扩展名认不出音频。
+      ...(asset.kind ? { kind: asset.kind } : {}),
     }
     // 打开面板并刷新（面板关着时先记下，组件挂载后补插）
     state.open = true
@@ -40,13 +43,14 @@ export function createRefsDomain(ctx: AgentServiceContext, deps: AgentServiceDep
    * 与单张同一条通道 —— 只是待插项从 1 变成 N。组件消费后一次清空
    * （clearPendingResources，区别于单张的 clearPendingResource）。
    */
-  function referenceAssets(assets: Array<{ id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean }>): void {
+  function referenceAssets(assets: Array<{ id?: string; name: string; url: string; path?: string; folderId?: string; isFolder?: boolean; kind?: string }>): void {
     if (!assets.length) return
     state.pendingAssets = assets.map((a) => ({
       id: a.id, name: a.name, url: a.url,
       ...(a.path ? { path: a.path } : {}),
       ...(a.folderId ? { folderId: a.folderId } : {}),
       ...(a.isFolder ? { isFolder: true } : {}),
+      ...(a.kind ? { kind: a.kind } : {}),
     }))
     state.open = true
     void deps.refresh()

@@ -1,5 +1,5 @@
 import { computed, reactive } from 'vue'
-import { createV2Logger } from '@mini-canvas/canvas-render'
+import { createV2Logger } from '@plume-canvas/canvas-render'
 export { readyHost, uiComponentOf, useUiComponentOutside, setReadyHost } from './ui/hostRuntime'
 export type { TreeNode, HostApi, HostLike } from './ui/types'
 export { DRAWER_TAB_ASSETS, DRAWER_TAB_CANVAS } from './drawerTabs'

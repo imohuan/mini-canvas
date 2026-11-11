@@ -1,8 +1,8 @@
 // 文件：packages/docs/public/examples/settings-persist/plugin-theme-toggle/src/host-wiring.ts
 // 格式：TypeScript 模块（宿主接线示范；node 环境可跑，不依赖浏览器）
 // 位置：示范"宿主该在哪一步 restore / 何时 dispose"；真实产品里等价代码在
-//       packages/canvas-render/src/host/createMiniCanvasHost.ts
-import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
+//       packages/canvas-render/src/host/createPlumeHost.ts
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 import { themeTogglePlugin } from './index'
 
 /**

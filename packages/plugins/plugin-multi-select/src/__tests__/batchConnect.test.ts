@@ -16,7 +16,7 @@ import {
   markGuideLines,
   toNodeRects,
 } from '../batchConnect'
-import { resolveFeedback, DEFAULT_SNAP_ZONE_CONFIG } from '@mini-canvas/canvas-render'
+import { resolveFeedback, DEFAULT_SNAP_ZONE_CONFIG } from '@plume-canvas/canvas-render'
 
 describe('buildBatchGuideLines —— 每个选中节点各一条临时线（用户明确要的效果）', () => {
   const rects = [

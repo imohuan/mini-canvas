@@ -5,7 +5,7 @@
  */
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Box, Sparkles, WandSparkles } from 'lucide-vue-next'
-import type { CanvasRenderContext } from '@mini-canvas/canvas-render'
+import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { registerItem, type ResourceItem } from 'prosemirror-editor-bundle'
 import {
   skillResources,
@@ -154,21 +154,34 @@ function nodeNameOf(
 function syncNodes(): void {
   const doc = ctx.tryGet<{
     getNodes(): Array<{ id: string; type: string; data?: Record<string, unknown>; parentId?: string | null }>
-    types?: Map<string, { label?: string }>
+    types?: Map<string, { label?: string; icon?: unknown }>
   }>('doc')
   if (!doc) return
   const typeLabelOf = (t: string): string | undefined => doc.types?.get(t)?.label
+  /**
+   * 节点类型的真实图标（用户 2026-11-11）：标签图标第一轮就用它。
+   *
+   * 找法要看**节点真正的类型**：图片节点常见 type=ui、data.nodeType=image，
+   * 直接拿 node.type 去 types 里查会拿到别的类型（或查不到），图标就退回默认。
+   */
+  const typeIconOf = (n: NodeLike): unknown => {
+    const d = n.data ?? {}
+    const t = (typeof d.nodeType === 'string' && d.nodeType) || n.type
+    return doc.types?.get(t)?.icon
+  }
   nodeList.value = doc
     .getNodes()
     .filter((n) => n.type !== 'group') // 分组只当容器，不作为内容引用
     .map((n) => {
       const thumb = nodeThumbOf(n)
+      const icon = typeIconOf(n)
       return {
         id: n.id,
         name: nodeNameOf(n, typeLabelOf),
         type: n.type,
         kind: nodeKindOf(n),
         ...(thumb ? { thumb } : {}),
+        ...(icon !== undefined ? { icon } : {}),
       }
     })
 }
@@ -279,12 +292,15 @@ onMounted(() => insertPendingNodeRefs())
  * 资产列表里给的 url 是后端地址（`/api/assets/files/xx.png`），图片可以直接当图用；
  * 视频是 mp4，塞进去只会裂图，所以查 video 服务已缓存的首帧，查不到就交给类型图标。
  */
-function withAssetThumb<T extends { name: string; url: string; path?: string; ext?: string; isFolder?: boolean }>(
+function withAssetThumb<T extends { name: string; url: string; path?: string; ext?: string; isFolder?: boolean; kind?: string }>(
   asset: T,
 ): T & { thumb?: string } {
   if (asset.isFolder) return asset
   const ext = asset.ext || /\.([A-Za-z0-9]{1,8})$/.exec(asset.path || asset.url || asset.name)?.[1] || ''
-  const kind = mediaKindOfExt(ext)
+  // 类型优先用资产清单给的 kind：资产名可能是 UUID、没有扩展名（用户 2026-11-11 的截图）
+  // 只认三种内容类型；'other' / 'node-package' 不能盖掉扩展名
+  const declared = asset.kind === 'image' || asset.kind === 'video' || asset.kind === 'audio' ? asset.kind : ''
+  const kind = declared || mediaKindOfExt(ext)
   if (kind === 'image') return { ...asset, thumb: asset.url }
   if (kind === 'video') {
     const thumb = peekAgentVideoThumb(asset.url)
@@ -379,7 +395,17 @@ function useSuggestion(text: string): void {
  * 解析本身住在 ../userSegments.ts（纯函数，有单测）—— 这里只做「按段渲染 + 点击派发」。
  * 转录里存的是 `<ref … />` XML 原文（后端不翻译），字段自带完整信息，不再靠名字回推。
  */
-const userSegments = parseUserSegments
+/**
+ * 气泡里的标签：解析标记时顺带查一次**当前画布**。
+ *
+ * 这样节点标签能用上类型注册的真实图标（音频就是音波），拿不到才按类型兜底。
+ * 查的是实时的 nodeList —— 节点改名 / 类型变化后，已发送的标签也跟着更新。
+ */
+function userSegments(text: string): ReturnType<typeof parseUserSegments> {
+  return parseUserSegments(text, {
+    node: (nodeId) => nodeList.value.find((n) => n.id === nodeId),
+  })
+}
 
 /**
  * 用户气泡的显示文本：剥掉 [user_steering] 块的标记只留内文（用户口径 2026-10-15）。

@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-group",
+  "name": "@plume-canvas/plugin-group",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "分组",
     "description": "选中多个 Ctrl+G 打组 / Ctrl+Shift+G 解组",
     "pluginName": "group",
@@ -24,10 +24,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

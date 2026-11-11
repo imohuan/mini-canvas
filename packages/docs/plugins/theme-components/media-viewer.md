@@ -70,7 +70,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 <!-- 位置：插件里的素材列表 —— 点一张开全屏预览 -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
 const MediaViewer = useUiComponent('mediaViewer')
 

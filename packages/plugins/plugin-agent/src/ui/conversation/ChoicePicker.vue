@@ -16,7 +16,7 @@
  * 所以这里统一用 brandSvg() 取图（它每次都给独立 id）。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { Check, Layers, Search, X } from 'lucide-vue-next'
 import { brandName, brandSvg, detectPlatform } from '../render/modelBrandIcons.js'
 import { scrollTopForVisibleItem } from '../shared/selectionScroll.js'

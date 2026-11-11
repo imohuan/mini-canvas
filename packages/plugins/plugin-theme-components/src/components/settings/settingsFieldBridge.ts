@@ -9,7 +9,7 @@
  * 这样换主题/热替换字段控件时，已经挂载的插件自绘页也会跟着换。
  */
 import { defineComponent, h, type Component, type PropType } from 'vue'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
 
 export interface SettingsFieldBridgeProps {
   group: string
@@ -23,7 +23,7 @@ export function createSettingsFieldBridge(
   fallback: Component,
 ): Component {
   return defineComponent({
-    name: 'MiniCanvasSettingsFieldBridge',
+    name: 'PlumeSettingsFieldBridge',
     props: {
       group: { type: String, required: true },
       fieldKey: { type: String, required: true },

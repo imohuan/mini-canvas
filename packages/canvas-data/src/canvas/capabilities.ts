@@ -13,14 +13,14 @@
  * 零 Vue。组件句柄 opaque；节点数据/展示走 nodeStore/nodeRegistry(宿主已注入服务)，
  * 通用 UI 槽(slots)走 ctx 自带的 SlotRegistry 服务('slots')，宿主按需渲染。
  */
-import type { PluginScope, Registry, SlotRegistry, SettingsStore, Disposable } from '@mini-canvas/kernel'
+import type { PluginScope, Registry, SlotRegistry, SettingsStore, Disposable } from '@plume-canvas/kernel'
 import { registerNodeType } from './registry/registerNodeType'
 import type { ThemeSlot } from './registry/themeRegistry'
 import type { NodeSegment } from './registry/nodeRegistry'
 import type { NodeTypeDef } from './registry/registerNodeType'
 import type { NodeStoreService } from '../nodeStore'
 import type { NodeFactoryService, NodeCreator } from './nodeFactory'
-import type { CommandDef } from '@mini-canvas/kernel'
+import type { CommandDef } from '@plume-canvas/kernel'
 import type { NodeRegion, NodeRegionAttachment } from './region'
 import { canvasRuntime } from './canvasRuntime'
 import type { SettingsMenuScope } from './settingsMenu'

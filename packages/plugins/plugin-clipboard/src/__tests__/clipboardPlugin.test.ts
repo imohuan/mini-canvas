@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Context } from '@mini-canvas/canvas-data'
+import { Context } from '@plume-canvas/canvas-data'
 import {
   NodeStore,
   EdgeStore,
@@ -17,8 +17,8 @@ import {
   CLIPBOARD_PASTE_KEY,
   type ClipboardEntry,
   type ClipboardPasteHandler,
-} from '@mini-canvas/canvas-data'
-import { CommandRegistry } from '@mini-canvas/kernel'
+} from '@plume-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { clipboardPlugin, type ClipboardService } from '../clipboardPlugin'
 
 /** 测试本地信封形状（与渲染层宿主 GraphEnvelope 同构；避免插件测试依赖 canvas-render） */
@@ -379,7 +379,7 @@ describe('跨页面粘贴（用户 2026-10-12 缺陷①：换个页面粘不了�
       if (mime === 'text/plain') written = data
       return true
     })
-    expect(written.startsWith('mini-canvas-nodes:')).toBe(true)
+    expect(written.startsWith('plume-canvas-nodes:')).toBe(true)
     expect(parseCanvasClipboardText(written)?.nodes).toHaveLength(1)
 
     // B：内存剪贴板是空的（另一个页面）—— 过去这里会直接让位，什么也贴不出来
@@ -439,14 +439,14 @@ describe('跨页面粘贴（用户 2026-10-12 缺陷①：换个页面粘不了�
     svcA.copy()
     let raw = ''
     svcA.markSystemClipboard((mime, data) => {
-      if (mime && mime === 'application/x-mini-canvas-nodes') raw = data
+      if (mime && mime === 'application/x-plume-nodes') raw = data
       return true
     })
     const parsed = parseCanvasClipboardText(raw)
     expect(parsed).toBeTruthy()
 
     const payload = buildClipboardPastePayload(
-      pasteEvent({ types: ['application/x-mini-canvas-nodes'], data: { 'application/x-mini-canvas-nodes': canvasClipboardPayload(parsed!.nodes, parsed!.edges, parsed!.copyTime) } }),
+      pasteEvent({ types: ['application/x-plume-nodes'], data: { 'application/x-plume-nodes': canvasClipboardPayload(parsed!.nodes, parsed!.edges, parsed!.copyTime) } }),
     )
     expect(pasteEntry(b.ctx)(payload)).toBe(true)
     await new Promise((r) => setTimeout(r, 30))
@@ -516,7 +516,7 @@ describe('跨页面粘贴（用户 2026-10-12 缺陷①：换个页面粘不了�
     const b = otherPage()
     await b.ctx.start()
     // 老版本写的剪贴板：带前缀的 text/plain 里只有一个 {"v":1,"nodes":n,"edges":m} 标记
-    const marker = 'mini-canvas-nodes:' + JSON.stringify({ v: 1, nodes: 1, edges: 0 })
+    const marker = 'plume-canvas-nodes:' + JSON.stringify({ v: 1, nodes: 1, edges: 0 })
     const payload = buildClipboardPastePayload(pasteEvent({ types: ['text/plain'], data: { 'text/plain': marker } }))
     // 仍然认领（返回 true）→ 宿主 preventDefault，file-drop 的纯文本处理器不会被问到；
     // 本页没有内存快照 → 不贴任何节点（过去这里会让位，标记 JSON 会被建成一个文本节点）

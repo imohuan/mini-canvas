@@ -374,7 +374,7 @@ export function applyDebug(ctx: ServerCtx): void {
      * 这条通道**永远**关着。
      *
      * 它曾经是调试页的读取口：`text/html`、与后台同源，节点 HTML 里的脚本能直接读走
-     * `localStorage.mc_admin_token`。现在调试产物只由另一个端口的只读服务提供。
+     * `localStorage.plume_admin_token`。现在调试产物只由另一个端口的只读服务提供。
      * 保留这条路由（而不是删掉）是为了给旧链接一个明确的 404 说明，而不是落到 SPA 兜底
      * 回一份 index.html 让调用方误以为拿到了页面。
      */

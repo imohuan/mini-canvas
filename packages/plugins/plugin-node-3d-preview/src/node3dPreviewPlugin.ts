@@ -11,8 +11,8 @@
  *
  * 依赖方向：只依赖内核(canvas-base/canvas-data) + 渲染层类型(useCanvasRender)，不反向依赖宿主/demo。
  */
-import { Service, type Context, type PluginModule, type ConfigSchema } from '@mini-canvas/canvas-base'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { Service, type Context, type PluginModule, type ConfigSchema } from '@plume-canvas/canvas-base'
+import type { DocService } from '@plume-canvas/canvas-data'
 import PanoramaContent from './PanoramaContent.vue'
 import {
   PANORAMA_FULLSCREEN_COMMAND,
@@ -35,7 +35,7 @@ export interface Panorama3DNodeService {
 }
 
 /** 类型增强缝（cordis 声明合并）：宿主/作者 ctx.panorama3d 直访时类型为本服务 */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     panorama3d: Panorama3DNodeService
   }

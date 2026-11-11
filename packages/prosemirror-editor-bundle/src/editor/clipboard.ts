@@ -1,6 +1,6 @@
 import { Plugin, PluginKey } from "prosemirror-state";
 import type { ResourceItem } from "../types";
-import { encodeNodeRef, REF_ICONS } from "../referenceMarkup";
+import { encodeNodeRef, REF_ICONS, REF_KIND_ICONS } from "../referenceMarkup";
 import { buildResourceNode } from "./resourceNode";
 import { buildSlotItem, itemRegistry } from "./chipRegistry";
 import { mySchema } from "./schema";
@@ -180,6 +180,11 @@ export function parsePlainTextToContent(
       // 文件夹标签没有 path 也没有 ext，只有 folderId —— 靠它区分「目录」与「文件」。
       const refExt = kind === 'asset' ? (attrs.ext || '') : ''
       const refFolderId = kind === 'asset' ? (attrs.folderId || '') : ''
+      /**
+       * 标记里带的内容类型（image / video / audio / text）：回填成 chip 时也要带上，
+       * 否则重开会话后标签又退回「节点通用图标 / 资产图片图标」（用户 2026-11-11）。
+       */
+      const contentKind = attrs.kind || ''
       // 优先复用现成清单里的同款 item（带 renderEditor / 图标 / 点击聚焦）——
       // 否则回填出来的标签退化成默认「@名字」样式，与右键插入的标签长得不一样（用户报过）。
       const cleanName = (attrs.name || '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&amp;/g, '&')
@@ -207,7 +212,11 @@ export function parsePlainTextToContent(
             // 图标取唯一那份 REF_ICONS（referenceMarkup.ts）—— 与 @ 菜单 / 右键插入的标签同源
             const ic = document.createElement('span')
             ic.className = 'ac-tag-icon'
-            ic.innerHTML = REF_ICONS[kind as keyof typeof REF_ICONS] || REF_ICONS.asset
+            // 真实图标拿不到时按类型兜底，最后才用「节点 / 资产」默认图标
+            const typeIcon = contentKind === 'image' || contentKind === 'video' || contentKind === 'audio' || contentKind === 'text'
+              ? REF_KIND_ICONS[contentKind]
+              : ''
+            ic.innerHTML = typeIcon || REF_ICONS[kind as keyof typeof REF_ICONS] || REF_ICONS.asset
             el.append(ic)
             const lb = document.createElement('span')
             lb.className = 'ac-tag-label'
@@ -227,6 +236,7 @@ export function parsePlainTextToContent(
         refValue,
         refExt: item.ref?.ext || refExt,
         refFolderId: item.ref?.folderId || refFolderId,
+        chipKind: contentKind,
       }))
       itemRegistry.set(item.id, item)
     } else if (isMarkup) {

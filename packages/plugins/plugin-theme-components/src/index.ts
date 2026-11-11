@@ -1,5 +1,5 @@
 /**
- * @mini-canvas/plugin-theme-components —— 默认主题的**通用组件**半边（应用级常驻）。
+ * @plume-canvas/plugin-theme-components —— 默认主题的**通用组件**半边（应用级常驻）。
  *
  * 只做与画布无关的事：
  * - 外观变量（圆角 / 字体 / 尺寸）交接给组件库
@@ -7,13 +7,13 @@
  * - 设置面板与设置菜单
  * - 全局通知服务
  *
- * 画布外观（节点壳 / 边 / 背景 / 节点工具栏）在 @mini-canvas/plugin-theme-canvas，
- * 两个包互不 import；共享的纯数据在 @mini-canvas/theme-contract。
+ * 画布外观（节点壳 / 边 / 背景 / 节点工具栏）在 @plume-canvas/plugin-theme-canvas，
+ * 两个包互不 import；共享的纯数据在 @plume-canvas/theme-contract。
  */
-import type { InferConfig, PluginModule, PluginScope } from "@mini-canvas/canvas-base"
-import "@mini-canvas/ui-kit-shadcn/styles.css"
+import type { InferConfig, PluginModule, PluginScope } from "@plume-canvas/canvas-base"
+import "@plume-canvas/ui-kit-shadcn/styles.css"
 // 主题变量：包加载即生效（:root 定义 --canvas-node-*），空状态等通用件也引这些变量。
-import "@mini-canvas/theme-contract/styles/node-theme.css"
+import "@plume-canvas/theme-contract/styles/node-theme.css"
 // 界面浮层层级：组件库只管组件本身，宿主/主题在这里统一决定 Dialog / 菜单 / 预览谁盖谁。
 import "./styles/ui-layers.css"
 // 全局滚动条观感（用户口径 2026-11-04：取消统一的滚动组件，改由主题统一定样式）。
@@ -23,7 +23,7 @@ import { registerThemeStudio } from "./components/theme-studio/register"
 import SettingsSchemaField from "./components/settings/SettingsSchemaField.vue"
 import PluginSettingsContent from "./components/settings/PluginSettingsContent.vue"
 import { registerDefaultSettingsMenu } from "./components/settings/defaultMenu"
-import { registerEventName } from "@mini-canvas/canvas-base"
+import { registerEventName } from "@plume-canvas/canvas-base"
 import {
   PrecisionSlider,
   ToolParamField,
@@ -40,12 +40,12 @@ import ToolParamHint from "./components/ui/ToolParamHint.vue"
 import SlotDebugOverlay from "./components/ui/SlotDebugOverlay.vue"
 import UiKitDebugOverlay from "./components/ui/UiKitDebugOverlay.vue"
 import FeedbackHost from "./components/ui/FeedbackHost.vue"
-import { SHADCN_COMPONENTS, withComponentConfig, withUiKitDebugMark } from "@mini-canvas/ui-kit-shadcn"
+import { SHADCN_COMPONENTS, withComponentConfig, withUiKitDebugMark } from "@plume-canvas/ui-kit-shadcn"
 import ShadcnSettingsRow from "./components/settings/ShadcnSettingsRow.vue"
 import ShadcnSettingsSection from "./components/settings/ShadcnSettingsSection.vue"
-import { UiToaster } from "@mini-canvas/ui-kit-shadcn"
-import { setStaticUiCatalog } from "@mini-canvas/canvas-render"
-import { createFeedbackService, feedbackDebugSnapshot, setFeedbackService } from "@mini-canvas/canvas-render"
+import { UiToaster } from "@plume-canvas/ui-kit-shadcn"
+import { setStaticUiCatalog } from "@plume-canvas/canvas-render"
+import { createFeedbackService, feedbackDebugSnapshot, setFeedbackService } from "@plume-canvas/canvas-render"
 import {
   AppearanceConfig,
   DEFAULT_THEME_APPEARANCE,
@@ -55,7 +55,7 @@ import {
   createNotifyService,
   toThemeBridgeInput,
   type ThemeBridgeInput,
-} from "@mini-canvas/theme-contract"
+} from "@plume-canvas/theme-contract"
 import { setSettingsUiCatalog } from "./composables/useUiComponentOutside"
 
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。

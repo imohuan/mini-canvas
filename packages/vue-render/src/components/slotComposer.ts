@@ -5,12 +5,12 @@
  * - SlotComposer：把「宿主内置 UI」与「插件注册的 UI」合成一个有序序列的父组件；
  * - SlotAnchor：宿主内置 UI 的稳定锚点，声明 id / order / before / after。
  *
- * id 规范与判定统一走 @mini-canvas/kernel 的 naming 模块（全仓唯一事实源）：
+ * id 规范与判定统一走 @plume-canvas/kernel 的 naming 模块（全仓唯一事实源）：
  * - 槽名用点：shell.dock、shell.status、shell.drawer.tabs
  * - 条目 id 用斜杠：owner/name，例如 host/agent、my-plugin/export
  * - host/ 前缀保留给宿主内置项
  */
-export { isSlotItemId, isSlotName } from '@mini-canvas/kernel'
+export { isSlotItemId, isSlotName } from '@plume-canvas/kernel'
 
 /** 宿主锚点或插件条目的最小排序描述 */
 export interface SlotComposerEntry {

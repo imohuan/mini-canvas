@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { Selection } from '../selection'
 import { History } from '../history'
 import type { HistorySnapshot } from '../history'
-import { CommandRegistry } from '@mini-canvas/kernel'
-import { NodeFactory } from '@mini-canvas/canvas-data'
+import { CommandRegistry } from '@plume-canvas/kernel'
+import { NodeFactory } from '@plume-canvas/canvas-data'
 
 describe('Selection（选中集服务）', () => {
   it('set/has/add/remove/clear/size 语义正确', () => {

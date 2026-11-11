@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
- * mini-canvas-cloud CLI —— `npx mini-canvas-cloud serve` 的入口。
+ * plume-canvas CLI —— `npx plume-canvas serve` 的入口。
  *
- * 命令名带 `-cloud` 后缀：仓库里 mcp-server 的 bin 已经叫 `mini-canvas`（面向 AI 工具链），
- * 两个包若用同一个 bin 名，谁先装谁生效、后装的会被静默覆盖。分开命名免得踩。
+ * 命令名就叫 `plume-canvas`：本包（cloud-server）是唯一的主启动入口。
  *
  * 做的事：解析参数 → 起 cloud-server → 打印访问地址与数据落点 → 打印外部插件条数。
  * 端口被占用时（且用户没写死端口）自动往后找下一个可用端口，不让"怎么又起不来"成为日常。
@@ -27,7 +26,7 @@ interface CliOptions {
   open: boolean
   /** 是否提供 MCP 接口（缺省开） */
   mcp: boolean
-  /** 关闭管理令牌鉴权（必须配合 MINI_CANVAS_ALLOW_INSECURE=1） */
+  /** 关闭管理令牌鉴权（必须配合 PLUME_ALLOW_INSECURE=1） */
   noAdminAuth: boolean
   /** 额外信任的 Host（可重复） */
   trustedHosts: string[]
@@ -35,14 +34,14 @@ interface CliOptions {
   trustedOrigins: string[]
 }
 
-const HELP = `mini-canvas-cloud —— 自托管画布服务
+const HELP = `plume-canvas —— 自托管画布服务
 
 用法:
-  mini-canvas-cloud serve [选项]      起服务（默认子命令）
-  mini-canvas-cloud list-tools        列出 MCP 暴露的工具
-  mini-canvas-cloud --help            看这份帮助
-  mini-canvas-cloud --version         看版本
-  mini-canvas-cloud audit-verify      校验 <数据目录>/audit.log 的 hash 链（不开服务）
+  plume-canvas serve [选项]      起服务（默认子命令）
+  plume-canvas list-tools        列出 MCP 暴露的工具
+  plume-canvas --help            看这份帮助
+  plume-canvas --version         看版本
+  plume-canvas audit-verify      校验 <数据目录>/audit.log 的 hash 链（不开服务）
 
 选项:
   -p, --port <号>     监听端口（默认 ${DEFAULT_PORT}；被占用时自动往后找）
@@ -53,7 +52,7 @@ const HELP = `mini-canvas-cloud —— 自托管画布服务
       --providers <目录> 平台提供方目录（后台的"投递箱"；默认 <数据目录>/providers）
       --server-plugins <目录> 后台插件目录（丢 .js 进去即多一个后台插件；默认 <数据目录>/server-plugins）
       --no-mcp        不提供 MCP 接口（默认提供）
-      --no-admin-auth 关闭管理令牌与来源边界（**必须**同时设 MINI_CANVAS_ALLOW_INSECURE=1）
+      --no-admin-auth 关闭管理令牌与来源边界（**必须**同时设 PLUME_ALLOW_INSECURE=1）
       --trusted-host <host:port>   额外信任的 Host（反代 / 另一个主机名；可重复）
       --trusted-origin <origin>    额外信任的 Origin（如 dev 的 http://localhost:5288；可重复）
       --open          启动后自动打开浏览器（可选；默认不打开）
@@ -77,7 +76,7 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
   /** 子命令（先记下、解析完参数再执行） */
   let subcommand: 'list-tools' | 'audit-verify' | undefined
   const opts: CliOptions = {
-    port: Number(process.env.MINI_CANVAS_PORT ?? '') || DEFAULT_PORT,
+    port: Number(process.env.PLUME_PORT ?? '') || DEFAULT_PORT,
     portExplicit: false,
     dir: DEFAULT_DATA_DIR,
     hostname: '127.0.0.1',
@@ -193,9 +192,9 @@ function isPortBusy(err: unknown): boolean {
 /** 起服务：端口被占用且用户没写死端口时，往后找最多 10 个端口 */
 async function startWithPortFallback(opts: CliOptions) {
   // 关鉴权必须显式二次确认：裸跑等于把「装插件 / 执行脚本 / 改画布」的入口对外开放。
-  if (opts.noAdminAuth && process.env.MINI_CANVAS_ALLOW_INSECURE !== '1') {
+  if (opts.noAdminAuth && process.env.PLUME_ALLOW_INSECURE !== '1') {
     throw new Error(
-      '--no-admin-auth 需要同时设置环境变量 MINI_CANVAS_ALLOW_INSECURE=1。\n' +
+      '--no-admin-auth 需要同时设置环境变量 PLUME_ALLOW_INSECURE=1。\n' +
         '这是有意的二次确认：关掉之后任何网页都能装插件、跑脚本、改画布。',
     )
   }
@@ -235,7 +234,7 @@ async function main(): Promise<void> {
   const manifest = await buildManifest(await resolvePluginsDir(opts.plugins))
 
   console.log('')
-  console.log('  mini-canvas-cloud 已启动')
+  console.log('  plume-canvas 已启动')
   console.log('')
   console.log(`  画布   ${info.url}/`)
   if (portChanged) console.log(`         （端口 ${opts.port} 被占用，已自动改用 ${info.port}）`)
@@ -253,7 +252,7 @@ async function main(): Promise<void> {
     console.log('  ⚠️  管理鉴权已关闭（--no-admin-auth）—— 任何网页都能装插件 / 跑脚本 / 改画布')
   } else {
     console.log('')
-    console.log('  管理令牌 ' + (srv.adminTokenSource === 'env' ? '（来自 MINI_CANVAS_ADMIN_TOKEN）' : srv.adminTokenFile))
+    console.log('  管理令牌 ' + (srv.adminTokenSource === 'env' ? '（来自 PLUME_ADMIN_TOKEN）' : srv.adminTokenFile))
     console.log('           ' + srv.adminToken)
     console.log('           前端在「设置 → 插件」里填一次；删掉令牌文件重启即轮换')
   }

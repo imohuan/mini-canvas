@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-multi-select",
+  "name": "@plume-canvas/plugin-multi-select",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "多选",
     "description": "Shift+拖框选 / Ctrl+A 全选 / Escape 清除",
     "pluginName": "multi-select",
@@ -24,9 +24,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.0"
   },
   "devDependencies": {
@@ -36,6 +36,6 @@
     "vite": "^8.0.12",
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
-    "@mini-canvas/plugin-theme-canvas": "workspace:*"
+    "@plume-canvas/plugin-theme-canvas": "workspace:*"
   }
 }

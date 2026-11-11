@@ -5,12 +5,12 @@
  * 即多选框的位置注册**复用节点那套区域词与落场规则**，只是宿主从"某个节点"换成"选择集"。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, NodeStore, createDocService } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, createDocService } from '@plume-canvas/canvas-data'
 import { NodeRegistry } from '../registry/nodeRegistry'
 import { ThemeRegistry } from '../registry/themeRegistry'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { NodeFactory } from '../nodeFactory'
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 
 const Comp = { name: 'SelComp' }
 

@@ -14,10 +14,10 @@ import { ref } from "vue"
 const text = ref("")
 const visible = ref(false)
 
-export const TIP_EVENT = "mini-canvas:tip"
+export const TIP_EVENT = "plume-canvas:tip"
 
 function broadcast(): void {
-  ;(globalThis as { __miniCanvasTip?: { text: string; visible: boolean } }).__miniCanvasTip = {
+  ;(globalThis as { __plumeTip?: { text: string; visible: boolean } }).__plumeTip = {
     text: text.value,
     visible: visible.value,
   }

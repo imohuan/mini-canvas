@@ -6,7 +6,7 @@
  * 都复用它，避免三份实现各自漂移。
  */
 import { ref } from 'vue'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import PromptVariables from './PromptVariables.vue'
 
 const props = withDefaults(

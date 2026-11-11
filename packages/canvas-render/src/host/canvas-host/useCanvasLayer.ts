@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { DEFAULT_EDGE_VISUAL, DEFAULT_HANDLE_VISUAL, DEFAULT_DEBUG_VISUAL, splitNodeWritePatch } from '../canvasHostCore'
 import { DEFAULT_SNAP_ZONE_CONFIG } from '../../connection/geometry'
-import type { CanvasHostHandle } from '../createMiniCanvasHost'
+import type { CanvasHostHandle } from '../createPlumeHost'
 import type { CanvasHostRenderProps } from '../canvasHostTypes'
 import type { NodeWrite, NodeWritePatch } from '../../contracts/nodeRegistryKey'
 

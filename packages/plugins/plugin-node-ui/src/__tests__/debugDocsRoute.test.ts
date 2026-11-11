@@ -68,7 +68,7 @@ async function post(route: (c: unknown) => unknown, params: Record<string, strin
 }
 
 beforeEach(async () => {
-  dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-debug-docs-'))
+  dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-debug-docs-'))
 })
 
 afterEach(async () => {
@@ -135,7 +135,7 @@ describe('POST /api/canvases/:canvasId/debug-docs', () => {
    * ★ 调试源没起来就**不生成**，不回退同源。
    *
    * 回退那条路会把节点 HTML 放到后台的源上执行，页面里的脚本能读走
-   * `localStorage.mc_admin_token`；而画布上的「调试」按钮从不读 warnings，
+   * `localStorage.plume_admin_token`；而画布上的「调试」按钮从不读 warnings，
    * 用户完全看不出自己在跑一个会泄露令牌的页面。所以这里必须是明确的失败。
    */
   it('★ 没有调试源 → 直接拒绝生成（不回退后台同源）', async () => {

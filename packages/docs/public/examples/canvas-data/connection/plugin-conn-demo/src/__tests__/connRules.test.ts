@@ -3,8 +3,8 @@
 // 位置：连接规则的逐条验证 —— 纯函数，不需要浏览器
 
 import { describe, expect, it } from 'vitest'
-import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@mini-canvas/canvas-data'
-import type { DocService } from '@mini-canvas/canvas-data'
+import { Context, createCanvasBasePlugin, MemoryStorageAdapter } from '@plume-canvas/canvas-data'
+import type { DocService } from '@plume-canvas/canvas-data'
 import { checkEdge } from '../connRules'
 import * as connDemo from '../index'
 

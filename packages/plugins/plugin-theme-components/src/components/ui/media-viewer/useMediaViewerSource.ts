@@ -1,5 +1,5 @@
 import { computed, ref, type Component, type Ref } from "vue"
-import { useUiComponent, uiComponentOutside } from "@mini-canvas/canvas-render"
+import { useUiComponent, uiComponentOutside } from "@plume-canvas/canvas-render"
 import type { MediaViewerItem, MediaViewerProps } from "./types"
 
 /** kind 归一化 + 预览注册件取用 + 多张清单/下标。 */

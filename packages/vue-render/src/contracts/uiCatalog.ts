@@ -8,7 +8,7 @@
  * 边界：组件库只有默认主题插件可以 import；其它插件与外壳都从这里按名取件，
  * 内部私有小组件留在各自插件里。
  */
-import type { Context } from '@mini-canvas/kernel'
+import type { Context } from '@plume-canvas/kernel'
 import { onScopeDispose, shallowRef, type Ref } from 'vue'
 import { useCanvasContextOrRender } from '../context'
 

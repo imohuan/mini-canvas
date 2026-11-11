@@ -26,7 +26,7 @@ import {
 // 视觉语言（参考 docs/reference/bezier-glow-flow-line）：导轨细线 + 青色渐变光斑沿连线流动。
 //
 // **连线颜色（导轨 / 流光）不在这里**：它们已上移进渲染层主题色板
-//（`@mini-canvas/canvas-render` 的 themePalette：`edgeRailColor` / `edgeFlowColor`，
+//（`@plume-canvas/canvas-render` 的 themePalette：`edgeRailColor` / `edgeFlowColor`，
 // 各带亮/暗两格）。理由：颜色必须"一套主题一个值"，而本插件的 Config 字段是单值 ——
 // 留着它就会永远盖住色板（登记过就有值 → CustomEdge 拿到后不再回落色板），
 // 于是用户改了主题色也看不到变化。其它非颜色的边外观（线宽/虚线/光斑参数）仍留在此处。

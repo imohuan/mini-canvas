@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useCanvasRender, useSoleNodeSelected } from '@mini-canvas/canvas-render'
+import { useCanvasRender, useSoleNodeSelected } from '@plume-canvas/canvas-render'
 import { MIN_CLIP_DURATION } from '../videoClip'
 import { isClipPending, isClipping } from '../videoSession'
 import { publishDraftRange, readDuration } from '../videoClipStore'

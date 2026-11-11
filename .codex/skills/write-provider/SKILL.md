@@ -1,6 +1,6 @@
 ---
 name: write-provider
-description: 写或修改 mini-canvas 的后台 provider（数据根下的 providers 目录里丢一个 js 文件）时使用。覆盖单文件限制、只能用 Node 内置模块、必须导出 id/actions/submit，以及底栏动作的字段、图标、预设和 HTML 面板。前端插件开发不走这份。
+description: 写或修改 plume-canvas 的后台 provider（数据根下的 providers 目录里丢一个 js 文件）时使用。覆盖单文件限制、只能用 Node 内置模块、必须导出 id/actions/submit，以及底栏动作的字段、图标、预设和 HTML 面板。前端插件开发不走这份。
 ---
 
 # 写一个后台 provider
@@ -8,7 +8,7 @@ description: 写或修改 mini-canvas 的后台 provider（数据根下的 provi
 一句话：往 `<数据根>/providers/` 丢一个 `.js` 文件，后台几秒内自动装载。
 它的 `actions` 会直接出现在画布底栏的模型下拉里，前端一行都不用改。
 
-默认数据根是启动目录下的 `.mini-canvas`，所以一般是 `.mini-canvas/providers/`。
+默认数据根是启动目录下的 `.plume`，所以一般是 `.plume/providers/`。
 目录不存在就自己建：缺目录等于「没有 provider」，不报错，也不影响启动。
 
 ## 四条硬要求

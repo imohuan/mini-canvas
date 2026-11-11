@@ -21,9 +21,9 @@ export interface CustomCursor {
   hy: number
 }
 
-const KEY = 'mc-cursor-effect:custom-cursors'
+const KEY = 'plume-cursor-effect:custom-cursors'
 /** 自定义素材变化时广播的事件名（设置页写、渲染层听，立即生效） */
-export const CUSTOM_CHANGED_EVENT = 'mc-cursor-effect:custom-changed'
+export const CUSTOM_CHANGED_EVENT = 'plume-cursor-effect:custom-changed'
 
 /**
  * 内存兜底。

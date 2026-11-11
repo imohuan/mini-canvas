@@ -8,7 +8,7 @@
  * 这个文件只做「拼 URL / 带令牌 / 读回包 / 转发 SSE」，不碰 Vue，也不碰 DOM。
  * UiContent.vue 负责把消息接进来、把结果 postMessage 回去。
  */
-import { ADMIN_TOKEN_HEADER, withAdminToken } from '@mini-canvas/canvas-base'
+import { ADMIN_TOKEN_HEADER, withAdminToken } from '@plume-canvas/canvas-base'
 
 /** 沙箱页能交上来的产物字节（三种都能结构化克隆；Blob 保留 type） */
 export type SavePayload = Blob | Uint8Array | ArrayBuffer

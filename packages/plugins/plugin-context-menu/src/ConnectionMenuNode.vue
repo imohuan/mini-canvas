@@ -11,8 +11,8 @@
  * 位置/尺寸/缩放由画布负责（它是真节点）；这里只负责"长什么样"。
  */
 import { computed } from 'vue'
-import { Handle, Position, useCanvasRender } from '@mini-canvas/canvas-render'
-import type { NodeProps } from '@mini-canvas/canvas-render'
+import { Handle, Position, useCanvasRender } from '@plume-canvas/canvas-render'
+import type { NodeProps } from '@plume-canvas/canvas-render'
 import ConnectionMenuContent from './ConnectionMenuContent.vue'
 import { CARD_WIDTH, CARD_BORDER, CARD_PADDING_Y, ITEM_HEIGHT } from './connectionMenu'
 import { inverseScaleForZoom, inverseScaleOrigin, normalizePortSide } from './cardInverseScale'

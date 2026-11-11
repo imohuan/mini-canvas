@@ -19,7 +19,7 @@
  * 笔刷光标（用户口径 2026-10-30）：鼠标在绘制区时显示一个圆圈 = 当前笔刷大小（brush cursor）。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { fitEditingNodeIntoView, useCanvasRender } from '@mini-canvas/canvas-render'
+import { fitEditingNodeIntoView, useCanvasRender } from '@plume-canvas/canvas-render'
 import { paintState, pushStroke } from './paintSession'
 import { paintStrokes } from './imagePaint'
 

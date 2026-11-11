@@ -12,11 +12,11 @@
  * - needs 缺项：dev 当场抛错（响亮），prod 返回 undefined + warn（不白屏）。见决策 9。
  *
  * 为什么这里没有 ctx 参数：本模块是 canvas-render 的契约层，只做"取值 + 缺项裁决"，
- * 不 import 任何节点插件 —— 具体能力由宿主/主题插件注册（见 createMiniCanvasHost 的标准四件）。
+ * 不 import 任何节点插件 —— 具体能力由宿主/主题插件注册（见 createPlumeHost 的标准四件）。
  */
 import { inject, provide, type InjectionKey, type Ref } from 'vue'
-import type { Entry, Registry } from '@mini-canvas/kernel'
-import type { Context } from '@mini-canvas/canvas-data'
+import type { Entry, Registry } from '@plume-canvas/kernel'
+import type { Context } from '@plume-canvas/canvas-data'
 
 /** 一个节点暴露给能力工厂的上下文（工厂按它造出该节点专属的能力实例） */
 export interface CapabilityNodeContext {

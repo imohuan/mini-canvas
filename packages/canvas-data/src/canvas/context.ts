@@ -1,7 +1,7 @@
 /**
  * [迁移转发] Context —— 画布版上下文。
  *
- * 插件框架（装载 / 依赖编排 / 事件 / 作用域回收 / 能力层接缝）已迁往 @mini-canvas/kernel；
+ * 插件框架（装载 / 依赖编排 / 事件 / 作用域回收 / 能力层接缝）已迁往 @plume-canvas/kernel；
  * 本文件只做一件事：把"画布能力层"作为默认层装进 kernel 的 Context，
  * 于是 `new Context()` 依旧自带 ctx.nodes/theme/commands/slots/settings（包内 363 条测试零改动）。
  *
@@ -10,12 +10,12 @@
  * - 画布的消费方（render / 插件 / 测试）要的是"带画布能力段的 ctx"。
  * 于是"默认装哪层"由本包决定——将来要纯内核，直接 new kernel 的 Context 即可。
  */
-import { Context as KernelContext } from '@mini-canvas/kernel'
-import type { CapabilityLayer } from '@mini-canvas/kernel'
+import { Context as KernelContext } from '@plume-canvas/kernel'
+import type { CapabilityLayer } from '@plume-canvas/kernel'
 import { createCanvasCapabilityLayer } from './capabilityLayer'
 
-export { runPlugin } from "@mini-canvas/kernel"
-export type { ContextState, PluginRuntimeStatus } from "@mini-canvas/kernel"
+export { runPlugin } from "@plume-canvas/kernel"
+export type { ContextState, PluginRuntimeStatus } from "@plume-canvas/kernel"
 
 /**
  * 画布上下文：kernel Context + 默认装好的画布能力层。

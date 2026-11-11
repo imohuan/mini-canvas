@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-note-pair",
+  "name": "@plume-canvas/plugin-note-pair",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "双便签",
     "description": "一次事务建两个便签并连起来；另一条命令报告当前画布情况",
     "pluginName": "note-pair",
@@ -23,9 +23,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

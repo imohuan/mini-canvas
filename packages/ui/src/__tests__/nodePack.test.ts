@@ -54,7 +54,7 @@ describe('buildPack —— 拿后台打好的字节', () => {
   it('★ build / import 都带 x-admin-token（漏了就是 403）', async () => {
     // 必须用 vi.stubGlobal：Node 24 自带一个 localStorage 访问器，直接赋值可能被忽略
     vi.stubGlobal('localStorage', {
-      m: new Map<string, string>([['mc_admin_token', 'tok-123']]),
+      m: new Map<string, string>([['plume_admin_token', 'tok-123']]),
       getItem(k: string) { return (this as unknown as { m: Map<string, string> }).m.get(k) ?? null },
       setItem(k: string, v: string) { (this as unknown as { m: Map<string, string> }).m.set(k, v) },
       removeItem(k: string) { (this as unknown as { m: Map<string, string> }).m.delete(k) },
@@ -71,7 +71,7 @@ describe('buildPack —— 拿后台打好的字节', () => {
       return {
         ok: true,
         status: 200,
-        headers: { get: () => 'application/x-mini-canvas-node' },
+        headers: { get: () => 'application/x-plume-node' },
         arrayBuffer: async () => new Uint8Array([1]).buffer,
         json: async () => ({ ok: true }),
       }
@@ -92,7 +92,7 @@ describe('buildPack —— 拿后台打好的字节', () => {
         fetchImpl: async () => ({
           ok: true,
           status: 200,
-          headers: { get: () => 'application/x-mini-canvas-node' },
+          headers: { get: () => 'application/x-plume-node' },
           arrayBuffer: async () => bytes.buffer.slice(0),
         }),
       },
@@ -101,10 +101,10 @@ describe('buildPack —— 拿后台打好的字节', () => {
   })
 
   it('名字与脚本清单从**响应头**带回（字节响应没有 JSON 体放它们）', async () => {
-    // 少了这条，收藏时预填名字只能回落成"节点包.mcnode"，用户每次都得手改
+    // 少了这条，收藏时预填名字只能回落成"节点包.plumenode"，用户每次都得手改
     const bytes = new Uint8Array([1])
     const head: Record<string, string> = {
-      'content-type': 'application/x-mini-canvas-node',
+      'content-type': 'application/x-plume-node',
       'x-pack-name': encodeURIComponent('视频可视化'),
       'x-pack-scripts': 'scale,crop',
       'x-pack-missing': 'gone',

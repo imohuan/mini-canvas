@@ -1,6 +1,6 @@
 # 底部状态栏 bottom-bar
 
-> 插件解析 · `@mini-canvas/plugin-bottom-bar` · 自带件
+> 插件解析 · `@plume-canvas/plugin-bottom-bar` · 自带件
 
 **一句话**：节点卡片下面那条状态栏就是它 —— 它同时提供**可替换的底栏皮**、**注册式动作**（谁都能往底栏塞按钮）、
 **任务进度覆盖层**（跑生成时的进度与取消），三件事合在一件里。
@@ -25,9 +25,9 @@
 | 项 | 值 | 来源 |
 | --- | --- | --- |
 | 插件名（`name`） | `'bottom-bar'` | `src/nodeBarPlugin.ts` |
-| 包名 | `@mini-canvas/plugin-bottom-bar` | `package.json` |
+| 包名 | `@plume-canvas/plugin-bottom-bar` | `package.json` |
 | 硬依赖（`inject`） | `['doc', 'nodeRegistry', 'themeRegistry']` | 同上 |
-| 自带件 | `miniCanvas.builtin: true` | `package.json` |
+| 自带件 | `plume.builtin: true` | `package.json` |
 | 产物出口 | `pluginBottomBar: PluginModule` | `src/index.ts` |
 
 > **装配顺序很重要**：底栏插件必须在**三个节点插件之前**装载 —— 节点插件 `apply` 时 `nodeBar` 已在，

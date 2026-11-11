@@ -2,7 +2,7 @@
  * 默认主题的 0/1/2 级设置菜单：注册数据与“插件只做自己的事”的覆盖规则。
  */
 import { describe, expect, it } from 'vitest'
-import { SettingsMenuRegistry } from '@mini-canvas/canvas-data'
+import { SettingsMenuRegistry } from '@plume-canvas/canvas-data'
 import { registerDefaultSettingsMenu } from '../defaultMenu'
 import { compareSettingsCategory } from '../navCategory'
 

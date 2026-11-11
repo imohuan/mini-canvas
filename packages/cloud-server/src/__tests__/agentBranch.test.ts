@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { AgentSessionStore } from '@mini-canvas/plugin-agent/server/agent/sessionStore.js'
-import { branchStore } from '@mini-canvas/plugin-agent/server/agent/branchStore.js'
+import { AgentSessionStore } from '@plume-canvas/plugin-agent/server/agent/sessionStore.js'
+import { branchStore } from '@plume-canvas/plugin-agent/server/agent/branchStore.js'
 import { createCloudServer, type CloudServer } from '../server'
 
 let dir: string
@@ -74,7 +74,7 @@ describe('分支注册表', () => {
 
   describe('分支 HTTP 面', () => {
   it('POST fork → 转录拷贝进新会话（用 store 直接造父会话，绕开 SDK 凭据）', async () => {
-    const { AgentSessionStore: S } = await import('@mini-canvas/plugin-agent/server/agent/sessionStore.js')
+    const { AgentSessionStore: S } = await import('@plume-canvas/plugin-agent/server/agent/sessionStore.js')
     const st = new S(dir)
     await st.ensure('default', { id: 's1', title: '父', createdAt: 1, provider: 'p', modelId: 'm' })
     await st.appendTurn('default', 's1', { role: 'user', text: '要编辑的那句', ts: 1 })
@@ -87,7 +87,7 @@ describe('分支注册表', () => {
   })
 
   it('GET branch-info → 返回分支点 + 全画布分叉点全表', async () => {
-    const { AgentSessionStore: S } = await import('@mini-canvas/plugin-agent/server/agent/sessionStore.js')
+    const { AgentSessionStore: S } = await import('@plume-canvas/plugin-agent/server/agent/sessionStore.js')
     const st = new S(dir)
     await st.ensure('default', { id: 's1', title: '父', createdAt: 1, provider: 'p', modelId: 'm' })
     await st.appendTurn('default', 's1', { role: 'user', text: '编辑点', ts: 1 })

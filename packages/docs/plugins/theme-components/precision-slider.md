@@ -58,7 +58,7 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 ```vue
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useUiComponent, useCanvasRender } from '@mini-canvas/canvas-render'
+import { useUiComponent, useCanvasRender } from '@plume-canvas/canvas-render'
 
 const PrecisionSlider = useUiComponent('slider')
 const { ctx } = useCanvasRender()

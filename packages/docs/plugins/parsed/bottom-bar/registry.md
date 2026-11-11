@@ -44,7 +44,7 @@
 // 文件：packages/my-plugin/src/myPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：往底栏加一个自己的动作 + 一个写入器
-import { registerBarAction, registerBarApplier } from '@mini-canvas/plugin-bottom-bar'
+import { registerBarAction, registerBarApplier } from '@plume-canvas/plugin-bottom-bar'
 
 // 取不到 nodeBar 说明 bottom-bar 还没装 → 等它上架再补注册（装配顺序无关）
 const registerBar = (): boolean => {

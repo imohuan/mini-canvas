@@ -9,7 +9,7 @@
  */
 import { computed } from 'vue'
 import { Terminal } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 import { approvalDescription, approvalTitle } from '../../model/toolMeta.js'
 import type { ApprovalCard } from '../../model/sessionModel.js'
 

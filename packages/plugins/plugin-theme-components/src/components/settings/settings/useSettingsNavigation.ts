@@ -6,9 +6,9 @@
  */
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Component, ComponentPublicInstance } from 'vue'
-import type { SettingsMenuView } from '@mini-canvas/canvas-data'
-import type { SettingsPanelSource } from '@mini-canvas/canvas-render'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+import type { SettingsMenuView } from '@plume-canvas/canvas-data'
+import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 import { Circle } from 'lucide-vue-next'
 import {
   categoryOf,

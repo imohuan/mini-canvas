@@ -70,9 +70,9 @@ describe('createAdminAuth：固定令牌与开关', () => {
     expect(await fs.readFile(path.join(dir, 'admin-token'), 'utf8')).toBe('c'.repeat(64))
   })
 
-  it('环境变量 MINI_CANVAS_ADMIN_TOKEN 同样优先，且不生成文件', async () => {
+  it('环境变量 PLUME_ADMIN_TOKEN 同样优先，且不生成文件', async () => {
     const envToken = 'd'.repeat(64)
-    vi.stubEnv('MINI_CANVAS_ADMIN_TOKEN', envToken)
+    vi.stubEnv('PLUME_ADMIN_TOKEN', envToken)
     const auth = await createAdminAuth({ dataDir: dir })
     expect(auth.source).toBe('env')
     expect(auth.token).toBe(envToken)

@@ -1,7 +1,7 @@
 /**
  * 把「画布界面」与「云端客户端插件」的**已构建产物**收进本包 assets/。
  *
- * 为什么需要：`npx mini-canvas-cloud serve` 的目标是"起个服务就能看到画布"。
+ * 为什么需要：`npx plume-canvas serve` 的目标是"起个服务就能看到画布"。
  * 但 ui 与插件是两个独立包，装 cloud-server 的人不会同时装它们，产物也不在
  * `packages/ui/dist` 这种仓库相对路径上。所以发布前把这两份 dist 复制进本包，
  * 让 tarball 自给自足（`resolveUiDist` / `resolvePluginsDir` 会优先在包内找）。

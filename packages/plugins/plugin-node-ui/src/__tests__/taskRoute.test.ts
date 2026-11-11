@@ -114,7 +114,7 @@ async function untilSettled(
 let dir = ''
 
 beforeEach(async () => {
-  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mc-task-test-'))
+  dir = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-task-test-'))
 })
 
 afterEach(async () => {

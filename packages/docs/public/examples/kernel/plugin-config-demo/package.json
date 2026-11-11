@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "配置装配演示",
     "description": "跟着配置篇学：模块级 Config schema、校验补默认、越界响亮报错、settings 单一数据源",
     "pluginName": "config-demo",
@@ -15,7 +15,7 @@
     ".": { "types": "./src/index.ts", "default": "./src/index.ts" }
   },
   "dependencies": {
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/kernel": "workspace:*"
   }
 }
 

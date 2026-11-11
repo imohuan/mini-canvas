@@ -13,10 +13,10 @@
 `BaseNode` 是 VueFlow 渲染每个节点时套上的壳，**离开画布宿主渲染不出来** —— 所以下面嵌一块真画布（装了默认主题 + 示例节点），你在真环境里看它：
 
 <script setup>
-import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
+import PlumeStage from '../../.vitepress/theme/demos/PlumeStage.vue'
 </script>
 
-<MiniCanvasStage :height="360" />
+<PlumeStage :height="360" />
 
 > 两条连线之间就是 `CustomEdge` 画的（流光、导轨、选中加亮）。试着点选节点看它变亮，或双击连线弹剪切钮。
 
@@ -84,7 +84,7 @@ import MiniCanvasStage from '../../.vitepress/theme/demos/MiniCanvasStage.vue'
 // 文件：packages/my-plugin/src/myEdgeTheme.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：一个换皮插件 —— 用自己画的边顶替默认边
-import type { Context, PluginModule } from '@mini-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/canvas-base'
 import MyEdge from './MyEdge.vue'
 
 export const name = 'my-edge-theme'

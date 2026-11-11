@@ -17,9 +17,9 @@ function read(rel: string): string {
 describe('CanvasHost 纯画布化', () => {
   it('不再创建内核、不再创建 NodeRegistry、不再 stop host', () => {
     const src = read('../CanvasHost.vue')
-    // 允许 `import type { CanvasHostHandle } from './createMiniCanvasHost'` 这种纯类型导入；
-    // 不允许运行时调用 createMiniCanvasHost（启动归 CanvasProvider）。
-    expect(src).not.toMatch(/\bcreateMiniCanvasHost\s*\(/)
+    // 允许 `import type { CanvasHostHandle } from './createPlumeHost'` 这种纯类型导入；
+    // 不允许运行时调用 createPlumeHost（启动归 CanvasProvider）。
+    expect(src).not.toMatch(/\bcreatePlumeHost\s*\(/)
     expect(src).not.toContain('new NodeRegistry')
     expect(src).not.toContain('new MemoryStorageAdapter')
     expect(src).not.toContain('host.stop()')

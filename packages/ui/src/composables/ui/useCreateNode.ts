@@ -28,8 +28,8 @@ export function createCreateNodeScope(
     const host = (hostEl.value?.host ?? hostEl.value) as FullHost | undefined
     if (!host?.command) {
       // 兜底：从 window key 拿（与 e2e 同源）
-      const w = window as unknown as { MiniCanvasUI?: { getHost(): FullHost } }
-      const fallback = w.MiniCanvasUI?.getHost()
+      const w = window as unknown as { PlumeUI?: { getHost(): FullHost } }
+      const fallback = w.PlumeUI?.getHost()
       if (fallback) { fallback.command.execute('command:create-node', buildPayload(type, fallback)); return }
       return
     }
@@ -120,7 +120,7 @@ export function createCreateNodeScope(
     asset: { name?: string; url: string; kind?: string; assetKind?: string },
     atFlow?: { x: number; y: number },
   ): Promise<string | null> {
-    // ★ 节点包（.mcnode）走导入那条路，不是"建一个媒体节点"。
+    // ★ 节点包（.plumenode）走导入那条路，不是"建一个媒体节点"。
     //   为什么要在这里认：从**资源库**拖一个包到画布，与从**文件系统**拖一个包，
     //   对用户来说是同一个动作（用户 2026-10-13 口径："拖拽之后和直接从文件夹中拖拽进来的效果是一样的"），
     //   所以两条路必须落到同一件事：写脚本 + 还原节点。
@@ -287,7 +287,7 @@ export function createCreateNodeScope(
     const list = files.filter((f) => f.size > 0)
     if (!list.length) return 0
 
-    // ★ 节点包（.mcnode）单独走一条：它不是媒体文件，而是"一个节点 + 它的脚本"。
+    // ★ 节点包（.plumenode）单独走一条：它不是媒体文件，而是"一个节点 + 它的脚本"。
     //   为什么要在这里分流：拖进来的动作是同一个（拖到画布），但落点完全不同 ——
     //   媒体文件是"建一个媒体节点"，包是"写脚本 + 还原节点"。
     //   先挑出来落地，剩下的交给 file-drop（用户可能一次拖了包 + 图片）。
@@ -301,7 +301,7 @@ export function createCreateNodeScope(
   }
 
   /**
-   * 把一个 .mcnode 交给后台落地（写脚本 + 还原节点），然后**在前端建出那个节点**。
+   * 把一个 .plumenode 交给后台落地（写脚本 + 还原节点），然后**在前端建出那个节点**。
    *
    * 为什么建节点这一步在前端：只有前端知道往哪张画布、落在哪个位置、建完选中谁。
    * 后台只负责"把脚本写下去、把节点数据算好"（它算不了视口）。

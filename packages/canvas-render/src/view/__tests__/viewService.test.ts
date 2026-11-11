@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ViewService } from '../viewService'
 import { NodeLayoutService } from '../../layout/nodeLayout'
-import { NodeStore } from '@mini-canvas/canvas-data'
+import { NodeStore } from '@plume-canvas/canvas-data'
 
 describe('view · 几何与视口合体', () => {
   it('未 attach 后端时读默认 {0,0,1}，控制 no-op 不抛', () => {

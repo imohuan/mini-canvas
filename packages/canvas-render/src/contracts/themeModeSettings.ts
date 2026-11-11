@@ -13,7 +13,7 @@
  * 那是禁止**按插件**各切各的主题；这里是**全应用唯一**的一个主题开关，全局一起换，
  * 不存在「两个组件同一时刻显示不同主题」，正是规范里说明的允许情形。
  */
-import type { SettingSchema } from '@mini-canvas/kernel'
+import type { SettingSchema } from '@plume-canvas/kernel'
 
 /** 设置 key（settings 全局平面命名，先声明者独占） */
 export const THEME_MODE_KEY = 'themeMode'

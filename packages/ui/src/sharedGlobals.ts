@@ -1,14 +1,14 @@
 /**
  * sharedGlobals —— 把渲染运行时挂到 window，供**外部 UMD 插件**取用。
  *
- * 为什么需要这一步：仓库里多数插件打的是 UMD（`external: ['vue', '@mini-canvas/canvas-data', …]`），
+ * 为什么需要这一步：仓库里多数插件打的是 UMD（`external: ['vue', '@plume-canvas/canvas-data', …]`），
  * 产物靠 window 上的全局取依赖，不走 ES import。而本应用是 vite 打的 ESM、**默认不暴露这些全局**，
  * 于是那些插件即使加载进浏览器，也会因为 `window.Vue` 是 undefined 而在第一行炸掉。
  *
  * 这个模块就是补上那一层：在应用启动前，把「宿主只允许一份」的共享运行时挂到 window。
  * 挂的名字必须与各插件 vite.config.ts 里 `output.globals` 写的一致：
- *   Vue / VueFlow / MiniCanvasKernel / MiniCanvasCore / MiniCanvasBase / MiniCanvasRender /
- *   ProseMirrorEditorBundle / MiniCanvasUiKit / MiniCanvasThemeContract
+ *   Vue / VueFlow / PlumeKernel / PlumeCore / PlumeBase / PlumeRender /
+ *   ProseMirrorEditorBundle / PlumeUiKit / PlumeThemeContract
  * 改名字要两边一起改（本文件 + 各插件 vite.config 的 globals），否则插件加载会报「找不到依赖」。
  *
  * 与 vite 配置里 `optimizeDeps.exclude` 那串源码包是同一批：它们在 dev 下由 vite 现编、
@@ -19,25 +19,25 @@
  */
 import * as Vue from 'vue'
 import * as VueFlow from '@vue-flow/core'
-import * as MiniCanvasKernel from '@mini-canvas/kernel'
-import * as MiniCanvasCore from '@mini-canvas/canvas-data'
-import * as MiniCanvasBase from '@mini-canvas/canvas-base'
-import * as MiniCanvasRender from '@mini-canvas/canvas-render'
+import * as PlumeKernel from '@plume-canvas/kernel'
+import * as PlumeCore from '@plume-canvas/canvas-data'
+import * as PlumeBase from '@plume-canvas/canvas-base'
+import * as PlumeRender from '@plume-canvas/canvas-render'
 import * as ProseMirrorEditorBundle from 'prosemirror-editor-bundle'
-import * as MiniCanvasUiKit from '@mini-canvas/ui-kit-shadcn'
-import * as MiniCanvasThemeContract from '@mini-canvas/theme-contract'
+import * as PlumeUiKit from '@plume-canvas/ui-kit-shadcn'
+import * as PlumeThemeContract from '@plume-canvas/theme-contract'
 
 /** 暴露出去的全局名 → 值（唯一事实源；测试据此核对名字没写岔） */
 export const SHARED_GLOBAL_NAMES = [
   'Vue',
   'VueFlow',
-  'MiniCanvasKernel',
-  'MiniCanvasCore',
-  'MiniCanvasBase',
-  'MiniCanvasRender',
+  'PlumeKernel',
+  'PlumeCore',
+  'PlumeBase',
+  'PlumeRender',
   'ProseMirrorEditorBundle',
-  'MiniCanvasUiKit',
-  'MiniCanvasThemeContract',
+  'PlumeUiKit',
+  'PlumeThemeContract',
 ] as const
 
 /**
@@ -50,13 +50,13 @@ export function exposeSharedGlobals(
   const bag: Record<string, unknown> = {
     Vue,
     VueFlow,
-    MiniCanvasKernel,
-    MiniCanvasCore,
-    MiniCanvasBase,
-    MiniCanvasRender,
+    PlumeKernel,
+    PlumeCore,
+    PlumeBase,
+    PlumeRender,
     ProseMirrorEditorBundle,
-    MiniCanvasUiKit,
-    MiniCanvasThemeContract,
+    PlumeUiKit,
+    PlumeThemeContract,
   }
   for (const [name, value] of Object.entries(bag)) {
     if (target[name] === undefined) target[name] = value

@@ -58,7 +58,7 @@ describe('queueUploadsFromNodeIds：三类媒体都要认', () => {
 
 describe('预选（用户 2026-10-14：节点包要自动选「节点」标签 + 「节点库」位置）', () => {
   it('PendingUpload 能带上 tags / folderId（由弹窗宿主读走）', () => {
-    pendingUploads.value = [{ name: 'a.mcnode', file: new File([new Uint8Array([1])], 'a.mcnode'), tags: ['节点'], folderId: 'f1' }]
+    pendingUploads.value = [{ name: 'a.plumenode', file: new File([new Uint8Array([1])], 'a.plumenode'), tags: ['节点'], folderId: 'f1' }]
     const got = drainUploads()
     expect(got[0].tags).toEqual(['节点'])
     expect(got[0].folderId).toBe('f1')

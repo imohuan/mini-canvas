@@ -23,7 +23,7 @@
  *
  * 分档（用户要求）：加载态长在所有节点上，缩小时不该还画一整片大字。按画布缩放分三档，
  * 阈值来自全局设置 nodeLoadingTier2Zoom / nodeLoadingTier3Zoom（图片 / 视频 / 可视化共用），
- * 规则在 @mini-canvas/theme-contract 的 nodeLoadingTier：
+ * 规则在 @plume-canvas/theme-contract 的 nodeLoadingTier：
  * - 第 1 档：完整（状态词 + 耗时 + 大百分比 + 文案 + 取消按钮）；
  * - 第 2 档：精简（去耗时、字号小一号，其余保留）；
  * - 第 3 档：极简（只留中心数字 / 光圈，不写状态词与文案）。
@@ -38,8 +38,8 @@ import {
   readNodeLoadingTiers,
   resolveNodeLoadingTier,
   type NodeLoadingTierConfig,
-} from '@mini-canvas/theme-contract'
-import { useCanvasRender } from '@mini-canvas/canvas-render'
+} from '@plume-canvas/theme-contract'
+import { useCanvasRender } from '@plume-canvas/canvas-render'
 
 const props = withDefaults(
   defineProps<{

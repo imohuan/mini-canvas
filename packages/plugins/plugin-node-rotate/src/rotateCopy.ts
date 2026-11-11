@@ -12,7 +12,7 @@
  * 为什么进入模式要延迟一拍：新节点刚创建时 VueFlow 还没挂载它的视图，
  * 顶栏按「恰好选中本节点」渲染 —— 同步 enter 会发生在视图挂载前，面板不出现（Chrome 实测）。
  */
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import { ROTATE_MODE_ID, openRotateMode } from './rotateSession'
 
 /** 副本与原图的横向间隔（原图右缘 + 100，与裁剪/扩展出图的摆法一致） */

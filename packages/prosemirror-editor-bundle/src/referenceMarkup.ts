@@ -40,6 +40,20 @@ export const REF_ICONS: Record<RefKind, string> = {
   mcp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></svg>',
 }
 
+/**
+ * 内容类型图标（图片 / 视频 / 音频 / 文本）。
+ *
+ * 标签图标的第二轮兜底：拿不到「真实图标」（节点类型注册的 icon）时，
+ * 至少按类型画对 —— 音频不再画成图片、图片节点不再画成通用方块。
+ * 形状与底栏的 data-icon 图标同一套，两处看起来一致。
+ */
+export const REF_KIND_ICONS: Record<'image' | 'video' | 'audio' | 'text', string> = {
+  image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="8.5" cy="9.5" r="1.6"/><path d="m21 15-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 20"/></svg>',
+  video: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="m15 10 6-4v12l-6-4z"/></svg>',
+  audio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>',
+  text: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V4h16v3"/><path d="M12 4v16"/><path d="M8 20h8"/></svg>',
+}
+
 /** 一个引用标记（解析结果）；字段按 kind 各取所需，统一摊平方便消费方读取 */
 export interface ReferenceMarkup {
   type: RefKind
@@ -49,6 +63,8 @@ export interface ReferenceMarkup {
   canvasId?: string
   nodeId?: string
   folderId?: string
+  /** 内容类型（image / video / audio / text）；老标记没有这个字段 */
+  contentKind?: string
 }
 
 /** XML 属性值转义（只处理会影响解析的三个字符；其余照原样） */
@@ -64,6 +80,14 @@ function unesc(v: string): string {
 export interface RefAssetExtra {
   ext?: string
   folderId?: string
+  /**
+   * 内容类型（image / video / audio / text）。
+   *
+   * 为什么写进标记（用户 2026-11-11）：标签图标第二轮要靠类型；节点名可能是 UUID，
+   * 资产名也可能没有扩展名，光看名字认不出音频。写进去后重开会话还能画对图标。
+   * 可选：老标记没有它也能用（退回按名字 / 扩展名判断）。
+   */
+  contentKind?: string
 }
 
 /**
@@ -76,16 +100,19 @@ export function formatReferenceMarkup(kind: string, name: string, value?: string
   const type = kind.toLowerCase()
   if (type === 'node' && value) {
     const { canvasId, nodeId } = decodeNodeRef(value)
-    return '<ref type="node" name="' + esc(name) + '" canvasId="' + esc(canvasId) + '" nodeId="' + esc(nodeId) + '" />'
+    return '<ref type="node" name="' + esc(name) + '" canvasId="' + esc(canvasId) + '" nodeId="' + esc(nodeId) + '"'
+      + (extra?.contentKind ? ' kind="' + esc(extra.contentKind) + '"' : '') + ' />'
   }
   if (type === 'asset') {
     return '<ref type="asset" name="' + esc(name) + '"'
       + (value ? ' path="' + esc(value) + '"' : '')
       + (extra?.ext ? ' ext="' + esc(extra.ext) + '"' : '')
       + (extra?.folderId ? ' folderId="' + esc(extra.folderId) + '"' : '')
+      + (extra?.contentKind ? ' kind="' + esc(extra.contentKind) + '"' : '')
       + ' />'
   }
-  return '<ref type="' + esc(type) + '" name="' + esc(name) + '"' + (value ? ' path="' + esc(value) + '"' : '') + ' />'
+  return '<ref type="' + esc(type) + '" name="' + esc(name) + '"' + (value ? ' path="' + esc(value) + '"' : '')
+    + (extra?.contentKind ? ' kind="' + esc(extra.contentKind) + '"' : '') + ' />'
 }
 
 /** 与 formatReferenceMarkup 等价、但字段化传参（node 用它，避免拼 # 再解回来） */
@@ -125,6 +152,7 @@ export function parseReferenceMarkups(text: string): ReferenceMarkup[] {
       ...(attrs.canvasId ? { canvasId: attrs.canvasId } : {}),
       ...(attrs.nodeId ? { nodeId: attrs.nodeId } : {}),
       ...(attrs.folderId ? { folderId: attrs.folderId } : {}),
+      ...(attrs.kind ? { contentKind: attrs.kind } : {}),
     })
   }
   return out

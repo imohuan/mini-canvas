@@ -26,7 +26,7 @@ describe('预览分流：普通媒体直给 url，节点包要先解包', () => 
     vi.stubGlobal('fetch', async () => {
       throw new Error('offline')
     })
-    await openAssetPreviewFromAsset({ id: 'p1', name: '演示节点.mcnode', url: '/api/assets/files/x.mcnode', kind: 'node-package' })
+    await openAssetPreviewFromAsset({ id: 'p1', name: '演示节点.plumenode', url: '/api/assets/files/x.plumenode', kind: 'node-package' })
     expect(assetPreview.value?.kind).toBe('text')
     expect(String(assetPreview.value?.text)).toContain('读不出来')
     vi.unstubAllGlobals()
@@ -43,7 +43,7 @@ describe('预览分流：普通媒体直给 url，节点包要先解包', () => 
         json: async () => ({ ok: true, html: '<div id="paint">hi</div>', manifest: { name: '演示' }, scripts: { scale: 'x' } }),
       }
     })
-    await openAssetPreviewFromAsset({ id: 'p2', name: '演示.mcnode', url: '/api/assets/files/y.mcnode', kind: 'node-package' })
+    await openAssetPreviewFromAsset({ id: 'p2', name: '演示.plumenode', url: '/api/assets/files/y.plumenode', kind: 'node-package' })
     expect(assetPreview.value?.kind).toBe('ui')
     expect(assetPreview.value?.html).toContain('id="paint"')
     vi.unstubAllGlobals()
@@ -56,7 +56,7 @@ describe('预览分流：普通媒体直给 url，节点包要先解包', () => 
     // 先开一张视频（同层清单里混着节点包）
     await openAssetPreviewFromAsset(
       { id: 'v', name: '视频', url: '/v.mp4', kind: 'video' },
-      { list: ['/v.mp4', '/p.mcnode'], names: ['视频', '节点包'], kinds: ['video', 'node-package'], index: 0 },
+      { list: ['/v.mp4', '/p.plumenode'], names: ['视频', '节点包'], kinds: ['video', 'node-package'], index: 0 },
     )
     expect(assetPreview.value?.kind).toBe('video')
     // 模拟 ← / → 切到第二张（setAssetPreviewIndex 的同一条路）
@@ -64,22 +64,22 @@ describe('预览分流：普通媒体直给 url，节点包要先解包', () => 
     setAssetPreviewIndex(1)
     const cur = currentAssetPreview()
     expect(cur?.kind).toBe('ui')
-    expect(cur?.url).toBe('/p.mcnode')
+    expect(cur?.url).toBe('/p.plumenode')
     expect(cur?.name).toBe('节点包')
   })
 
   it('★ 切到另一个节点包时旧界面必须失效（否则连切两张画面不变）', async () => {
     const { currentAssetPreview, assetPreview } = await import('../composables/assetUiBus')
-    // 已解出第一个包（html 来自 /p1.mcnode）
+    // 已解出第一个包（html 来自 /p1.plumenode）
     assetPreview.value = {
-      name: '包一', kind: 'ui', html: '<div>包一</div>', htmlUrl: '/p1.mcnode',
-      list: ['/p1.mcnode', '/p2.mcnode'], names: ['包一', '包二'],
+      name: '包一', kind: 'ui', html: '<div>包一</div>', htmlUrl: '/p1.plumenode',
+      list: ['/p1.plumenode', '/p2.plumenode'], names: ['包一', '包二'],
       kinds: ['node-package', 'node-package'], index: 0,
     }
     // 切到第二个包：html 仍是包一的 —— 必须当作"还没取"
     assetPreview.value = { ...assetPreview.value, index: 1 }
     const second = currentAssetPreview()
-    expect(second?.url).toBe('/p2.mcnode')
+    expect(second?.url).toBe('/p2.plumenode')
     expect(second?.html).toBeUndefined()
     // 切回第一个包：html 本来就属于它，保留（不重复取包）
     assetPreview.value = { ...assetPreview.value, index: 0 }

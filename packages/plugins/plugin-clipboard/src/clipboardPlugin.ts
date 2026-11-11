@@ -15,9 +15,9 @@
  * 依赖注入：doc/selection 为宿主恒在硬依赖（canvas-data 能力层内置 + 宿主注入）;
  * viewport 由 canvas-render 宿主注入、本插件只做"可选读取"（复制时把最近鼠标屏幕坐标经它换成 flow 锚点）。
  */
-import { Service, type Context, type PluginModule } from '@mini-canvas/canvas-base'
-import { registerEventName } from '@mini-canvas/canvas-base'
-import type { DocService, SelectionService, CanvasNode } from '@mini-canvas/canvas-data'
+import { Service, type Context, type PluginModule } from '@plume-canvas/canvas-base'
+import { registerEventName } from '@plume-canvas/canvas-base'
+import type { DocService, SelectionService, CanvasNode } from '@plume-canvas/canvas-data'
 import {
   CLIPBOARD_COPY_KIND,
   CLIPBOARD_COPY_KEY,
@@ -33,7 +33,7 @@ import {
   pendingMediaRestoreFields,
   type ClipboardPasteHandler,
   type ClipboardWriteHandler,
-} from '@mini-canvas/canvas-data'
+} from '@plume-canvas/canvas-data'
 import {
   makeSnapshot,
   internalEdgesOf,
@@ -78,7 +78,7 @@ export interface ClipboardService {
   readonly hasData: boolean
 }
 
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     clipboard: ClipboardService
   }

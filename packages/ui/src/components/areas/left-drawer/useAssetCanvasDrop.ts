@@ -3,7 +3,7 @@ import { useUi } from '../../../composables/ui'
 import { assetKindOf } from '../../../composables/assetModel'
 
 /** 拖出资源树的资产 MIME（AssetTree 写入，宿主在 drop 时兜底读取） */
-const ASSET_DRAG_MIME = 'application/x-mini-canvas-asset'
+const ASSET_DRAG_MIME = 'application/x-plume-asset'
 
 /**
  * LeftDrawer 的「把资源拖到画布」监听。
@@ -51,11 +51,11 @@ export function useAssetCanvasDrop() {
   function onCanvasDrop(e: DragEvent): void {
     if (!overCanvas(e)) return
 
-    // ★ 从**文件系统**拖进来的东西：先把节点包(.mcnode)抽出来单独走导入，剩下的交给 file-drop。
+    // ★ 从**文件系统**拖进来的东西：先把节点包(.plumenode)抽出来单独走导入，剩下的交给 file-drop。
     //   为什么要在这拦一道：file-drop 只认图片/视频/文本，包会被它当成"不支持的文件"直接丢掉；
     //   而包这条路的落点完全不同（写脚本 + 还原节点，见 ui.importPackFile）。
     const dropped = Array.from(e.dataTransfer?.files ?? [])
-    const packs = dropped.filter((f) => f.name.toLowerCase().endsWith('.mcnode'))
+    const packs = dropped.filter((f) => f.name.toLowerCase().endsWith('.plumenode'))
     if (packs.length) {
       e.preventDefault()
       e.stopPropagation()

@@ -1,5 +1,5 @@
 /** 注册糖：条目落调用方插件作用域（卸载自动摘除、同 id 替换）。 */
-import type { PluginScope } from '@mini-canvas/kernel'
+import type { PluginScope } from '@plume-canvas/kernel'
 import type { BarAction, BarApplier } from './types'
 
 export const BAR_FIELD = 'node/bar'

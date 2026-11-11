@@ -9,12 +9,12 @@
  * 运行时那半边（传老词当场抛清晰错误）由 nodeRegion.test.ts / capabilitiesAttach.test.ts 锁。
  */
 import { describe, it, expect } from 'vitest'
-import { Context, NodeStore, NodeRegistry, ThemeRegistry } from '@mini-canvas/canvas-data'
+import { Context, NodeStore, NodeRegistry, ThemeRegistry } from '@plume-canvas/canvas-data'
 import { createDocService } from '../../docService'
-import { CommandRegistry } from '@mini-canvas/kernel'
+import { CommandRegistry } from '@plume-canvas/kernel'
 import { NodeFactory } from '../nodeFactory'
 import { resolveSegment, nodeSegmentStack } from '../registry/nodeRenderer'
-import type { PluginModule, PluginScope } from '@mini-canvas/kernel'
+import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 
 const Comp = { name: 'Comp' }
 

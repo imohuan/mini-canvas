@@ -64,11 +64,11 @@ describe('同级文件列表', () => {
   it('siblingPreview 带上每张的类型（切张时预览按当前张渲染，2026-10-28）', () => {
     const kinds: SiblingRow[] = [
       { kind: 'asset', id: 'v1', name: 'v1', parentId: '甲', url: '/v.mp4', assetKind: 'video' },
-      { kind: 'asset', id: 'p1', name: 'p1', parentId: '甲', url: '/p.mcnode', assetKind: 'node-package' },
+      { kind: 'asset', id: 'p1', name: 'p1', parentId: '甲', url: '/p.plumenode', assetKind: 'node-package' },
     ]
     const got = siblingPreview(kinds, kinds[0])
     expect(got.kinds).toEqual(['video', 'node-package'])
-    expect(got.list).toEqual(['/v.mp4', '/p.mcnode'])
+    expect(got.list).toEqual(['/v.mp4', '/p.plumenode'])
     expect(got.index).toBe(0)
   })
 

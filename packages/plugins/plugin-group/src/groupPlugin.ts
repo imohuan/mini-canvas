@@ -12,8 +12,8 @@
  * 写模型：所有图变更统一走 ctx.get('doc')（唯一写入口，历史 + 落盘自动）。
  * 分层：只依赖内核(canvas-base/canvas-data) + 渲染层类型/事件，不直碰 VueFlow，不碰老版 src/。
  */
-import { Service, type Context, type PluginModule, type ConfigSchema, type InferConfig } from '@mini-canvas/canvas-base'
-import type { DocService, SelectionService } from '@mini-canvas/canvas-data'
+import { Service, type Context, type PluginModule, type ConfigSchema, type InferConfig } from '@plume-canvas/canvas-base'
+import type { DocService, SelectionService } from '@plume-canvas/canvas-data'
 // 注意：canvas-render 只是 devDependency（类型/令牌），不能 runtime import。
 // 渲染层事件名是稳定字符串常量（canvas-render RenderEvents.NodeDragEnd 同名），这里本地定义，
 // 让本包纯内核即可运行（宿主 Vite 下 .vue 组件才真正消费 canvas-render）。
@@ -113,7 +113,7 @@ export interface GroupServiceAPI {
 }
 
 /** 类型增强缝：宿主/插件可 ctx.group 直访 */
-declare module '@mini-canvas/canvas-data' {
+declare module '@plume-canvas/canvas-data' {
   interface Context {
     group: GroupServiceAPI
   }
@@ -581,7 +581,7 @@ export function apply(ctx: Context) {
   }
   // ① 立即跑一次：插件是**热装**的（插件管理装进来时画布早已 restore 完毕），apply 时点就在场
   backfillLegacyGroupNames()
-  // ② 订阅 replace：冷启动装配时 restore 发生在插件 apply **之后**（见 createMiniCanvasHost），
+  // ② 订阅 replace：冷启动装配时 restore 发生在插件 apply **之后**（见 createPlumeHost），
   //    以及切画布/云端整体覆盖也走 replace —— 这两条路都要补。
   const offBackfill = ctx.get('doc').subscribe((change) => {
     if (change.kind === 'node' && change.reason === 'replace') backfillLegacyGroupNames()

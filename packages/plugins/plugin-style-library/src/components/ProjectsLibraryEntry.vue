@@ -7,7 +7,7 @@
  */
 import { computed } from 'vue'
 import { SparklesIcon, WandSparklesIcon } from 'lucide-vue-next'
-import { useCanvasContext, useUiComponent } from '@mini-canvas/canvas-render'
+import { useCanvasContext, useUiComponent } from '@plume-canvas/canvas-render'
 import type { LibraryService } from '../data/store'
 import { useCanvasGate } from '../useCanvasGate'
 

@@ -1,7 +1,7 @@
 /**
  * iconKind —— 图标句柄形态判定（全局唯一判定点）。
  *
- * 归属：@mini-canvas/kernel 通用能力——判定的是"opaque 句柄该怎么渲染"，与画布无关。
+ * 归属：@plume-canvas/kernel 通用能力——判定的是"opaque 句柄该怎么渲染"，与画布无关。
  *
  * 节点类型注册时声明的 icon 是**不透明句柄**：可以是 SVG 字符串，也可以是 Vue 组件，
  * 内核不解析、不依赖 Vue（与 content 的 opaque 语义一致）。谁来渲染，谁就在这里问一句

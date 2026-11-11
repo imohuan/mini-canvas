@@ -17,7 +17,7 @@
  * 卸载 demo-kit：条目自动回收，画布回原样。
  */
 import { markRaw } from 'vue'
-import type { Context } from '@mini-canvas/canvas-base'
+import type { Context } from '@plume-canvas/canvas-base'
 import DemoTopEntry from './DemoTopEntry.vue'
 import DemoFeaturePanel from './DemoFeaturePanel.vue'
 import { closeDemoMode } from './demoMode'

@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-file-drop",
+  "name": "@plume-canvas/plugin-file-drop",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "文件拖入",
     "description": "把图片/视频/文本拖到画布或粘贴进来即建节点",
     "pluginName": "file-drop",
@@ -24,10 +24,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*"
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",

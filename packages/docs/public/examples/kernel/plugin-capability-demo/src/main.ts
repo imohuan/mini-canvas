@@ -1,7 +1,7 @@
 // 文件：packages/docs/public/examples/kernel/plugin-capability-demo/src/main.ts
 // 格式：TypeScript 模块（装配脚本，`npx tsx src/main.ts` 即可跑）
 // 位置：演示「装层 / 不装层」两种结果
-import { Context } from '@mini-canvas/kernel'
+import { Context } from '@plume-canvas/kernel'
 import { createMiniCapabilityLayer } from './miniLayer'
 
 /** 段不参与框架类型，演示里用局部类型把它说清楚 */
@@ -40,6 +40,6 @@ await bare.start()
 bare.stop()
 
 // ③ 也可以装成全局默认：之后每次 new Context() 各拿一份新层
-// import { setDefaultCapabilityLayerFactory } from '@mini-canvas/kernel'
+// import { setDefaultCapabilityLayerFactory } from '@plume-canvas/kernel'
 // setDefaultCapabilityLayerFactory(() => createMiniCapabilityLayer())
 

@@ -27,6 +27,18 @@ describe("parsePlainTextToContent：XML 引用元素 → chip", () => {
     expect(nodes[0].attrs.refValue).toBe("c1#35")
   })
 
+  /**
+   * 内容类型（用户 2026-11-11）：标记里带着 kind 时，回填的标签也要记着它，
+   * 否则重开会话后又退回节点通用图标 / 资产图片图标。
+   */
+  it("回填时保留内容类型（chipKind）", () => {
+    const [asset] = resourceNodes('<ref type="asset" name="d4b974cd" ext="mp3" kind="audio" />')
+    expect(asset.attrs.chipKind).toBe("audio")
+    const [node] = resourceNodes('<ref type="node" name="音频 1" canvasId="c1" nodeId="9" kind="audio" />')
+    expect(node.attrs.chipKind).toBe("audio")
+  })
+
+
   it("MCP：无 path 也还原（不依赖 resolver）", () => {
     const nodes = resourceNodes('<ref type="mcp" name="canvas" />')
     expect(nodes).toHaveLength(1)

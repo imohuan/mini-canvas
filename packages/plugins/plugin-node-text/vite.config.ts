@@ -11,7 +11,7 @@ export default defineConfig({
   build: {
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
-      name: 'MiniCanvasPluginNodeText',
+      name: 'PlumePluginNodeText',
       formats: ['umd'],
       fileName: () => 'plugin-node-text.js',
     },
@@ -22,15 +22,15 @@ export default defineConfig({
       // 它只因**测试**装载真实主题而留在 devDependencies。
       external: [
         'vue',
-        '@mini-canvas/canvas-data',
-        '@mini-canvas/canvas-render',
+        '@plume-canvas/canvas-data',
+        '@plume-canvas/canvas-render',
         'prosemirror-editor-bundle',
       ],
       output: {
         globals: {
           vue: 'Vue',
-          '@mini-canvas/canvas-data': 'MiniCanvasCore',
-          '@mini-canvas/canvas-render': 'MiniCanvasRender',
+          '@plume-canvas/canvas-data': 'PlumeCore',
+          '@plume-canvas/canvas-render': 'PlumeRender',
           'prosemirror-editor-bundle': 'ProseMirrorEditorBundle',
         },
       },

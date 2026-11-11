@@ -1,9 +1,9 @@
 {
-  "name": "@mini-canvas/plugin-node-image",
+  "name": "@plume-canvas/plugin-node-image",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "miniCanvas": {
+  "plume": {
     "title": "图片节点",
     "description": "图片节点：上传 / 裁剪 / 旋转 / 生成",
     "pluginName": "image",
@@ -24,10 +24,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@mini-canvas/canvas-base": "workspace:*",
-    "@mini-canvas/canvas-data": "workspace:*",
-    "@mini-canvas/canvas-render": "workspace:*",
-    "@mini-canvas/kernel": "workspace:*",
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "prosemirror-editor-bundle": "workspace:*"
   },
   "peerDependencies": {
@@ -41,6 +41,6 @@
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34",
-    "@mini-canvas/plugin-theme-components": "workspace:*"
+    "@plume-canvas/plugin-theme-components": "workspace:*"
   }
 }
