@@ -140,4 +140,10 @@ describe('模型 / MCP 的检测与自定义模型（用户 2026-11-11 续）', 
     expect(resultRule).toContain('#16a34a')
     expect(resultRule).not.toContain('--ui-accent')
   })
+
+  it('多模型测试是并发的，并且按钮显示 完成数/总数', () => {
+    expect(models).toContain('probeModelsConcurrently')
+    expect(models).toContain('probeProgress')
+    expect(models).not.toMatch(/for\s*\(const modelId of ids\)\s*\{\s*await/)
+  })
 })

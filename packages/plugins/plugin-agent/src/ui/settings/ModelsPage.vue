@@ -22,6 +22,7 @@ import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import type { ModelProbeView } from '../../api/agentApi.js'
 import SettingsDetailHeader from './components/SettingsDetailHeader.vue'
+import { probeModelsConcurrently } from './modelProbeBatch.js'
 import './settings.css'
 
 const Button = useUiComponent('Button')
@@ -89,6 +90,10 @@ const modelEditing = ref(false)
 const testSelected = ref<Set<string>>(new Set())
 /** 每个模型的测试结果（正常态可一次测多个） */
 const probeResults = ref<Record<string, ModelProbeView>>({})
+/** 并发测试进度：已回来 / 本次共测几个 */
+const probeProgress = ref<{ done: number; total: number }>({ done: 0, total: 0 })
+/** 正在跑的那一批（每次测试换一个编号：上一批晚到的结果不能写进新一批） */
+let probeRun = 0
 const customModel = ref('')
 const upstreamHint = ref('')
 const notice = ref('')
@@ -145,7 +150,10 @@ const probeEntries = computed(() =>
 )
 
 function resetProbe(): void {
+  // 取消在途批次的写回（换协议 / 改输入后，旧结论不能落进新状态）
+  probeRun += 1
   probeResults.value = {}
+  probeProgress.value = { done: 0, total: 0 }
 }
 
 /** 进入「编辑模型」：才能多选保留哪些、手写模型 ID */
@@ -283,7 +291,7 @@ const clearTest = (): void => {
  *
  * 没勾任何模型时测的是「手写的那一个」；检测不会保存配置，所以填错了不会污染已存渠道。
  */
-/** 正常态：逐个测试选中的模型（可多选），结果分别落在每个模型下面 */
+/** 正常态：**并发**测试选中的模型（可多选），结果分别落在每个模型下面 */
 async function testSelectedModels(): Promise<void> {
   const ids = [...testSelected.value]
   if (!ids.length) {
@@ -292,24 +300,39 @@ async function testSelectedModels(): Promise<void> {
   }
   probing.value = true
   s.error = ''
+  // 先清结果，再写进度：resetProbe 也会清进度，顺序反了会显示成 0/0（2026-11-11 实测）
   resetProbe()
+  probeProgress.value = { done: 0, total: ids.length }
+  const run = ++probeRun
+  // 按本次点击时的表单值发请求：测试途中用户改输入框不影响已经发出去的那批。
+  const snapshot = {
+    provider: form.value.provider || undefined,
+    ...(form.value.baseUrl ? { baseUrl: form.value.baseUrl } : {}),
+    ...(form.value.apiKey ? { apiKey: form.value.apiKey } : {}),
+    clientType: form.value.clientType || AUTO_CLIENT,
+  }
   try {
-    for (const modelId of ids) {
-      const result = await agent.probeModel({
-        provider: form.value.provider || undefined,
-        modelId,
-        ...(form.value.baseUrl ? { baseUrl: form.value.baseUrl } : {}),
-        ...(form.value.apiKey ? { apiKey: form.value.apiKey } : {}),
-        clientType: form.value.clientType || AUTO_CLIENT,
-      })
-      probeResults.value = { ...probeResults.value, [modelId]: result }
-      // 自动检测通了：把表单协议切到实测值（保存时就用它）
-      if (result.ok && result.clientType && result.clientType !== AUTO_CLIENT) {
-        form.value.clientType = result.clientType
-      }
-    }
+    // **并发**：每个模型各自发一条，谁先回来谁先落到卡片上；
+    // 一个失败不拦住其它模型（旧写法是 for-await，慢模型会把整批拖成串行）。
+    await probeModelsConcurrently(
+      ids,
+      (modelId) => agent.probeModel({ ...snapshot, modelId }),
+      (modelId, result) => {
+        if (run !== probeRun) return
+        probeResults.value = { ...probeResults.value, [modelId]: result }
+        // 自动检测通了：把表单协议切到实测值（保存时就用它）
+        if (result.ok && result.clientType && result.clientType !== AUTO_CLIENT) {
+          form.value.clientType = result.clientType
+        }
+      },
+      () => {
+        if (run !== probeRun) return
+        probeProgress.value = { ...probeProgress.value, done: probeProgress.value.done + 1 }
+      },
+    )
   } finally {
-    probing.value = false
+    // 只有这一批还是“当前批”时才收起 loading：连点两次不会让先结束的旧批提前解锁
+    if (run === probeRun) probing.value = false
   }
 }
 
@@ -526,7 +549,9 @@ async function save(): Promise<void> {
                 <Button variant="outline" size="xs" type="button" @click="clearTest">清空</Button>
               </span>
               <Button variant="outline" size="sm" type="button" :disabled="probing || !testSelected.size" @click="testSelectedModels">
-                {{ probing ? '测试中…' : '测试选中（' + testSelected.size + '）' }}
+                {{ probing
+                  ? '测试中…（' + probeProgress.done + '/' + probeProgress.total + '）'
+                  : '测试选中（' + testSelected.size + '）' }}
               </Button>
             </div>
 
