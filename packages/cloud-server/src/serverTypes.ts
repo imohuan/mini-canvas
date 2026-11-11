@@ -23,8 +23,6 @@ export interface CloudServerOptions {
   agent?: boolean
   /** 平台提供方目录（后台的"投递箱"）；不传则用 <数据根>/providers */
   providersDir?: string
-  /** 外挂后台插件的目录（丢 .js 进去即多一个后台插件）；不传则用 <数据根>/server-plugins */
-  serverPluginsDir?: string
   /**
    * 是否盯着 provider 目录自动重载（缺省开）。测试里关掉，避免定时器影响用例。
    */
@@ -81,7 +79,6 @@ export interface CloudServer {
     kv: string
     canvases: string
     providers: string
-    serverPlugins: string
     ui?: string
     plugins?: string
   }

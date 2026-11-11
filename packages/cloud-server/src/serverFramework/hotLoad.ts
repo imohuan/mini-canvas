@@ -68,20 +68,22 @@ function runtimeOf(ctx: PluginScope): { install: (m: unknown) => void; uninstall
 }
 
 /**
- * 运行时装载一个已落盘的后台插件（按 id = 文件名去 .js）。
+ * 运行时装载一个已落盘的后台插件（按 id = 插件目录名）。
  *
- * 直接读那个文件并 import，不扫全目录：插件名（如 showcase）与文件名（如
- * imohuan__plugin-showcase）不必同名 —— 扫全目录再按名匹配会错配（实测踩过）。
+ * 位置固定为 `<插件目录>/<id>/dist/server.js`（前后端同目录，2026-11-11 口径）。
+ * 直接读这个文件并 import，不扫全目录：插件名（如 showcase）与目录名（如
+ * plugin-showcase）不必同名 —— 扫全目录再按名匹配会错配（实测踩过）。
  */
 export async function hotInstallServerPlugin(
   ctx: PluginScope,
-  dir: string,
+  /** 插件根目录（`<数据根>/plugins`） */
+  pluginsDir: string,
   id: string,
 ): Promise<HotLoadResult> {
   const runtime = runtimeOf(ctx)
   if (!runtime) return { ok: false, error: "宿主未提供运行期装卸能力（ctx.runtime）" }
   try {
-    const file = path.join(dir, id + '.js')
+    const file = path.join(pluginsDir, id, 'dist', 'server.js')
     const text = await fs.readFile(file, 'utf8')
     const mod = (await import(/* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(text))) as Record<string, unknown>
     const candidate = (mod.default ?? mod) as unknown

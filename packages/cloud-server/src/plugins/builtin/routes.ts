@@ -19,13 +19,11 @@ import { historyRoutes } from '../../routes/history.js'
 import { kvRoutes } from '../../routes/kv.js'
 import { canvasOpsRoutes } from '../../routes/canvasOps.js'
 import { pluginRoutes } from '../../static.js'
-import { createServerPluginsRoutes } from '../../routes/serverPlugins.js'
 import { createNpmPluginsRoutes } from '../../routes/npmPlugins.js'
 import { projectsRoutes } from '../../routes/projects.js'
 import { assetsRoutes } from '../../routes/assets.js'
 import { hotInstallServerPlugin, hotUninstallServerPlugin } from '../../serverFramework/hotLoad.js'
-import { hotLoadedNames } from '../../serverFramework/hotLoad.js'
-import { buildPluginCatalog } from '../catalog.js'
+import type { PluginRoots } from '../pluginRoots.js'
 import { healthPlugin } from './health.js'
 import { pluginWatchRoutes } from '../pluginWatch.js'
 import { createPluginPresenceRoutes } from '../../routes/pluginPresenceRoute.js'
@@ -62,8 +60,8 @@ export const S = {
   /** 单轮对话用的「按需加载 SDK」函数（server.ts 里注入 loadSdk） */
   agentLoadSdk: 'agentLoadSdk',
   pluginsDir: 'pluginsDir',
-  serverPluginsDir: 'serverPluginsDir',
   selfOrigin: 'selfOrigin',
+  pluginRoots: 'pluginRoots',
 } as const
 
 /** 取服务的小助手：缺了就抛明确错误（不要静默 undefined）。
@@ -235,65 +233,14 @@ export const canvasOpsPlugin: PluginModule = {
   },
 }
 
-/**
- * server-plugins 内置插件：后台插件的安装 / 卸载 / 清单（Task 7）。
- * 目录经服务注入（serverPluginsDir）。安全约束见 routes/serverPlugins.ts 文件头。
- */
-export const serverPluginsPlugin: PluginModule = {
-  name: 'server-plugins',
-  inject: [S.serverPluginsDir, S.selfOrigin, 'serverPluginsLoaded'],
-  apply(ctx) {
-    ctx.routes.adopt(
-      createServerPluginsRoutes({
-        dir: need<string>(ctx, S.serverPluginsDir),
-        // 后台半现在跟插件同目录；只看扁平目录会把自带件显示成「后台未装」（实测）。
-        ...(ctx.tryGet<string | undefined>(S.pluginsDir)
-          ? { pluginsDir: ctx.tryGet<string>(S.pluginsDir) }
-          : {}),
-        // 现算：启动登记的快照 + 运行期热装 —— 否则热装/热卸后 loaded 不更新，前端据它误判（用户实测）
-        loaded: () => [...new Set([...(ctx.tryGet<string[]>('serverPluginsLoaded') ?? []), ...hotLoadedNames()])],
-        // 服务自己的 origin：用于跨源安装检查（审查发现：不传 origin 时该检查整段被跳过）。
-        origin: need<string>(ctx, S.selfOrigin),
-        // 可信哈希来源 = 本服务扫插件目录得到的清单（**不是**调用方声明的）。
-        // 审查发现的真问题：比对调用方现算的哈希等于没校验（同一通道同一份字节）。
-        trustedShaOf: async (id) => {
-          const catalog = await buildPluginCatalog(ctx.tryGet<string | undefined>(S.pluginsDir))
-          const entry = catalog.plugins.find((p) => p.id === id)
-          return entry?.server?.sha256
-        },
-        // permissions 的消费点：从清单读出来，供诊断接口展示（计划明确要求）
-        permissionsOf: async (id) => {
-          const catalog = await buildPluginCatalog(ctx.tryGet<string | undefined>(S.pluginsDir))
-          return catalog.plugins.find((p) => p.id === id)?.server?.permissions
-        },
-        // 热装/热卸：装完/卸完当场生效，用户不必重启服务（见 serverFramework/hotLoad.ts）
-        hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.serverPluginsDir), id),
-        hotUninstall: async (id) => hotUninstallServerPlugin(ctx, id),
-        // 调试用「按路径安装」：只有显式设置 PLUME_DEBUG_PLUGIN_INSTALL=1 才挂这条路由。
-        // 为什么不默认开：它按**本机磁盘路径**读文件，等于给一条"读文件 + 执行"的通道，
-        // 生产环境不该存在。允许的根目录是插件目录（真正的插件产物都在各自 dist/ 下）。
-        ...(process.env.PLUME_DEBUG_PLUGIN_INSTALL === '1'
-          ? {
-              debugInstall: {
-                allowRoots: [
-                  ctx.tryGet<string>(S.serverPluginsDir),
-                  ctx.tryGet<string | undefined>(S.pluginsDir),
-                ].filter((p): p is string => typeof p === 'string' && p.length > 0),
-              },
-            }
-          : {}),
-        // 审计：服务端装配时把 audit 注入进 ctx（见 server.ts），没注入就是 no-op
-        audit: (e) => ctx.tryGet<{ append(x: unknown): Promise<void> }>('auditLog')?.append(e) ?? Promise.resolve(),
-      }),
-    )
-  },
-}
-
 export const pluginCatalogPlugin: PluginModule = {
   name: 'plugin-routes',
-  inject: [S.pluginsDir],
+  inject: [S.pluginsDir, S.pluginRoots],
   apply(ctx) {
-    ctx.routes.adopt(pluginRoutes(ctx.tryGet<string | undefined>(S.pluginsDir)))
+    // 有 pluginRoots（正常服务）就按「全局优先 + 随包兜底」解析；
+    // 只有 pluginsDir（单测的最小装配）时退化成单目录。
+    const roots = ctx.tryGet<PluginRoots | undefined>(S.pluginRoots)
+    ctx.routes.adopt(pluginRoutes(roots ?? ctx.tryGet<string | undefined>(S.pluginsDir)))
   },
 }
 
@@ -317,12 +264,11 @@ export const pluginWatchPlugin: PluginModule = {
  */
 export const npmPluginsPlugin: PluginModule = {
   name: 'npm-plugins',
-  inject: [S.pluginsDir, S.serverPluginsDir],
+  inject: [S.pluginsDir],
   apply(ctx) {
     ctx.routes.adopt(
       createNpmPluginsRoutes({
-        pluginsDir: ctx.tryGet<string>(S.pluginsDir),
-        serverPluginsDir: need<string>(ctx, S.serverPluginsDir),
+        pluginsDir: need<string>(ctx, S.pluginsDir),
         // scope 白名单：环境变量 PLUME_NPM_SCOPES 可覆盖（逗号分隔，如 "@imohuan/,@acme/"）
         ...(process.env.PLUME_NPM_SCOPES
           ? {
@@ -333,7 +279,7 @@ export const npmPluginsPlugin: PluginModule = {
             }
           : {}),
         // 热装/热卸：装完当场生效（见 serverFramework/hotLoad.ts）
-        hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.serverPluginsDir), id),
+        hotInstall: (id) => hotInstallServerPlugin(ctx, need<string>(ctx, S.pluginsDir), id),
         hotUninstall: async (id) => hotUninstallServerPlugin(ctx, id),
         audit: (e) => ctx.tryGet<{ append(x: unknown): Promise<void> }>('auditLog')?.append(e) ?? Promise.resolve(),
       }),
@@ -357,6 +303,5 @@ export const BUILTIN_PLUGINS: PluginModule[] = [
   kvPlugin,
   canvasOpsPlugin,
   pluginCatalogPlugin,
-  serverPluginsPlugin,
   npmPluginsPlugin,
 ]

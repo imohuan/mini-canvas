@@ -31,10 +31,14 @@ afterEach(async () => {
 async function boot(): Promise<{ base: string; port: number }> {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'res-read-'))
   // 两个库的最小后台半（真实插件路由的行为：GET file 不需要令牌）
-  const plugins = path.join(dir, 'server-plugins')
-  await fs.mkdir(plugins, { recursive: true })
+  const plugins = path.join(dir, 'plugins')
+  await fs.mkdir(path.join(plugins, 'libraries', 'dist'), { recursive: true })
   await fs.writeFile(
-    path.join(plugins, 'libraries.js'),
+    path.join(plugins, 'libraries', 'package.json'),
+    JSON.stringify({ name: 'libraries', plume: { pluginName: 'libraries', server: { entry: 'dist/server.js' } } }),
+  )
+  await fs.writeFile(
+    path.join(plugins, 'libraries', 'dist', 'server.js'),
     [
       "export const name = 'libraries'",
       'export function apply(ctx) {',

@@ -10,18 +10,23 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createServerFramework } from '../serverFramework/index.js'
-import { loadServerPluginsFromDir } from '../serverFramework/pluginLoader.js'
+import { loadServerPluginsFromPluginDirs } from '../serverFramework/pluginLoader.js'
 
 let dir: string
 let pluginsDir: string
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cs-showcase-ext-'))
-  pluginsDir = path.join(dir, 'server-plugins')
-  await fs.mkdir(pluginsDir, { recursive: true })
+  // 新布局：一个插件一个目录，入口由 package.json 声明
+  pluginsDir = path.join(dir, 'plugins')
+  await fs.mkdir(path.join(pluginsDir, 'plugin-showcase', 'dist'), { recursive: true })
+  await fs.writeFile(
+    path.join(pluginsDir, 'plugin-showcase', 'package.json'),
+    JSON.stringify({ name: '@plume-canvas/plugin-showcase', plume: { pluginName: 'showcase', server: { entry: 'dist/server.js' } } }),
+  )
   // 拷**真实构建产物**（不是测试替身）—— 产物坏了这里立刻炸
   await fs.copyFile(
     path.resolve(__dirname, '../../..', 'plugins', 'plugin-showcase', 'dist', 'server.js'),
-    path.join(pluginsDir, 'showcase.js'),
+    path.join(pluginsDir, 'plugin-showcase', 'dist', 'server.js'),
   )
 })
 afterEach(async () => {
@@ -30,7 +35,7 @@ afterEach(async () => {
 
 describe('showcase 外挂形态（真实产物 → loader → 路由生效）', () => {
   it('六组端点全部可达且 demo 字段正确', async () => {
-    const { modules, failures } = await loadServerPluginsFromDir(pluginsDir)
+    const { modules, failures } = await loadServerPluginsFromPluginDirs(pluginsDir)
     expect(failures).toEqual([])
     expect(modules.map((m) => m.name)).toEqual(['showcase'])
 

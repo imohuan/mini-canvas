@@ -21,6 +21,7 @@
     "./*": "./dist/*"
   },
   "scripts": {
+    "start": "pnpm build:assets && pnpm build && pnpm serve",
     "dev": "tsx src/cli.ts serve -d ../../.plume --trusted-origin http://localhost:5288",
     "build": "pnpm typecheck && pnpm bundle",
     "bundle": "node scripts/bundle.mjs && tsc -p tsconfig.build.json && node scripts/bundle-dts.mjs",

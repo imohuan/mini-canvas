@@ -32,10 +32,14 @@ describe('真实服务：后台插件路由的字节能被内部自请求拿到'
     const ROUTE = '/api/self-fetch-probe/file'
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'self-fetch-real-'))
     // 最小后台插件（模拟风格库）：只提供一条返回 PNG 的 file 路由
-    const pluginsDir = path.join(dir, 'server-plugins')
-    await fs.mkdir(pluginsDir, { recursive: true })
+    const pluginsDir = path.join(dir, 'plugins')
+    await fs.mkdir(path.join(pluginsDir, 'probe', 'dist'), { recursive: true })
     await fs.writeFile(
-      path.join(pluginsDir, 'probe.js'),
+      path.join(pluginsDir, 'probe', 'package.json'),
+      JSON.stringify({ name: 'probe', plume: { pluginName: 'probe', server: { entry: 'dist/server.js' } } }),
+    )
+    await fs.writeFile(
+      path.join(pluginsDir, 'probe', 'dist', 'server.js'),
       [
         "export const name = 'probe'",
         'export function apply(ctx) {',

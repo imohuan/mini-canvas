@@ -19,11 +19,15 @@ afterEach(async () => {
 })
 
 describe('外挂后台插件（丢文件即生效）', () => {
-  it('server-plugins 目录里的 .js 定义的路由，在真实服务里能访问', async () => {
-    const pluginsDir = path.join(dir, 'server-plugins')
-    await fs.mkdir(pluginsDir, { recursive: true })
+  it('插件目录里的后台半定义的路由，在真实服务里能访问', async () => {
+    const pluginsDir = path.join(dir, 'plugins')
+    await fs.mkdir(path.join(pluginsDir, 'hello-plugin', 'dist'), { recursive: true })
     await fs.writeFile(
-      path.join(pluginsDir, 'hello-plugin.js'),
+      path.join(pluginsDir, 'hello-plugin', 'package.json'),
+      JSON.stringify({ name: 'hello-plugin', plume: { pluginName: 'hello-plugin', server: { entry: 'dist/server.js' } } }),
+    )
+    await fs.writeFile(
+      path.join(pluginsDir, 'hello-plugin', 'dist', 'server.js'),
       [
         'export const name = "hello-plugin"',
         'export function apply(ctx) {',
@@ -39,10 +43,14 @@ describe('外挂后台插件（丢文件即生效）', () => {
   })
 
   it('外挂插件也能注册 Agent 中间件（并拦下对话）', async () => {
-    const pluginsDir = path.join(dir, 'server-plugins')
-    await fs.mkdir(pluginsDir, { recursive: true })
+    const pluginsDir = path.join(dir, 'plugins')
+    await fs.mkdir(path.join(pluginsDir, 'mw-plugin', 'dist'), { recursive: true })
     await fs.writeFile(
-      path.join(pluginsDir, 'mw-plugin.js'),
+      path.join(pluginsDir, 'mw-plugin', 'package.json'),
+      JSON.stringify({ name: 'mw-plugin', plume: { pluginName: 'mw-plugin', server: { entry: 'dist/server.js' } } }),
+    )
+    await fs.writeFile(
+      path.join(pluginsDir, 'mw-plugin', 'dist', 'server.js'),
       [
         'export const name = "mw-plugin"',
         'export function apply(ctx) {',

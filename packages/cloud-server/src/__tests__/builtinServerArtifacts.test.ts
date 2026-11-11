@@ -25,8 +25,8 @@ describe('自带后台半随构建部署', () => {
       readFileSync(path.join(REPO, 'packages/plugins/plugin-node-ui/package.json'), 'utf8'),
     )
     expect(pkg.scripts.build).toMatch(/build-server\.mjs|build:server/)
-    expect(src).toMatch(/server-plugins/)
-    expect(src).toMatch(/copyFile|cp\(/)
+    // 2026-11-12：不再往数据根复制插件，所以这里只核对「产物确实在 assets 里」的检查存在
+    expect(src).toMatch(/assets.*plugins.*dist.*server\.js/s)
   })
 
   it('后台半缺失时明确报错（不静默跳过，让 404 变成看得懂的构建失败）', () => {
@@ -44,13 +44,16 @@ describe('自带后台半随构建部署', () => {
     expect(src).toMatch(/copyPluginDir\(/)
     // 与发布打包共用同一套规则：两份入口产物必须同形
     const shared = readFileSync(path.join(REPO, 'packages/cloud-server/scripts/plugin-assets.mjs'), 'utf8')
-    expect(shared).toMatch(/dist\/web\.js/)
-    expect(shared).toMatch(/dist\/server\.js/)
+    // 产物按作者声明的相对路径复制（名字是自由，配置是事实源）
+    expect(shared).toMatch(/copyKeepingDirs/)
+    expect(shared).toMatch(/plume\.server\.entry|plume\?\.server\?\.entry/)
     expect(shared).toMatch(/plume\.pluginName/)
   })
 
-  it('后台半从 assets 铺，不从仓库源码目录披（发布包与本地跑同一份代码）', () => {
+  it('构建只核对「后台半在 assets 里」，不再往数据根复制（全局目录优先、随包兜底）', () => {
     const src = readFileSync(SCRIPT, 'utf8')
     expect(src).toMatch(/ASSETS, "plugins", d, "dist", "server\.js"/)
+    // 不该再出现往 server-plugins 写文件的代码
+    expect(src).not.toMatch(/serverPluginsDir\s*=\s*path\.join\(DATA_ROOT/)
   })
 })

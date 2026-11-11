@@ -16,14 +16,11 @@ const run = promisify(execFile)
 
 let dir: string
 let pluginsDir: string
-let serverPluginsDir: string
 
 beforeEach(async () => {
   dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cs-npm-'))
   pluginsDir = path.join(dir, 'plugins')
-  serverPluginsDir = path.join(dir, 'server-plugins')
   await fs.mkdir(pluginsDir, { recursive: true })
-  await fs.mkdir(serverPluginsDir, { recursive: true })
 })
 afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true })
@@ -56,23 +53,36 @@ async function startFakeRegistry(
 /** 造包 payload（package.json + dist/）并打成顶层 package/ 的 tgz */
 async function makePkg(
   workDir: string,
-  opts: { installable: boolean; withServer: boolean; version: string },
+  opts: {
+    installable: boolean
+    withServer: boolean
+    version: string
+    /** 自定义入口（第三方不按我们的命名规范时用），缺省 dist/plugin-demo.js */
+    webEntry?: string
+    serverEntry?: string
+  },
 ): Promise<string> {
-  const dist = path.join(workDir, 'payload', 'dist')
-  await fs.mkdir(dist, { recursive: true })
+  const webRel = opts.webEntry ?? 'dist/plugin-demo.js'
+  const webFile = path.join(workDir, 'payload', webRel)
+  await fs.mkdir(path.dirname(webFile), { recursive: true })
     // 真实插件产物是 UMD（有 PlumePlugin* 全局）；测试数据也要给一份可识别的
     await fs.writeFile(
-      path.join(dist, 'plugin-demo.js'),
+      webFile,
       '(function(e,t){t(e.PlumePluginDemo={})})(this,function(e){e.name="demo";e.apply=function(){}})',
       'utf8',
     )
   const serverCode = 'export const name = "demo"' + String.fromCharCode(10) + 'export function apply() {}'
-  if (opts.withServer) await fs.writeFile(path.join(dist, 'server.js'), serverCode, 'utf8')
+  const serverRel = opts.serverEntry ?? 'dist/server.js'
+  if (opts.withServer) {
+    const serverFile = path.join(workDir, 'payload', serverRel)
+    await fs.mkdir(path.dirname(serverFile), { recursive: true })
+    await fs.writeFile(serverFile, serverCode, 'utf8')
+  }
   const mini: Record<string, unknown> = { title: 'Demo', pluginName: 'demo' }
   if (opts.installable) mini.installable = true
   // 结构上"是个插件"：有 pluginName + web 入口（现在的判定看结构，不看 installable）
-  mini.web = { entry: 'dist/plugin-demo.js' }
-  if (opts.withServer) mini.server = { entry: 'dist/server.js' }
+  mini.web = { entry: webRel }
+  if (opts.withServer) mini.server = { entry: serverRel }
   const pkgJson = { name: '@plume-canvas/plugin-demo', version: opts.version, plume: mini }
   await fs.writeFile(path.join(workDir, 'payload', 'package.json'), JSON.stringify(pkgJson), 'utf8')
   const stage = path.join(workDir, 'stage')
@@ -93,7 +103,6 @@ async function boot(registryUrl: string, audit?: (e: AuditAppendInput) => Promis
   const routes = createNpmPluginsRoutes({
     registry: registryUrl,
     pluginsDir,
-    serverPluginsDir,
     recordFile: path.join(dir, '.npm-installed.json'),
     // 测试用 @plume-canvas/ 前缀（默认白名单是 @imohuan/ + plume-canvas-）
     scopeAllowlist: ['@plume-canvas/'],
@@ -259,9 +268,15 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     const inst = await j(await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true }))
     expect(inst.ok).toBe(true)
     expect(inst.hasServer).toBe(true)
-      // 新规则：落盘统一改名 web.js（入口由 plume.web.entry 决定，不按原文件名）
-      await expect(fs.access(path.join(pluginsDir, 'plume-canvas__plugin-demo', 'dist', 'web.js'))).resolves.toBeUndefined()
-    await expect(fs.access(path.join(serverPluginsDir, 'plume-canvas__plugin-demo.js'))).resolves.toBeUndefined()
+    // 落盘保持包里的相对结构，入口按 package.json 的配置读（不统一改名）
+    const installed = path.join(pluginsDir, 'plume-canvas__plugin-demo')
+    await expect(fs.access(path.join(installed, 'dist', 'plugin-demo.js'))).resolves.toBeUndefined()
+    await expect(fs.access(path.join(installed, 'dist', 'server.js'))).resolves.toBeUndefined()
+    const pj = JSON.parse(await fs.readFile(path.join(installed, 'package.json'), 'utf8')) as {
+      plume: { web: { entry: string }; server: { entry: string } }
+    }
+    expect(pj.plume.web.entry).toBe('dist/plugin-demo.js')
+    expect(pj.plume.server.entry).toBe('dist/server.js')
 
     const list = await j(await call(host, '/api/npm-plugins/installed'))
     expect((list.plugins as Array<{ pkg: string; version: string }>)[0]).toMatchObject({ pkg: '@plume-canvas/plugin-demo', version: '1.0.0' })
@@ -294,6 +309,43 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     expect(upd.to).toBe('1.1.0')
     const list = await j(await call(host, '/api/npm-plugins/installed'))
     expect((list.plugins as Array<{ version: string }>)[0].version).toBe('1.1.0')
+    host.stop()
+  })
+
+  it('★ 第三方用自定义文件名：按 package.json 的 entry 落盘与读取，不按文件名猜', async () => {
+    // 用户口径：我们自家插件保持 dist/web.js / dist/server.js 规范，但**加载方只认配置**。
+    // 第三方作者写成 build/bundle.js、server/entry.js 也照样能装、能加载。
+    const tgz = await makePkg(dir, {
+      installable: true,
+      withServer: true,
+      version: '3.0.0',
+      webEntry: 'build/bundle.js',
+      serverEntry: 'server/entry.js',
+    })
+    const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '3.0.0' }, versions: {} }
+    registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
+    ;(packument.versions as Record<string, unknown>)['3.0.0'] = {
+      version: '3.0.0',
+      dist: { tarball: registry.url + '/demo.tgz' },
+      plume: {
+        pluginName: 'demo',
+        web: { entry: 'build/bundle.js' },
+        server: { entry: 'server/entry.js' },
+      },
+    }
+    const host = await boot(registry.url)
+    const inst = await j(await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true }))
+    expect(inst.ok, String(inst.error)).toBe(true)
+    expect(inst.hasServer).toBe(true)
+    const installed = path.join(pluginsDir, 'plume-canvas__plugin-demo')
+    // 原样落盘（不改名），配置也原样保留
+    await expect(fs.access(path.join(installed, 'build', 'bundle.js'))).resolves.toBeUndefined()
+    await expect(fs.access(path.join(installed, 'server', 'entry.js'))).resolves.toBeUndefined()
+    const pj = JSON.parse(await fs.readFile(path.join(installed, 'package.json'), 'utf8')) as {
+      plume: { web: { entry: string }; server: { entry: string } }
+    }
+    expect(pj.plume.web.entry).toBe('build/bundle.js')
+    expect(pj.plume.server.entry).toBe('server/entry.js')
     host.stop()
   })
 })

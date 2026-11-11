@@ -458,7 +458,7 @@ describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
     expect(list[0].version).toBe('1.1.0')
   })
 
-  it('未确认时不请求后台安装（避免假故障红字）；确认后才发请求', async () => {
+  it('后台半随插件目录一起装：不再单独请求 /api/server-plugins/install', async () => {
     const ctx = new Context()
     const host = fakeHost()
     const { save } = fakeSave()
@@ -469,15 +469,6 @@ describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
     const fetchImpl = (async (url: string | URL, init?: RequestInit) => {
       const u = String(url)
       calls.push(u)
-      if (u.includes('/api/server-plugins/install')) {
-        const b = JSON.parse(String(init?.body ?? '{}')) as { confirm?: boolean }
-        return b.confirm === true
-          ? ({ ok: true, status: 200, json: async () => ({ ok: true }), text: async () => '' } as Response)
-          : ({ ok: false, status: 400, json: async () => ({ ok: false, error: 'need confirm' }), text: async () => '' } as Response)
-      }
-      if (u.includes('/api/server-plugins')) {
-        return { ok: true, status: 200, json: async () => ({ ok: true, plugins: [], loaded: [] }), text: async () => '' } as Response
-      }
       return { ok: true, status: 200, json: async () => CATALOG_WITH_SERVER, text: async () => '' } as Response
     }) as unknown as typeof fetch
     const svc = createPluginManagerService(ctx, {
@@ -489,12 +480,12 @@ describe('plugin-manager 服务：NPM 市场（Task 5）', () => {
     await svc.refresh()
     await svc.install('plugin-srv', { serverConfirm: false })
     expect(svc.state.rows.find((r) => r.entry.id === 'plugin-srv')?.serverError).toBeUndefined()
-    expect(calls.some((u) => u.includes('/api/server-plugins/install'))).toBe(false)
-    // 卸掉（前端半也卸），再以确认方式装一次：这次应发后台安装请求
+    // 卸掉（前端半也卸），再以确认方式装一次
     await svc.uninstall('plugin-srv')
     await svc.install('plugin-srv', { serverConfirm: true })
     expect(svc.state.rows.find((r) => r.entry.id === 'plugin-srv')?.serverError).toBeUndefined()
-    expect(calls.some((u) => u.includes('/api/server-plugins/install'))).toBe(true)
+    // 后台半跟插件目录同生共死（NPM 整包落盘），界面不该再发单独的安装请求
+    expect(calls.some((u) => u.includes('/api/server-plugins/install')), '不该再调旧的 server-plugins 接口').toBe(false)
   })
 
   it('installFromNpm 装完后把前端半自动装进内核（用户点一次就该活）', async () => {
@@ -993,8 +984,6 @@ describe('plugin-manager 服务：管理令牌', () => {
     await svc.uninstallFromNpm('@plume-canvas/plugin-demo')
 
     const protectedPaths = [
-      '/api/server-plugins/install',
-      '/api/server-plugins/uninstall',
       '/api/npm-plugins/install',
       '/api/npm-plugins/update',
       '/api/npm-plugins/uninstall',

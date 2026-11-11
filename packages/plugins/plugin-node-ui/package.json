@@ -22,7 +22,6 @@
     "build": "vite build && node scripts/build-server.mjs",
     "build:web": "vite build",
     "build:server": "node scripts/build-server.mjs",
-    "deploy:server": "node scripts/deploy-server.mjs",
     "dev": "vite",
     "dev:hmr": "vite --config vite.dev.config.ts",
     "test": "vitest run",

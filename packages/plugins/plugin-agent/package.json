@@ -8,7 +8,9 @@
     "description": "画布内对话助手：消息流 + 工具调用 + 设置页",
     "pluginName": "agent",
     "builtin": true,
-    "serverBuiltin": true
+    "serverBuiltin": true,
+    "web": { "entry": "dist/web.js" },
+    "server": { "entry": "dist/server.js" }
   },
   "files": [
     "dist",

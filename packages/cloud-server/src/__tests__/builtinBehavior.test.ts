@@ -76,7 +76,7 @@ describe('内置插件 · 行为不变（Task 3）', () => {
     srv.stop()
   })
 
-  it('内置插件清单齐全（通用 16 + Agent 3，且都声明了 inject）', () => {
+  it('内置插件清单齐全（通用 15 + Agent 3，且都声明了 inject）', () => {
     // Agent 三条已拆到 builtin/agentRoutes.ts（由开关整组决定装不装），
     // 这里合并校验“完整清单”，避免把两者当成重复来源。
     const names = [...BUILTIN_PLUGINS, ...AGENT_PLUGINS].map((p) => p.name).sort()
@@ -100,7 +100,6 @@ describe('内置插件 · 行为不变（Task 3）', () => {
         'plugin-presence',
         'projects',
         'provider-admin',
-        'server-plugins',
       ].sort(),
     )
     // health 无依赖；其余都该声明 inject（不然就是漏写了）

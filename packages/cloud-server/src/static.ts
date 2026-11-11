@@ -15,6 +15,7 @@ import { Hono } from 'hono'
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { buildPluginCatalog } from './plugins/catalog.js'
 import { BUILTIN_BY_DIR, BUILTIN_PLUGINS, FIRST_INSTALL_DIRS } from './plugins/builtinPlugins.js'
+import type { PluginRoots } from './plugins/pluginRoots.js'
 
 /**
  * 本包自己的根目录（用于找随包发布的 assets/）。
@@ -96,7 +97,7 @@ const PLUGIN_SEG_RE = /^[\w.@-]+$/
  * 解析一个「插件资源」请求：/plugins/<pkg>/<相对路径…>
  * 逐段校验 + 扩展名白名单；不合法给明确原因（服务端据此回 400）。
  */
-export function resolvePluginAsset(urlPath: string): { rel: string } | { error: string } {
+export function resolvePluginAsset(urlPath: string): { rel: string; altRel?: string } | { error: string } {
   const clean = decodeURIComponent(urlPath.split('?')[0] ?? '')
   const m = clean.match(/^\/plugins\/(.+)$/)
   if (!m) return { error: '未知路径' }
@@ -109,7 +110,9 @@ export function resolvePluginAsset(urlPath: string): { rel: string } | { error: 
   // 扁平形态（单段）：文件直接放在插件目录下，不套 <pkg>/dist。
   if (segs.length === 1) return { rel: segs[0]! }
   const [pkg, ...rest] = segs
-  return { rel: [pkg!, 'dist', ...rest].join('/') }
+  // 嵌套形态：先按「插件目录下原路径」找（入口可能不在 dist/，如 dist/my-plugin.js、
+  // 或作者把产物放在 build/ 下）；找不到再由调用方回退到「dist/ 下的同名文件」。
+  return { rel: [pkg!, ...rest].join('/'), altRel: [pkg!, 'dist', ...rest].join('/') }
 }
 
 /**
@@ -139,31 +142,14 @@ export async function resolveUiDist(explicit?: string): Promise<string | undefin
 }
 
 /**
- * 找插件目录。顺序（用户口径 2026-11-11）：
+/**
+ * 找「随包插件目录」（只读兜底）。全局目录由 pluginRoots 按数据根算，不走这里。
  *
- *   1. 显式 `--plugins`（仓库开发时指到 packages/plugins）
- *   2. **数据根下的 plugins/** —— 安装、更新都落这里，是运行时唯一可写的位置
- *   3. 包内 `assets/plugins` —— 首启兜底（cloud-server 打包时把全部插件收进来了）
- *
- * 注意：仓库里的 `packages/plugins` **不再**自动命中。开发时要么用 `--plugins` 指过去，
- * 要么让启动脚本把插件同步到数据根，避免「在仓库里跑就永远看不到数据根那份」。
+ * 2026-11-12 起插件**两层**：全局 `<数据根>/plugins` 优先、随包 `assets/plugins` 兜底，
+ * 按插件解析实际生效的那一份 —— 见 src/plugins/pluginRoots.ts。
  */
-export async function resolvePluginsDir(
-  explicit?: string,
-  dataDir?: string,
-): Promise<string | undefined> {
-  if (explicit) {
-    if (!(await isDir(explicit))) throw new Error(`--plugins 指定的目录不存在: ${explicit}`)
-    return path.resolve(explicit)
-  }
-  const candidates = [
-    ...(dataDir ? [path.join(path.resolve(dataDir), 'plugins')] : []),
-    path.join(PACKAGE_ROOT, 'assets/plugins'),
-  ]
-  for (const c of candidates) {
-    if (await isDir(c)) return c
-  }
-  return undefined
+export function packagedPluginsDir(): string {
+  return path.join(PACKAGE_ROOT, 'assets/plugins')
 }
 
 /** 清单里的一项（与计划 §四 的 /plugin-manifest.json 形状一致） */
@@ -543,14 +529,16 @@ function pickInsertAt(text: string): number {
 }
 
 /** 插件路由：清单 + 插件产物（两者都要扫描磁盘，改完刷新即生效） */
-export function pluginRoutes(pluginsDir: string | undefined): Hono {
+export function pluginRoutes(pluginsDir: string | PluginRoots | undefined): Hono {
   const app = new Hono()
 
   app.get('/plugin-manifest.json', async (c) => {
-    const plugins = await buildManifest(pluginsDir)
-    if (pluginsDir && !(await exists(pluginsDir))) {
+    // 旧 ESM 清单只服务历史路径：它按单目录工作，给根对象时取全局目录。
+    const single = typeof pluginsDir === 'string' ? pluginsDir : pluginsDir?.global
+    const plugins = await buildManifest(single)
+    if (single && !(await exists(single))) {
       // 目录不存在不是错（可能只是还没建插件），但说清楚更好排查
-      return c.json({ plugins: [], note: '插件目录不存在: ' + pluginsDir })
+      return c.json({ plugins: [], note: '插件目录不存在: ' + single })
     }
     return c.json({ plugins })
   })
@@ -577,7 +565,19 @@ export function pluginRoutes(pluginsDir: string | undefined): Hono {
     if (!pluginsDir) return c.json({ ok: false, error: '未配置插件目录' }, 404)
     const resolved = resolvePluginAsset(c.req.path)
     if ('error' in resolved) return c.json({ ok: false, error: resolved.error }, 400)
-    const bytes = await readWithin(pluginsDir, resolved.rel)
+    // 先按原路径找，再回退到 dist/ 下的同名文件（兼容旧产物与只声明文件名的插件）
+    // 两级根：全局优先、随包兜底。
+    const roots: string[] =
+      typeof pluginsDir === 'string'
+        ? [pluginsDir]
+        : [pluginsDir.global, pluginsDir.packaged].filter((p): p is string => !!p)
+    let bytes: Uint8Array<ArrayBuffer> | undefined
+    for (const root of roots) {
+      bytes =
+        (await readWithin(root, resolved.rel)) ||
+        (resolved.altRel ? await readWithin(root, resolved.altRel) : undefined)
+      if (bytes) break
+    }
     if (!bytes) return c.json({ ok: false, error: '插件文件不存在' }, 404)
     return c.body(bytes, 200, {
       'content-type': mimeFor(resolved.rel),

@@ -12,8 +12,9 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createCloudServer, DEFAULT_DATA_DIR, DEFAULT_PORT } from './server.js'
-import { resolvePluginsDir } from './static.js'
+import { packagedPluginsDir } from './static.js'
 import { buildPluginCatalog } from './plugins/catalog.js'
+import { resolvePluginRoots } from './plugins/pluginRoots.js'
 import { BUILTIN_PLUGINS, FIRST_INSTALL_DIRS } from './plugins/builtinPlugins.js'
 
 interface CliOptions {
@@ -24,7 +25,6 @@ interface CliOptions {
   ui?: string
   plugins?: string
   providers?: string
-  serverPlugins?: string
   open: boolean
   /** 是否提供 MCP 接口（缺省开） */
   mcp: boolean
@@ -52,7 +52,6 @@ const HELP = `plume-canvas —— 自托管画布服务
       --ui <目录>     画布界面产物目录（默认自动探测 packages/ui/dist）
       --plugins <目录> 插件目录（默认自动探测 packages/plugins）
       --providers <目录> 平台提供方目录（后台的"投递箱"；默认 <数据目录>/providers）
-      --server-plugins <目录> 后台插件目录（丢 .js 进去即多一个后台插件；默认 <数据目录>/server-plugins）
       --no-mcp        不提供 MCP 接口（默认提供）
       --no-admin-auth 关闭管理令牌与来源边界（**必须**同时设 PLUME_ALLOW_INSECURE=1）
       --trusted-host <host:port>   额外信任的 Host（反代 / 另一个主机名；可重复）
@@ -109,7 +108,6 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     else if (a === '--ui') opts.ui = takeValue(a)
     else if (a === '--plugins') opts.plugins = takeValue(a)
     else if (a === '--providers') opts.providers = takeValue(a)
-    else if (a === '--server-plugins') opts.serverPlugins = takeValue(a)
     else if (a === '--mcp') opts.mcp = true
     else if (a === '--no-mcp') opts.mcp = false
     else if (a === '--no-admin-auth') opts.noAdminAuth = true
@@ -210,7 +208,6 @@ async function startWithPortFallback(opts: CliOptions) {
       ...(opts.ui ? { uiDist: opts.ui } : {}),
       ...(opts.plugins ? { pluginsDir: opts.plugins } : {}),
       ...(opts.providers ? { providersDir: opts.providers } : {}),
-      ...(opts.serverPlugins ? { serverPluginsDir: opts.serverPlugins } : {}),
       ...(opts.noAdminAuth ? { adminAuth: false } : {}),
       ...(opts.trustedHosts.length ? { trustedHosts: opts.trustedHosts } : {}),
       ...(opts.trustedOrigins.length ? { trustedOrigins: opts.trustedOrigins } : {}),
@@ -235,7 +232,9 @@ async function main(): Promise<void> {
   // 打印前先扫一次插件清单：让用户一眼看到"装了几个插件、其中几个是开箱就用的"。
   // 这里报**插件管理清单**（/plugin-catalog.json 那份），因为界面现在按它装载；
   // 旧的 ESM manifest 只服务历史路径，拿它报数会显示成 0~2 个，误导用户。
-  const catalog = await buildPluginCatalog(await resolvePluginsDir(opts.plugins, opts.dir))
+  const catalog = await buildPluginCatalog(
+    opts.plugins ? { global: opts.plugins } : await resolvePluginRoots(opts.dir, packagedPluginsDir()),
+  )
   const builtinIds = new Set(BUILTIN_PLUGINS.map((e) => e.dir))
   const builtinEntries = catalog.plugins.filter((p) => builtinIds.has(p.id))
 
@@ -254,7 +253,6 @@ async function main(): Promise<void> {
   )
   for (const p of builtinEntries) console.log(`         - ${p.id}  → ${p.url}`)
   console.log(`  平台   ${srv.paths.providers}（丢 .js 进去即多一个平台）`)
-  console.log(`  后台插件 ${srv.paths.serverPlugins}（丢 .js 进去即多一个后台插件；重启生效）`)
   // ---- 管理面安全：令牌与白名单**逐行**打印（配错时能一眼看出来，而不是等 403 才猜）----
   if (srv.adminTokenSource === 'disabled') {
     console.log('')

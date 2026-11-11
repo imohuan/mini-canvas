@@ -5,14 +5,14 @@
  * 保证产物同形：
  *
  *   assets/plugins/<插件目录名>/
- *   ├── package.json     ← plume 元信息（entry 已回填成 dist/web.js / dist/server.js）
+ *   ├── package.json     ← plume 元信息（entry 回填成**实际产物名**）
  *   └── dist/
  *       ├── web.js       ← 前端半
  *       └── server.js    ← 后台半（有才发）
  *
- * 为什么统一改名：安装器（routes/npmPlugins.ts）与清单（plugins/catalog.ts）都只认配置里的
- * entry；名字固定成 web.js / server.js 之后，「装的」和「随包发的」是同一套结构，
- * 少一类「本地能跑、发出去装不上」的差异。
+ * 文件名**保持构建产物原名**（如 plugin-node-text.js），只有确实没有名字时（或作者没声明的）
+ * 才落回 web.js / server.js。安装、清单、加载三处都读 package.json 的 entry，
+ * 名字是作者的自由，配置才是事实源（用户口径 2026-11-12）。
  */
 import { cp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
@@ -80,8 +80,16 @@ export async function pickWebEntry(dir, pkg) {
   return web.length ? path.join(dist, web[0]) : undefined
 }
 
-/** 后台产物：只要 dist/server.js（加载器按这个约定扫，见 serverFramework/pluginLoader.ts） */
-export async function pickServerEntry(dir) {
+/**
+ * 后台产物：优先 package.json 里声明的 `plume.server.entry`；没声明才回退 dist/server.js。
+ * 与加载器（serverFramework/pluginLoader.ts）同一套规则 —— 名字由作者定，配置是事实源。
+ */
+export async function pickServerEntryOf(dir, pkg) {
+  const declared = pkg?.plume?.server?.entry
+  if (typeof declared === "string" && declared) {
+    const p = path.join(dir, declared)
+    return (await exists(p)) ? p : undefined
+  }
   const p = path.join(dir, "dist", "server.js")
   return (await exists(p)) ? p : undefined
 }
@@ -95,10 +103,13 @@ export async function copyPluginDir({ name, dir, pkg }, targetDir) {
   if (!webEntry) {
     throw new Error(name + " 没有前端产物（先跑 pnpm -C packages/plugins/" + name + " build）")
   }
-  const serverEntry = await pickServerEntry(dir)
-  await mkdir(path.join(targetDir, "dist"), { recursive: true })
-  await cp(webEntry, path.join(targetDir, "dist", "web.js"))
-  if (serverEntry) await cp(serverEntry, path.join(targetDir, "dist", "server.js"))
+  const serverEntry = await pickServerEntryOf(dir, pkg)
+  await mkdir(targetDir, { recursive: true })
+  // 发布包统一成 dist/web.js 与 dist/server.js（我们自己插件的规范，2026-11-12 确认保留）。
+  // 注意：**读取方仍只认 package.json 的 entry**，不按文件名猜 —— 规范是给自家插件用的，
+  // 第三方写 `dist/my-plugin.js` 也照样能装、能加载。
+  await copyKeepingDirs(webEntry, path.join(targetDir, "dist", "web.js"))
+  if (serverEntry) await copyKeepingDirs(serverEntry, path.join(targetDir, "dist", "server.js"))
 
   const outPkg = {
     ...pkg,
@@ -110,4 +121,10 @@ export async function copyPluginDir({ name, dir, pkg }, targetDir) {
   }
   await writeFile(path.join(targetDir, "package.json"), JSON.stringify(outPkg, null, 2) + "\n", "utf8")
   return { name, web: webEntry, ...(serverEntry ? { server: serverEntry } : {}) }
+}
+
+/** 复制文件并自动建好目标目录 */
+async function copyKeepingDirs(from, to) {
+  await mkdir(path.dirname(to), { recursive: true })
+  await cp(from, to)
 }

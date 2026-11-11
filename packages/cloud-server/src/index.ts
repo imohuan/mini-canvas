@@ -38,13 +38,15 @@ export type { SavedResource } from './store/canvasResources.js'
 export type { CanvasData } from './store/canvasStore.js'
 export {
   buildManifest,
-  resolvePluginsDir,
+  packagedPluginsDir,
   resolveUiDist,
   pluginRoutes,
   uiRoutes,
   resolvePluginAsset,
 } from './static.js'
 export type { ManifestPluginEntry } from './static.js'
+export { resolvePluginRoots, resolvePluginDir, listPluginIds } from './plugins/pluginRoots.js'
+export type { PluginRoots } from './plugins/pluginRoots.js'
 export {
   buildPluginCatalog,
   catalogVersion,

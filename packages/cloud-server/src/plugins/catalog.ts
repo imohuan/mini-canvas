@@ -23,6 +23,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { BUILTIN_BY_DIR } from './builtinPlugins.js'
+import { listPluginIds, resolvePluginDir, type PluginRoots } from './pluginRoots.js'
 
 /** 清单里的一项 —— 插件管理据此渲染一行、并按 url 去加载 */
 export interface PluginCatalogEntry {
@@ -418,6 +419,8 @@ export async function readServerArtifact(
       continue
     }
     return {
+      // 地址按**配置里的文件名**给出（`/plugins/<插件>/<entry 的文件名>`），
+      // 静态层会把最后一段解析到「插件目录下同名文件」，不再假定它在 dist/ 里。
       url: "/plugins/" + pkgName + "/" + path.basename(file),
       sha256: createHash("sha256").update(text, "utf8").digest("hex"),
       ...(Array.isArray(permissions)
@@ -428,33 +431,33 @@ export async function readServerArtifact(
   return undefined
 }
 
-export async function buildPluginCatalog(pluginsDir: string | undefined): Promise<PluginCatalog> {
+/**
+ * 扫插件目录，生成插件管理要的清单。
+ *
+ * 入参可以是**单个目录**（兼容旧调用），也可以是两级根（全局优先、随包兜底）。
+ * 后者是 2026-11-12 的口径：同一个插件在两个目录里都有时，**全局那份生效**，
+ * 首启不再把随包插件复制到全局目录。
+ */
+export async function buildPluginCatalog(
+  pluginsDir: string | PluginRoots | undefined,
+): Promise<PluginCatalog> {
   const plugins: PluginCatalogEntry[] = []
   const skipped: Array<{ file: string; reason: string }> = []
   if (!pluginsDir) {
     return { ok: true, version: 0, plugins, skipped: [{ file: '(未配置插件目录)', reason: '服务没有找到 packages/plugins' }] }
   }
 
-  let names: string[]
-  try {
-    names = await fs.readdir(pluginsDir)
-  } catch (err) {
-    if ((err as { code?: string }).code === 'ENOENT') {
-      return { ok: true, version: 0, plugins, skipped: [{ file: pluginsDir, reason: '插件目录不存在' }] }
-    }
-    throw err
+  const roots: PluginRoots = typeof pluginsDir === 'string' ? { global: pluginsDir } : pluginsDir
+  const names = await listPluginIds(roots)
+  if (names.length === 0) {
+    return { ok: true, version: 0, plugins, skipped: [{ file: roots.global, reason: '插件目录不存在或为空' }] }
   }
 
   for (const pkgName of names.sort()) {
     if (pkgName.startsWith('_') || pkgName.startsWith('.')) continue
-    const pkgDir = path.join(pluginsDir, pkgName)
-    let stat
-    try {
-      stat = await fs.stat(pkgDir)
-    } catch {
-      continue
-    }
-    if (!stat.isDirectory()) continue
+    // **按插件**解析实际目录：全局优先，全局没有才用随包那份
+    const pkgDir = await resolvePluginDir(roots, pkgName)
+    if (!pkgDir) continue
 
     const pkg = await readPkgJson(pkgDir)
     // 收录条件：声明了 plume.web.entry（能不能装载）。installable / builtin 只影响面板分类。

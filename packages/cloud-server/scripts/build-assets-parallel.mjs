@@ -372,24 +372,20 @@ for (const p of plugins) {
 }
 console.log("[ ok ] " + plugins.length + " 个插件 -> assets/plugins")
 
-// ---------- 3.5 内置插件的后台半 → <数据根>/server-plugins ----------
-// 从**刚收好的 assets** 里铺，而不是从仓库源码目录：发布包与本地跑的是同一份代码，
-// 不会出现「本地接口能用、发布包里 404」。规则与 cloud-server 启动时的 seedServerPlugins 一致。
-// 只复制、不装：server-plugins 是**启动时**扫的，复制完在下一次启动生效。
-const serverPluginsDir = path.join(DATA_ROOT, "server-plugins")
-await mkdir(serverPluginsDir, { recursive: true })
+// ---------- 3.5 不再往数据根复制任何东西 ----------
+// 2026-11-12 口径：插件**不复制**。全局目录 `<数据根>/plugins` 优先，
+// 没有就用随包 `assets/plugins` 兜底 —— 按插件解析，见 cloud-server/src/plugins/pluginRoots.ts。
+// 所以这里只核对内置插件的后台半**确实打进了 assets**（少了说明构建漏了）。
 let missingServer = 0
 for (const d of BUILTIN_SERVER_PLUGINS) {
   const artifact = path.join(ASSETS, "plugins", d, "dist", "server.js")
-  if (!(await pathExists(artifact))) {
-    console.error("[FAIL] 没有 " + d + " 的后台半产物：" + artifact)
-    console.error("       它负责 /api/node-packages/*（导出节点包）等接口；缺了会表现为「导出失败」")
-    missingServer += 1
+  if (await pathExists(artifact)) {
+    console.log("[ ok ] " + d + " 后台半已随包（assets/plugins/" + d + "/dist/server.js）")
     continue
   }
-  const target = path.join(serverPluginsDir, d + ".js")
-  await copyFile(artifact, target)
-  console.log("[ ok ] " + d + " 后台半 -> " + path.relative(PACKAGE_ROOT, target))
+  console.error("[FAIL] 没有 " + d + " 的后台半产物：" + artifact)
+  console.error("       它负责 /api/node-packages/*（导出节点包）等接口；缺了会表现为「导出失败」")
+  missingServer += 1
 }
 if (missingServer > 0) {
   console.error("\n" + missingServer + " 个自带后台半缺失，中止（否则启动后导出 / 导入节点包会 404）。")

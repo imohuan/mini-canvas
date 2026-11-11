@@ -70,7 +70,6 @@ import {
   looksLikeUrl,
   originOf,
   presenceStatusOf,
-  withAdminToken,
 } from './hotReloadTypes'
 
 /**
@@ -727,47 +726,21 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
   }
 
   /**
-   * 按路径装后台半（调试入口）。
+   * 调试期后台半（2026-11-12 起）。
    *
-   * 失败不抛给前端重装流程（前端已经装好了），但**必须记日志**：
-   * 后台没开调试安装时，这里会明确告诉你原因，而不是静默成功。
+   * 旧的 server-plugins 目录与 /api/server-plugins/install-from-path 已删除：
+   * 后台半只认「插件目录 + package.json 的 plume.server.entry」，不再有第二份拷贝。
+   * 所以这里不再发起安装请求，只把情况说清楚 —— 静默成功会让作者以为后台已生效。
    */
   async function installServerFromPath(id: string, serverPath: string): Promise<void> {
-    try {
-      // 管理令牌走仓库统一出口 withAdminToken（守卫测试要求可追溯，别手拼头）。
-      const headers = withAdminToken({ 'content-type': 'application/json' })
-      const body = { id, path: serverPath, confirm: true }
-      const res = deps.fetchJson
-        ? (await deps.fetchJson(backend('/api/server-plugins/install-from-path'), {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(body),
-          })) as { ok?: boolean; error?: string; note?: string }
-        : ((await (
-            await fetch(backend('/api/server-plugins/install-from-path'), {
-              method: 'POST',
-              headers,
-              body: JSON.stringify(body),
-            })
-          ).json()) as { ok?: boolean; error?: string; note?: string })
-      if (body && res?.ok !== true) {
-        log({
-          sourceId: 0,
-          sourceLabel: '调试插件',
-          action: 'error',
-          detail: id + '：后台半未装上（' + (res?.error ?? '未知原因') + '）',
-        })
-        return
-      }
-      log({ sourceId: 0, sourceLabel: '调试插件', action: 'reload', detail: id + '：后台半已按路径安装' })
-    } catch (err) {
-      log({
-        sourceId: 0,
-        sourceLabel: '调试插件',
-        action: 'error',
-        detail: id + '：后台半安装请求失败 ' + String(err),
-      })
-    }
+    log({
+      sourceId: 0,
+      sourceLabel: '调试插件',
+      action: 'error',
+      detail:
+        id + '：后台半需放到 <数据根>/plugins/<插件>/ 并由 package.json 的 plume.server.entry 声明 ' +
+        '（上报路径 ' + serverPath + ' 不再直接安装），改完重启服务生效',
+    })
   }
 
   /**
@@ -797,27 +770,8 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
 
   /** 卸后台半（按 id；后台没有这个 id 也算成功，因为目标状态已经达成） */
   async function uninstallServerHalf(id: string): Promise<void> {
-    try {
-      const headers = withAdminToken({ 'content-type': 'application/json' })
-      const init: RequestInit = {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ id }),
-      }
-      const res = deps.fetchJson
-        ? ((await deps.fetchJson(backend('/api/server-plugins/uninstall'), init)) as { ok?: boolean; error?: string })
-        : ((await (await fetch(backend('/api/server-plugins/uninstall'), init)).json()) as {
-            ok?: boolean
-            error?: string
-          })
-      if (res?.ok !== true) {
-        log({ sourceId: 0, sourceLabel: '调试插件', action: 'error', detail: id + '：后台半未卸（' + (res?.error ?? '未知原因') + '）' })
-        return
-      }
-      log({ sourceId: 0, sourceLabel: '调试插件', action: 'disconnected', detail: id + '：后台半已卸载' })
-    } catch (err) {
-      log({ sourceId: 0, sourceLabel: '调试插件', action: 'error', detail: id + '：后台半卸载失败 ' + String(err) })
-    }
+    // 后台半跟插件目录同生共死（删目录即消失），不再有单独的卸载接口。
+    log({ sourceId: 0, sourceLabel: '调试插件', action: 'disconnected', detail: id + '：后台半随插件目录，重启后消失' })
   }
 
   return {

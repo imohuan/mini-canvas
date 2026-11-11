@@ -160,11 +160,11 @@ function sseResponse(runId: string): Response {
 }
 
 /**
- * 脚本目录：优先用宿主上架的 `taskScriptsDir`；没有就按"server-plugins 的上一级"推。
+ * 脚本目录：优先用宿主上架的 `taskScriptsDir`；没有就从**插件目录的上一级**推。
  *
- * 为什么可以推：server-plugins 就在数据根下（`<数据根>/server-plugins`），
- * 而脚本目录与它并列（`<数据根>/task-scripts`）。这样即使在没有任何配置的环境里
- * 这个能力也能用 —— 而不是"必须先去改 server.ts"。
+ * 为什么可以推：插件目录就在数据根下（`<数据根>/plugins`），而脚本目录与它并列
+ * （`<数据根>/task-scripts`）。这样即使在没有任何配置的环境里这个能力也能用 ——
+ * 而不是"必须先去改 server.ts"。
  *
  * ⚠️ 还有一条**从画布存储推**的兜底（2026-10-13 补）：有些宿主（cloud-server 的外挂
  * 后台插件）拿不到上面两个名字，于是脚本目录落到 `process.cwd()/task-scripts` ——
@@ -174,9 +174,9 @@ function sseResponse(runId: string): Response {
 export function resolveTaskScriptsDir(ctx: TaskServerCtx): string {
   const explicit = ctx.tryGet<string>('taskScriptsDir')
   if (typeof explicit === 'string' && explicit) return explicit
-  const serverPluginsDir = ctx.tryGet<string>('serverPluginsDir')
-  if (typeof serverPluginsDir === 'string' && serverPluginsDir) {
-    return path.join(path.dirname(serverPluginsDir), 'task-scripts')
+  const pluginsDir = ctx.tryGet<string>('pluginsDir')
+  if (typeof pluginsDir === 'string' && pluginsDir) {
+    return path.join(path.dirname(pluginsDir), 'task-scripts')
   }
   // 从画布存储问数据根（`<数据根>/canvases/<id>` 的上一级）—— 脚本目录与 canvases 并列。
   // 这条兜底很重要：没有它，上面两个名字都拿不到的宿主会把脚本目录落到进程当前目录

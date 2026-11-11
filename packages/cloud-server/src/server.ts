@@ -19,19 +19,14 @@ import { CanvasStore } from './store/canvasStore.js'
 import { CanvasResourceStore } from './store/canvasResources.js'
 import { ProjectStore } from './store/projectStore.js'
 import { AssetStore } from './store/assetStore.js'
-import { resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
-import { cleanupLegacyServerPlugins, seedPlugins } from './plugins/seedPlugins.js'
+import { resolveUiDist, uiRoutes } from './static.js'
+import { resolvePluginRoots } from './plugins/pluginRoots.js'
 import { fileURLToPath } from 'node:url'
 import { mcpRoutes } from './routes/mcp.js'
 import { createServerFramework } from './serverFramework/index.js'
 import { BUILTIN_PLUGINS } from './plugins/builtin/routes.js'
-import { createAgentPlugins } from './plugins/builtin/agentRoutes.js'
 import { PluginPresence } from './plugins/pluginPresence.js'
-import {
-  loadServerPluginsFromDir,
-  loadServerPluginsFromPluginDirs,
-  DEFAULT_SERVER_PLUGINS_DIR,
-} from './serverFramework/pluginLoader.js'
+import { loadServerPluginsFromPluginDirs } from './serverFramework/pluginLoader.js'
 import { bindHotLoadedTracking } from './serverFramework/hotLoad.js'
 import { listPluginMcpTools } from './serverFramework/mcp.js'
 import { CanvasDocument } from './mcp/canvasDoc.js'
@@ -62,7 +57,7 @@ const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 import { makeFetchSelfBytes } from './tasks/selfFetch.js'
 import { branchStore } from '@plume-canvas/plugin-agent/server/agent/branchStore.js'
 import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_API_KEY } from '@plume-canvas/plugin-agent/server/agent/testModel.js'
-import { assembleAgentServices, type AgentServices } from '@plume-canvas/plugin-agent/server/agent/assembleAgent.js'
+import type { AgentServices } from '@plume-canvas/plugin-agent/server/agent/assembleAgent.js'
 import { buildRuntimeContext, runtimeContextSection } from '@plume-canvas/plugin-agent/server/agent/runtimeContext.js'
 import { listAgentPromptSections, runAgentMiddleware } from './serverFramework/agent.js'
 import { adminActionFor, createAdminAuth, isAdminPath } from './adminAuth.js'
@@ -85,38 +80,20 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const port = opts.port ?? DEFAULT_PORT
   const dataDir = path.resolve(opts.dir ?? DEFAULT_DATA_DIR)
   const uiDist = await resolveUiDist(opts.uiDist)
-  // 首启把随包插件铺到数据根：之后所有安装/更新都落在可写位置（用户口径 2026-11-11）。
-  // 单测用的是临时数据根、也不需要发布版的插件副本：拷贝 32 个目录会把一批 5 秒超时的
-  // 用例拖红（实测），所以测试环境跳过，插件目录仍按 candidates 正常探测。
-  const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test'
-  if (!isTestEnv) {
-    const seededPlugins = await seedPlugins(
-      path.join(PACKAGE_ROOT, 'assets/plugins'),
-      path.join(dataDir, 'plugins'),
-    )
-    if (seededPlugins.added.length || seededPlugins.updated.length) {
-      console.log(
-        '[cloud-server] 插件已铺入数据根：新增 ' + seededPlugins.added.length +
-          ' 个，更新 ' + seededPlugins.updated.length +
-          ' 个，跳过 ' + seededPlugins.skipped.length + ' 个',
-      )
-    }
-  }
-  const pluginsDir = await resolvePluginsDir(opts.pluginsDir, dataDir)
-  // 旧的「后台半扁平拷贝」清掉：2026-11-11 起后台半跟前端半同目录（plugins/<插件>/dist/server.js），
-  // 两处都在会撞 `Duplicate plugin name`（实测：video-crop）。
-  // 只在服务自己管目录（没传 --server-plugins）时清，使用者指定的一律不动。
-  if (!opts.serverPluginsDir && pluginsDir) {
-    const removedLegacy = await cleanupLegacyServerPlugins(
-      pluginsDir,
-      path.resolve(dataDir, DEFAULT_SERVER_PLUGINS_DIR),
-    )
-    if (removedLegacy.length > 0) {
-      console.log(
-        '[cloud-server] 已清掉旧的扁平后台副本（后台半现在跟插件同目录）：' + removedLegacy.join(', '),
-      )
-    }
-  }
+  /**
+   * 插件**不复制**（用户口径 2026-11-12）：两层目录，全局优先、随包兜底，
+   * 按插件解析实际生效的那一份。
+   *
+   * - 全局 `<数据根>/plugins`：安装 / 更新 / 用户自己放的都在这；
+   * - 随包 `cloud-server/assets/plugins`：只读兜底，开箱即用。
+   *
+   * 好处：更新就是真更新全局那一份，不会出现「数据根一份、包内一份、到底读哪份」的困惑；
+   * 也不会在数据根里多出一份 32 个插件的副本（以前每次启动都要比一遍版本）。
+   */
+  const pluginRoots = opts.pluginsDir
+    ? { global: path.resolve(opts.pluginsDir) }
+    : await resolvePluginRoots(dataDir, path.join(PACKAGE_ROOT, 'assets/plugins'))
+  const pluginsDir = pluginRoots.global
 
   // ---- 管理面安全：令牌 / 审计 / 来源边界（方案 commit 2/4/5）----
   // 三条都在建 app 之前准备好：中间件要在装配阶段（host.start 之前）挂上。
@@ -171,6 +148,19 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     if (!agentServicesRef) throw new Error('[cloud-server] Agent 已关闭，不能访问 Agent 服务')
     return agentServicesRef
   }
+  /**
+   * 让插件把它装配好的服务组交回来（2026-11-12）。
+   *
+   * 为什么走这一步：Agent 后台现在是**真正的后台插件**（`plugin-agent/dist/server.js`），
+   * 服务组由它在 `apply()` 里自装配。宿主不再 import 源码，但仍要读这些服务
+   * （任务化对话、提示词小节、关停回收）—— 于是它装配完调一次这个回调，宿主收进同一个变量。
+   *
+   * 用「交回来」而不是「宿主先建好再注入」：装配需要 host.ctx 里的端口服务，
+   * 而 ctx 要等 host 建好；顺序上只能是插件先跑、宿主后取。
+   */
+  const adoptAgentServices = (services: AgentServices): void => {
+    agentServicesRef = services
+  }
 
   // ==================== 平台提供方（后台的「投递箱」）====================
   // 全部走外挂文件：目录里丢一个 .js 就是一个平台，热加载。
@@ -186,10 +176,6 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   if (seeded.length > 0) {
     console.log('[cloud-server] 已铺入默认 provider：' + seeded.join(', '))
   }
-  // 外挂后台插件的目录（与 providers 并列；丢 .js 进去即多一个后台插件）
-  const serverPluginsDir = path.resolve(
-    opts.serverPluginsDir ?? path.join(dataDir, DEFAULT_SERVER_PLUGINS_DIR),
-  )
   const registry = new ProviderRegistry()
   /**
    * 内置 agent-chat 平台：首次启动装一次，之后每次 reload 也要补一份。
@@ -337,25 +323,26 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    * 开关为假时它根本不会被调用 —— 没有 Config、没有 SessionStore、没有 SDK 懒加载。
    */
   if (agentEnabled) {
-    // Agent 后台的实现已经住在 plugin-agent 里（本文件只做一次装配与端口注入）。
-    // 端口一律**显式注入**：插件不 import 宿主的 store / serverFramework，
-    // 这样它的后台半才能打成自包含单文件（data: URL 加载器要求）。
-    agentServicesRef = await assembleAgentServices({
-      ports: {
-        dataDir,
-        canvasDirOf: (canvasId) => canvasDir(dataDir, canvasId),
-        kv: kvStore,
-        promptSections: () => listAgentPromptSections(host.ctx),
-        runMiddleware: (turn) => runAgentMiddleware(host.ctx, turn),
-        skillSources: opts.agentSkillSources,
-      },
+    // Agent 后台的服务组由**插件自己**装配（`plugin-agent/dist/server.js`）。
+    // 宿主只负责把端口上架 —— 插件不 import 宿主的 store / serverFramework，
+    // 这样它的后台半才能打成自包含单文件。
+    host.ctx.inject('agentPorts', {
+      dataDir,
+      canvasDirOf: (canvasId: string) => canvasDir(dataDir, canvasId),
+      kv: kvStore,
+      promptSections: () => listAgentPromptSections(host.ctx),
+      runMiddleware: (turn: unknown) => runAgentMiddleware(host.ctx, turn as never),
+      skillSources: opts.agentSkillSources,
+      log: (message: string, extra?: unknown) => console.log('[agent] ' + message, extra ?? ''),
+      // 插件装配完把服务组交回来（见 adoptAgentServices 的说明）
+      adopt: adoptAgentServices,
+      // 让宿主能在监听前/端口变化时刷新运行时上下文（模板里的 {{baseUrl}} 之类）
+      runtimeContext: () => runtimeContext(),
     })
-    // 先灌一次（此刻用的是请求端口）：监听前读配置也能拿到目录与占位符清单。
-    agentServicesRef.config.setRuntimeContext(runtimeContext())
   }
   // 设置页要列「后台自动附加了哪些内容」——把注册场的读口子交给 config（它不认识插件系统）。
-  // 必须**在 host 建好之后**：`host.ctx` 是 const，放前面会撞暂时性死区。
-  if (agentEnabled) agentServices().config.setPromptSectionViews(() => listAgentPromptSections(host.ctx))
+  // 服务组由插件装配（`host.start()` 之后才就绪），所以这里只登记**读口子**，
+  // 真正绑定的时刻在下面的 ⑥ 段 —— 这里提前调用会撞「Agent 还没装配」。
   const app = host.app
 
   // ---- 装配阶段（顺序即匹配优先级；全部必须在 start() 之前完成，Hono 首次 fetch 后冻结）----
@@ -575,12 +562,12 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 为什么给"函数"而不是直接给 SDK 对象：SDK 是懒加载的（没配模型时启动照常成功），
   // 而那条路由每次请求都要用它 —— 传函数就没有"启动时还没加载好"的时序问题。
   // **只在 Agent 开启时注入**：关闭时连这个入口都不该存在（见 agent:false 测试）。
-  if (agentEnabled) host.ctx.inject('agentLoadSdk', () => agentServices().loadSdk())
   host.ctx.inject('providerRegistry', registry)
   host.ctx.inject('taskManager', tasks)
   host.ctx.inject('history', history)
   host.ctx.inject('pluginsDir', pluginsDir)
-  host.ctx.inject('serverPluginsDir', serverPluginsDir)
+  // 清单/资源层要按「全局优先 + 随包兜底」解析插件，故把两个根一起上架。
+  host.ctx.inject('pluginRoots', pluginRoots)
   // 调试监听的「在场表」：只存内存（心跳不落盘）。
   // 只有「本机调试」时才装 plugin-presence 插件；否则这个服务根本不存在。
   const pluginPresence = new PluginPresence()
@@ -648,13 +635,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const debugOrigin = createDebugOrigin({ dataRoot: dataDir })
   host.ctx.inject('debugOrigin', debugOrigin)
   if (agentEnabled) {
-    host.ctx.inject('agentConfig', agentServices().config)
-    host.ctx.inject('agentSessions', agentServices().sessions)
-    host.ctx.inject('agentRuntime', agentServices().runtime)
     host.ctx.inject('agentBranches', branchStore(dataDir))
-    host.ctx.inject('agentHub', agentServices().hub)
-    host.ctx.inject('agentQueue', agentServices().queue)
-    host.ctx.inject('agentGoal', agentServices().goal)
   }
 
   // ③ 登记内置插件。**顺序即路由优先级**（Hono 先注册者优先）：
@@ -667,36 +648,30 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     if (plugin.name === 'plugin-presence' && !loopbackListen) continue
     host.ctx.plugin(plugin)
   }
-  // Agent 三条路由插件单独一组：关闭时它们根本不进登记表，不靠“名字前缀跳过”。
-  if (agentEnabled) {
-    // 三条路由插件由 plugin-agent 提供；这里只把「跑中间件」的那一个函数指针交给它。
-    for (const plugin of createAgentPlugins(host.ctx)) host.ctx.plugin(plugin)
-  }
 
-  // ③.5 外挂后台插件：**丢一个 .js 进目录 = 多一个后台插件**（Task 4）。
+  // ③.5 后台插件：**一个插件一个目录**，后台半就在同目录里（用户口径 2026-11-12）。
+  //     位置由插件自己的 package.json 的 plume.server.entry 决定，不再有 server-plugins，
+  //     也不再有「扁平 .js 副本」这第二种布局。
   //     必须在 host.start() 之前登记（路由代理是 start 时一次性 flush 的）。
   //     安全边界见 serverFramework/pluginLoader.ts 文件头（等于"把 JS 当服务端代码执行"，
-  //     信任边界 = 谁能写那个目录）。
-  // 两个来源，**插件目录优先**：
-  //   ① `<数据根>/plugins/<插件>/dist/server.js` —— 随发布包铺入的正规布局（前后端同目录）
-  //   ② `<数据根>/server-plugins/*.js` —— 手工丢文件 / NPM 安装的旧布局
-  // 同名时以①为准：②里那份通常是升级前的残留副本（实测：旧 plugin-video-crop.js 与
-  // plugin-node-video 的新后台半同为 `video-crop`，两个都装会报 Duplicate plugin name）。
-  const fromPluginDirs = await loadServerPluginsFromPluginDirs(pluginsDir)
-  const scannedServerPlugins = await loadServerPluginsFromDir(serverPluginsDir)
-  for (const f of [...fromPluginDirs.failures, ...scannedServerPlugins.failures]) {
+  //     信任边界 = 谁能写数据根下的插件目录）。
+  // 两层根都要传：后台半可能在随包目录里（首启没装过），也可能在全局目录里（更新过）
+  const scannedServerPlugins = await loadServerPluginsFromPluginDirs(pluginRoots)
+  for (const f of scannedServerPlugins.failures) {
     console.warn('[cloud-server] 后台插件加载失败 ' + f.file + '：' + f.error)
   }
   const registeredServerPlugins: string[] = []
   const seenServerPluginNames = new Set<string>()
-  /** 从插件目录来的后台半先装；同一个 name 只装一次 */
-  const orderedServerPlugins = [
-    ...fromPluginDirs.modules,
-    ...scannedServerPlugins.modules,
-  ]
-  for (const mod of orderedServerPlugins) {
+  for (const mod of scannedServerPlugins.modules) {
+    // Agent 后台半现在也是**普通后台插件**（plugin-agent/dist/server.js）。
+    // `agent: false` 时跳过它 —— 与其在插件内部判断，不如在这里就不装。
+    if (!agentEnabled && mod.name === 'agent') {
+      console.log('[cloud-server] agent: false，跳过插件 agent 的后台半')
+      continue
+    }
+    // 同一个 name 只装一次（两个插件目录导出同名插件时，先来的赢，后面的明确报出来）
     if (seenServerPluginNames.has(mod.name)) {
-      console.log('[cloud-server] 后台插件 ' + mod.name + ' 已在插件目录里加载，跳过 server-plugins 里的同名副本')
+      console.warn('[cloud-server] 后台插件重名，已跳过：' + mod.name)
       continue
     }
     try {
@@ -710,8 +685,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       )
     }
   }
-  // 运行时观测面（审查 P1）：目录可写 = 服务端代码执行，部署者必须能一眼看清"加载了哪些外挂插件"。
-  // 启动日志逐个列出；GET /api/server-plugins 也带 loaded 状态（见 builtin/routes.ts）。
+  // 运行时观测面：插件目录可写 = 服务端代码执行，部署者必须能一眼看清"加载了哪些后台插件"。
   if (registeredServerPlugins.length > 0 || scannedServerPlugins.failures.length > 0) {
     console.log(
       '[cloud-server] 外挂后台插件 ' +
@@ -835,14 +809,6 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   // 这里先用**请求的**端口写一次（测试 / 不开监听也能拿到 builtin 标记与删除锁）；
   // 真正的监听端口要等 listen 回调才知道（port 传 0 时由系统分配），start() 里会再纠正一次。
   // 失败只记日志，不拦启动 —— 用户可能根本没用 Agent，不该因为这一条写不进去就起不来。
-  if (agentEnabled && mcpEnabled && opts.builtinCanvasMcp !== false) {
-    // 必须 **await**：这是建服务的一部分，不能留一条还在写的异步尾巴 ——
-    // 否则调用方（测试清理 / 进程退出）会在写完成前就把数据目录删掉（实测 ENOTEMPTY）。
-    await agentServices().config
-      .ensureBuiltinCanvasMcp(`http://${opts.hostname ?? '127.0.0.1'}:${port}/mcp`)
-      .catch((err) => console.warn('[agent] 内置画布 MCP 写入失败：' + String(err)))
-  }
-
   // ⑤ 装载插件 + 把插件路由翻成代理；**插件路由挂好之后**再挂 ui 兜底。
   //    顺序不可调换：ui 的 get('*') 若先挂，会把 /health、/api/* 全吃掉（实测）。
   await host.start(() => {
@@ -878,7 +844,6 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       })
       .catch((err) => console.warn('[agent] test 模型登记失败：' + String(err)))
   if (agentEnabled) {
-    await ensureTestModel(`http://${opts.hostname ?? '127.0.0.1'}:${port}`)
   }
 
   /**
@@ -957,6 +922,34 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       await writeProviderConfig(providerConfigFile, cfg)
     } catch {
       /* 快照只是展示用，失败了不影响启停本身 */
+    }
+  }
+
+  // ⑥ Agent 服务组由插件装配（`plugin-agent/dist/server.js`），要等 host.start() 之后才有。
+  //    这里等它跑完再往下走：内置画布 MCP 的写入与「任务化对话」都要用它。
+  //    装配失败只记日志，不拦启动 —— Agent 坏掉不该让整个画布打不开。
+  if (agentEnabled) {
+    const ready = host.ctx.tryGet<Promise<unknown>>('agentReady')
+    if (ready) {
+      try {
+        await ready
+      } catch (err) {
+        console.warn('[cloud-server] Agent 后台装配失败：' + (err instanceof Error ? err.message : String(err)))
+      }
+    }
+    if (agentServicesRef) {
+      // 设置页要列「后台自动附加了哪些内容」——把注册场的读口子交给 config
+      agentServices().config.setPromptSectionViews(() => listAgentPromptSections(host.ctx))
+      // test 模型：用请求端口先登记一次（真实端口在 listen 回调里纠正）
+      await ensureTestModel(`http://${opts.hostname ?? '127.0.0.1'}:${port}`)
+      // 内置画布 MCP：把自己 `/mcp` 端点写进 Agent 的 MCP 清单（默认携带、用户零配置）。
+      // 这里先用**请求的**端口写一次；真实端口在 start() 的 listen 回调里再纠正。
+      // 失败只记日志，不拦启动 —— 用户可能根本没用 Agent。
+      if (mcpEnabled && opts.builtinCanvasMcp !== false) {
+        await agentServices().config
+          .ensureBuiltinCanvasMcp(`http://${opts.hostname ?? '127.0.0.1'}:${port}/mcp`)
+          .catch((err) => console.warn('[agent] 内置画布 MCP 写入失败：' + String(err)))
+      }
     }
   }
 
@@ -1107,7 +1100,6 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       kv: path.join(dataDir, 'kv'),
       canvases: path.join(dataDir, 'canvases'),
       providers: providersDir,
-      serverPlugins: serverPluginsDir,
       ...(uiDist ? { ui: uiDist } : {}),
       ...(pluginsDir ? { plugins: pluginsDir } : {}),
     },

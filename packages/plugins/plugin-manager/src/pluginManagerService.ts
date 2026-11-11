@@ -499,21 +499,28 @@ export function createPluginManagerService(
    *
    * 为什么必须有它：serverInstalled 只是"本次会话点过安装"的记忆 —— 刷新页面就丢，
    * 于是"后台其实装着、界面却显示未装/失败"（用户实测）。真相在服务端的
-   * /api/server-plugins（它按目录实况列出）+ /api/npm-plugins/installed（NPM 来源版本）。
+   * 清单（/plugin-catalog.json 的 server 段：服务端扫插件目录得出，按实况列出）
+   * + /api/npm-plugins/installed（NPM 来源版本）。
    * 这里拉一次、按 id 对齐，把真相写回行上。
    */
   async function syncServerState(): Promise<void> {
     const origin = baseOfCatalogUrl(state.catalogUrl)
     const installedIds = new Set<string>()
     const loadedNames = new Set<string>()
-    // 目录实况：任何来源装的后台半都在这里（含手工丢文件、NPM 装、启动装载）
+    // 目录实况：任何来源装的后台半都在这里（含 NPM 装、启动装载、用户自己放的插件）。
+    // 清单按插件目录扫，`server.url` 有值 = 这个插件带后台半。
     try {
-      const res = await doFetch(origin + "/api/server-plugins", { headers: { accept: "application/json" } })
+      const res = await doFetch(origin + "/plugin-catalog.json", { headers: { accept: "application/json" } })
       if (res.ok) {
-        const j = (await res.json()) as { plugins?: Array<{ id?: string }>; loaded?: string[] }
-        for (const p of j.plugins ?? []) if (p.id) installedIds.add(p.id)
-        // loaded = 本次启动已登记进内核的（能证明"真的活着"，不只是文件在）
-        for (const n of j.loaded ?? []) loadedNames.add(n)
+        const j = (await res.json()) as {
+          plugins?: Array<{ id?: string; name?: string; server?: { url?: string } }>
+        }
+        for (const p of j.plugins ?? []) {
+          if (!p.id || !p.server?.url) continue
+          installedIds.add(p.id)
+          // 清单里的 server 段来自服务端扫目录：有它 = 文件在、且会被启动加载
+          if (p.name) loadedNames.add(p.name)
+        }
       }
       // 另一个可能的落点：前端半目录名（服务端 pluginsDir）—— 有些部署后台半与前端半同 id
     } catch { /* 服务端不可达：保持现状，不误报 */ }
@@ -614,74 +621,32 @@ export function createPluginManagerService(
   }
 
   /**
-   * 装后台那一半（清单项带 server 时）。
+   * 后台半的安装（2026-11-12 起：**跟着插件目录一起装**）。
    *
-   * 边界：**不抛** —— 后台装不上不该让前端也装不上（两半独立，各自报错）。
-   * 失败原因写进 `row.serverError`，界面上与前端错误分开显示。
+   * 以前是「前端半下一个文件、后台半单独 POST 一份文本给 /api/server-plugins/install」，
+   * 一个插件散落两处、还要单独确认一次。现在 NPM 安装是**整包落盘**：
+   * `<插件根>/<目录名>/{package.json, dist/web.js, dist/server.js}` 一起写，
+   * 后台半由服务端启动时按清单加载（见 cloud-server 的 pluginLoader）。
    *
-   * 安全（与后端路由对齐，见 cloud-server/src/routes/serverPlugins.ts 文件头）：
-   * - 先把产物**文本**下载下来（浏览器出网，服务端不外连 → 无 SSRF）；
-   * - 算 sha256 声明给服务端校验；
-   * - `confirm: true` 表示用户已在界面上确认"以服务端权限运行"。
+   * 所以这里只需要把「后台半随包存在」这个事实反映到状态上，不再发安装请求。
    */
   async function installServerHalf(row: PluginRow): Promise<void> {
     const server = row.entry.server
     if (!server) return
     row.serverError = undefined
-    // 没有用户显式确认**不要**发请求：后台插件是以服务端权限运行的代码，
-    // confirm 缺省 false 会被后端 400 拒（"需要 confirm: true"）。把 400 当失败报红是**假故障**
-    // （用户实测：后台其实已装好、接口能访问，界面却显示"后台失败"）。
-    // 正确做法：静默留在"未装"，等用户在界面上点安装（那时才有确认）。
     if (row.serverConfirm !== true) return
-    try {
-      const abs = absolutize(server.url, baseOfCatalogUrl(state.catalogUrl))
-      const res = await doFetch(abs, { headers: { accept: 'text/javascript' } })
-      if (!res.ok) throw new Error('下载后台产物失败：' + res.status)
-      const code = await res.text()
-      // ⚠️ 关键（审查修正）：**不在这里自己算哈希再传给服务端** ——
-      // 那等于"同一条通道里，改包的人自己算、自己验"，是自洽的、防不住任何东西。
-      // 完整性锚点必须是**服务端自己的信任源**（扫插件目录得到的清单里那份 sha256），
-      // 由服务端自己比对。这里只把清单声明的哈希一并带上（服务端会用它校验，
-      // 但**不信任**它 —— 服务端以自己 catalog 里的值为准）。
-      const origin = baseOfCatalogUrl(state.catalogUrl)
-      const r = await doFetch(origin + '/api/server-plugins/install', {
-        method: 'POST',
-        headers: withAdminToken({ 'content-type': 'application/json' }),
-        body: JSON.stringify({
-          id: row.entry.id,
-          code,
-          // 清单声明的哈希（服务端会拿它跟自己扫出来的对；对不上就拒）
-          sha256: server.sha256,
-          // 用户已在界面上显式确认"以服务端权限运行"（由 install() 的 opts.confirm 传来）
-          confirm: true,
-          origin,
-        }),
-      })
-      const j = (await r.json()) as { ok?: boolean; error?: string }
-      if (!r.ok || j.ok !== true) throw new Error(readableServerError(j.error ?? '后台安装失败：' + r.status, r.status))
-      row.serverInstalled = true
-    } catch (err) {
-      row.serverError = err instanceof Error ? err.message : String(err)
-    }
+    // 清单里有 server 段 = 服务端已经扫到这份后台产物，且启动时会被加载。
+    row.serverInstalled = true
+    row.serverLoaded = true
   }
 
   /** 卸后台那一半（不抛，错误写进 serverError） */
   async function uninstallServerHalf(row: PluginRow): Promise<void> {
     if (!row.hasServer) return
     row.serverError = undefined
-    try {
-      const origin = baseOfCatalogUrl(state.catalogUrl)
-      const r = await doFetch(origin + '/api/server-plugins/uninstall', {
-        method: 'POST',
-        headers: withAdminToken({ 'content-type': 'application/json' }),
-        body: JSON.stringify({ id: row.entry.id }),
-      })
-      const j = (await r.json()) as { ok?: boolean; error?: string }
-      if (!r.ok || j.ok !== true) throw new Error(readableServerError(j.error ?? '后台卸载失败：' + r.status, r.status))
-      row.serverInstalled = false
-    } catch (err) {
-      row.serverError = err instanceof Error ? err.message : String(err)
-    }
+    // 后台半跟插件目录同生共死（NPM 卸载会把整个目录删掉），这里只更新界面状态。
+    row.serverInstalled = false
+    row.serverLoaded = false
   }
 
   /**
@@ -734,9 +699,8 @@ export function createPluginManagerService(
   /**
    * 卸一个插件。
    *
-   * @param opts.skipServerHalf 只卸前端半、不碰后台半 —— 给"后台半已由别处删掉"的调用方用
-   *   （NPM 卸载走的是 /api/npm-plugins/uninstall，它**已经**删了后台文件；若这里再调
-   *   /api/server-plugins/uninstall 会因为文件已不在而 404，用户实测到多余的那个 404）。
+   * @param opts.skipServerHalf 只卸前端半、不碰后台状态 —— 给"后台半已由别处连同目录删掉"的调用方用
+   *   （NPM 卸载走 /api/npm-plugins/uninstall，它删整个插件目录，前后端一起消失）。
    */
   async function uninstall(id: string, opts?: { skipServerHalf?: boolean }): Promise<void> {
     const row = state.rows.find((r) => r.entry.id === id)

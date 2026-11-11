@@ -19,7 +19,7 @@ import { promisify } from 'node:util'
 import { createNpmPluginsRoutes } from '../routes/npmPlugins.js'
 import { buildPluginCatalog } from '../plugins/catalog.js'
 import { createServerFramework } from '../serverFramework/index.js'
-import { loadServerPluginsFromDir } from '../serverFramework/pluginLoader.js'
+import { loadServerPluginsFromPluginDirs } from '../serverFramework/pluginLoader.js'
 
 const run = promisify(execFile)
 const REPO_ROOT = path.resolve(__dirname, '../../..')
@@ -49,7 +49,6 @@ async function readPackedPackageJson(tgz: string): Promise<Record<string, unknow
 describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载', () => {
   let dir: string
   let pluginsDir: string
-  let serverPluginsDir: string
   let registryUrl: string
   let server: http.Server
   let packuments: Record<string, unknown>
@@ -59,9 +58,7 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
   beforeAll(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cs-loop-'))
     pluginsDir = path.join(dir, 'plugins')
-    serverPluginsDir = path.join(dir, 'server-plugins')
     await fs.mkdir(pluginsDir, { recursive: true })
-    await fs.mkdir(serverPluginsDir, { recursive: true })
 
     tgz = await npmPackReal()
     const pkgJson = await readPackedPackageJson(tgz)
@@ -113,7 +110,6 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
     const routes = createNpmPluginsRoutes({
       registry: registryUrl,
       pluginsDir,
-      serverPluginsDir,
       recordFile: path.join(dir, '.npm-installed.json'),
     })
     const host = createServerFramework({ root: dir })
@@ -139,7 +135,7 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
     expect(entry!.server?.sha256).toMatch(/^[0-9a-f]{64}$/)
 
     // ---- 3) 后台半被真 loader 装载，服务真的能调 ----
-    const loaded = await loadServerPluginsFromDir(serverPluginsDir)
+    const loaded = await loadServerPluginsFromPluginDirs(pluginsDir)
     expect(loaded.failures).toEqual([])
     expect(loaded.modules.map((m) => m.name)).toContain('showcase')
 
@@ -158,7 +154,6 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
     host2.ctx.routes.adopt(createNpmPluginsRoutes({
       registry: registryUrl,
       pluginsDir,
-      serverPluginsDir,
       recordFile: path.join(dir, '.npm-installed.json'),
     }))
     await host2.start()
@@ -169,7 +164,6 @@ describe('NPM 闭环：真 pack 产物 → 安装 → 插件真的活 → 卸载
     }))
     expect(del.status).toBe(200)
     host2.stop()
-    await expect(fs.access(path.join(serverPluginsDir, 'plume-canvas__plugin-showcase.js'))).rejects.toThrow()
     await expect(fs.access(path.join(pluginsDir, 'plume-canvas__plugin-showcase'))).rejects.toThrow()
   }, 60_000)
 })

@@ -29,7 +29,6 @@ export interface AdminAuth {
  * GET / HEAD 永远返回 false。
  */
 export const ADMIN_WRITE_PREFIXES = [
-  '/api/server-plugins/',
   '/api/npm-plugins/',
   '/api/providers/',
   '/api/agent/mcp',
@@ -90,11 +89,6 @@ export function adminActionFor(method: string, pathname: string): AuditAction {
   if (pathname.startsWith('/api/task/')) return 'task/call'
   if (pathname.startsWith('/api/agent/canvases/')) return 'agent/session-write'
   if (pathname.startsWith('/api/agent/mcp')) return pathname.includes('/remove') ? 'agent/mcp-remove' : 'agent/mcp-add'
-  // 卸载 / 更新要看具体子路径：整段都记成 install 会让审计里「装了什么」完全失真
-  // （实测同一次卸载会同时出现 server-plugin/install 与 server-plugin/uninstall 两个名字）。
-  if (pathname.startsWith('/api/server-plugins/')) {
-    return pathname.includes('/uninstall') ? 'server-plugin/uninstall' : 'server-plugin/install'
-  }
   if (pathname.startsWith('/api/npm-plugins/')) {
     if (pathname.includes('/uninstall')) return 'npm-plugin/uninstall'
     if (pathname.includes('/update')) return 'npm-plugin/update'

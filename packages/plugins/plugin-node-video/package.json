@@ -23,7 +23,6 @@
     "build": "vite build && node scripts/build-server.mjs",
     "build:web": "vite build",
     "build:server": "node scripts/build-server.mjs",
-    "deploy:server": "node scripts/deploy-server.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

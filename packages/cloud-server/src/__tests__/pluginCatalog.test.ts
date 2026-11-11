@@ -361,8 +361,12 @@ describe('插件资源投放：不只发 js', () => {
       expect('error' in resolvePluginAsset(bad), '应拒绝: ' + bad).toBe(true)
     }
     // 合法：嵌套与扁平都放行
-    expect(resolvePluginAsset('/plugins/pkg/pkg.js')).toEqual({ rel: 'pkg/dist/pkg.js' })
-    expect(resolvePluginAsset('/plugins/pkg/assets/logo.svg')).toEqual({ rel: 'pkg/dist/assets/logo.svg' })
+    // 嵌套：原路径优先，另给一个 dist/ 下的回退（入口不一定在 dist 里）
+    expect(resolvePluginAsset('/plugins/pkg/pkg.js')).toEqual({ rel: 'pkg/pkg.js', altRel: 'pkg/dist/pkg.js' })
+    expect(resolvePluginAsset('/plugins/pkg/assets/logo.svg')).toEqual({
+      rel: 'pkg/assets/logo.svg',
+      altRel: 'pkg/dist/assets/logo.svg',
+    })
     expect(resolvePluginAsset('/plugins/flat.js')).toEqual({ rel: 'flat.js' })
   })
 

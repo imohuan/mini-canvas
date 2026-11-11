@@ -38,10 +38,13 @@ const DEFAULT_PREFIXES = ['plume-canvas-', '@plume-canvas/']
   const PKG_RE = /^(@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/
 
 export interface NpmPluginsRoutesOptions extends NpmClientOptions {
-  /** 前端半落点（catalog 的 pluginsDir） */
-  pluginsDir?: string
-  /** 后台半落点（server-plugins 目录） */
-  serverPluginsDir: string
+  /**
+   * 插件根目录（`<数据根>/plugins`）。
+   *
+   * 前后端半都落这里：`<pluginsDir>/<目录名>/{package.json, dist/web.js, dist/server.js}`。
+   * 2026-11-12 起不再有独立的 server-plugins 目录 —— 一个插件一个目录，前后端同进同出。
+   */
+  pluginsDir: string
   /** 来源记录文件（NPM 装了什么、什么版本，落 JSON 供 GET installed 与 update 比对） */
   recordFile?: string
   /** 允许的包名前缀（缺省见 DEFAULT_PREFIXES；既支持 @scope/ 也支持 plume-canvas- 这类前缀） */
@@ -64,7 +67,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   const app = new Hono()
   const client = createNpmClient(opts)
   const prefixes = opts.scopeAllowlist ?? DEFAULT_PREFIXES
-  const recordFile = opts.recordFile ?? path.join(opts.serverPluginsDir, '.npm-installed.json')
+  const recordFile = opts.recordFile ?? path.join(opts.pluginsDir, '.npm-installed.json')
 
   const readRecords = async (): Promise<Record<string, InstallRecord>> => {
     try {
@@ -274,7 +277,7 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
     }
 
     // ④ 下载 + 解包到临时目录
-    const tmpDir = path.join(opts.serverPluginsDir, '.tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8))
+    const tmpDir = path.join(opts.pluginsDir, '.tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8))
     try {
       await fs.mkdir(tmpDir, { recursive: true })
       const tgz = path.join(tmpDir, 'pkg.tgz')
@@ -314,13 +317,23 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
         }
       }
 
-      // ⑥ 前端半 → pluginsDir/<pkgName>/dist/（catalog 自动收录）
-      // 落盘目录名：包名去掉 scope 前缀、把 / 换成 __（普通包如 @plume-canvas/plugin-showcase 原样）
+      // ⑥ 落盘：`<插件根>/<目录名>/` 下**保持包里的相对结构**，只把 package.json 的
+      //    plume.web.entry / plume.server.entry 改成安装后的真实相对路径。
+      //
+      // 为什么不统一改名成 web.js / server.js（用户口径 2026-11-12）：文件名是作者的自由，
+      // 事实源是 package.json 里的配置。改名就得同步改配置，等于让装载方去**猜**；
+      // 按配置读，作者写 `dist/my-plugin.js` 也照样能装、能加载。
       const pkgDirName = dirNameOf(pkg)
-      const webDest = path.join(opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins'), pkgDirName, 'dist')
-      await fs.mkdir(webDest, { recursive: true })
-      const webText = await fs.readFile(path.join(extracted, webRel), 'utf8')
-      await fs.writeFile(path.join(webDest, 'web.js'), webText, 'utf8')
+      const destDir = path.join(opts.pluginsDir, pkgDirName)
+      await fs.mkdir(destDir, { recursive: true })
+      /** 把包内声明的那几个产物按原相对路径复制过去（目录一并带上） */
+      const copyEntry = async (rel: string): Promise<void> => {
+        const target = path.join(destDir, rel)
+        await fs.mkdir(path.dirname(target), { recursive: true })
+        await fs.copyFile(path.join(extracted, rel), target)
+      }
+      await copyEntry(webRel)
+      if (typeof serverRel === 'string') await copyEntry(serverRel)
       // ⚠️ package.json 必须一起落：catalog 靠它的 plume 段判定"进不进本地列表"并取
       // title/globalName/server 元数据。少了它，前端半文件在、但管理页列不出来（实测踩过）。
       //
@@ -336,27 +349,23 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
         ...(pkgObj.plume ?? {}),
         installable: true,
         npmInstalled: true,
-        // 落盘后统一改名，配置跟着改写，后续清单/加载都按这两个名字
-        web: { ...((pkgObj.plume?.web as object) ?? {}), entry: 'dist/web.js' },
+        // entry 仍是包内那条相对路径（文件也按原路径落盘），这里只是补齐规范化写法
+        web: { ...((pkgObj.plume?.web as object) ?? {}), entry: webRel },
         ...(typeof serverRel === 'string'
-          ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: 'dist/server.js' } }
+          ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: serverRel } }
           : {}),
       }
-      await fs.writeFile(path.join(path.dirname(webDest), 'package.json'), JSON.stringify(pkgObj, null, 2), 'utf8')
-      // server.js 也留一份在 pluginsDir/dist：catalog 靠它算 sha256（前端下载后台半、
-      // 以及"清单里的可信哈希"都从这条 URL 来）；真正运行的那份由 serverPluginsDir 承担。
-      if (typeof serverRel === 'string') {
-        await fs.copyFile(path.join(extracted, serverRel), path.join(webDest, 'server.js'))
-      }
 
-      // ⑦ server 半 → serverPluginsDir/<id>.js；服务端自己算 sha256 记来源
+      await fs.writeFile(path.join(destDir, 'package.json'), JSON.stringify(pkgObj, null, 2), 'utf8')
+
+      // ⑦ 后台半就在同一个目录里（`dist/server.js` 之类），服务端自己算 sha256 记来源。
+      //    **不再往 server-plugins 另写一份** —— 那个目录已经删掉（用户口径 2026-11-12）。
       let serverSha: string | undefined
       let hotMsg = ''
       if (typeof serverRel === 'string') {
         const serverText = await fs.readFile(path.join(extracted, serverRel), 'utf8')
         serverSha = createHash('sha256').update(serverText, 'utf8').digest('hex')
         const serverId = dirNameOf(pkg)
-        await fs.writeFile(path.join(opts.serverPluginsDir, serverId + '.js'), serverText, 'utf8')
         // 热装：宿主当场 import + 登记内核 → 后台路由即时可用，不必重启（见 hotLoad.ts）
         if (opts.hotInstall) {
           const hot = await opts.hotInstall(serverId)
@@ -481,12 +490,10 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       delete recs[pkg]
       await writeRecords(recs)
       const pkgDirName = dirNameOf(pkg)
-      const serverId = pkgDirName
       // 只删"NPM 安装副本"目录。护栏：目录名必须与**我们落盘时用的名字**一致（dirNameOf(pkg)），
       // 且位于插件目录下 —— 绝不会误删作者的仓库源码包（它的目录名是 plugin-showcase 这种，
       // 与本函数算出的 pkgDirName 不同名时一律不动）。
-      const pluginsRoot = opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins')
-      const target = path.join(pluginsRoot, pkgDirName)
+      const target = path.join(opts.pluginsDir, pkgDirName)
       // 真护栏：只有当这个目录**确实是我们从 NPM 装进来的**（package.json 的 name === 该包名）才删。
       // 这样万一目录名与作者的仓库源码包撞名（如 plugin-showcase），也绝不会误删源码。
       let isOurInstall = false
@@ -499,11 +506,10 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       if (isOurInstall) {
         await fs.rm(target, { recursive: true, force: true })
       }
-      await fs.rm(path.join(opts.serverPluginsDir, serverId + '.js'), { force: true })
       // 热卸：宿主当场从内核摘掉 → 后台路由即时失效（见 hotLoad.ts）
       let hotMsg = '并即时失效'
       if (opts.hotUninstall) {
-        const hot = await opts.hotUninstall(serverId)
+        const hot = await opts.hotUninstall(pkgDirName)
         hotMsg = hot.ok ? '并即时失效' : '（热卸失败，重启后消失：' + hot.error + '）'
         settle({ result: 'ok', ...(hot.ok ? {} : { reason: '已删文件；热卸失败：' + (hot.error ?? '未知原因') }) })
       }

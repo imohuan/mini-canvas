@@ -10,7 +10,8 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createCloudServer, type CloudServer } from '../server'
-import { hasTopLevelExport, resolvePluginsDir, resolveUiDist } from '../static'
+import { hasTopLevelExport, packagedPluginsDir, resolveUiDist } from '../static'
+import { resolvePluginRoots } from '../plugins/pluginRoots'
 
 let dir: string
 let srv: CloudServer
@@ -368,23 +369,22 @@ describe('ui / 插件目录探测顺序', () => {
   })
 
   it('插件目录顺序：数据根优先，包内 assets 兜底', async () => {
-    // 用户口径（2026-11-11）：安装/更新都落在数据根，包内那份只做首启兜底。
-    // 显式目录仍然最高优先级（仓库开发时指到 packages/plugins）。
+    // 用户口径（2026-11-12）：插件**两层**，全局优先、随包兜底，按插件解析；
+    // 首启不复制 —— 全局没有就直接用随包那份。
     const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-data-'))
-    const pluginsRoot = path.join(dataRoot, 'plugins')
-    await fs.mkdir(pluginsRoot, { recursive: true })
     try {
-      const resolved = await resolvePluginsDir(undefined, dataRoot)
-      expect(resolved?.replace(/\\/g, '/')).toContain('/plugins')
-      expect(resolved?.replace(/\\/g, '/')).toContain(path.basename(dataRoot))
+      const roots = await resolvePluginRoots(dataRoot, packagedPluginsDir())
+      expect(roots.global.replace(/\\/g, '/')).toContain('/plugins')
+      expect(roots.global.replace(/\\/g, '/')).toContain(path.basename(dataRoot))
+      // 全局目录此时还不存在：读插件不该顺手建目录（只读部署不污染数据根）
+      await expect(fs.access(roots.global)).rejects.toThrow()
     } finally {
       await fs.rm(dataRoot, { recursive: true, force: true })
     }
   })
 
-  it('显式给了目录就用它；目录不存在时响亮报错（不静默回落）', async () => {
+  it('显式给了 ui 目录就用它；不存在时响亮报错（不静默回落）', async () => {
     await expect(resolveUiDist('D:/definitely/not/here/xyz')).rejects.toThrow('--ui 指定的目录不存在')
-    await expect(resolvePluginsDir('D:/definitely/not/here/xyz')).rejects.toThrow('--plugins 指定的目录不存在')
   })
 })
 

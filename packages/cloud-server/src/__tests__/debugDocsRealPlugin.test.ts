@@ -44,8 +44,13 @@ describe('真机形状：外挂后台插件 + 独立调试源', () => {
       return
     }
     const pluginsDir = path.join(dir, 'server-plugins')
-    await fs.mkdir(pluginsDir, { recursive: true })
-    await fs.copyFile(PLUGIN_SERVER_JS, path.join(pluginsDir, 'plugin-node-ui.js'))
+    // 新布局：一个插件一个目录，后台半放在 dist/server.js，入口由 package.json 声明
+    await fs.mkdir(path.join(pluginsDir, 'plugin-node-ui', 'dist'), { recursive: true })
+    await fs.writeFile(
+      path.join(pluginsDir, 'plugin-node-ui', 'package.json'),
+      JSON.stringify({ name: '@plume-canvas/plugin-node-ui', plume: { pluginName: 'node-ui', server: { entry: 'dist/server.js' } } }),
+    )
+    await fs.copyFile(PLUGIN_SERVER_JS, path.join(pluginsDir, 'plugin-node-ui', 'dist', 'server.js'))
 
     srv = await createCloudServer({
       dir,
@@ -53,7 +58,7 @@ describe('真机形状：外挂后台插件 + 独立调试源', () => {
       hostname: '127.0.0.1',
       watchProviders: false,
       agent: false,
-      serverPluginsDir: pluginsDir,
+      pluginsDir,
       // 固定令牌：下面要断言"管理令牌没进调试页"，空串会让这条断言永远失败（'' 出现在任何文本里）
       adminToken: ADMIN,
     })

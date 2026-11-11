@@ -26,11 +26,16 @@ afterEach(async () => {
 
 describe('启动期装载的后台插件：带参数路由能命中', () => {
   it('★ POST /api/canvases/:canvasId/debug-docs 真的进到插件处理器', async () => {
-    const pluginsDir = path.join(dir, 'server-plugins')
-    await fs.mkdir(pluginsDir, { recursive: true })
+    // 插件目录布局：<数据根>/plugins/<插件>/{package.json, dist/server.js}
+    const pluginsDir = path.join(dir, 'plugins')
+    await fs.mkdir(path.join(pluginsDir, 'probe', 'dist'), { recursive: true })
+    await fs.writeFile(
+      path.join(pluginsDir, 'probe', 'package.json'),
+      JSON.stringify({ name: '@plume-canvas/plugin-probe', plume: { pluginName: 'debug-docs-probe', server: { entry: 'dist/server.js' } } }),
+    )
     // 最小外挂插件：形状与 plugin-node-ui 里那条一致（同一个路径、同一个参数名）
     await fs.writeFile(
-      path.join(pluginsDir, 'probe.js'),
+      path.join(pluginsDir, 'probe', 'dist', 'server.js'),
       [
         'export const name = "debug-docs-probe"',
         'export function apply(ctx) {',
@@ -47,7 +52,7 @@ describe('启动期装载的后台插件：带参数路由能命中', () => {
       hostname: '127.0.0.1',
       watchProviders: false,
       agent: false,
-      serverPluginsDir: pluginsDir,
+      pluginsDir,
     })
     const started = await srv.start()
     const res = await fetch(started.url + '/api/canvases/c9/debug-docs', {
