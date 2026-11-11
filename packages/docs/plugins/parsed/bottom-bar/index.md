@@ -70,3 +70,17 @@
 
 这两条都有单测钉着（`chipCaretNoise.test.ts`、`chipAttrsNeedUpdate.test.ts`、`refChipIndex.test.ts`）。改标签刷新逻辑前先读这三个文件。
 
+## 按住 Ctrl 把素材拖进参考格
+
+底栏开着、鼠标停在**某张素材卡**上时，按住 Ctrl 才进入拖拽态：画布上可拖的素材节点亮起来，
+按住节点拖到卡片上就换成参考。松开 Ctrl 自动退出。
+
+三个条件同时满足才进入（`ctrlDragMode.canEnterCtrlDragMode`）：
+
+1. 底栏真的渲染出来了；
+2. 按的是 Ctrl 的第一次 keydown（按住不放不算）；
+3. 鼠标此刻停在素材卡上（读 `.nb-card:hover`）—— 在画布空白处或输入框里按 Ctrl 不触发，
+   这样 Ctrl+C / Ctrl+V 这类编辑快捷键不会被抢走。
+
+底栏自己的输入框不算「别处的输入框」：点节点后它常自动聚焦，若一并拦下，按 Ctrl 就永远进不了拖拽态。
+
