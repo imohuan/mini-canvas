@@ -40,6 +40,7 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
   { dir: 'plugin-multi-select', reason: '多选' },
   { dir: 'plugin-edge-cutting', reason: '连线切割' },
   { dir: 'plugin-style-library', reason: '风格库（含后台半）' },
+  { dir: 'plugin-shortcut-manager', reason: '快捷键帮助面板与设置页的快捷键配置' },
   { dir: 'plugin-cloud-client', reason: '云端连接：后台能力入口，首启必须最先装上', first: true },
 ] as const
 

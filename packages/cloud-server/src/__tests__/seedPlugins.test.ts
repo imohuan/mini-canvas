@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { seedPlugins, seedServerPlugins } from '../plugins/seedPlugins.js'
+import { cleanupLegacyServerPlugins, seedPlugins } from '../plugins/seedPlugins.js'
 
 let root: string
 let src: string
@@ -81,43 +81,57 @@ describe('seedPlugins：首启铺入 + 版本比较', () => {
   })
 })
 
-describe('seedServerPlugins：内置插件的后台半铺成扁平 js', () => {
-  /** 造一个带后台半的插件目录：<base>/<name>/{package.json, dist/server.js} */
-  async function makeWithServer(base: string, name: string, version: string, marker: string): Promise<void> {
+describe('cleanupLegacyServerPlugins：清掉与插件目录重复的扁平旧副本', () => {
+  /** 造一个插件目录（可带后台半） */
+  async function makePluginDir(base: string, name: string, withServer: boolean): Promise<void> {
     const dir = path.join(base, name)
     await fs.mkdir(path.join(dir, 'dist'), { recursive: true })
-    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: '@plume-canvas/' + name, version }))
-    await fs.writeFile(path.join(dir, 'dist', 'server.js'), marker)
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: '@plume-canvas/' + name }))
+    await fs.writeFile(path.join(dir, 'dist', 'web.js'), 'web')
+    if (withServer) await fs.writeFile(path.join(dir, 'dist', 'server.js'), 'server')
   }
 
-  it('铺成 <名字>.js（扁平，与加载器一致），并记下版本', async () => {
-    await makeWithServer(src, 'plugin-node-ui', '1.0.0', 'server-v1')
-    const written = await seedServerPlugins(src, dest)
-    expect(written).toEqual(['plugin-node-ui.js'])
-    expect(await fs.readFile(path.join(dest, 'plugin-node-ui.js'), 'utf8')).toBe('server-v1')
+  it('插件目录里有同名后台半 → 删掉扁平旧副本（否则启动报 Duplicate plugin name）', async () => {
+    await makePluginDir(dest, 'plugin-node-video', true)
+    const legacy = path.join(root, 'server-plugins')
+    await fs.mkdir(legacy, { recursive: true })
+    await fs.writeFile(path.join(legacy, 'plugin-node-video.js'), 'old-flat-copy')
+    const removed = await cleanupLegacyServerPlugins(dest, legacy)
+    expect(removed).toEqual(['plugin-node-video.js'])
+    await expect(fs.access(path.join(legacy, 'plugin-node-video.js'))).rejects.toThrow()
   })
 
-  it('版本不更高 → 不覆盖（用户/上次装的那份保留）', async () => {
-    await makeWithServer(src, 'plugin-node-ui', '1.0.0', 'server-v1')
-    await seedServerPlugins(src, dest)
-    await fs.writeFile(path.join(dest, 'plugin-node-ui.js'), 'user-patched')
-    const again = await seedServerPlugins(src, dest)
-    expect(again).toEqual([])
-    expect(await fs.readFile(path.join(dest, 'plugin-node-ui.js'), 'utf8')).toBe('user-patched')
+  it('使用者自己额外丢的后台插件（插件目录里没有同名）→ 保留', async () => {
+    await makePluginDir(dest, 'plugin-node-text', false)
+    const legacy = path.join(root, 'server-plugins')
+    await fs.mkdir(legacy, { recursive: true })
+    await fs.writeFile(path.join(legacy, 'my-extra.js'), 'extra')
+    const removed = await cleanupLegacyServerPlugins(dest, legacy)
+    expect(removed).toEqual([])
+    await expect(fs.access(path.join(legacy, 'my-extra.js'))).resolves.toBeUndefined()
   })
 
-  it('包内版本更高 → 覆盖', async () => {
-    await makeWithServer(src, 'plugin-node-ui', '1.0.0', 'server-v1')
-    await seedServerPlugins(src, dest)
-    await makeWithServer(src, 'plugin-node-ui', '2.0.0', 'server-v2')
-    const written = await seedServerPlugins(src, dest)
-    expect(written).toEqual(['plugin-node-ui.js'])
-    expect(await fs.readFile(path.join(dest, 'plugin-node-ui.js'), 'utf8')).toBe('server-v2')
+  it('同名但插件没有后台半 → 不删（那份扁平件可能就是它唯一的后台半）', async () => {
+    await makePluginDir(dest, 'plugin-node-text', false)
+    const legacy = path.join(root, 'server-plugins')
+    await fs.mkdir(legacy, { recursive: true })
+    await fs.writeFile(path.join(legacy, 'plugin-node-text.js'), 'user-added')
+    const removed = await cleanupLegacyServerPlugins(dest, legacy)
+    expect(removed).toEqual([])
   })
 
-  it('没有 dist/server.js 的插件不产生后台文件', async () => {
-    await makePlugin(src, 'plugin-text', '1.0.0', 'web-only')
-    expect(await seedServerPlugins(src, dest)).toEqual([])
-    await expect(fs.access(path.join(dest, 'plugin-text.js'))).rejects.toThrow()
+  it('文件名与插件目录名不同、但导出的插件名相同 → 也清掉（plugin-video-crop.js vs plugin-node-video）', async () => {
+    // 真实踩过的情况：旧副本叫 plugin-video-crop.js，导出的 name 是 video-crop；
+    // 正式插件是 plugin-node-video，同样导出 video-crop —— 两者同名，启动直接报重复。
+    const dir = path.join(dest, 'plugin-node-video')
+    await fs.mkdir(path.join(dir, 'dist'), { recursive: true })
+    await fs.writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: '@plume-canvas/plugin-node-video' }))
+    await fs.writeFile(path.join(dir, 'dist', 'server.js'), 'var name = "video-crop"\nexport { name }')
+    const legacy = path.join(root, 'server-plugins')
+    await fs.mkdir(legacy, { recursive: true })
+    await fs.writeFile(path.join(legacy, 'plugin-video-crop.js'), 'old')
+    const removed = await cleanupLegacyServerPlugins(dest, legacy)
+    expect(removed).toEqual(['plugin-video-crop.js'])
   })
 })
+

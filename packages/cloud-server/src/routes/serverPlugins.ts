@@ -34,6 +34,13 @@ const ID_RE = /^[A-Za-z0-9_-]{1,64}$/
 export interface ServerPluginsRoutesOptions {
   /** server-plugins 目录（文件落在这里） */
   dir: string
+  /**
+   * 插件目录（`<数据根>/plugins/<插件>/dist/server.js`）。
+   *
+   * 后台半现在跟插件同目录（2026-11-11），插件管理页要按这里列出「哪些插件带后台」，
+   * 只看扁平 dir 会显示成「后台未装」（实测）。给了就一起列，同一个 id 只出一条。
+   */
+  pluginsDir?: string
   /** 本服务 origin（用于跨源判断） */
   origin?: string
   /** 是否允许跨源安装（缺省 false = 只收同源） */
@@ -92,21 +99,46 @@ export function createServerPluginsRoutes(opts: ServerPluginsRoutesOptions): Hon
 
   /** 列出已装的后台插件（文件名 + 大小 + 有没有声明 permissions） */
   app.get('/api/server-plugins', async (c) => {
+    /** id → { file, size }；两个来源合并，插件目录优先（它是随包发布的正式布局） */
+    const found = new Map<string, { file: string; size: number }>()
+    if (opts.pluginsDir) {
+      let dirs: string[] = []
+      try {
+        dirs = (await fs.readdir(opts.pluginsDir)).sort()
+      } catch {
+        /* 插件目录不存在：照常看扁平目录 */
+      }
+      for (const name of dirs) {
+        if (name.startsWith('_') || name.startsWith('.')) continue
+        const artifact = path.join(opts.pluginsDir, name, 'dist', 'server.js')
+        try {
+          const size = (await fs.stat(artifact)).size
+          found.set(name, { file: name + '/dist/server.js', size })
+        } catch {
+          /* 没有后台半的插件是常态 */
+        }
+      }
+    }
     let names: string[] = []
     try {
       names = (await fs.readdir(opts.dir)).filter((n) => n.endsWith('.js')).sort()
     } catch {
       /* 目录不存在 = 一个都没装 */
     }
+    for (const file of names) {
+      const id = file.replace(/\.js$/, '')
+      if (found.has(id)) continue // 插件目录那份更新更全，扁平副本只当补充
+      let size = 0
+      try {
+        size = (await fs.stat(path.join(opts.dir, file))).size
+      } catch {
+        /* 文件在扫描间隙被删：给 0，不当错误 */
+      }
+      found.set(id, { file, size })
+    }
     const plugins = await Promise.all(
-      names.map(async (file) => {
-        const id = file.replace(/\.js$/, '')
-        let size = 0
-        try {
-          size = (await fs.stat(path.join(opts.dir, file))).size
-        } catch {
-          /* 文件在扫描间隙被删：给 0，不当错误 */
-        }
+      [...found.entries()].sort(([a], [b]) => a.localeCompare(b)).map(async ([id, info]) => {
+        const { file, size } = info
         // permissions 的消费点（计划明确要求"没有消费点的字段等于没有"）：
         // 声明在清单里（发布时写的），这里读出来展示，让界面能告诉用户"这个插件声明要什么权限"。
         let permissions: string[] | undefined

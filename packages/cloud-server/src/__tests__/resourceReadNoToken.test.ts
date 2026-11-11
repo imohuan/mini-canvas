@@ -39,7 +39,8 @@ async function boot(): Promise<{ base: string; port: number }> {
       "export const name = 'libraries'",
       'export function apply(ctx) {',
       '  const png = new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0])',
-      "  for (const p of ['/api/style-library', '/api/effect-library']) {",
+      // 用本用例自己的前缀：发布包里内置了真的 style-library，会占住同名路由。
+      "  for (const p of ['/api/read-probe-a', '/api/read-probe-b']) {",
       "    ctx.routes.get(p + '/file', (c) => c.body(png, 200, { 'content-type': 'image/png' }))",
       '  }',
       '}',
@@ -65,6 +66,7 @@ describe('资源读取不需要管理令牌（用户口径）', () => {
     for (const p of [
       '/api/style-library/file',
       '/api/effect-library/file',
+      '/api/read-probe-a/file',
       '/api/canvases/default/resources/x.png',
       '/api/assets/files/x.png',
     ]) {
@@ -75,7 +77,7 @@ describe('资源读取不需要管理令牌（用户口径）', () => {
 
   it('风格库 / 特效库的图片：不带 x-admin-token 也能 200', async () => {
     const { base } = await boot()
-    for (const prefix of ['/api/style-library', '/api/effect-library']) {
+    for (const prefix of ['/api/read-probe-a', '/api/read-probe-b']) {
       const res = await fetch(base + prefix + '/file?name=a.png')
       expect(res.status, prefix).toBe(200)
       expect(res.headers.get('content-type')).toContain('image/png')

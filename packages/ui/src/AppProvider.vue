@@ -42,7 +42,10 @@ async function bootstrap() {
       const catalog = await fetchCatalog()
       const want = pickBuiltinEntries(catalog)
       const failures = await installCatalogPlugins({ ...catalog, plugins: want }, (mod) => ctx.plugin(mod))
-      if (failures.length) console.warn('[ui] 部分插件装载失败', failures)
+      if (failures.length) {
+        // 逐条打印：只打一个数组，用户和排查者都看不出「哪个插件、为什么」。
+        for (const f of failures) console.warn('[ui] 插件装载失败 ' + f.id + '：' + f.error)
+      }
     } catch (err) {
       // 后台没起来或清单坏了：界面仍要能打开（只是没有插件），把原因说清楚。
       console.error('[ui] 从 cloud-server 装载插件失败', err)

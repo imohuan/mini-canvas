@@ -16,6 +16,8 @@ interface CatalogEntry {
   url?: string
   format?: 'umd' | 'esm'
   globalName?: string
+  /** UMD 全局对象上哪一个导出才是插件模块（缺省 = 全局对象本身就是模块） */
+  moduleExport?: string
   requiresGlobals?: string[]
   builtin?: boolean
 }
@@ -68,8 +70,42 @@ async function loadOne(
     document.head.appendChild(el)
   })
   const g = entry.globalName
-  const mod = g ? (globalThis as unknown as Record<string, PluginModule | undefined>)[g] : undefined
-  if (mod) install(mod)
+  const bag = g ? (globalThis as unknown as Record<string, unknown>)[g] : undefined
+  const mod = pickPluginModule(bag, entry.moduleExport)
+  if (!mod) {
+    throw new Error('加载 ' + entry.id + ' 后没在全局上找到插件模块（globalName=' + (g ?? '?') + '）')
+  }
+  install(mod)
+}
+
+/**
+ * 从 UMD 全局对象里取出**插件模块**。
+ *
+ * 为什么需要这一步（2026-11-11 实测白屏）：插件产物把一堆组件和工具函数一起挂在
+ * 全局上（`themeCanvasPlugin`、`NodeToolbarService`…），整个对象交给内核会报
+ * `apply is not a function`。清单里的 `moduleExport` 指明该取哪个字段；
+ * 没有时按形状兜底（同时有 name/apply 的那一项）。
+ */
+export function pickPluginModule(
+  bag: unknown,
+  moduleExport?: string,
+): PluginModule | undefined {
+  if (!bag || typeof bag !== 'object') return undefined
+  const obj = bag as Record<string, unknown>
+  const shapeOk = (v: unknown): v is PluginModule =>
+    !!v && typeof v === 'object' && typeof (v as { apply?: unknown }).apply === 'function'
+  if (moduleExport) {
+    const picked = obj[moduleExport]
+    if (shapeOk(picked)) return picked
+  }
+  // 兜底：全局对象自己就是模块
+  if (shapeOk(obj)) return obj
+  // 再兜底：扫自己这个全局对象的属性，取同时有 apply 的那一个。
+  // 只在本对象里找 —— 绝不跨到 window 上别的插件（并发加载时那些正在陆续出现，
+  // 扫全局会挑到邻座，装错插件）。
+  const candidates = Object.entries(obj).filter(([, v]) => shapeOk(v))
+  const picked = candidates.find(([k]) => /plugin/i.test(k))?.[1] ?? candidates[0]?.[1]
+  return picked as PluginModule | undefined
 }
 
 /** 把清单里的插件全部装进内核（单条失败不影响其它） */
@@ -78,13 +114,30 @@ export async function installCatalogPlugins(
   install: (mod: PluginModule) => void,
 ): Promise<Array<{ id: string; error: string }>> {
   const failures: Array<{ id: string; error: string }> = []
-  for (const entry of catalog.plugins) {
-    try {
-      await loadOne(entry, install)
-    } catch (err) {
-      failures.push({ id: entry.id, error: err instanceof Error ? err.message : String(err) })
+  // **并发下载、按序安装**：每个插件是一个独立的 <script> / fetch，串行等 21 个
+  // 等于把首屏拖成 21 个来回（实测明显卡）。下载可以并行；install 仍按清单顺序串行，
+  // 因为插件之间有先后依赖（manager 依赖内核、theme 依赖 render）。
+  // 注意：UMD 的 <script> 是全局副作用（执行即挂 window），并发加载没问题；
+  // 但 ESM 走 import(data:) 也是纯加载，不碰内核。
+  const CONCURRENCY = 6
+  const loaded: Array<PluginModule | undefined> = new Array(catalog.plugins.length)
+  let cursor = 0
+  const worker = async (): Promise<void> => {
+    while (cursor < catalog.plugins.length) {
+      const index = cursor++
+      const entry = catalog.plugins[index]!
+      try {
+        // 先只把产物加载成模块（不装进内核），装的动作留到下面按序做
+        let picked: PluginModule | undefined
+        await loadOne(entry, (mod) => { picked = mod })
+        loaded[index] = picked
+      } catch (err) {
+        failures.push({ id: entry.id, error: err instanceof Error ? err.message : String(err) })
+      }
     }
   }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, catalog.plugins.length) }, worker))
+  for (const mod of loaded) if (mod) install(mod)
   return failures
 }
 

@@ -246,6 +246,10 @@ export const serverPluginsPlugin: PluginModule = {
     ctx.routes.adopt(
       createServerPluginsRoutes({
         dir: need<string>(ctx, S.serverPluginsDir),
+        // 后台半现在跟插件同目录；只看扁平目录会把自带件显示成「后台未装」（实测）。
+        ...(ctx.tryGet<string | undefined>(S.pluginsDir)
+          ? { pluginsDir: ctx.tryGet<string>(S.pluginsDir) }
+          : {}),
         // 现算：启动登记的快照 + 运行期热装 —— 否则热装/热卸后 loaded 不更新，前端据它误判（用户实测）
         loaded: () => [...new Set([...(ctx.tryGet<string[]>('serverPluginsLoaded') ?? []), ...hotLoadedNames()])],
         // 服务自己的 origin：用于跨源安装检查（审查发现：不传 origin 时该检查整段被跳过）。

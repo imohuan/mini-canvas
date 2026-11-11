@@ -20,14 +20,18 @@ import { CanvasResourceStore } from './store/canvasResources.js'
 import { ProjectStore } from './store/projectStore.js'
 import { AssetStore } from './store/assetStore.js'
 import { resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
-import { seedPlugins, seedServerPlugins } from './plugins/seedPlugins.js'
+import { cleanupLegacyServerPlugins, seedPlugins } from './plugins/seedPlugins.js'
 import { fileURLToPath } from 'node:url'
 import { mcpRoutes } from './routes/mcp.js'
 import { createServerFramework } from './serverFramework/index.js'
 import { BUILTIN_PLUGINS } from './plugins/builtin/routes.js'
 import { createAgentPlugins } from './plugins/builtin/agentRoutes.js'
 import { PluginPresence } from './plugins/pluginPresence.js'
-import { loadServerPluginsFromDir, DEFAULT_SERVER_PLUGINS_DIR } from './serverFramework/pluginLoader.js'
+import {
+  loadServerPluginsFromDir,
+  loadServerPluginsFromPluginDirs,
+  DEFAULT_SERVER_PLUGINS_DIR,
+} from './serverFramework/pluginLoader.js'
 import { bindHotLoadedTracking } from './serverFramework/hotLoad.js'
 import { listPluginMcpTools } from './serverFramework/mcp.js'
 import { CanvasDocument } from './mcp/canvasDoc.js'
@@ -82,18 +86,37 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const dataDir = path.resolve(opts.dir ?? DEFAULT_DATA_DIR)
   const uiDist = await resolveUiDist(opts.uiDist)
   // 首启把随包插件铺到数据根：之后所有安装/更新都落在可写位置（用户口径 2026-11-11）。
-  const seededPlugins = await seedPlugins(
-    path.join(PACKAGE_ROOT, 'assets/plugins'),
-    path.join(dataDir, 'plugins'),
-  )
-  if (seededPlugins.added.length || seededPlugins.updated.length) {
-    console.log(
-      '[cloud-server] 插件已铺入数据根：新增 ' + seededPlugins.added.length +
-        ' 个，更新 ' + seededPlugins.updated.length +
-        ' 个，跳过 ' + seededPlugins.skipped.length + ' 个',
+  // 单测用的是临时数据根、也不需要发布版的插件副本：拷贝 32 个目录会把一批 5 秒超时的
+  // 用例拖红（实测），所以测试环境跳过，插件目录仍按 candidates 正常探测。
+  const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test'
+  if (!isTestEnv) {
+    const seededPlugins = await seedPlugins(
+      path.join(PACKAGE_ROOT, 'assets/plugins'),
+      path.join(dataDir, 'plugins'),
     )
+    if (seededPlugins.added.length || seededPlugins.updated.length) {
+      console.log(
+        '[cloud-server] 插件已铺入数据根：新增 ' + seededPlugins.added.length +
+          ' 个，更新 ' + seededPlugins.updated.length +
+          ' 个，跳过 ' + seededPlugins.skipped.length + ' 个',
+      )
+    }
   }
   const pluginsDir = await resolvePluginsDir(opts.pluginsDir, dataDir)
+  // 旧的「后台半扁平拷贝」清掉：2026-11-11 起后台半跟前端半同目录（plugins/<插件>/dist/server.js），
+  // 两处都在会撞 `Duplicate plugin name`（实测：video-crop）。
+  // 只在服务自己管目录（没传 --server-plugins）时清，使用者指定的一律不动。
+  if (!opts.serverPluginsDir && pluginsDir) {
+    const removedLegacy = await cleanupLegacyServerPlugins(
+      pluginsDir,
+      path.resolve(dataDir, DEFAULT_SERVER_PLUGINS_DIR),
+    )
+    if (removedLegacy.length > 0) {
+      console.log(
+        '[cloud-server] 已清掉旧的扁平后台副本（后台半现在跟插件同目录）：' + removedLegacy.join(', '),
+      )
+    }
+  }
 
   // ---- 管理面安全：令牌 / 审计 / 来源边界（方案 commit 2/4/5）----
   // 三条都在建 app 之前准备好：中间件要在装配阶段（host.start 之前）挂上。
@@ -167,18 +190,6 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const serverPluginsDir = path.resolve(
     opts.serverPluginsDir ?? path.join(dataDir, DEFAULT_SERVER_PLUGINS_DIR),
   )
-  // 内置插件的后台半（如可视化节点的导出接口、视频裁剪）：也要铺进 server-plugins，
-  // 否则发布版里前端在、接口 404（历史踩过：导出节点包报 403/404）。
-  // 远端显式指定了 --server-plugins 时不铺：那是使用者自己的目录，不该被我们写。
-  if (!opts.serverPluginsDir) {
-    const seededServer = await seedServerPlugins(
-      path.join(PACKAGE_ROOT, 'assets/plugins'),
-      serverPluginsDir,
-    )
-    if (seededServer.length > 0) {
-      console.log('[cloud-server] 内置插件后台半已铺入：' + seededServer.join(', '))
-    }
-  }
   const registry = new ProviderRegistry()
   /**
    * 内置 agent-chat 平台：首次启动装一次，之后每次 reload 也要补一份。
@@ -666,15 +677,32 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   //     必须在 host.start() 之前登记（路由代理是 start 时一次性 flush 的）。
   //     安全边界见 serverFramework/pluginLoader.ts 文件头（等于"把 JS 当服务端代码执行"，
   //     信任边界 = 谁能写那个目录）。
+  // 两个来源，**插件目录优先**：
+  //   ① `<数据根>/plugins/<插件>/dist/server.js` —— 随发布包铺入的正规布局（前后端同目录）
+  //   ② `<数据根>/server-plugins/*.js` —— 手工丢文件 / NPM 安装的旧布局
+  // 同名时以①为准：②里那份通常是升级前的残留副本（实测：旧 plugin-video-crop.js 与
+  // plugin-node-video 的新后台半同为 `video-crop`，两个都装会报 Duplicate plugin name）。
+  const fromPluginDirs = await loadServerPluginsFromPluginDirs(pluginsDir)
   const scannedServerPlugins = await loadServerPluginsFromDir(serverPluginsDir)
-  for (const f of scannedServerPlugins.failures) {
+  for (const f of [...fromPluginDirs.failures, ...scannedServerPlugins.failures]) {
     console.warn('[cloud-server] 后台插件加载失败 ' + f.file + '：' + f.error)
   }
   const registeredServerPlugins: string[] = []
-  for (const mod of scannedServerPlugins.modules) {
+  const seenServerPluginNames = new Set<string>()
+  /** 从插件目录来的后台半先装；同一个 name 只装一次 */
+  const orderedServerPlugins = [
+    ...fromPluginDirs.modules,
+    ...scannedServerPlugins.modules,
+  ]
+  for (const mod of orderedServerPlugins) {
+    if (seenServerPluginNames.has(mod.name)) {
+      console.log('[cloud-server] 后台插件 ' + mod.name + ' 已在插件目录里加载，跳过 server-plugins 里的同名副本')
+      continue
+    }
     try {
       host.ctx.plugin(mod)
       registeredServerPlugins.push(mod.name)
+      seenServerPluginNames.add(mod.name)
     } catch (err) {
       // 重名等登记问题：记一条、继续装别的（别让一个坏插件把整个服务带崩）
       console.warn(

@@ -47,6 +47,14 @@ export interface PluginCatalogEntry {
   format?: 'umd' | 'esm'
   /** UMD 产物在 window 上暴露的全局名（加载后从这里取插件对象） */
   globalName: string
+  /**
+   * 全局对象上**哪一个导出**才是插件模块（如 `themeCanvasPlugin`）。
+   *
+   * 缺省表示「全局对象本身就是插件模块」（只导出 name/apply 的简单插件）。
+   * 有值时必须取 `window[globalName][moduleExport]` —— 否则拿到的是整袋导出，
+   * 内核会报 `apply is not a function`。
+   */
+  moduleExport?: string
   /** 该产物运行时需要哪些 window 全局（Vue / PlumeCore / …）；缺了会加载失败 */
   requiresGlobals: string[]
   /** 是否默认安装（缺省 true） */
@@ -211,6 +219,110 @@ export function parseRequiresGlobals(text: string): string[] {
   if (!anchor || anchor.index === undefined) return []
   const header = text.slice(anchor.index, anchor.index + 800)
   return KNOWN_GLOBALS.filter((g) => new RegExp('[,(]\\s*[a-zA-Z_$][\\w$]*\\.' + g + '\\b').test(header))
+}
+
+/**
+ * 从 UMD 产物末尾读「哪个导出才是插件模块」。
+ *
+ * 为什么需要：插件产物不只导出 name/apply，还导出一堆组件与工具函数（如
+ * `e.themeCanvasPlugin`、`e.NodeToolbarService`）。整个全局对象**不是**插件模块，
+ * 直接交给内核会报 `apply is not a function`（构建版首页白屏，2026-11-11 实测）。
+ *
+ * 判据按可信度排：
+ *   1. 形如 `xxxPlugin` 的导出，且该名字与包名/pluginName 对得上（themeCanvasPlugin ↔ theme-canvas）；
+ *   2. 导出的对象字面量里**同时**有 name 与 apply（`{name:…,inject:…,apply:…}`）。
+ * 找不到就返回 undefined —— 由加载方退化成「按模块自身形状取」，不瞎猜。
+ */
+export function parseModuleExport(text: string, hints: readonly string[] = []): string | undefined {
+  // 只看尾部：UMD 的导出赋值都在收尾处（正文里同名局部变量很多，全文扫会误命中）。
+  const tail = text.slice(Math.max(0, text.length - 8000))
+  // 导出赋值形如 `e.apply=zF` / `e.themeCanvasPlugin=BF`；`Object.defineProperty(e,"X",…)` 不是对象模块，跳过。
+  // 每项都以「命名空间变量 + .」开头（`e.apply=zF` / `e.clipboardPlugin={…}`），
+  // 因此按 `.` 切比按 `,` 切稳：`}e.x=…` 前面可能是花括号，不是逗号。
+  const assign = /[A-Za-z_$][\w$]*\.([A-Za-z_$][\w$]*)\s*(?==)/g
+  const exported = new Set<string>()
+  let m: RegExpExecArray | null
+  while ((m = assign.exec(tail))) exported.add(m[1]!)
+  if (exported.size === 0) return undefined
+  const names = [...exported]
+  // 尾部里每个 `X=…` 的值也记下来，用于②判断它是不是对象字面量。
+  const valueOf = new Map<string, string>()
+  const withValue = /[A-Za-z_$][\w$]*\.([A-Za-z_$][\w$]*)\s*=\s*([A-Za-z_$][\w$]*)\s*(?=[,;}]|$)/g
+  while ((m = withValue.exec(tail))) valueOf.set(m[1]!, m[2]!)
+
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const normalizedHints = hints.map(norm).filter(Boolean)
+  // ① 名字带 Plugin 且与提示词对得上（themeCanvasPlugin / nodeTextPlugin / pluginBottomBar）
+  for (const name of names) {
+    if (!/plugin$/i.test(name) && !/^plugin/i.test(name)) continue
+    const n = norm(name.replace(/^plugin/i, '').replace(/plugin$/i, ''))
+    if (n && normalizedHints.some((h) => h === n || h.includes(n) || n.includes(h))) return name
+  }
+  // ①.5 只剩一个形如 `xxxPlugin` 的导出：没有歧义，就是它（clipboardPlugin / canvasExportPlugin 等
+  //     名字与包名不同源，靠提示词对不上，但整个产物只有这一个 Plugin 结尾导出）。
+  const pluginLike = names.filter((name) => /plugin$/i.test(name) || /^plugin[A-Z]/.test(name))
+  if (pluginLike.length === 1) return pluginLike[0]
+  // ② 逐个导出项：找到它赋的那个变量，再回到**全文**里看那个变量的定义是不是插件模块。
+  //    （不能只看尾部：`e.clipboardPlugin={name:g,...}` 是内联字面量，而
+  //     `e.themeCanvasPlugin=BF` 指向的对象定义在尾部之外，两种写法都要认。）
+  for (const [exportedName, value] of valueOf) {
+    if (isPluginModuleDefinition(text, value)) return exportedName
+  }
+  // ③ 内联字面量导出：`e.clipboardPlugin={name:g,inject:_,apply:b}`
+  for (const name of names) {
+    if (name === 'default') continue
+    const at = tail.search(new RegExp('[A-Za-z_$][\\w$]*\\.' + name + '\\s*=\\s*\\{'))
+    if (at < 0) continue
+    const body = sliceBalanced(tail, tail.indexOf('{', at))
+    if (body && isPluginModuleBody(body)) return name
+  }
+  return undefined
+}
+
+/** 对象字面量体里同时有 apply（函数）与 inject（依赖列表）= 插件模块的形状 */
+function isPluginModuleBody(body: string): boolean {
+  return /\bapply\s*:/.test(body) && /\binject\s*:/.test(body)
+}
+
+/**
+ * 变量 `varName` 的定义是不是插件模块。
+ *
+ * 在**全文**里找 `varName = {`，然后从花括号起做一次括号配平截取对象体（对象里还嵌着
+ * 方法体与数组，正则跨不过去 —— 这是第一版失败的原因）。
+ */
+function isPluginModuleDefinition(text: string, varName: string): boolean {
+  const escaped = varName.replace(/\$/g, '\\$')
+  const re = new RegExp('(?:^|[\\s,;(])' + escaped + '\\s*=\\s*\\{', 'g')
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    const braceAt = text.indexOf('{', m.index + m[0].length - 1)
+    const body = sliceBalanced(text, braceAt)
+    if (body && isPluginModuleBody(body)) return true
+  }
+  return false
+}
+
+/** 从 `{` 开始截出配平的对象字面量（含两端花括号）；超长/不配平返回 undefined */
+function sliceBalanced(text: string, braceAt: number): string | undefined {
+  if (braceAt < 0) return undefined
+  let depth = 0
+  let quote: string | undefined
+  const end = Math.min(text.length, braceAt + 20000)
+  for (let i = braceAt; i < end; i++) {
+    const c = text[i]
+    if (quote) {
+      if (c === '\\') i++
+      else if (c === quote) quote = undefined
+      continue
+    }
+    if (c === '"' || c === "'" || c === '`') { quote = c; continue }
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return text.slice(braceAt, i + 1)
+    }
+  }
+  return undefined
 }
 
 /** 把清单折成一个 32 位整数版本号（同内容同号，改了内容就变） */
@@ -398,6 +510,12 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
       url: '/plugins/' + pkgName + '/' + path.basename(declaredEntry),
       format,
       globalName: format === 'umd' ? (globalName ?? '') : '',
+      ...(format === 'umd'
+        ? (() => {
+            const exp = parseModuleExport(text, [pkgName, name, pkg.plume?.pluginName ?? ''])
+            return exp ? { moduleExport: exp } : {}
+          })()
+        : {}),
       requiresGlobals: format === 'umd' ? parseRequiresGlobals(text) : [],
       // 默认安装是显式 opt-in；首启装哪些由项目的自带清单决定（见 builtinInstallIds）。
       defaultInstalled: pkg.plume?.defaultInstalled === true,

@@ -11,7 +11,30 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { createCloudServer } from '../server'
-import { KNOWN_GLOBALS } from '../plugins/catalog'
+import { KNOWN_GLOBALS, parseModuleExport } from '../plugins/catalog'
+
+describe('parseModuleExport —— 从 UMD 全局里找出插件模块（2026-11-11 白屏的根因）', () => {
+  it('产物导出一堆组件时，取那个 Plugin 结尾的字段（themeCanvasPlugin）', () => {
+    const text = '...e.Config=RF,e.CustomEdge=TF,e.apply=zF,e.name=IF,e.themeCanvasPlugin=BF});'
+    expect(parseModuleExport(text, ['plugin-theme-canvas', 'theme-canvas'])).toBe('themeCanvasPlugin')
+  })
+
+  it('名字对不上包名时，只按「尾部唯一的 xxxPlugin 导出」判定', () => {
+    const text = '...e.coerceClipboardSnapshot=a,e.deepClone=h,e.clipboardPlugin={name:g,inject:_,apply:b});'
+    expect(parseModuleExport(text, ['plugin-clipboard'])).toBe('clipboardPlugin')
+  })
+
+  it('对象字面量定义在尾部之外（e.themeCanvasPlugin=BF）也能认出来', () => {
+    const text = 'var BF={name:IF,inject:LF,Config:RF,apply:zF};e.name=IF,e.themeCanvasPlugin=BF});'
+    expect(parseModuleExport(text, ['theme-canvas'])).toBe('themeCanvasPlugin')
+  })
+
+  it('只导出工具函数、没有插件模块时返回 undefined（宁可退化也不瞎猜）', () => {
+    const text = '...e.utilA=a,e.utilB=b,e.deepClone=h});'
+    expect(parseModuleExport(text, ['plugin-demo'])).toBeUndefined()
+  })
+})
+
 import { HOST_GLOBALS } from '../../../../packages/plugins/vite-plugin-lib'
 
 /** 造一个插件目录：<dir>/<pkg>/{package.json, dist/<file>} */

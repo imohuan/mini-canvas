@@ -94,6 +94,60 @@ export async function loadServerPluginsFromDir(dir: string): Promise<ServerPlugi
   return { modules, failures }
 }
 
+export interface PluginDirScanResult extends ServerPluginLoadResult {
+  /** 每个成功加载的模块来自哪个插件目录（目录名）；与 modules 同序 */
+  sources: string[]
+}
+
+/**
+ * 从**插件目录**（`<数据根>/plugins/<插件>/dist/server.js`）加载后台半。
+ *
+ * 用户口径（2026-11-11）：一个插件 = 一个目录，前后端同进同出。前端半是
+ * `dist/web.js`，后台半就是同目录的 `dist/server.js` —— 不再另拷一份到 server-plugins，
+ * 否则同一个插件来源两处，升级/卸载要改两遍，还容易残留旧副本（实测：
+ * `plugin-video-crop.js` 老副本与 `plugin-node-video` 新产物同名 `video-crop`，启动时
+ * 报 `Duplicate plugin name`）。
+ *
+ * 与扁平目录的分工：扁平 `server-plugins/*.js` 仍收（手工丢文件、NPM 安装的旧布局）；
+ * 两边出现同名插件时，**插件目录那份优先**（它是随包发布、版本受控的那份）。
+ */
+export async function loadServerPluginsFromPluginDirs(pluginsDir: string | undefined): Promise<PluginDirScanResult> {
+  const modules: PluginModule[] = []
+  const failures: PluginDirScanResult['failures'] = []
+  const sources: string[] = []
+  if (!pluginsDir) return { modules, failures, sources }
+  let names: string[]
+  try {
+    names = await fs.readdir(pluginsDir)
+  } catch (err) {
+    if (isNotFound(err)) return { modules, failures, sources }
+    throw err
+  }
+  for (const name of names.sort()) {
+    if (name.startsWith('_') || name.startsWith('.')) continue
+    const file = path.join(pluginsDir, name, 'dist', 'server.js')
+    let text: string
+    try {
+      text = await fs.readFile(file, 'utf8')
+    } catch {
+      continue // 没有后台半的插件是常态，不是错误
+    }
+    try {
+      const mod = (await import(/* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(text))) as Record<string, unknown>
+      const candidate = mod.default ?? mod
+      if (!isValidServerPlugin(candidate)) {
+        failures.push({ file: name + '/dist/server.js', error: '不是合法后台插件（需导出 name 与 apply）' })
+        continue
+      }
+      modules.push(candidate)
+      sources.push(name)
+    } catch (err) {
+      failures.push({ file: name + '/dist/server.js', error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+  return { modules, failures, sources }
+}
+
 function isNotFound(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'ENOENT'
 }

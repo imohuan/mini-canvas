@@ -26,6 +26,11 @@ export interface CatalogEntry {
   format?: 'umd' | 'esm'
   /** UMD 产物在 window 上暴露的全局名 */
   globalName?: string
+  /**
+   * 全局对象上**哪一个导出**才是插件模块（如 `themeCanvasPlugin`）。
+   * 缺省 = 全局对象本身就是模块；有值时必须取 `window[globalName][moduleExport]`。
+   */
+  moduleExport?: string
   /** 该产物运行时需要哪些 window 全局（Vue / PlumeCore / …） */
   requiresGlobals?: string[]
   /** 是否默认安装 */
@@ -97,6 +102,7 @@ export function normalizeCatalog(raw: unknown): CatalogEntry[] {
       url: typeof e.url === 'string' ? e.url : '',
       ...(e.format === 'esm' || e.format === 'umd' ? { format: e.format } : {}),
       ...(typeof e.globalName === 'string' ? { globalName: e.globalName } : {}),
+      ...(typeof e.moduleExport === 'string' && e.moduleExport ? { moduleExport: e.moduleExport } : {}),
       ...(Array.isArray(e.requiresGlobals)
         ? { requiresGlobals: e.requiresGlobals.filter((g): g is string => typeof g === 'string') }
         : {}),
