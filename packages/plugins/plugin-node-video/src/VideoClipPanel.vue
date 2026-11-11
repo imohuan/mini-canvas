@@ -2,7 +2,7 @@
 /**
  * VideoClipPanel —— 视频剪辑胶片条（video/clip 功能模式的底栏；单选时显示）。
  *
- * 1:1 复刻 packages/ui/public/video-clip-demo.html 的暗色胶囊剪辑条（用户口径 2026-10-29）：
+ * 1:1 复刻 packages/ui/docs/demos/video-clip-demo.html 的暗色胶囊剪辑条（用户口径 2026-10-29）：
  *   关闭 | 键盘（配置入口） | 胶片格（蓝胶囊选区 + 播放头 + 时长 pill） | 磁吸 | 循环 | 白色确认圆钮。
  * 点键盘图标在按钮上方弹出快捷键说明（shadcn Popover）。
  *

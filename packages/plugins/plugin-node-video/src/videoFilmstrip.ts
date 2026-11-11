@@ -1,7 +1,7 @@
 /**
  * videoFilmstrip —— 剪辑胶片条的抽帧逻辑（纯函数，零 Vue）。
  *
- * 复刻 packages/ui/public/video-clip-demo.html 的胶片条：把整段视频按目标格数
+ * 复刻 packages/ui/docs/demos/video-clip-demo.html 的胶片条：把整段视频按目标格数
  * 均匀抽帧，每格一张小图。抽帧复用同包的 captureFrame（临时 video 元素 seek +
  * canvas），不依赖播放中的元素 —— 面板与内容区是兄弟组件，抓不到它的 video。
  *
