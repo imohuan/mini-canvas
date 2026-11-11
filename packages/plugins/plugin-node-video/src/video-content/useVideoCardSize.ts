@@ -3,9 +3,9 @@ import type { VideoOpsContext } from '../videoOps'
 import {
   followedVideoCardSizePatch,
   videoCardSizePatch,
-  videoCardSizeSettled,
   type CardSizePatch,
 } from '../videoFit'
+import { readVideoMeta } from '../videoTransform'
 
 export interface VideoCardSizeOptions {
   nodeId: () => string
@@ -23,12 +23,18 @@ export interface VideoCardSizeOptions {
 }
 
 /**
- * 卡片尺寸兜底：挂载时补算、换源时按新视频重算，两者都保持幂等。
+ * 卡片尺寸：视频地址一变就量一次，量到就按画面比例显示。
+ *
+ * 挂载时也会量一次（拖入 / 打开旧画布都是"第一次拿到地址"）；
+ * 播放器拿到 loadedmetadata 时走同一个写入口，两者都幂等。
  */
 export function useVideoCardSize(options: VideoCardSizeOptions) {
   const { nodeId, data, ops, sourceFields, onSourceChanged, dragging } = options
 
   const sourceKey = computed(() => sourceFields.value.resourceId + '|' + sourceFields.value.legacyUrl)
+
+  /** 上一次量尺寸的地址：同一地址不重复解码（loadedmetadata 与 URL 监听都会走到这里） */
+  let measuredUrl = ''
 
   function syncCardSize(patch: CardSizePatch | null): void {
     if (!patch) return
@@ -53,8 +59,29 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
 
   watch(sourceKey, () => {
     onSourceChanged()
+    measuredUrl = ''
     syncCardSize(followedVideoCardSizePatch(data(), ops.fitLimits?.()))
   })
+
+  /**
+   * 显示的 URL 变了：先量一次视频尺寸，量到就按尺寸显示宽高。
+   *
+   * 用户口径（2026-11-11）：「监听它显示的 URL 的变化，一变就先取尺寸，再按尺寸显示」。
+   * 拖入 / 换源 / 旧数据打开都走这一条；量不到（跨域、编码不支持）就什么都不做。
+   */
+  async function measure(url: string): Promise<void> {
+    if (!url || url === measuredUrl) return
+    measuredUrl = url
+    const meta = await readVideoMeta(url).catch(() => null)
+    // 量的时候地址又换了 → 这次结果作废（新地址那一次自己会量）
+    if (url !== measuredUrl) return
+    if (!meta || !(meta.width > 0) || !(meta.height > 0)) {
+      // 失败不记住：下次地址再变/再挂载还能重试
+      measuredUrl = ''
+      return
+    }
+    flushMeta(meta.width, meta.height)
+  }
 
   /** 拖动中拿到、还没落地的真实宽高（松手后补写） */
   let pendingMeta: { width: number; height: number } | null = null
@@ -99,15 +126,9 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
   if (dragging) watch(dragging, (on) => { if (!on) flushMeta() })
 
   return {
-    syncCardSize,
     mountSize,
     onMeta,
-    /**
-     * 卡片尺寸是否已经和视频比例一致（不一致就该主动去读元数据）。
-     *
-     * 地址还没解析出来（videoUrl 为空）时也算「没量好」—— 地址一到就值得读一次。
-     */
-    sizeSettled: (url?: string) => Boolean(url) && videoCardSizeSettled(data(), ops.fitLimits?.()),
+    measure,
   }
 }
 

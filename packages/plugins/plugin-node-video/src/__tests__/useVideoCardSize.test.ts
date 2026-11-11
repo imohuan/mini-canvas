@@ -1,16 +1,23 @@
 /**
- * useVideoCardSize —— 卡片尺寸兜底的挂载补算契约。
+ * useVideoCardSize —— 卡片尺寸跟着视频比例走。
  *
- * 用户 2026-11-10 实测（loading-ui-demo 画布）：后台/脚本建的节点把卡片写死成
- * 440×260，里面装的是 1280×720 的 16:9 视频 —— 卡片没有贴着画面比例，
- * 画面被 contain 留了黑边。视频节点不允许手动 resize（resizable:false），
- * 所以挂载兜底也应该把「比例不对」的尺寸一并纠正，而不是只补「缺失」的。
+ * 用户 2026-11-10：后台/脚本建的节点把卡片写死成 440×260，装 1280×720 的 16:9 视频，
+ * contain 留下黑边。视频节点不允许手动 resize，卡片尺寸本就该由画面比例决定。
+ *
+ * 用户 2026-11-11：从资源面板拖入视频，卡片先按默认 480×320 画、上下留黑边，
+ * 要平移缩放才恢复。做法是**监听显示的 URL，一变就量尺寸，再按尺寸显示宽高**。
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { nextTick, ref } from 'vue'
 import { useVideoCardSize } from '../video-content/useVideoCardSize'
 import { videoCardSizePatch } from '../videoFit'
+import { readVideoMeta } from '../videoTransform'
 import type { VideoOpsContext } from '../videoOps'
+
+/** 量尺寸要真实解码视频：单测里换成固定元数据（1280×720） */
+vi.mock('../videoTransform', () => ({
+  readVideoMeta: vi.fn(async () => ({ width: 1280, height: 720, duration: 10 })),
+}))
 
 function makeOps(data: Record<string, unknown>): VideoOpsContext {
   const apply = (_id: string, next: Record<string, unknown>, size?: { w: number; h: number }): void => {
@@ -167,5 +174,57 @@ describe('useVideoCardSize.onMeta：拿到视频真实宽高后立即对齐卡�
     await nextTick()
     expect(data.cardWidth).toBe(videoCardSizePatch(1280, 720)!.size.w)
     expect(data.cardHeight).toBe(videoCardSizePatch(1280, 720)!.size.h)
+  })
+})
+
+describe('useVideoCardSize.measure：URL 一变就量尺寸，再按尺寸显示', () => {
+  beforeEach(() => { vi.mocked(readVideoMeta).mockClear() })
+
+  it('量到 1280×720 → 宽高与卡片尺寸一起写（不用等悬停播放）', async () => {
+    const data: Record<string, unknown> = { cardWidth: 480, cardHeight: 320 }
+    const { measure } = useVideoCardSize({
+      nodeId: () => 'm1',
+      data: () => data,
+      ops: makeOps(data),
+      sourceFields: { value: { resourceId: '', legacyUrl: '/api/assets/a.mp4' } } as never,
+      onSourceChanged: () => {},
+    })
+    await measure('/api/assets/a.mp4')
+    const fit = videoCardSizePatch(1280, 720)!.size
+    expect(data.videoWidth).toBe(1280)
+    expect(data.videoHeight).toBe(720)
+    expect(data.cardWidth).toBe(fit.w)
+    expect(data.cardHeight).toBe(fit.h)
+  })
+
+  it('同一地址不重复解码（loadedmetadata 与 URL 监听会重复触发）', async () => {
+    const data: Record<string, unknown> = {}
+    const { measure } = useVideoCardSize({
+      nodeId: () => 'm2',
+      data: () => data,
+      ops: makeOps(data),
+      sourceFields: { value: { resourceId: '', legacyUrl: '/api/assets/a.mp4' } } as never,
+      onSourceChanged: () => {},
+    })
+    await measure('/api/assets/a.mp4')
+    await measure('/api/assets/a.mp4')
+    expect(readVideoMeta).toHaveBeenCalledTimes(1)
+  })
+
+  it('量不到尺寸 → 什么都不写（不猜数字），下次还能重试', async () => {
+    vi.mocked(readVideoMeta).mockResolvedValueOnce(null)
+    const data: Record<string, unknown> = { cardWidth: 480, cardHeight: 320 }
+    const { measure } = useVideoCardSize({
+      nodeId: () => 'm3',
+      data: () => data,
+      ops: makeOps(data),
+      sourceFields: { value: { resourceId: '', legacyUrl: '/api/assets/a.mp4' } } as never,
+      onSourceChanged: () => {},
+    })
+    await measure('/api/assets/a.mp4')
+    expect(data.cardWidth).toBe(480)
+    expect(data.videoWidth).toBeUndefined()
+    await measure('/api/assets/a.mp4')
+    expect(readVideoMeta).toHaveBeenCalledTimes(2)
   })
 })

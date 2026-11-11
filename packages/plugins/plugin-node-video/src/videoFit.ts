@@ -133,20 +133,4 @@ export function followedVideoCardSizePatch(
   return patch
 }
 
-/**
- * 卡片尺寸够不够“**正经量过**”：宽高都在、并且与视频比例一致。
- *
- * 为什么需要它（用户 2026-11-11）：从资源面板拖入视频时，节点最早只有地址，
- * 卡片先按类型默认 480×320 画出来；视频是 1280×720，上下就一直留黑边，
- * 要等悬停播放（挂上 video 元素、读到元数据）或者平移缩放才纠正。
- * 内容组件用它判断「要不要主动去读一次视频元数据」，而不是干等用户悬停。
- */
-export function videoCardSizeSettled(
-  data: Record<string, unknown> | undefined,
-  limits?: Partial<VideoFitLimits> | null,
-): boolean {
-  if (!data) return false
-  if (positive(data.cardWidth) === null || positive(data.cardHeight) === null) return false
-  return followedVideoCardSizePatch(data, limits) === null
-}
 
