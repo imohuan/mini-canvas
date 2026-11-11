@@ -58,6 +58,8 @@ packages/canvas-core-v2/demo-web/plugins/
 # 仓库内源码插件目录一律叫 plugin-<名字>；而 NPM 装的用发布包名 @plume-canvas/plugin-<名字>，
 # 两者命名不重叠，所以这条不会误伤源码包。
 packages/plugins/plume-canvas-plugin-*
+# scope 包的落盘目录名是「去 @、/ 换 __」：@plume-canvas/plugin-x → plume-canvas__plugin-x
+packages/plugins/plume-canvas__plugin-*
 
 # 分析 VueFlow 源码用(浅克隆, 不入库); 用 codegraph 索引查询
 vendor/
