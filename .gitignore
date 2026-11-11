@@ -69,6 +69,9 @@ vendor/
 _snap_tmp/
 packages/ui/_snap_tmp/
 .scratch/
+# 各包自己的 .scratch（截图 / 探针脚本 / 一次性的验证脚本）也不入库
+**/.scratch/
+**/.tmp-verify/
 .penguin-patch-tmp/
 cdp-*.txt
 packages/ui/e2e/_shots/
