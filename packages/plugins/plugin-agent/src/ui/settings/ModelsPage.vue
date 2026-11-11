@@ -532,14 +532,17 @@ async function save(): Promise<void> {
 
             <div v-if="probeEntries.length" class="ap-probe-results">
               <div v-for="e in probeEntries" :key="e.model" class="ap-probe-result" :class="{ 'is-ok': e.result.ok }">
-                <p class="ap-probe-head">
+                <p class="ap-probe-title">
                   <CheckCircle2 v-if="e.result.ok" :size="14" aria-hidden="true" />
                   <XCircle v-else :size="14" aria-hidden="true" />
                   <span class="ap-probe-model">{{ e.model }}</span>
-                  <span v-if="e.result.ok">通了 · {{ e.result.clientType }} · {{ e.result.latencyMs }}ms</span>
-                  <span v-else>没通：{{ e.result.error || '请求失败' }}</span>
+                  <span class="ap-probe-state" :class="e.result.ok ? 'is-ok' : 'is-bad'">{{ e.result.ok ? '通了' : '没通' }}</span>
                 </p>
-                <p v-if="e.result.reply" class="ap-hint">回复「{{ e.result.reply }}」</p>
+                <p class="ap-probe-desc">
+                  <template v-if="e.result.ok">{{ e.result.clientType }} · {{ e.result.latencyMs }}ms</template>
+                  <template v-else>{{ e.result.error || '请求失败' }}</template>
+                </p>
+                <p v-if="e.result.reply" class="ap-probe-reply">回复「{{ e.result.reply }}」</p>
                 <p v-if="e.result.fallback === 'non-stream'" class="ap-hint">
                   这个网关的流式返回缺少用量字段，检测改用了一次普通请求确认连通。
                 </p>
@@ -581,12 +584,25 @@ async function save(): Promise<void> {
 .ap-saved-row:hover { background: var(--ui-hover, #f4f6f9); }
 .ap-saved-check { flex: none; width: 14px; height: 14px; accent-color: var(--ui-accent, #0891b2); }
 .ap-saved-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-family: var(--font-mono, ui-monospace, monospace); color: var(--ui-ink, #18202b); }
-.ap-saved-result { flex: none; font-size: 10px; color: var(--ui-danger, #ef4444); }
-.ap-saved-result.is-ok { color: var(--ui-accent, #0891b2); }
+/* 状态色固定：成功绿、失败红。这里不跟主题强调色走 —— 强调色可能本身就是红色，
+   会把「成功」也画成红框（2026-11-11 截图）。 */
+.ap-saved-result { flex: none; font-size: 10px; color: #dc2626; }
+.ap-saved-result.is-ok { color: #16a34a; }
 .ap-probe-results { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
 .ap-probe-model { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
-.ap-probe-result { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
-.ap-probe-result.is-ok { border-color: var(--ui-accent, #0891b2); }
-.ap-probe-head { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-ink, #18202b); }
+/* 信息卡片：默认灰框；成功绿框、失败红框。只有这一块用状态色，选中效果仍用主题色。 */
+.ap-probe-result { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
+.ap-probe-result.is-ok { border-color: #16a34a; }
+.ap-probe-result.is-ok .ap-probe-title > svg { color: #16a34a; }
+.ap-probe-result:not(.is-ok) { border-color: #dc2626; }
+.ap-probe-result:not(.is-ok) .ap-probe-title > svg { color: #dc2626; }
+.ap-probe-title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-ink, #18202b); }
+.ap-probe-title .ap-probe-model { font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
+.ap-probe-state { margin-left: auto; font-size: 10px; font-weight: 600; }
+.ap-probe-state.is-ok { color: #16a34a; }
+.ap-probe-state.is-bad { color: #dc2626; }
+/* 描述放第二行：协议 / 耗时（或失败原因） */
+.ap-probe-desc { margin: 0; font-size: 11px; line-height: 1.5; color: var(--ui-ink-dim, #6b7280); }
+.ap-probe-reply { margin: 0; font-size: 10px; line-height: 1.5; color: var(--ui-ink-mute, #8c95a3); }
 .ap-flush-card :deep(.shadcn-settings-section__body) { border: 0; background: transparent; padding: 0; overflow: visible; }
 </style>

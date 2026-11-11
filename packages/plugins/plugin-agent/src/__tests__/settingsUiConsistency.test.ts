@@ -122,4 +122,22 @@ describe('模型 / MCP 的检测与自定义模型（用户 2026-11-11 续）', 
     expect(mcp).toContain('检测配置')
     expect(mcp).toContain('不会保存')
   })
+
+  it('MCP 检测结果挂在对应服务行下面，可折叠，不再堆在页面最底部', () => {
+    expect(mcp).toContain('serverResult(m.name)')
+    expect(mcp).toContain('toggleExpanded(m.name)')
+    expect(mcp).toContain('ap-server-detail')
+    expect(mcp).not.toContain('toolsByServer')
+  })
+
+  it('测试信息卡片：默认灰、成功绿、失败红；描述在第二行', () => {
+    const models = read('../ui/settings/ModelsPage.vue')
+    expect(models).toContain('#16a34a')
+    expect(models).toContain('#dc2626')
+    expect(models).toContain('ap-probe-desc')
+    // 结果卡片不再用主题强调色当边框
+    const resultRule = /\.ap-probe-result\.is-ok\s*\{([^}]*)\}/.exec(models)?.[1] ?? ''
+    expect(resultRule).toContain('#16a34a')
+    expect(resultRule).not.toContain('--ui-accent')
+  })
 })

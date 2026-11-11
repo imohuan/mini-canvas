@@ -52,6 +52,8 @@ const isStdio = computed(() => form.value.kind === 'stdio')
 
 const probing = ref(false)
 const probe = ref<McpProbeResult | null>(null)
+/** 哪些服务的结果被展开（默认折起来，和列表行一一对应） */
+const expanded = ref<Set<string>>(new Set())
 /** 添加页的「检测」：不保存也先连一次 */
 const draftProbing = ref(false)
 const draftProbe = ref<McpProbeResult | null>(null)
@@ -61,23 +63,34 @@ onMounted(() => void agent.refresh())
 async function checkConnection(): Promise<void> {
   probing.value = true
   probe.value = null
+  expanded.value = new Set()
   try {
     probe.value = await agent.probeMcp()
+    // 连不上的默认展开：用户点检测就是为了看问题；连上的也展开第一个，省一次点击
+    const failed = probe.value.servers.filter((sv) => sv.status !== 'completed')
+    const open = (failed.length ? failed : probe.value.servers.slice(0, 1)).map((sv) => sv.name)
+    expanded.value = new Set(open)
   } finally {
     probing.value = false
   }
 }
 
-const toolsByServer = computed(() => {
-  const map = new Map<string, McpProbeResult['tools']>()
-  for (const t of probe.value?.tools ?? []) {
-    const key = t.server || '（未知服务）'
-    const list = map.get(key) ?? []
-    list.push(t)
-    map.set(key, list)
-  }
-  return [...map.entries()]
-})
+/** 某个服务这次检测的结果（列表行里就地显示；没有就不显示） */
+function serverResult(name: string): McpProbeResult['servers'][number] | undefined {
+  return probe.value?.servers.find((sv) => sv.name === name)
+}
+
+/** 某个服务拿到的工具 */
+function toolsOf(name: string): McpProbeResult['tools'] {
+  return (probe.value?.tools ?? []).filter((t) => t.server === name)
+}
+
+function toggleExpanded(name: string): void {
+  const next = new Set(expanded.value)
+  if (next.has(name)) next.delete(name)
+  else next.add(name)
+  expanded.value = next
+}
 
 function openAdd(): void {
   form.value = { name: '', kind: 'http', url: '', command: 'node', args: '' }
@@ -143,30 +156,63 @@ async function save(): Promise<void> {
       </div>
 
       <ul class="ap-list">
-        <li v-for="m in s.mcpServers" :key="m.name" class="ap-list-row">
-          <div class="ap-list-main">
-            <div class="ap-list-title">
-              <span class="ap-list-name">{{ m.name }}</span>
-              <Badge v-if="m.builtin" variant="secondary">自带</Badge>
-              <Badge v-else variant="outline">{{ m.permission ?? 'auto' }}</Badge>
-              <Badge v-if="m.invalid" variant="outline">配置有误</Badge>
+        <li v-for="m in s.mcpServers" :key="m.name" class="ap-list-item">
+          <div class="ap-list-row">
+            <div class="ap-list-main">
+              <div class="ap-list-title">
+                <span class="ap-list-name">{{ m.name }}</span>
+                <Badge v-if="m.builtin" variant="secondary">自带</Badge>
+                <Badge v-else variant="outline">{{ m.permission ?? 'auto' }}</Badge>
+                <Badge v-if="m.invalid" variant="outline">配置有误</Badge>
+                <!-- 检测结果就地挂在服务名后面：一眼看出哪个通了、哪个没通 -->
+                <span
+                  v-if="serverResult(m.name)"
+                  class="ap-server-state"
+                  :class="serverResult(m.name)!.status === 'completed' ? 'is-ok' : 'is-bad'"
+                >
+                  {{ serverResult(m.name)!.status === 'completed' ? '通 · ' + serverResult(m.name)!.tools + ' 个工具' : '没通' }}
+                </span>
+              </div>
+              <div class="ap-list-desc">{{ String(m.config.url || m.config.command || '') || '（没有地址）' }}</div>
+              <div v-if="m.invalid" class="ap-list-err">{{ m.invalid }}</div>
+              <div v-else-if="m.builtin" class="ap-list-meta">随智能助手内置：不能修改，也不能删除</div>
             </div>
-            <div class="ap-list-desc">{{ String(m.config.url || m.config.command || '') || '（没有地址）' }}</div>
-            <div v-if="m.invalid" class="ap-list-err">{{ m.invalid }}</div>
-            <div v-else-if="m.builtin" class="ap-list-meta">随智能助手内置：不能修改，也不能删除</div>
+            <Button
+              v-if="serverResult(m.name)"
+              variant="ghost"
+              size="xs"
+              type="button"
+              :aria-expanded="expanded.has(m.name)"
+              :aria-label="'查看 ' + m.name + ' 的检测结果'"
+              @click="toggleExpanded(m.name)"
+            >
+              {{ expanded.has(m.name) ? '收起' : '详情' }}
+            </Button>
+            <Button
+              v-if="!m.builtin"
+              variant="destructive"
+              size="sm"
+              type="button"
+              :disabled="busy"
+              :aria-label="'删除 MCP ' + m.name"
+              @click="agent.removeMcp(m.name)"
+            >
+              <Trash2 :size="13" aria-hidden="true" /> 删除
+            </Button>
+            <span v-else class="ap-readonly">只读</span>
           </div>
-          <Button
-            v-if="!m.builtin"
-            variant="destructive"
-            size="sm"
-            type="button"
-            :disabled="busy"
-            :aria-label="'删除 MCP ' + m.name"
-            @click="agent.removeMcp(m.name)"
-          >
-            <Trash2 :size="13" aria-hidden="true" /> 删除
-          </Button>
-          <span v-else class="ap-readonly">只读</span>
+
+          <!-- 折叠详情：结果跟在这一行下面，不再堆到页面最底部 -->
+          <div v-if="serverResult(m.name) && expanded.has(m.name)" class="ap-server-detail">
+            <p v-if="serverResult(m.name)!.error" class="ap-list-err">{{ serverResult(m.name)!.error }}</p>
+            <p v-if="toolsOf(m.name).length" class="ap-hint">
+              {{ toolsOf(m.name).length }} 个工具 · {{ serverResult(m.name)!.transport || '连接' }} · {{ serverResult(m.name)!.durationMs }}ms
+            </p>
+            <div v-if="toolsOf(m.name).length" class="ap-tagpool">
+              <Badge v-for="t in toolsOf(m.name)" :key="t.fullName" variant="secondary" :title="t.description">{{ t.name }}</Badge>
+            </div>
+            <p v-else-if="serverResult(m.name)!.status === 'completed'" class="ap-hint">连上了，但没发现任何工具。</p>
+          </div>
         </li>
       </ul>
 
@@ -188,27 +234,10 @@ async function save(): Promise<void> {
         </Button>
       </div>
 
-      <div v-if="probe" class="ap-probe">
+      <!-- 整体失败 / 警告：结果本身已落到各自的服务行下，这里只说不能归到某一行的东西 -->
+      <div v-if="probe && (probe.error || probe.warnings.length)" class="ap-probe">
         <p v-if="probe.error" class="ap-error">{{ probe.error }}</p>
-        <template v-else>
-          <p class="ap-hint">
-            {{ probe.ok ? '连接成功' : '有服务连不上' }}：
-            <span v-for="(sv, i) in probe.servers" :key="sv.name">
-              {{ i ? '、' : '' }}{{ sv.name }}(<span :class="sv.status === 'completed' ? '' : 'is-bad'">{{ sv.tools }} 个工具</span><template
-                v-if="sv.status !== 'completed'">· {{ sv.status }}<template v-if="sv.error"> {{ sv.error }}</template></template>)
-            </span>
-            <template v-if="!probe.servers.length">没有任何服务返回结果</template>
-          </p>
-          <p v-for="w in probe.warnings" :key="w" class="ap-hint is-bad">{{ w }}</p>
-
-          <div v-for="[server, list] in toolsByServer" :key="server" class="ap-toolgroup">
-            <strong class="ap-toolgroup-name">{{ server }}</strong>
-            <div class="ap-tagpool">
-              <Badge v-for="t in list" :key="t.fullName" variant="secondary" :title="t.description">{{ t.name }}</Badge>
-            </div>
-          </div>
-          <p v-if="probe.ok && !probe.tools.length" class="ap-hint">连上了，但没发现任何工具。</p>
-        </template>
+        <p v-for="w in probe.warnings" :key="w" class="ap-hint is-bad">{{ w }}</p>
       </div>
     </div>
 
@@ -255,13 +284,16 @@ async function save(): Promise<void> {
         <div v-if="draftProbe" class="ap-probe-result" :class="{ 'is-ok': draftProbe.ok }">
           <p v-if="draftProbe.error" class="ap-error">{{ draftProbe.error }}</p>
           <template v-else>
-            <p class="ap-hint">{{ draftProbe.ok ? '连接成功' : '连接失败' }}：{{ draftProbe.servers.length }} 个服务 · {{ draftProbe.tools.length }} 个工具</p>
+            <p class="ap-probe-title">
+              <span class="ap-probe-state" :class="draftProbe.ok ? 'is-ok' : 'is-bad'">{{ draftProbe.ok ? '连接成功' : '连接失败' }}</span>
+              <span class="ap-probe-desc">{{ draftProbe.servers.length }} 个服务 · {{ draftProbe.tools.length }} 个工具</span>
+            </p>
+            <p v-for="sv in draftProbe.servers" :key="sv.name" class="ap-probe-desc" :class="{ 'is-bad-text': sv.status !== 'completed' }">
+              {{ sv.name }} · {{ sv.status }} · {{ sv.tools }} 个工具<template v-if="sv.error"> · {{ sv.error }}</template>
+            </p>
             <div v-if="draftProbe.tools.length" class="ap-tagpool">
               <Badge v-for="t in draftProbe.tools" :key="t.fullName" variant="secondary" :title="t.description">{{ t.name }}</Badge>
             </div>
-            <p v-for="sv in draftProbe.servers" :key="sv.name" class="ap-hint" :class="{ 'is-bad': sv.status !== 'completed' }">
-              {{ sv.name }} · {{ sv.status }} · {{ sv.tools }} 个工具<template v-if="sv.error"> · {{ sv.error }}</template>
-            </p>
             <p v-for="w in draftProbe.warnings" :key="w" class="ap-hint is-bad">{{ w }}</p>
           </template>
         </div>
@@ -283,6 +315,15 @@ async function save(): Promise<void> {
 .ap-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .ap-list-row { display: flex; align-items: center; gap: 12px; padding: 9px 8px; border-radius: 10px; }
 .ap-list-row:hover { background: var(--ui-hover, #f4f6f9); }
+.ap-list-item { border-radius: 10px; }
+.ap-list-item:hover { background: var(--ui-hover, #f4f6f9); }
+.ap-list-item .ap-list-row:hover { background: transparent; }
+/* 检测状态：成功绿、失败红（与模型卡片同一套固定状态色） */
+.ap-server-state { flex: none; font-size: 10px; font-weight: 600; }
+.ap-server-state.is-ok { color: #16a34a; }
+.ap-server-state.is-bad { color: #dc2626; }
+/* 折叠详情贴着这一行，左边缩进与文字列对齐 */
+.ap-server-detail { display: flex; flex-direction: column; gap: 6px; margin: 0 8px 8px 8px; padding: 8px 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
 .ap-list-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .ap-list-title { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
 .ap-list-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--ui-ink, #18202b); }
@@ -297,7 +338,15 @@ async function save(): Promise<void> {
 .ap-mcp-form { padding: 4px 0; }
 .ap-draft-probe { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; }
 .ap-probe-result { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
-.ap-probe-result.is-ok { border-color: var(--ui-accent, #0891b2); }
+/* 信息卡片：默认灰框，成功绿框、失败红框（状态色固定，不跟主题强调色） */
+.ap-probe-result.is-ok { border-color: #16a34a; }
+.ap-probe-result:not(.is-ok) { border-color: #dc2626; }
+.ap-probe-title { display: flex; align-items: center; gap: 6px; margin: 0; }
+.ap-probe-state { font-size: 12px; font-weight: 600; }
+.ap-probe-state.is-ok { color: #16a34a; }
+.ap-probe-state.is-bad { color: #dc2626; }
+.ap-probe-desc { margin: 0; font-size: 11px; line-height: 1.5; color: var(--ui-ink-dim, #6b7280); }
+.ap-probe-desc.is-bad-text { color: #dc2626; }
 .ap-form-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; }
 .ap-input { width: 100%; }
 .ap-select { width: 160px; }
