@@ -126,3 +126,30 @@ export function followedCardSizePatch(
   if (positive(data.cardWidth) === patch.size.w && positive(data.cardHeight) === patch.size.h) return null
   return patch
 }
+
+/**
+ * 量到图片真实尺寸后的统一写回补丁（图片地址一变就量一次）。
+ *
+ * 用户口径（2026-11-11，图片与视频同一条）：「直接看地址，一变就先量尺寸，再按尺寸显示」。
+ * 与 `missingCardSizePatch` 的区别：那个只补「卡片还没有尺寸」；图片节点不允许手动 resize
+ * （resizable:false），卡片尺寸本就该由画面比例决定，所以已经有一个**比例不对**的尺寸时也要纠正。
+ *
+ * 幂等：算出来与当前一致就返回 null、一次都不写（否则写回会再次触发判断，转成死循环）。
+ *
+ * @param imageWidth  刚量到的图片宽
+ * @param imageHeight 刚量到的图片高
+ */
+export function measuredCardSizePatch(
+  data: Record<string, unknown> | undefined,
+  imageWidth: unknown,
+  imageHeight: unknown,
+  limits?: Partial<ImageFitLimits> | null,
+): CardSizePatch | null {
+  if (!data) return null
+  const patch = cardSizePatch(imageWidth, imageHeight, limits)
+  if (!patch) return null
+  // 宽高与卡片尺寸都已经是这一组 → 一次都不写（幂等）
+  const sameMeta = positive(data.imageWidth) === positive(imageWidth) && positive(data.imageHeight) === positive(imageHeight)
+  const sameSize = positive(data.cardWidth) === patch.size.w && positive(data.cardHeight) === patch.size.h
+  return sameMeta && sameSize ? null : patch
+}

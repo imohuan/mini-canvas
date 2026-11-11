@@ -144,13 +144,24 @@ export function createCreateNodeScope(
     const position = spawnPosition(atFlow)
     let newId: unknown
     if (type === 'image') {
-      if (!target?.command) return null
-      newId = target.command.execute('command:create-node', {
-        type: 'image',
-        position,
-        imageUrl: asset.url,
-        ...(asset.name ? { name: asset.name } : {}),
-      })
+      /**
+       * 图片：先量真实宽高再建节点（与视频同一条口径）。
+       *
+       * 只走 command:create-node 的话，节点先按默认 320×240（4:3）画出来，
+       * 16:9 的图先留一圈白边、等 `<img>` 加载完才纠正（用户 2026-11-11 实测）。
+       */
+      const imageSvc = ctx?.get<{ addImageNodeWithSize?: (p: { x: number; y: number }, url: string, name?: string) => Promise<string> }>('image')
+      if (imageSvc?.addImageNodeWithSize) {
+        newId = await imageSvc.addImageNodeWithSize(position, asset.url, asset.name)
+      } else {
+        if (!target?.command) return null
+        newId = target.command.execute('command:create-node', {
+          type: 'image',
+          position,
+          imageUrl: asset.url,
+          ...(asset.name ? { name: asset.name } : {}),
+        })
+      }
     } else {
       // video / audio：走插件服务（服务名与节点类型同名；插件没装 → undefined → 明确反馈）
       const svc = ctx?.get<{

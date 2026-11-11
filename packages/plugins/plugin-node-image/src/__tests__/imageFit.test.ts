@@ -14,6 +14,7 @@ import {
   missingCardSizePatch,
   readImageFitLimits,
   resolveImageFitLimits,
+  measuredCardSizePatch,
 } from '../imageFit'
 
 describe('fitCardSize：等比 + 最短边 / 最长边', () => {
@@ -153,5 +154,33 @@ describe('followedCardSizePatch：换图时跟随新图 + 幂等', () => {
     trigger()
     trigger()
     expect(writes).toEqual([{ cardWidth: 420, cardHeight: 280 }])
+  })
+})
+
+describe('measuredCardSizePatch：量到宽高就按尺寸显示（已有错误比例也纠正）', () => {
+  it('卡片是默认 4:3、图是 16:9 → 给出新补丁（拖入后黑边的那个场景）', () => {
+    expect(
+      measuredCardSizePatch({ imageWidth: 1600, imageHeight: 900, cardWidth: 320, cardHeight: 240 }, 1600, 900),
+    ).toEqual(cardSizePatch(1600, 900))
+  })
+
+  it('宽高与尺寸都已一致 → null（幂等，一次都不写）', () => {
+    const fit = cardSizePatch(1600, 900)!.size
+    expect(
+      measuredCardSizePatch(
+        { imageWidth: 1600, imageHeight: 900, cardWidth: fit.w, cardHeight: fit.h },
+        1600,
+        900,
+      ),
+    ).toBeNull()
+  })
+
+  it('宽高没有、尺寸也没写 → 给出补丁（旧数据 / 后台建的节点）', () => {
+    expect(measuredCardSizePatch({}, 1600, 900)).toEqual(cardSizePatch(1600, 900))
+  })
+
+  it('量到的尺寸非法 → null（不猜数字，也不把已有尺寸改坏）', () => {
+    expect(measuredCardSizePatch({ cardWidth: 320, cardHeight: 240 }, 0, 900)).toBeNull()
+    expect(measuredCardSizePatch(undefined, 1600, 900)).toBeNull()
   })
 })

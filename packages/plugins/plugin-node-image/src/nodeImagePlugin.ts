@@ -18,7 +18,8 @@ import {
 import type { DocService } from '@mini-canvas/canvas-data'
 import { thumbTierFields, thumbTierKeys } from './thumbTier'
 import { imageTitleExtra } from './imageNodeData'
-import { followedCardSizePatch, readImageFitLimits } from './imageFit'
+import { cardSizePatch, followedCardSizePatch, readImageFitLimits } from './imageFit'
+import { resolveImageSrc } from './imageRefs'
 import ImageContent from './ImageContent.vue'
 import ImageTopToolbar from './ImageTopToolbar.vue'
 import ImageFrameOverlay from './ImageFrameOverlay.vue'
@@ -27,7 +28,7 @@ import ImagePaintPanel from './ImagePaintPanel.vue'
 import { beginCrop, beginExpand, endEdit, onEditModeChange } from './cropSession'
 import { beginPaint, endPaint, isPainting, onPaintModeChange, paintState, redoStroke, undoStroke } from './paintSession'
 import { createImageOps, cropImage, downloadImageNode, expandImageNode, paintImageNodes, rotateImage, uploadImage } from './imageOps'
-import { pickImageFile } from './imageTransform'
+import { pickImageFile, readImageSize } from './imageTransform'
 import type { Rect } from '@mini-canvas/canvas-render'
 import {
   MEDIA_CREATOR_FIELD,
@@ -44,6 +45,14 @@ export interface ImageNodeService {
    * 拿到的是别的插件（视频截图、文件拖入、资产导入）的统一入口。
    */
   addImageNodeFromResource(position: { x: number; y: number }, resourceId: string, meta?: ImageNodeMeta): string
+  /**
+   * 放一张**已经能显示**的图：先量真实宽高，再连同卡片尺寸一次建出来。
+   *
+   * 为什么不复用 addImageNode：那个只写地址，卡片先按默认 320×240（4:3）画，
+   * 要等 `<img>` 加载完才纠正 —— 用户看到的是「先留一圈白边再跳一下」。
+   * 资产拖入走这条路（地址本来就能直接量）。
+   */
+  addImageNodeWithSize(position: { x: number; y: number }, imageUrl: string, name?: string): Promise<string>
   /** 删除节点并落盘 */
   removeNode(id: string): void
 }
@@ -93,6 +102,31 @@ export class ImageService extends Service implements ImageNodeService {
     if (typeof meta?.width === 'number' && meta.width > 0) data.imageWidth = meta.width
     if (typeof meta?.height === 'number' && meta.height > 0) data.imageHeight = meta.height
     return doc.transaction('add-image-node', (tx) => tx.createNode('image', position, data))
+  }
+
+  /**
+   * 带真实宽高建图片节点：量到尺寸就一并写 imageWidth/Height + 卡片尺寸；
+   * 量不到（跨域 / 解码失败）就退回只写地址 —— 绝不猜一个尺寸。
+   */
+  async addImageNodeWithSize(position: { x: number; y: number }, imageUrl: string, name?: string): Promise<string> {
+    if (!imageUrl) return this.addImageNode(position, '')
+    const playable = (await resolveImageSrc(this.ctx, { imageUrl })) || imageUrl
+    const size = await readImageSize(playable).catch(() => null)
+    const data: Record<string, unknown> = { imageUrl }
+    if (name) data.imageName = name
+    let card: { w: number; h: number } | undefined
+    if (size && size.width > 0 && size.height > 0) {
+      data.imageWidth = size.width
+      data.imageHeight = size.height
+      card = cardSizePatch(size.width, size.height, readImageFitLimits(this.ctx))?.size
+    }
+    const doc = this.ctx.get('doc')
+    return doc.transaction('add-image-node', (tx) => {
+      const id = tx.createNode('image', position, data)
+      // 尺寸与 data 同一次事务：只记一条撤销，建出来就是对的
+      if (card) tx.updateNode(id, { size: card })
+      return id
+    })
   }
 
   /** 删除节点：连带清掉与它相连的边与选中态，包一次历史并落盘（统一走 graph）。
