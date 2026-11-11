@@ -27,7 +27,7 @@ import { handleTab } from './tabPageOnly'
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { provideMiniMapDockTarget } from './composables/miniMapDock'
 import { flushPendingSave } from './composables/pendingSave'
-import { CANVAS_PLUGINS, seedDefaultCanvas } from './assembly'
+import { resolveCanvasPlugins, seedDefaultCanvas } from './assembly'
 import { APP_SHELL_KEY, type AppShell } from './app-shell'
 import { inject } from 'vue'
 
@@ -91,7 +91,8 @@ onMounted(async () => {
       appBase: shell.appBase,
       seed: seedDefaultCanvas,
       dev: import.meta.env.DEV,
-      plugins: CANVAS_PLUGINS,
+      // dev 用静态清单；build 的插件已由 AppProvider 从 cloud-server 装载，这里不再传冷启动件。
+      plugins: await resolveCanvasPlugins(),
     })
     if (disposed) {
       await session.dispose()

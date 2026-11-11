@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { APP_PLUGINS, CANVAS_PLUGINS } from '../assembly'
+import { DEV_APP_PLUGINS, DEV_CANVAS_PLUGINS } from '../dev-plugins'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PLUGINS_DIR = path.resolve(HERE, '../../../plugins')
@@ -62,7 +62,7 @@ describe('6 个基础交互插件 = 自带件', () => {
     // 分层后清单拆成两份：应用级常驻（APP_PLUGINS）与进入画布才装的（CANVAS_PLUGINS）。
     // 这两份合起来才是"自带件全都在"。
     const names = new Set(
-      [...APP_PLUGINS, ...CANVAS_PLUGINS].map((p) => (p as { name?: string }).name),
+      [...DEV_APP_PLUGINS, ...DEV_CANVAS_PLUGINS].map((p) => (p as { name?: string }).name),
     )
     for (const [dir, pluginName] of Object.entries(BUILTIN_INTERACTIVE)) {
       expect(names.has(pluginName), dir + '（' + pluginName + '）不在冷启动清单里').toBe(true)
@@ -77,7 +77,7 @@ describe('6 个基础交互插件 = 自带件', () => {
     const byPluginName = new Map<string, string>(
       Object.entries(BUILTIN_INTERACTIVE).map(([dir, name]) => [name, dir]),
     )
-    for (const plugin of [...APP_PLUGINS, ...CANVAS_PLUGINS]) {
+    for (const plugin of [...DEV_APP_PLUGINS, ...DEV_CANVAS_PLUGINS]) {
       const name = (plugin as { name?: string }).name
       const dir = name ? byPluginName.get(name) : undefined
       if (!dir) continue

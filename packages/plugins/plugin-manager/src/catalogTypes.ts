@@ -146,9 +146,14 @@ export function defaultInstalledIds(entries: CatalogEntry[]): string[] {
  * 规则：**有存档就用存档**（用户上次卸过的不再自动装回来）；**没存档（首次）就默认全装**。
  * 存档里的 id 也可能已经不在清单里了（后台撤了某插件）—— 按清单过滤，只留还在的。
  */
-export function resolveDesiredIds(entries: CatalogEntry[], saved: string[] | undefined): string[] {
+export function resolveDesiredIds(
+  entries: CatalogEntry[],
+  saved: string[] | undefined,
+  /** 宿主注入的自带插件 id（首启装这些）；缺省沿用「一个都不装」 */
+  initialIds?: readonly string[],
+): string[] {
   // 只对"可装卸"的插件算意图；自带插件永不进这套（避免被当成待装项）。
   const ids = new Set(entries.filter((e) => e.builtin !== true).map((e) => e.id))
-  const source = saved === undefined ? defaultInstalledIds(entries) : saved
+  const source = saved === undefined ? (initialIds && initialIds.length ? initialIds : defaultInstalledIds(entries)) : saved
   return source.filter((id) => ids.has(id))
 }

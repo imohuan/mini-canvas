@@ -19,9 +19,12 @@ describe('自带后台半随构建部署', () => {
   it('★ 构建资源时把 plugin-node-ui 的后台半放进 server-plugins', () => {
     const src = readFileSync(SCRIPT, 'utf8')
     // 要真的调用构建 + 复制，而不是只在注释里提一句
-    // 清单里要有 plugin-node-ui；构建任务真的跑它的 build:server（不靠人手工 deploy）
+    // 清单里要有 plugin-node-ui；它的 build 脚本自己会跑 build:server（不靠人手工 deploy）
     expect(src).toMatch(/BUILTIN_SERVER_PLUGINS\s*=\s*\[[^\]]*plugin-node-ui/)
-    expect(src).toMatch(/script:\s*"build:server"/)
+    const pkg = JSON.parse(
+      readFileSync(path.join(REPO, 'packages/plugins/plugin-node-ui/package.json'), 'utf8'),
+    )
+    expect(pkg.scripts.build).toMatch(/build-server\.mjs|build:server/)
     expect(src).toMatch(/server-plugins/)
     expect(src).toMatch(/copyFile|cp\(/)
   })
@@ -30,5 +33,24 @@ describe('自带后台半随构建部署', () => {
     const src = readFileSync(SCRIPT, 'utf8')
     expect(src).toMatch(/dist\/server\.js/)
     expect(src).toMatch(/process\.exit\(1\)/)
+  })
+
+  it('★ 每个插件都收进 assets/plugins（不再只收 cloud-client 一个）', () => {
+    // 用户口径：发布包里每个插件都要有产物，界面包一个插件都不内置。
+    // 旧脚本只收 cloud-client，其余插件「仓库里有、发布包里没有」，发出去就少功能。
+    const src = readFileSync(SCRIPT, 'utf8')
+    expect(src).toMatch(/plugin-assets\.mjs/)
+    expect(src).toMatch(/collectPlugins\(\)/)
+    expect(src).toMatch(/copyPluginDir\(/)
+    // 与发布打包共用同一套规则：两份入口产物必须同形
+    const shared = readFileSync(path.join(REPO, 'packages/cloud-server/scripts/plugin-assets.mjs'), 'utf8')
+    expect(shared).toMatch(/dist\/web\.js/)
+    expect(shared).toMatch(/dist\/server\.js/)
+    expect(shared).toMatch(/plume\.pluginName/)
+  })
+
+  it('后台半从 assets 铺，不从仓库源码目录披（发布包与本地跑同一份代码）', () => {
+    const src = readFileSync(SCRIPT, 'utf8')
+    expect(src).toMatch(/ASSETS, "plugins", d, "dist", "server\.js"/)
   })
 })

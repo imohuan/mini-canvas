@@ -12,7 +12,9 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createCloudServer, DEFAULT_DATA_DIR, DEFAULT_PORT } from './server.js'
-import { buildManifest, resolvePluginsDir } from './static.js'
+import { resolvePluginsDir } from './static.js'
+import { buildPluginCatalog } from './plugins/catalog.js'
+import { BUILTIN_PLUGINS, FIRST_INSTALL_DIRS } from './plugins/builtinPlugins.js'
 
 interface CliOptions {
   port: number
@@ -230,8 +232,12 @@ async function main(): Promise<void> {
   const opts = await parseArgs(process.argv)
   const { srv, info, portChanged } = await startWithPortFallback(opts)
 
-  // 打印前先探一次插件清单：让用户一眼看到"有几个插件会被画布装上"
-  const manifest = await buildManifest(await resolvePluginsDir(opts.plugins))
+  // 打印前先扫一次插件清单：让用户一眼看到"装了几个插件、其中几个是开箱就用的"。
+  // 这里报**插件管理清单**（/plugin-catalog.json 那份），因为界面现在按它装载；
+  // 旧的 ESM manifest 只服务历史路径，拿它报数会显示成 0~2 个，误导用户。
+  const catalog = await buildPluginCatalog(await resolvePluginsDir(opts.plugins, opts.dir))
+  const builtinIds = new Set(BUILTIN_PLUGINS.map((e) => e.dir))
+  const builtinEntries = catalog.plugins.filter((p) => builtinIds.has(p.id))
 
   console.log('')
   console.log('  plume-canvas 已启动')
@@ -242,8 +248,11 @@ async function main(): Promise<void> {
   console.log(`         kv/       ${srv.paths.kv}（设置 / 快捷这类小数据）`)
   console.log(`         canvases/ ${srv.paths.canvases}（一个画布一个文件夹）`)
   console.log(`  界面   ${srv.paths.ui ?? '未找到 packages/ui/dist —— 先执行 cd packages/ui && pnpm build'}`)
-  console.log(`  插件   ${srv.paths.plugins ?? '(未找到插件目录)'} · 清单里 ${manifest.length} 个`)
-  for (const p of manifest) console.log(`         - ${p.id}  → ${p.url}`)
+  console.log(
+    `  插件   ${srv.paths.plugins ?? '(未找到插件目录)'} · 识别到 ${catalog.plugins.length} 个，` +
+      `开箱自动装 ${builtinEntries.length} 个（首装 ${FIRST_INSTALL_DIRS.length} 个）`,
+  )
+  for (const p of builtinEntries) console.log(`         - ${p.id}  → ${p.url}`)
   console.log(`  平台   ${srv.paths.providers}（丢 .js 进去即多一个平台）`)
   console.log(`  后台插件 ${srv.paths.serverPlugins}（丢 .js 进去即多一个后台插件；重启生效）`)
   // ---- 管理面安全：令牌与白名单**逐行**打印（配错时能一眼看出来，而不是等 403 才猜）----

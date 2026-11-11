@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { Hono } from 'hono'
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { buildPluginCatalog } from './plugins/catalog.js'
+import { BUILTIN_BY_DIR, BUILTIN_PLUGINS, FIRST_INSTALL_DIRS } from './plugins/builtinPlugins.js'
 
 /**
  * 本包自己的根目录（用于找随包发布的 assets/）。
@@ -137,16 +138,26 @@ export async function resolveUiDist(explicit?: string): Promise<string | undefin
   return undefined
 }
 
-/** 找插件目录（含 dist 的插件包所在目录）：显式给了就用它，否则按候选顺序探测（仓库优先，随包兜底） */
-export async function resolvePluginsDir(explicit?: string): Promise<string | undefined> {
+/**
+ * 找插件目录。顺序（用户口径 2026-11-11）：
+ *
+ *   1. 显式 `--plugins`（仓库开发时指到 packages/plugins）
+ *   2. **数据根下的 plugins/** —— 安装、更新都落这里，是运行时唯一可写的位置
+ *   3. 包内 `assets/plugins` —— 首启兜底（cloud-server 打包时把全部插件收进来了）
+ *
+ * 注意：仓库里的 `packages/plugins` **不再**自动命中。开发时要么用 `--plugins` 指过去，
+ * 要么让启动脚本把插件同步到数据根，避免「在仓库里跑就永远看不到数据根那份」。
+ */
+export async function resolvePluginsDir(
+  explicit?: string,
+  dataDir?: string,
+): Promise<string | undefined> {
   if (explicit) {
     if (!(await isDir(explicit))) throw new Error(`--plugins 指定的目录不存在: ${explicit}`)
     return path.resolve(explicit)
   }
   const candidates = [
-    path.resolve('packages/plugins'),
-    path.resolve('../plugins'),
-    path.resolve('plugins'),
+    ...(dataDir ? [path.join(path.resolve(dataDir), 'plugins')] : []),
     path.join(PACKAGE_ROOT, 'assets/plugins'),
   ]
   for (const c of candidates) {
@@ -189,11 +200,11 @@ export async function buildManifest(pluginsDir: string | undefined): Promise<Man
   for (const name of names.sort()) {
     if (name.startsWith('_') || name.startsWith('.')) continue
 
-    // 冷启动自带插件（plume.builtin: true）不进外部清单。
+    // 冷启动自带插件（项目内置清单里的目录）不进外部清单。
     // 为什么必须卡：它们由应用 APP_PLUGINS 装配，产物多为「external @plume-canvas/* 的 ESM」，
     // 被 install({ url }) 走 import(data:…) 加载时裸模块名解析不了，每次开页必炸一条
     // "Failed to resolve module specifier"（实测：plugin-bottom-bar）。
-    if (await isBuiltinPlugin(path.join(pluginsDir, name))) continue
+    if (isBuiltinPluginDir(name)) continue
 
     // —— 形态一：目录下直接放的单个 .js 文件 ——
     // 这是给"手写个小插件试一下"准备的：扔一个 js 进来就行，不用搭 <包名>/dist/ 那套目录。
@@ -217,17 +228,13 @@ export async function buildManifest(pluginsDir: string | undefined): Promise<Man
 }
 
 /**
- * 该插件目录是否为**冷启动自带件**（package.json 声明 plume.builtin: true）。
- * 与 /plugin-catalog.json 的 builtin 判据同源（见 plugins/catalog.ts 的 isBuiltin）。
+ * 该插件目录是否为**冷启动自带件**。
+ *
+ * 与 /plugin-catalog.json 的 builtin 判据同源：只看项目自己的内置清单
+ * （plugins/builtinPlugins.ts），不读插件 package.json 里的 plume.builtin。
  */
-async function isBuiltinPlugin(pkgDir: string): Promise<boolean> {
-  try {
-    const raw = await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8')
-    const pkg = JSON.parse(raw) as { plume?: { builtin?: boolean } }
-    return pkg.plume?.builtin === true
-  } catch {
-    return false
-  }
+function isBuiltinPluginDir(dirName: string): boolean {
+  return BUILTIN_BY_DIR.has(dirName)
 }
 
 /**
@@ -553,7 +560,14 @@ export function pluginRoutes(pluginsDir: string | undefined): Hono {
    * 与上面的 /plugin-manifest.json（ESM，给应用冷启动用）各管一摊，详见 plugins/catalog.ts 文件头。
    */
   app.get('/plugin-catalog.json', async (c) => {
-    return c.json(await buildPluginCatalog(pluginsDir))
+    const catalog = await buildPluginCatalog(pluginsDir)
+    // 自带插件清单：由**项目**决定（src/plugins/builtinPlugins.ts），不由插件自己在
+    // package.json 里写 builtin。前端首启按这份清单装，装完即用。
+    return c.json({
+      ...catalog,
+      builtinInstallIds: BUILTIN_PLUGINS.map((e) => e.dir),
+      firstInstallIds: FIRST_INSTALL_DIRS,
+    })
   })
 
   // 插件资源：/plugins/<pkg>/<相对路径…>（嵌套）或 /plugins/<file>（扁平）。

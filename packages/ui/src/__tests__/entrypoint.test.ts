@@ -14,6 +14,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { APP_PLUGINS, CANVAS_PLUGINS, SAMPLE_TEXT, createDefaultStorageAdapter, seedDefaultCanvas } from '../assembly'
+import { DEV_APP_PLUGINS, DEV_CANVAS_PLUGINS } from '../dev-plugins'
 import { canvasRenderPlugin } from '@plume-canvas/canvas-render'
 import * as entry from '../index'
 
@@ -90,23 +91,23 @@ describe('@plume-canvas/ui 出口契约', () => {
     // 主题已拆成 theme-components（应用级）与 theme-canvas（画布级）。
     // +1（2026-11-05）：canvas-render（渲染层基础设施：标准能力包注册）。
     // 它必须排在业务插件之前：业务插件启动时按名取能力，缺了就得等下一次唤醒。
-    expect(APP_PLUGINS).toHaveLength(9)
-    expect(CANVAS_PLUGINS.length).toBeGreaterThan(10)
-    expect(APP_PLUGINS.length + CANVAS_PLUGINS.length).toBe(25)
+    expect(DEV_APP_PLUGINS).toHaveLength(9)
+    expect(DEV_CANVAS_PLUGINS.length).toBeGreaterThan(10)
+    expect(DEV_APP_PLUGINS.length + DEV_CANVAS_PLUGINS.length).toBe(25)
     // 第一项是渲染层能力注册；紧随其后的主题皮提供节点壳 / 边 / 背景 / 设置面板默认皮，
     // 缺了画布就是白屏。能力先于业务插件，是因为业务插件 apply 时就要按名取能力。
-    expect(APP_PLUGINS[0]).toBe(canvasRenderPlugin)
-    expect(APP_PLUGINS[1]).toBeTruthy()
+    expect(DEV_APP_PLUGINS[0]).toBe(canvasRenderPlugin)
+    expect(DEV_APP_PLUGINS[1]).toBeTruthy()
     // 设置页「个人 → 快捷键」要有真实配置页：成品外壳不装完整快捷键插件，
     // 这一项专门提供设置页与按名组件。
-    expect(APP_PLUGINS.map((p) => (p as { name?: string }).name)).toContain('shortcut-settings')
+    expect(DEV_APP_PLUGINS.map((p) => (p as { name?: string }).name)).toContain('shortcut-settings')
     // 无重名：同名插件装两次会让注册表后装者覆盖先装者，症状极难查
-    const names = [...APP_PLUGINS, ...CANVAS_PLUGINS]
+    const names = [...DEV_APP_PLUGINS, ...DEV_CANVAS_PLUGINS]
       .map((p) => (p as { name?: string }).name)
       .filter(Boolean) as string[]
     expect(new Set(names).size).toBe(names.length)
     // 每个条目都得是可装载形态（对象带 apply，或类）
-    for (const p of [...APP_PLUGINS, ...CANVAS_PLUGINS]) {
+    for (const p of [...DEV_APP_PLUGINS, ...DEV_CANVAS_PLUGINS]) {
       const ok = typeof p === 'function' || typeof (p as { apply?: unknown }).apply === 'function'
       expect(ok, `清单里有一项不是可装载的插件形态: ${JSON.stringify(p)}`).toBe(true)
     }

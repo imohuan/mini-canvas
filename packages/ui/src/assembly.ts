@@ -1,165 +1,43 @@
 /**
- * @plume-canvas/ui 的**装配清单** —— 「这一版成品应用装了哪些插件」的唯一住址。
+ * @plume-canvas/ui 的装配清单。
  *
- * 为什么独立成文件：`App.vue` 只该关心「页面长什么样」。换一套插件组合（加减插件、换主题皮）
- * 是**装配决定**，不该去改 UI 组件 —— 宿主组件一行不动，改这里的数组就够了。
+ * **dev 与 build 是两条路**（用户口径 2026-11-11）：
+ * - dev：`dev-plugins.ts` 里直接 import 插件源码 —— 改完立刻热更，方便调插件；
+ * - build：界面包不含任何插件，全部由 cloud-server 的清单在启动时装载（`remote-plugins.ts`）。
  *
- * 数组顺序即装载顺序（`CanvasHost` 按数组顺序冷启动）。
+ * 所以本文件（build 也会用到）刻意**不 import 任何 @plume-canvas/plugin-***；
+ * 一旦这里出现插件 import，Rollup 就会把它们打进界面包，正是要避免的事。
+ *
+ * 插件是否「自带」由项目配置决定（cloud-server 的 `src/plugins/builtinPlugins.ts`），
+ * 不由插件自己在 package.json 里写 `plume.builtin`。
  */
 import type { CanvasNode, StorageAdapter } from '@plume-canvas/canvas-data'
 import type { PluginModule } from '@plume-canvas/kernel'
 import { LocalStorageAdapter } from '@plume-canvas/canvas-data'
-import { canvasRenderPlugin } from '@plume-canvas/canvas-render'
-import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
-import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
-import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
-import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
-import { gridSplitPlugin } from '@plume-canvas/plugin-image-grid-split'
-import { nodeRotatePlugin } from '@plume-canvas/plugin-node-rotate'
-import { node3dPreviewPlugin } from '@plume-canvas/plugin-node-3d-preview'
-// 下面三个插件改为经「插件管理」插件安装（本地中转后台发清单）—— 故意不冷启动装配。
-// 想恢复成冷启动：取消注释 import 与 APP_PLUGINS 里的对应行即可（见文件尾说明）。
-// import { nodeImageComparePlugin } from '@plume-canvas/plugin-node-image-compare'
-import { nodeVideoPlugin } from '@plume-canvas/plugin-node-video'
-import { nodeAudioPlugin } from '@plume-canvas/plugin-node-audio'
-import { pluginBottomBar } from '@plume-canvas/plugin-bottom-bar'
-// —— 以下 6 个「基础交互」插件是**自带件**（2026-10-12 用户要求：作为默认插件安装）——
-// 它们冷启动直接装配，不再经「插件管理」装卸；package.json 相应从 installable 改成 builtin。
-import { clipboardPlugin } from '@plume-canvas/plugin-clipboard'
-import { contextMenuPlugin } from '@plume-canvas/plugin-context-menu'
-import { fileDropPlugin } from '@plume-canvas/plugin-file-drop'
-import { groupPlugin } from '@plume-canvas/plugin-group'
-import { multiSelectPlugin } from '@plume-canvas/plugin-multi-select'
-import { edgeCuttingPlugin } from '@plume-canvas/plugin-edge-cutting'
-// 生成动作（web2api / 图片生成 / 文本生成）的前端插件已删除（2026-11-08）：
-// 改成后台 provider（<数据根>/providers/web2api-*.js），底栏动作由 cloud-client 从
-// /api/actions 拉取后注册，前端不再需要这三个包。
-// 下面这批「布局 / 画布工具」类插件改由「插件管理」从云服务清单安装（默认已装）。
-// 它们各自已有 UMD 构建（见各包 vite.config.ts），故可作外部插件装卸。
-// import { alignGuidePlugin } from '@plume-canvas/plugin-align-guide'
-// import { autoLayoutPlugin } from '@plume-canvas/plugin-auto-layout'
-// import { alignArrangePlugin } from '@plume-canvas/plugin-align-arrange'
-// import { canvasExportPlugin } from '@plume-canvas/plugin-canvas-export'
-// import { nodeFindPlugin } from '@plume-canvas/plugin-node-find'
-// import { miniMapPlugin } from '@plume-canvas/plugin-mini-map'
-// 热重载：设置面板「热重载」分类（开发工具：登记链接，产物变了自动重装插件）
-import { hotReloadPlugin } from '@plume-canvas/plugin-hot-reload'
-// 资产入库入口：节点右键 + 多选上控制栏的「加入资产库」（贴进上传弹窗；两个插件零改动）
-import { uiAssetUploadPlugin } from './assetUploadPlugin'
-import { agentPlugin } from '@plume-canvas/plugin-agent'
-import { styleLibraryPlugin } from '@plume-canvas/plugin-style-library'
-import { projectsApiPlugin } from './projectsApiPlugin'
-// 组件展厅：把默认主题的组件真渲染在画布 UI 上（用户口径 2026-10-13：直观看到样式与行为）
-// 组件展厅等开发演示已合并进 plugin-demo-kit（可安装件，不冷启动）。
-// 插件管理是**独立包**（曾住在 plugin-cloud-client 包内部，2026-10-11 拆出来）：
-// 独立成包后它才是插件目录里的一个正经插件，能在「设置 → 插件 → 自带」里显示出来。
-import { pluginManagerPlugin } from '@plume-canvas/plugin-manager'
-// AI 可视化节点：声明「我有哪些数据」→ AI 生成 HTML 在节点里画出来。
-// 生成那一步要后台（cloud-server 提供模型），纯前端模式下节点照常显示、只是生成会失败。
-import { nodeUiPlugin } from '@plume-canvas/plugin-node-ui'
-// 云端连接（cloud-client）：**按运行环境**决定是否随开机自动装配（见 builtinPluginsForUiHost）。
-// 它默认是"可装卸"插件（面板里可选装），但**由 cloud-server 托管界面时**（也就是后台自己发
-// 这一版应用）要直接启动 —— 用户口径：「如果是 cloud-server 启动的服务，cloud-client 应该放在
-// 自带中直接启动」。判据见 CLOUD_HOST_FLAG。
-import { cloudClientPlugin } from '@plume-canvas/plugin-cloud-client'
-// 设置页「快捷键」配置面板：外壳自带帮助浮层，只需要这个轻量设置页插件。
-import { shortcutSettingsPlugin } from '@plume-canvas/plugin-shortcut-manager'
 
-/**
- * 成品应用的插件清单（顺序即装载序）。
- *
- * **自带件（builtin）与可装卸件的区别**（用户在「设置 → 插件」里看到的分类）：
- * - 自带件：写在这个数组里冷启动装配，面板「自带」页只读展示、没有安装/卸载按钮；
- * - 可装卸件：不在这里，改由「插件管理」从云端清单（cloud-server 的 /plugin-catalog.json）装进来。
- *
- * 2026-10-12 用户要求：把 6 个「基础交互」插件（复制粘贴 / 右键菜单 / 文件拖入 / 分组 /
- * 多选 / 连线切割）作为**自带插件**。它们已从下面那批"改由插件管理安装"里移出，
- * 对应 package.json 也从 installable 改成 builtin（否则会同时出现在两个分类里）。
- *
- * 注意：`plugin-node-image-compare` **故意**不在这里冷启动装配 —— 它改由「插件管理」插件
- * 从云服务（cloud-server 的 /plugin-catalog.json）装进来（用户要求：默认设为已安装）。
- * 想把某个恢复成冷启动：取消它 import 与下方对应行的注释即可。
- *
- * 另有 3 个插件是**按运行环境选装**，一直不在清单里：
- * `plugin-auto-save` / `plugin-cloud-client` / `plugin-history` —— 它们是「按运行环境选装」的
- * （云端保存要有人提供后台；history 与宿主自带的撤销栈职责重叠）。
- * 云端保存那条路走的是运行期外部清单（cloud-server 的 `/plugin-manifest.json`），见 App.vue。
- */
-/** 一条静态装配记录：插件 + 它属于哪一层 + 为什么在这里（维护者与测试共读）。 */
 export interface AppPluginEntry {
   plugin: PluginModule
   /** app = 应用级常驻；canvas = 进入画布才装 */
   kind: 'app' | 'canvas'
-  /** 一句话理由，测试用它核对注释与实现是否一致 */
+  /** 一句话理由，维护者与测试共读 */
   reason: string
 }
 
-/**
- * 唯一静态注册表：应用级与画布级都在这里，派生下面两个数组。
- *
- * 为什么不拆成两个独立数组：两份清单最容易漂移（加了一个忘了另一个）。
- * 现在只维护这一份，kind 决定它进哪一层；顺序即装载顺序。
- */
-export const APP_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
-  // 渲染层基础设施：标准能力包要最先注册，后面的业务插件启动时就能按名取到。
-  { plugin: canvasRenderPlugin, kind: 'app', reason: '渲染层基础设施（能力包注册）' },
-  // 通用组件 / 设置面板 / 外观变量：应用级常驻，项目页也要用。
-  { plugin: themeComponentsPlugin, kind: 'app', reason: '通用组件与设置面板' },
-  { plugin: pluginManagerPlugin, kind: 'app', reason: '插件管理页' },
-  { plugin: agentPlugin, kind: 'app', reason: 'Agent 对话与设置' },
-  { plugin: hotReloadPlugin, kind: 'app', reason: '热重载开发工具' },
-  { plugin: uiAssetUploadPlugin, kind: 'app', reason: '资产入库入口' },
-  { plugin: styleLibraryPlugin, kind: 'app', reason: '素材库（项目页可浏览）' },
-  { plugin: projectsApiPlugin, kind: 'app', reason: '项目数据服务（项目页面板可用）' },
-  { plugin: shortcutSettingsPlugin, kind: 'app', reason: '设置页快捷键配置' },
+/** dev 下的静态清单（build 下为空）。真实内容在 `dev-plugins.ts`。 */
+export const APP_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [] as const
 
-  { plugin: themeCanvasPlugin, kind: 'canvas', reason: '节点壳 / 连线 / 背景' },
-  { plugin: nodeTextPlugin, kind: 'canvas', reason: '文本节点' },
-  { plugin: nodeUiPlugin, kind: 'canvas', reason: 'AI 可视化节点' },
-  { plugin: pluginBottomBar, kind: 'canvas', reason: '节点底栏' },
-  { plugin: node3dPreviewPlugin, kind: 'canvas', reason: '3D 预览节点' },
-  { plugin: contextMenuPlugin, kind: 'canvas', reason: '右键菜单' },
-  { plugin: clipboardPlugin, kind: 'canvas', reason: '复制粘贴' },
-  { plugin: multiSelectPlugin, kind: 'canvas', reason: '多选' },
-  { plugin: groupPlugin, kind: 'canvas', reason: '分组' },
-  { plugin: edgeCuttingPlugin, kind: 'canvas', reason: '连线切割' },
-  { plugin: fileDropPlugin, kind: 'canvas', reason: '文件拖入' },
-  { plugin: nodeImagePlugin, kind: 'canvas', reason: '图片节点' },
-  { plugin: gridSplitPlugin, kind: 'canvas', reason: '宫格切分' },
-  { plugin: nodeRotatePlugin, kind: 'canvas', reason: '旋转与镜像' },
-  { plugin: nodeVideoPlugin, kind: 'canvas', reason: '视频节点' },
-  { plugin: nodeAudioPlugin, kind: 'canvas', reason: '音频节点' },
-] as const
+/** 应用级插件（dev 由 resolveAppPlugins 填充；build 为空） */
+export const APP_PLUGINS: PluginModule[] = []
 
-/** 应用级插件（顺序即装载序）。 */
-export const APP_PLUGINS: PluginModule[] = APP_PLUGIN_REGISTRY
-  .filter((e) => e.kind === 'app')
-  .map((e) => e.plugin)
-
-/**
- * 画布专用插件：只在进入画布时安装（项目页不装、不 apply）。
- *
- * 为什么单独一份：项目页只需要应用级插件（主题组件、设置、插件管理、Agent 等）。
- * 节点、底栏、选区交互这些离开画布就没意义；把它们留在应用级清单里会让项目页
- * 也启动一整套画布业务，违背"项目页不启动画布"的目标。
- *
- * 顺序与 APP_PLUGINS 里的画布项保持一致（主题仍在应用级，先行提供外观目录）。
- */
-/** 画布级插件（顺序即装载序）。 */
-export const CANVAS_PLUGINS: PluginModule[] = APP_PLUGIN_REGISTRY
-  .filter((e) => e.kind === 'canvas')
-  .map((e) => e.plugin)
-
+/** 画布级插件（dev 由 resolveAppPlugins 填充；build 为空） */
+export const CANVAS_PLUGINS: PluginModule[] = []
 
 /**
  * 判断「这一版界面是不是被 cloud-server 托管的」。
  *
- * 为什么用 home.html 里那个标记而不是别的：
- * - 看 URL / 端口都不靠谱（dev 走 vite 代理、端口会顺延，同源看不出来是谁在托管）；
- * - 让 cloud-server 在它发出去的那份 index.html 里**插一行 <meta>** 最准 ——
- *   那是"服务端自己声明身份"，前端只读不猜（服务端在 static.ts 的 uiRoutes 里注入）。
- *
- * 注意要用 **document 现读**：单测/SSR 里没有 document，读不到就当"不是托管"（保持本地行为）。
+ * 判据是服务端注入的 `<meta name="plume-host" content="cloud-server">`：
+ * 看 URL / 端口都不准（dev 走代理、端口会顺延），由发页面的人自己声明最可靠。
+ * 单测 / SSR 里没有 document，读不到就当「不是托管」（保持本地行为）。
  */
 export const CLOUD_HOST_FLAG = 'plume-host'
 
@@ -170,32 +48,31 @@ export function isCloudServerHosted(): boolean {
   return meta?.getAttribute('content') === 'cloud-server'
 }
 
-/**
- * 按**运行环境**决定还要不要追加几个自带插件 —— 目前只有云端连接（cloud-client）。
- *
- * 语义（与用户口径对齐）：
- * - **cloud-server 托管**（后台发界面）→ 云端连接算自带件，**开机直接启动**：后台就在同源、
- *   这类部署本来就是要连后台的，不该让用户先去面板里点一次。
- * - **其它**（ui 单独 dev、或别人拿这个包自己托管）→ 不自动装，仍由用户在「设置 → 插件」里装，
- *   这样本地单跑画布时不会被强行接管存档。
- *
- * 为什么不在托管时把它从"可装卸清单"里去掉：留着也无害 —— 它已经装在内核里，
- * 面板那一行会显示「已安装」，用户点卸载就能退回本地存储（这正是"自己挑"的兜底）。
- *
- * 为什么不做成"放进 APP_PLUGINS 就完事"：那份数组是**静态**的，本地 dev 也会跟着装 ——
- * 于是本地单跑时画布会去连一个不存在的后台。要"只在托管时启动"，这个判断只能放在运行期。
- */
+/** dev 下按运行环境追加的自带件（目前只有 cloud-client） */
 export function builtinPluginsForUiHost(): PluginModule[] {
-  // cloud-client 为了"产物自包含"用的是**自己的类型垫片**（见其 src/shims.ts），
-  // Config 在那里是 unknown，与内核的 ConfigSchema 不完全同形 —— 运行时完全一致，
-  // 只是类型层面要对上。这里在**边界处**收一次口（断言），好过把内核类型硬塞进插件、
-  // 破坏它"零 import 自包含"的前提。宿主实际按 { name, inject, Config, apply } 使用。
-  return isCloudServerHosted() ? [cloudClientPlugin as unknown as PluginModule] : []
+  return []
 }
 
-/** 最终装载清单 = 静态装配 + 按环境追加的自带件（宿主按这个数组冷启动） */
-export function resolveAppPlugins(): PluginModule[] {
-  return [...APP_PLUGINS, ...builtinPluginsForUiHost()]
+/**
+ * 最终装载清单。
+ *
+ * **dev**：返回 `dev-plugins.ts` 里的全部插件 —— 直接读源码，改完立刻热更；
+ * **build**：返回空数组。插件由 cloud-server 的清单在运行期装载，界面包里没有它们。
+ *
+ * dev 清单用**动态 import** 取，build 分支不会被 Rollup 追踪到那份模块。
+ */
+export async function resolveAppPlugins(): Promise<PluginModule[]> {
+  if (!import.meta.env.DEV) return []
+  const dev = await import('./dev-plugins')
+  const hosted = isCloudServerHosted() ? dev.devHostedExtras() : []
+  return [...dev.DEV_APP_PLUGINS, ...hosted]
+}
+
+/** dev 下的画布级插件（build 返回空；由 remote-plugins 装载） */
+export async function resolveCanvasPlugins(): Promise<PluginModule[]> {
+  if (!import.meta.env.DEV) return []
+  const dev = await import('./dev-plugins')
+  return dev.DEV_CANVAS_PLUGINS
 }
 
 /** 建一份成品应用默认的存储后端（本地 localStorage）。要换存储就换这里的实现。 */
@@ -204,7 +81,6 @@ export function createDefaultStorageAdapter(): StorageAdapter {
 }
 
 /** 示例图片（首次打开的空画布塞一个 image 节点，让人一眼知道能干什么） */
-// 下面 SVG 里的色值是**示例节点内容**（画进图片节点里当素材），不是界面配色 → 不跟随主题
 export const SAMPLE_IMAGE_URL =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
@@ -226,5 +102,4 @@ export function seedDefaultCanvas(): CanvasNode[] {
     { id: '2', type: 'image', position: { x: 560, y: 160 }, data: { imageUrl: SAMPLE_IMAGE_URL } },
   ]
 }
-
 

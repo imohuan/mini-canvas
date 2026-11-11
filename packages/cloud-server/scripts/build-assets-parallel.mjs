@@ -47,11 +47,11 @@ function intArg(name, fallback) {
 const jobs = intArg("--jobs", Math.max(2, Math.floor(availableParallelism() / 2)))
 
 /**
- * 自带插件的**后台半**：前端随应用冷启动，后台半要单独放进数据根的 server-plugins。
+ * 必须**立刻铺到数据根**的后台半（其余内置件的后台半由启动时的 seedServerPlugins 铺）。
  *
  * 为什么必须在这里做：用户实测 2026-11-05（分支 codex/app-shell-layering）右键「导出节点包」
  * 报「打包失败（HTTP 403）」，后台其实是 404「接口不存在: /api/node-packages/build」——
- * `/api/node-packages/*` 来自 plugin-node-ui 的后台半，而一键启动只构建前端与可装卸插件，
+ * `/api/node-packages/*` 来自 plugin-node-ui 的后台半，而一键启动只构建前端与部分插件，
  * 从来没人跑过 `deploy:server`。这类插件的前端看起来完全正常（导出菜单还在），
  * 坏掉的是菜单背后的接口，最容易被当成"导出功能本身坏了"。
  */
@@ -226,20 +226,25 @@ const INSTALLABLE_PLUGIN_DIRS = [
   "plugin-demo-kit",
 ]
 
+/** 只做开发工具、不随发布包发出的插件目录 */
+const DEV_ONLY_PLUGINS = new Set(["plugin-hot-reload"])
+
 /**
- * 扫 packages/plugins/* 的 package.json，把“声明了 installable 但漏在这份手写清单里”的插件补上。
+ * 扫 packages/plugins/*，找出**所有要打包的插件**（有 plume.pluginName 就算）。
  *
- * 为什么必须自动补：插件管理页的清单来自 dist 产物；漏构建的插件在面板里直接不出现，
- * 用户看到的就是“main 分支有这个插件，你这个分支没有”（2026-11-05 实测）。
+ * 为什么按 pluginName 而不是 installable：发布包里每个插件都要能装（内置件也要有产物），
+ * 是不是开箱自带由项目清单（src/plugins/builtinPlugins.ts）决定，与这里无关。
+ * 漏构建的表现是「插件在仓库里有、发布包里没有」，用户完全看不出来是构建漏了。
  */
-function discoverInstallablePlugins() {
+function discoverPlugins() {
   const root = path.join(REPO_ROOT, "packages/plugins")
   const names = []
   for (const dir of readdirSync(root, { withFileTypes: true })) {
     if (!dir.isDirectory()) continue
+    if (DEV_ONLY_PLUGINS.has(dir.name)) continue
     try {
       const pkg = JSON.parse(readFileSync(path.join(root, dir.name, "package.json"), "utf8"))
-      if (pkg.plume?.installable === true) names.push(dir.name)
+      if (pkg.plume?.pluginName) names.push(dir.name)
     } catch { /* 没有 package.json / JSON 坏了：跳过 */ }
   }
   return names
@@ -248,16 +253,9 @@ function discoverInstallablePlugins() {
 const TASKS = [
   // ui 不 external → externalize:false，指纹覆盖整个工作区依赖闭包
   { name: "@plume-canvas/ui", label: "画布界面", dir: path.join(REPO_ROOT, "packages/ui"), externalize: false },
-  { name: "@plume-canvas/plugin-cloud-client", label: "云端客户端", dir: path.join(REPO_ROOT, "packages/plugins/plugin-cloud-client"), externalize: true },
-  // 自带插件的后台半：前端产物在 ui 的闭包里，这里只补 dist/server.js
-  ...BUILTIN_SERVER_PLUGINS.map((d) => ({
-    name: "@plume-canvas/" + d,
-    label: d + "（后台半）",
-    dir: path.join(REPO_ROOT, "packages/plugins", d),
-    externalize: false,
-    script: "build:server",
-  })),
-  ...[...new Set([...INSTALLABLE_PLUGIN_DIRS, ...discoverInstallablePlugins()])].map((d) => ({
+  // 每个插件的 build 脚本自己负责前端半与后台半（有后台的包会串 build:server）。
+  // 这里全量纳入：发布包要给每个插件都备好产物，界面那边一个都不 import。
+  ...[...new Set([...INSTALLABLE_PLUGIN_DIRS, ...discoverPlugins()])].map((d) => ({
     name: "@plume-canvas/" + d,
     label: d,
     dir: path.join(REPO_ROOT, "packages/plugins", d),
@@ -344,14 +342,45 @@ if (toBuild.length === 0) {
   console.log("\n重建 " + results.length + " 个包成功（耗时 " + buildSecs + "s）\n")
 }
 
-// ---------- 3. 自带插件的后台半 → <数据根>/server-plugins ----------
+// ---------- 4. 收产物进 assets/ ----------
+await rm(ASSETS, { recursive: true, force: true })
+await mkdir(ASSETS, { recursive: true })
+
+const SOURCES = [
+  { from: path.join(REPO_ROOT, "packages/ui/dist"), to: path.join(ASSETS, "ui"), label: "画布界面" },
+]
+
+let missing = 0
+for (const s of SOURCES) {
+  if (!(await pathExists(s.from))) {
+    console.error("[FAIL] 没有 " + s.label + " 的构建产物：" + s.from)
+    missing += 1
+    continue
+  }
+  await cp(s.from, s.to, { recursive: true })
+  console.log("[ ok ] " + s.label + " -> " + path.relative(PACKAGE_ROOT, s.to))
+}
+if (missing > 0) process.exit(1)
+
+// 插件目录结构与运行时一致：assets/plugins/<插件目录名>/{package.json, dist/web.js, dist/server.js}
+// 与 scripts/bundle-assets.mjs 同一套规则 —— 两份构建入口（一键启动 / 发布打包）产物必须同形，
+// 否则「本地能跑、发出去不能跑」这种差异极难查。
+const { collectPlugins, copyPluginDir } = await import("./plugin-assets.mjs")
+const plugins = await collectPlugins()
+for (const p of plugins) {
+  await copyPluginDir(p, path.join(ASSETS, "plugins", p.name))
+}
+console.log("[ ok ] " + plugins.length + " 个插件 -> assets/plugins")
+
+// ---------- 3.5 内置插件的后台半 → <数据根>/server-plugins ----------
+// 从**刚收好的 assets** 里铺，而不是从仓库源码目录：发布包与本地跑的是同一份代码，
+// 不会出现「本地接口能用、发布包里 404」。规则与 cloud-server 启动时的 seedServerPlugins 一致。
 // 只复制、不装：server-plugins 是**启动时**扫的，复制完在下一次启动生效。
-// 为什么不在运行期打安装接口：构建阶段后台可能还没起来，而且那需要管理令牌。
 const serverPluginsDir = path.join(DATA_ROOT, "server-plugins")
 await mkdir(serverPluginsDir, { recursive: true })
 let missingServer = 0
 for (const d of BUILTIN_SERVER_PLUGINS) {
-  const artifact = path.join(REPO_ROOT, "packages/plugins", d, "dist/server.js")
+  const artifact = path.join(ASSETS, "plugins", d, "dist", "server.js")
   if (!(await pathExists(artifact))) {
     console.error("[FAIL] 没有 " + d + " 的后台半产物：" + artifact)
     console.error("       它负责 /api/node-packages/*（导出节点包）等接口；缺了会表现为「导出失败」")
@@ -367,34 +396,9 @@ if (missingServer > 0) {
   process.exit(1)
 }
 
-// ---------- 4. 收产物进 assets/ ----------
-await rm(ASSETS, { recursive: true, force: true })
-await mkdir(ASSETS, { recursive: true })
-
-const SOURCES = [
-  { from: path.join(REPO_ROOT, "packages/ui/dist"), to: path.join(ASSETS, "ui"), label: "画布界面" },
-  {
-    from: path.join(REPO_ROOT, "packages/plugins/plugin-cloud-client/dist"),
-    to: path.join(ASSETS, "plugins/plugin-cloud-client/dist"),
-    label: "云端客户端插件",
-  },
-]
-
-let missing = 0
-for (const s of SOURCES) {
-  if (!(await pathExists(s.from))) {
-    console.error("[FAIL] 没有 " + s.label + " 的构建产物：" + s.from)
-    missing += 1
-    continue
-  }
-  await cp(s.from, s.to, { recursive: true })
-  console.log("[ ok ] " + s.label + " -> " + path.relative(PACKAGE_ROOT, s.to))
-}
-if (missing > 0) process.exit(1)
-
 for (const must of [
   path.join(ASSETS, "ui/index.html"),
-  path.join(ASSETS, "plugins/plugin-cloud-client/dist/plugin-cloud-client.js"),
+  path.join(ASSETS, "plugins/plugin-cloud-client/dist/web.js"),
 ]) {
   if (!(await pathExists(must))) {
     console.error("[FAIL] 收进来的产物不完整，缺少：" + must)

@@ -20,6 +20,7 @@ import { CanvasResourceStore } from './store/canvasResources.js'
 import { ProjectStore } from './store/projectStore.js'
 import { AssetStore } from './store/assetStore.js'
 import { resolvePluginsDir, resolveUiDist, uiRoutes } from './static.js'
+import { seedPlugins, seedServerPlugins } from './plugins/seedPlugins.js'
 import { fileURLToPath } from 'node:url'
 import { mcpRoutes } from './routes/mcp.js'
 import { createServerFramework } from './serverFramework/index.js'
@@ -80,7 +81,19 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const port = opts.port ?? DEFAULT_PORT
   const dataDir = path.resolve(opts.dir ?? DEFAULT_DATA_DIR)
   const uiDist = await resolveUiDist(opts.uiDist)
-  const pluginsDir = await resolvePluginsDir(opts.pluginsDir)
+  // 首启把随包插件铺到数据根：之后所有安装/更新都落在可写位置（用户口径 2026-11-11）。
+  const seededPlugins = await seedPlugins(
+    path.join(PACKAGE_ROOT, 'assets/plugins'),
+    path.join(dataDir, 'plugins'),
+  )
+  if (seededPlugins.added.length || seededPlugins.updated.length) {
+    console.log(
+      '[cloud-server] 插件已铺入数据根：新增 ' + seededPlugins.added.length +
+        ' 个，更新 ' + seededPlugins.updated.length +
+        ' 个，跳过 ' + seededPlugins.skipped.length + ' 个',
+    )
+  }
+  const pluginsDir = await resolvePluginsDir(opts.pluginsDir, dataDir)
 
   // ---- 管理面安全：令牌 / 审计 / 来源边界（方案 commit 2/4/5）----
   // 三条都在建 app 之前准备好：中间件要在装配阶段（host.start 之前）挂上。
@@ -154,6 +167,18 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const serverPluginsDir = path.resolve(
     opts.serverPluginsDir ?? path.join(dataDir, DEFAULT_SERVER_PLUGINS_DIR),
   )
+  // 内置插件的后台半（如可视化节点的导出接口、视频裁剪）：也要铺进 server-plugins，
+  // 否则发布版里前端在、接口 404（历史踩过：导出节点包报 403/404）。
+  // 远端显式指定了 --server-plugins 时不铺：那是使用者自己的目录，不该被我们写。
+  if (!opts.serverPluginsDir) {
+    const seededServer = await seedServerPlugins(
+      path.join(PACKAGE_ROOT, 'assets/plugins'),
+      serverPluginsDir,
+    )
+    if (seededServer.length > 0) {
+      console.log('[cloud-server] 内置插件后台半已铺入：' + seededServer.join(', '))
+    }
+  }
   const registry = new ProviderRegistry()
   /**
    * 内置 agent-chat 平台：首次启动装一次，之后每次 reload 也要补一份。

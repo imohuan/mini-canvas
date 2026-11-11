@@ -25,6 +25,7 @@ import { node3dPreviewPlugin } from '@plume-canvas/plugin-node-3d-preview'
 import { alignGuidePlugin } from '@plume-canvas/plugin-align-guide'
 import { pluginBottomBar } from '@plume-canvas/plugin-bottom-bar'
 import { resolveAppPlugins } from '../assembly'
+import { DEV_APP_PLUGINS } from '../dev-plugins'
 
 /** 起一个与宿主同形的内核（真服务），装载声明了 Config 的几个插件 */
 async function bootWithSettings() {
@@ -264,9 +265,11 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
    * - 内容不会因为菜单合并而丢（每个 group 至少出现在一个 section 里）。
    */
   it('真实 APP_PLUGINS：菜单零兜底、一级不重复、全部 group 可见', async () => {
+    // 测试跑在 build 语义下：resolveAppPlugins() 返回空，插件清单直接取 dev 静态表。
+    const coldPlugins = await resolveAppPlugins()
     const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
-      coldPlugins: resolveAppPlugins(),
+      coldPlugins: coldPlugins.length ? coldPlugins : [...DEV_APP_PLUGINS],
     })
     const settings = host.ctx.get<SettingsLike>('settings')
     const menu = host.ctx.get<{
@@ -304,9 +307,10 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
   })
 
   it('安装本地清单后，所有分组仍被菜单收编，不冒出重复的一级入口', async () => {
+    const coldPlugins = await resolveAppPlugins()
     const { host } = await createPlumeHost({
       adapter: new MemoryStorageAdapter(),
-      coldPlugins: resolveAppPlugins(),
+      coldPlugins: coldPlugins.length ? coldPlugins : [...DEV_APP_PLUGINS],
     })
     const settings = host.ctx.get<SettingsLike>('settings')
     const menu = host.ctx.get<{

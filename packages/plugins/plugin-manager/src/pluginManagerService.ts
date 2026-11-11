@@ -189,6 +189,13 @@ function readableServerError(message: string, status: number): string {
 export interface CreateServiceOptions {
   /** 中转后台清单地址（含 /catalog.json） */
   catalogUrl?: string
+  /**
+   * 首启要自动安装的插件 id（清单里的 id，即插件目录名）。
+   *
+   * 由宿主（cloud-server 打包时生成的清单）决定哪些算「自带」，不再由插件自己
+   * 在 package.json 里写 `builtin` 决定。空数组 = 首次启动一个都不装。
+   */
+  initialInstallIds?: string[]
   /** 拉清单用的 fetch（测试注入假实现） */
   fetchImpl?: typeof fetch
   /** 注入 document/window（默认取全局；测试注入假实现） */
@@ -232,6 +239,8 @@ export function createPluginManagerService(
   opts: CreateServiceOptions = {},
 ): PluginManagerService {
   const catalogUrl = opts.catalogUrl || DEFAULT_CATALOG_URL
+  /** 首启自带插件：宿主注入的优先；没有注入就保持旧行为（一个都不装） */
+  const initialInstallIds = [...(opts.initialInstallIds ?? [])]
   const doFetch = opts.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init))
   const win = opts.win ?? (globalThis as unknown as Record<string, unknown>)
   const doc = opts.document ?? (win.document as Document)
@@ -848,9 +857,9 @@ export function createPluginManagerService(
       const json = (await res.json()) as unknown
       const entries = normalizeCatalog(json)
 
-      // 读存档（未存过 = undefined → 首次默认全装）
+      // 读存档（未存过 = undefined → 首次按宿主给的「自带插件」清单装）
       const saved = await readSavedIntent()
-      const desired = resolveDesiredIds(entries, saved)
+      const desired = resolveDesiredIds(entries, saved, initialInstallIds)
       state.intent = [...desired]
 
       // 复核行（**原地**对齐，不整批换新对象）——这样即便本函数与另一趟 refresh 交叠，

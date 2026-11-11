@@ -21,7 +21,15 @@ async function makePluginsDir(spec: Record<string, { file: string; content: stri
     const dist = path.join(root, pkgName, 'dist')
     await fs.mkdir(dist, { recursive: true })
     await fs.writeFile(path.join(dist, file), content)
-    if (pkg) await fs.writeFile(path.join(root, pkgName, 'package.json'), JSON.stringify(pkg))
+    if (pkg) {
+      // 清单只认 plume.web.entry：测试数据统一补上（等价于构建脚本回填）
+      const p = pkg as { plume?: Record<string, unknown> }
+      const withEntry = {
+        ...pkg,
+        plume: { ...(p.plume ?? {}), web: { ...((p.plume?.web as object) ?? {}), entry: 'dist/' + file } },
+      }
+      await fs.writeFile(path.join(root, pkgName, 'package.json'), JSON.stringify(withEntry))
+    }
   }
   return root
 }
@@ -73,7 +81,7 @@ describe('插件管理清单 /plugin-catalog.json', () => {
     }
   })
 
-  it('未声明 installable 的插件不收录；声明了的 ESM 插件**要**收录（面板装云端客户端就靠它）', async () => {
+  it('缺 plume.pluginName 的目录不收录；自包含 ESM 收录，裸 import 的伪 ESM 拒绝', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({
       'plugin-cold': { file: 'plugin-cold.js', content: UMD('PlumePluginCold'), pkg: { name: 'cold' } },
@@ -96,9 +104,9 @@ describe('插件管理清单 /plugin-catalog.json', () => {
         plugins: Array<{ id: string; format?: string }>
         skipped: Array<{ file: string }>
       }
-      expect(json.plugins.map((p) => p.id)).toEqual(['plugin-esm'])
-      expect(json.plugins[0]?.format).toBe('esm')
-      expect(json.skipped.some((x) => x.file === 'plugin-cold')).toBe(true)
+      expect(json.plugins.map((p) => p.id)).toEqual(['plugin-cold', 'plugin-esm'])
+      expect(json.plugins.find((p) => p.id === 'plugin-esm')?.format).toBe('esm')
+      expect(json.plugins.find((p) => p.id === 'plugin-cold')?.format).toBe('umd')
       expect(json.skipped.some((x) => x.file === 'plugin-bare')).toBe(true)
     } finally {
       s.stop()
@@ -107,18 +115,20 @@ describe('插件管理清单 /plugin-catalog.json', () => {
     }
   })
 
-  it('自带插件（builtin）也列进清单，但带 builtin 标记（前端只读展示、不给装卸）', async () => {
+  it('自带与否由项目清单决定：目录在 builtinPlugins.ts 里才带 builtin 标记，插件自己写的不算', async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({
-      'plugin-builtin-x': {
-        file: 'plugin-builtin-x.js',
+      // 目录名在项目内置清单里 → 自带
+      'plugin-node-text': {
+        file: 'plugin-node-text.js',
         content: UMD('PlumePluginBuiltinX', 'e.Vue'),
-        pkg: { name: '@plume-canvas/plugin-builtin-x', plume: { title: '自带件', builtin: true, pluginName: 'builtin-x' } },
+        pkg: { name: '@plume-canvas/plugin-node-text', plume: { title: '自带件', pluginName: 'builtin-x' } },
       },
-      'plugin-ext': {
-        file: 'plugin-ext.js',
+      // 目录名不在清单里，但 package.json 自己写了 builtin: true → 仍按可装卸件处理
+      'plugin-claims-builtin': {
+        file: 'plugin-claims-builtin.js',
         content: UMD('PlumePluginExt', 'e.Vue'),
-        pkg: { name: '@plume-canvas/plugin-ext', plume: { installable: true, pluginName: 'ext' } },
+        pkg: { name: '@plume-canvas/plugin-claims-builtin', plume: { builtin: true, pluginName: 'ext' } },
       },
     })
     const s = await createCloudServer({ dir, pluginsDir, watchProviders: false })
@@ -127,8 +137,8 @@ describe('插件管理清单 /plugin-catalog.json', () => {
         plugins: Array<{ id: string; builtin?: boolean }>
       }
       const byId = new Map(json.plugins.map((p) => [p.id, p]))
-      expect(byId.get('plugin-builtin-x')?.builtin).toBe(true)
-      expect(byId.get('plugin-ext')?.builtin).toBeUndefined()
+      expect(byId.get('plugin-node-text')?.builtin).toBe(true)
+      expect(byId.get('plugin-claims-builtin')?.builtin).toBeUndefined()
     } finally {
       s.stop()
       await fs.rm(dir, { recursive: true, force: true })
@@ -159,31 +169,24 @@ describe('插件管理清单 /plugin-catalog.json', () => {
     }
   })
 
-  it('冷启动自带插件（builtin）不进 /plugin-manifest.json（data: URL import 裸模块名必炸）', async () => {
+  it('项目内置清单里的插件不进 /plugin-manifest.json（data: URL import 裸模块名必炸）', async () => {
     // 实测背景：plugin-bottom-bar（builtin + ESM 产物）被列进 manifest，应用冷启动
     // install({ url }) 走 import(data:text/javascript)，产物里 external 的
     // "@plume-canvas/canvas-base" 在 data: URL 里解析不了 → 每次开页 console 报
     // "Failed to resolve module specifier"。它由 APP_PLUGINS 冷启动装配，清单不该列它。
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-doc-'))
     const pluginsDir = await makePluginsDir({
-      'plugin-builtin-esm': { file: 'plugin-builtin-esm.js', content: 'import { x } from "@plume-canvas/canvas-base";export const name = "b";export { x };' },
-      'plugin-builtin-umd': { file: 'plugin-builtin-umd.js', content: UMD('PlumePluginBuiltinUmd') },
+      // 两个都是项目内置清单里的目录（实际产物形态无关，判据只看目录名）
+      'plugin-node-text': { file: 'plugin-node-text.js', content: 'import { x } from "@plume-canvas/canvas-base";export const name = "b";export { x };' },
+      'plugin-bottom-bar': { file: 'plugin-bottom-bar.js', content: UMD('PlumePluginBuiltinUmd') },
       'plugin-ext-esm': { file: 'plugin-ext-esm.js', content: 'export const name = "ext";' },
     })
-    await fs.writeFile(
-      path.join(pluginsDir, 'plugin-builtin-esm', 'package.json'),
-      JSON.stringify({ name: '@plume-canvas/plugin-builtin-esm', plume: { builtin: true, pluginName: 'b-esm' } }),
-    )
-    await fs.writeFile(
-      path.join(pluginsDir, 'plugin-builtin-umd', 'package.json'),
-      JSON.stringify({ name: '@plume-canvas/plugin-builtin-umd', plume: { builtin: true, pluginName: 'b-umd' } }),
-    )
     const s = await createCloudServer({ dir, pluginsDir, watchProviders: false })
     try {
       const manifest = (await (await s.app.fetch(new Request('http://localhost/plugin-manifest.json'))).json()) as {
         plugins: Array<{ id: string }>
       }
-      // builtin 两个都不列；普通 ESM 插件照列
+      // 项目内置的两个都不列；普通 ESM 插件照列
       expect(manifest.plugins.map((p) => p.id)).toEqual(['plugin-ext-esm'])
     } finally {
       s.stop()
@@ -214,7 +217,9 @@ describe('前后端成对插件（Task 7）', () => {
     const body = (await (await srv.app.fetch(new Request('http://x/plugin-catalog.json'))).json()) as {
       plugins: Array<{ id: string; builtin?: boolean; server?: unknown }>
     }
-    expect(body.plugins.find((p) => p.id === 'plugin-builtin-with-be')?.server, '声明 serverBuiltin 的自带件应带 server').toBeTruthy()
+    // 统一后：声明 serverBuiltin 但盘上没有后台产物时，不再伪造 server 段（清单只为真实产物出 server）
+    // 旧行为需要一个空 url 的占位段，新链路里前端只按真实 server.url 装载，占位反而会引发下载 404。
+    expect(body.plugins.find((p) => p.id === 'plugin-builtin-with-be')?.server).toBeUndefined()
     expect(body.plugins.find((p) => p.id === 'plugin-builtin-fe-only')?.server, '纯前端自带件没有 server').toBeUndefined()
     srv.stop()
   })
@@ -387,7 +392,7 @@ describe('插件资源投放：不只发 js', () => {
     srv.stop()
   })
 
-  it('源码包不声明 installable → 不列入；NPM 装的那份声明了 → 列入（避免重复只留一份）', async () => {
+  it('源码包与 NPM 副本同名时去重，优先保留带 npmInstalled 标记的副本', async () => {
     const dir = await makePluginsDir({
       // 仓库源码包：已发布到 NPM，作者故意不声明 installable → 不列
       'plugin-demo': {
@@ -406,7 +411,8 @@ describe('插件资源投放：不只发 js', () => {
         pkg: {
           name: '@plume-canvas/plugin-demo',
           version: '1.0.0',
-          plume: { installable: true, pluginName: 'demo', title: 'Demo', web: { entry: 'dist/plugin-demo.js' } },
+          // 安装路由落盘时会写 npmInstalled: true（去重就靠这个显式标记）
+          plume: { installable: true, npmInstalled: true, pluginName: 'demo', title: 'Demo', web: { entry: 'dist/plugin-demo.js' } },
         },
       },
     })
@@ -415,8 +421,8 @@ describe('插件资源投放：不只发 js', () => {
       plugins: Array<{ id: string }>
       skipped: Array<{ file: string; reason: string }>
     }
+    // 新语义：installable 不再决定是否收录；两份都在清单里，按运行时名去重后只留副本。
     expect(body.plugins.map((p) => p.id)).toEqual(['plume-canvas__plugin-demo'])
-    expect(body.skipped.some((s) => s.file === 'plugin-demo' && s.reason.includes('installable'))).toBe(true)
     srv.stop()
   })
 })

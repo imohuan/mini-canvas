@@ -31,7 +31,23 @@ async function bootstrap() {
   const appManager = createPluginManager(ctx, { hiddenPlugins: [appBase.name] })
   const revokeAppManager = ctx.inject('appPluginManager', appManager)
   // 所有插件只登记一次：不依赖 doc 的立刻启动，依赖 doc 的停在 PENDING 等画布。
-  for (const plugin of resolveAppPlugins()) ctx.plugin(plugin)
+  for (const plugin of await resolveAppPlugins()) ctx.plugin(plugin)
+  // build 版本：界面包不含任何插件，改为从 cloud-server 的清单装载。
+  // 只装**项目内置清单**里的那些（builtinInstallIds）；其余可装卸件由用户在
+  // 插件管理页自己装，不能替用户做主，否则卸掉的插件下次开页又回来。
+  // dev 版本走上面的静态 import（resolveAppPlugins 非空），这里跳过。
+  if (import.meta.env.DEV === false) {
+    const { fetchCatalog, installCatalogPlugins, pickBuiltinEntries } = await import('./remote-plugins')
+    try {
+      const catalog = await fetchCatalog()
+      const want = pickBuiltinEntries(catalog)
+      const failures = await installCatalogPlugins({ ...catalog, plugins: want }, (mod) => ctx.plugin(mod))
+      if (failures.length) console.warn('[ui] 部分插件装载失败', failures)
+    } catch (err) {
+      // 后台没起来或清单坏了：界面仍要能打开（只是没有插件），把原因说清楚。
+      console.error('[ui] 从 cloud-server 装载插件失败', err)
+    }
+  }
   await ctx.start()
   // 配置桥在插件 Config 都声明完之后恢复一次，用户已保存的值才能作为初值。
   await appBase.services.settingsPersist?.restore()

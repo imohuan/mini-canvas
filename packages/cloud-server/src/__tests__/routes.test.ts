@@ -367,14 +367,19 @@ describe('ui / 插件目录探测顺序', () => {
     expect(hasTopLevelExport('/* export default 1 */')).toBe(false)
   })
 
-  it('仓库内路径优先于随包 assets（改了 ui 就该看到新产物，不被旧副本挡住）', async () => {
-    // 本仓库里 packages/ui/dist 是存在的（构建过），探测应命中它而不是包内 assets
-    const ui = await resolveUiDist()
-    expect(ui).toBeTruthy()
-    expect(ui!.replace(/\\/g, '/')).not.toContain('/assets/ui')
-
-    const plugins = await resolvePluginsDir()
-    expect(plugins!.replace(/\\/g, '/')).not.toContain('/assets/plugins')
+  it('插件目录顺序：数据根优先，包内 assets 兜底', async () => {
+    // 用户口径（2026-11-11）：安装/更新都落在数据根，包内那份只做首启兜底。
+    // 显式目录仍然最高优先级（仓库开发时指到 packages/plugins）。
+    const dataRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'plume-data-'))
+    const pluginsRoot = path.join(dataRoot, 'plugins')
+    await fs.mkdir(pluginsRoot, { recursive: true })
+    try {
+      const resolved = await resolvePluginsDir(undefined, dataRoot)
+      expect(resolved?.replace(/\\/g, '/')).toContain('/plugins')
+      expect(resolved?.replace(/\\/g, '/')).toContain(path.basename(dataRoot))
+    } finally {
+      await fs.rm(dataRoot, { recursive: true, force: true })
+    }
   })
 
   it('显式给了目录就用它；目录不存在时响亮报错（不静默回落）', async () => {

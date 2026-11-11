@@ -60,7 +60,12 @@ async function makePkg(
 ): Promise<string> {
   const dist = path.join(workDir, 'payload', 'dist')
   await fs.mkdir(dist, { recursive: true })
-  await fs.writeFile(path.join(dist, 'plugin-demo.js'), '/* demo web half */', 'utf8')
+    // 真实插件产物是 UMD（有 PlumePlugin* 全局）；测试数据也要给一份可识别的
+    await fs.writeFile(
+      path.join(dist, 'plugin-demo.js'),
+      '(function(e,t){t(e.PlumePluginDemo={})})(this,function(e){e.name="demo";e.apply=function(){}})',
+      'utf8',
+    )
   const serverCode = 'export const name = "demo"' + String.fromCharCode(10) + 'export function apply() {}'
   if (opts.withServer) await fs.writeFile(path.join(dist, 'server.js'), serverCode, 'utf8')
   const mini: Record<string, unknown> = { title: 'Demo', pluginName: 'demo' }
@@ -127,7 +132,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' }, server: { entry: 'dist/server.js' } },
     }
 
     const { entries, audit } = collector()
@@ -175,7 +180,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' }, server: { entry: 'dist/server.js' } },
     }
     registry.close()
     registry = await startFakeRegistry(packument, { '/demo.tgz': tgz })
@@ -195,7 +200,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' }, server: { entry: 'dist/server.js' } },
     }
     const host = await boot(registry.url)
     const search = async (q: string) =>
@@ -247,14 +252,15 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     ;(packument.versions as Record<string, unknown>)['1.0.0'] = {
       version: '1.0.0',
       dist: { tarball: registry.url + '/demo.tgz' },
-      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' }, server: { entry: 'dist/server.js' } },
     }
 
     const host = await boot(registry.url)
     const inst = await j(await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true }))
     expect(inst.ok).toBe(true)
     expect(inst.hasServer).toBe(true)
-    await expect(fs.access(path.join(pluginsDir, 'plume-canvas__plugin-demo', 'dist', 'plugin-demo.js'))).resolves.toBeUndefined()
+      // 新规则：落盘统一改名 web.js（入口由 plume.web.entry 决定，不按原文件名）
+      await expect(fs.access(path.join(pluginsDir, 'plume-canvas__plugin-demo', 'dist', 'web.js'))).resolves.toBeUndefined()
     await expect(fs.access(path.join(serverPluginsDir, 'plume-canvas__plugin-demo.js'))).resolves.toBeUndefined()
 
     const list = await j(await call(host, '/api/npm-plugins/installed'))
@@ -277,8 +283,8 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     const tgzV11 = await makePkg(dir2, { installable: true, withServer: true, version: '1.1.0' })
     const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '1.0.0' }, versions: {} }
     registry = await startFakeRegistry(packument, { '/v1.tgz': tgzV1, '/v11.tgz': tgzV11 })
-    ;(packument.versions as Record<string, unknown>)['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/v1.tgz' }, plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } } }
-    ;(packument.versions as Record<string, unknown>)['1.1.0'] = { version: '1.1.0', dist: { tarball: registry.url + '/v11.tgz' }, plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } } }
+    ;(packument.versions as Record<string, unknown>)['1.0.0'] = { version: '1.0.0', dist: { tarball: registry.url + '/v1.tgz' }, plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' }, server: { entry: 'dist/server.js' } } }
+    ;(packument.versions as Record<string, unknown>)['1.1.0'] = { version: '1.1.0', dist: { tarball: registry.url + '/v11.tgz' }, plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' }, server: { entry: 'dist/server.js' } } }
 
     const host = await boot(registry.url)
     await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', version: '1.0.0', confirm: true })

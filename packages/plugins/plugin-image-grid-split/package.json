@@ -12,12 +12,16 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    ".": { "types": "./src/index.ts", "default": "./src/index.ts" },
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
     "./*": "./src/*"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "build": "vite build"
   },
   "dependencies": {
     "@plume-canvas/canvas-base": "workspace:*",
@@ -29,6 +33,8 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
     "typescript": "~6.0.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34",

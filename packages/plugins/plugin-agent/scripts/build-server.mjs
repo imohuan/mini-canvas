@@ -24,7 +24,10 @@ const PKG = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const DIST = path.join(PKG, 'dist')
 
 // esbuild 不会删旧产物；先清干净，避免上次的文件混进来被当成插件加载。
-await rm(DIST, { recursive: true, force: true })
+// 只清后台产物：dist 里可能还有 vite 打出的前端半（plugin-agent.js），
+// 整个目录删掉会把前端产物一起抹掉（build = vite build && build-server 会踩到）。
+await rm(path.join(DIST, 'agent-server.js'), { force: true })
+await rm(path.join(DIST, 'vendor-plugins'), { recursive: true, force: true })
 
 await build({
   entryPoints: [path.join(PKG, 'src/server/index.ts')],

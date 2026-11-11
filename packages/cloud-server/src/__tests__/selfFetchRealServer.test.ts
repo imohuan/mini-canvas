@@ -27,6 +27,9 @@ afterEach(async () => {
 
 describe('真实服务：后台插件路由的字节能被内部自请求拿到', () => {
   it('/api/style-library/file 出图；selfFetch 也拿得到同一份字节（不被来源边界误杀）', async () => {
+    // 注意：发布包里内置了真的 style-library（后台半会铺进 server-plugins），
+    // 所以这里用一条**只属于本用例**的路径，避免与内置件的路由互相遮挡。
+    const ROUTE = '/api/self-fetch-probe/file'
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'self-fetch-real-'))
     // 最小后台插件（模拟风格库）：只提供一条返回 PNG 的 file 路由
     const pluginsDir = path.join(dir, 'server-plugins')
@@ -36,7 +39,7 @@ describe('真实服务：后台插件路由的字节能被内部自请求拿到'
       [
         "export const name = 'probe'",
         'export function apply(ctx) {',
-        "  ctx.routes.get('/api/style-library/file', (c) => c.body(new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0]), 200, { 'content-type': 'image/png' }))",
+        "  ctx.routes.get('" + ROUTE + "', (c) => c.body(new Uint8Array([137,80,78,71,13,10,26,10,0,0,0,0]), 200, { 'content-type': 'image/png' }))",
         '}',
       ].join('\n'),
       'utf8',
@@ -54,7 +57,7 @@ describe('真实服务：后台插件路由的字节能被内部自请求拿到'
     const { port } = await srv.start()
 
     // 前端视角：这条地址能正常出图
-    const direct = await fetch(`http://127.0.0.1:${port}/api/style-library/file?name=a.png`)
+    const direct = await fetch(`http://127.0.0.1:${port}${ROUTE}?name=a.png`)
     expect(direct.status).toBe(200)
     expect(direct.headers.get('content-type')).toContain('image/png')
 
@@ -63,7 +66,7 @@ describe('真实服务：后台插件路由的字节能被内部自请求拿到'
       fetch: (req) => srv.app.fetch(req),
       origin: () => `http://127.0.0.1:${port}`,
     })
-    const bytes = await fetchSelfBytes('/api/style-library/file?name=a.png')
+    const bytes = await fetchSelfBytes(ROUTE + '?name=a.png')
     expect(bytes).toBeTruthy()
     expect(new Uint8Array(bytes!)).toEqual(PNG)
   })

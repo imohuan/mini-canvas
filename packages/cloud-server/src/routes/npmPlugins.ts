@@ -282,18 +282,36 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       const pkgJsonPath = await extractTarball(tgz, tmpDir)
       const extracted = path.dirname(pkgJsonPath)
 
-      // ⑤ 找产物：web 半（dist/*.js 非 server）、server 半（dist/server.js）
-      const distDir = path.join(extracted, 'dist')
-      let files: string[] = []
-      try {
-        files = (await fs.readdir(distDir)).filter((f) => f.endsWith('.js') && !f.endsWith('.map'))
-      } catch {
-        return { status: 400, body: { ok: false, error: '包里没有 dist/（不是打包好的插件包）' } }
+      // ⑤ 前后端**只认配置**：plume.web.entry / plume.server.entry。
+      //
+      // 不再扫 dist 猜哪个是前端、哪个是后台 —— 命名是作者的自由，配置才是事实源。
+      // entry 必须是包内相对路径（拒绝绝对路径与 .. 穿越），扩展名只允许 .js / .mjs。
+      const safeEntry = (value: unknown, field: string): string | { error: string } => {
+        if (typeof value !== 'string' || value.trim() === '') {
+          return { error: '缺少 ' + field + '（要在 package.json 的 plume 段声明）' }
+        }
+        const rel = value.trim().replace(/\\/g, '/')
+        if (path.isAbsolute(rel) || rel.split('/').includes('..')) {
+          return { error: field + ' 必须是包内相对路径：' + value }
+        }
+        if (!/\.[cm]?js$/i.test(rel)) return { error: field + ' 只允许 .js / .mjs：' + value }
+        return rel
       }
-      const serverFile = files.find((f) => f === 'server.js' || f === 'plugin-server.js')
-      const webFile = files.find((f) => f !== serverFile)
-      if (!webFile) {
-        return { status: 400, body: { ok: false, error: 'dist/ 里没有前端半产物' } }
+
+      const mini = (vInfo.plume as Record<string, unknown> | undefined) ?? {}
+      const webRel = safeEntry((mini.web as { entry?: unknown } | undefined)?.entry, 'plume.web.entry')
+      if (typeof webRel !== 'string') return { status: 400, body: { ok: false, error: webRel.error } }
+      const serverDecl = (mini.server as { entry?: unknown } | undefined)?.entry
+      const serverRel = serverDecl === undefined ? undefined : safeEntry(serverDecl, 'plume.server.entry')
+      if (serverRel !== undefined && typeof serverRel !== 'string') {
+        return { status: 400, body: { ok: false, error: serverRel.error } }
+      }
+      for (const rel of [webRel, serverRel].filter((x): x is string => typeof x === 'string')) {
+        try {
+          await fs.access(path.join(extracted, rel))
+        } catch {
+          return { status: 400, body: { ok: false, error: '包里缺少声明的产物：' + rel } }
+        }
       }
 
       // ⑥ 前端半 → pluginsDir/<pkgName>/dist/（catalog 自动收录）
@@ -301,8 +319,8 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       const pkgDirName = dirNameOf(pkg)
       const webDest = path.join(opts.pluginsDir ?? path.join(opts.serverPluginsDir, '..', 'plugins'), pkgDirName, 'dist')
       await fs.mkdir(webDest, { recursive: true })
-      const webText = await fs.readFile(path.join(distDir, webFile), 'utf8')
-      await fs.writeFile(path.join(webDest, webFile), webText, 'utf8')
+      const webText = await fs.readFile(path.join(extracted, webRel), 'utf8')
+      await fs.writeFile(path.join(webDest, 'web.js'), webText, 'utf8')
       // ⚠️ package.json 必须一起落：catalog 靠它的 plume 段判定"进不进本地列表"并取
       // title/globalName/server 元数据。少了它，前端半文件在、但管理页列不出来（实测踩过）。
       //
@@ -314,19 +332,28 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       const pkgObj = JSON.parse(await fs.readFile(pkgJsonPath, 'utf8')) as {
         plume?: Record<string, unknown>
       }
-      pkgObj.plume = { ...(pkgObj.plume ?? {}), installable: true, npmInstalled: true }
+      pkgObj.plume = {
+        ...(pkgObj.plume ?? {}),
+        installable: true,
+        npmInstalled: true,
+        // 落盘后统一改名，配置跟着改写，后续清单/加载都按这两个名字
+        web: { ...((pkgObj.plume?.web as object) ?? {}), entry: 'dist/web.js' },
+        ...(typeof serverRel === 'string'
+          ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: 'dist/server.js' } }
+          : {}),
+      }
       await fs.writeFile(path.join(path.dirname(webDest), 'package.json'), JSON.stringify(pkgObj, null, 2), 'utf8')
       // server.js 也留一份在 pluginsDir/dist：catalog 靠它算 sha256（前端下载后台半、
       // 以及"清单里的可信哈希"都从这条 URL 来）；真正运行的那份由 serverPluginsDir 承担。
-      if (serverFile) {
-        await fs.copyFile(path.join(distDir, serverFile), path.join(webDest, serverFile))
+      if (typeof serverRel === 'string') {
+        await fs.copyFile(path.join(extracted, serverRel), path.join(webDest, 'server.js'))
       }
 
       // ⑦ server 半 → serverPluginsDir/<id>.js；服务端自己算 sha256 记来源
       let serverSha: string | undefined
       let hotMsg = ''
-      if (serverFile) {
-        const serverText = await fs.readFile(path.join(distDir, serverFile), 'utf8')
+      if (typeof serverRel === 'string') {
+        const serverText = await fs.readFile(path.join(extracted, serverRel), 'utf8')
         serverSha = createHash('sha256').update(serverText, 'utf8').digest('hex')
         const serverId = dirNameOf(pkg)
         await fs.writeFile(path.join(opts.serverPluginsDir, serverId + '.js'), serverText, 'utf8')
@@ -353,8 +380,8 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           ok: true,
           pkg,
           version,
-          hasServer: serverFile !== undefined,
-          note: '已安装；前端半刷新即可见' + (serverFile ? '，后台半' + hotMsg : ''),
+          hasServer: typeof serverRel === 'string',
+          note: '已安装；前端半刷新即可见' + (typeof serverRel === 'string' ? '，后台半' + hotMsg : ''),
         },
       }
     } catch (err) {

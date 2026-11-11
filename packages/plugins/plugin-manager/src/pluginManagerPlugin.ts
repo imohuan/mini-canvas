@@ -31,6 +31,13 @@ export const inject = [] as string[]
 export interface PluginManagerConfig {
   /** 中转后台清单地址 */
   catalogUrl?: string
+  /**
+   * 首启要自动安装的插件 id（清单 id = 插件目录名）。
+   *
+   * 由宿主注入：cloud-server 打包时把「自带插件清单」写进清单文件，前端装配时读出来传到这里。
+   * 不写 = 首次启动一个都不装（保持旧行为）。
+   */
+  initialInstallIds?: string[]
 }
 
 /**
@@ -61,6 +68,7 @@ export function apply(
   // 内核只向 apply 传 config，拿不到 host；绑定前操作会给出清晰错误，而不是静默装死。
   const service = createPluginManagerService(ctx, {
     ...(config?.catalogUrl ? { catalogUrl: config.catalogUrl } : {}),
+    ...(Array.isArray(config?.initialInstallIds) ? { initialInstallIds: config.initialInstallIds } : {}),
   })
   // 服务本身包成响应式：页面经它读 state，装卸变化能驱动重渲染（与 plugin-agent 同款）
   ctx.inject('plugin-manager', reactive(service))

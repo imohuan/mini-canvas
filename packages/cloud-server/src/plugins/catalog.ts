@@ -22,6 +22,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
+import { BUILTIN_BY_DIR } from './builtinPlugins.js'
 
 /** 清单里的一项 —— 插件管理据此渲染一行、并按 url 去加载 */
 export interface PluginCatalogEntry {
@@ -55,7 +56,9 @@ export interface PluginCatalogEntry {
    *
    * 为什么要在清单里列出它们：用户要"即使自带的插件也显示出来，但不显示安装/卸载按钮" ——
    * 一个页面能看清"这台画布一共有哪些插件、哪些是我能动的"，比只列可装卸的更完整。
-   * 判据取 package.json 的 plume.builtin（见文件头）。前端据此**只读展示**。
+   * 判据是**项目自己的内置清单**（builtinPlugins.ts 的目录名），不读插件
+   * package.json 里的 plume.builtin —— 同一个插件在别的发行版里可能只是可装卸件，
+   * 归属该由发行方决定。前端据此**只读展示**。
    */
   builtin?: boolean
   /**
@@ -94,6 +97,15 @@ export interface PluginCatalog {
   plugins: PluginCatalogEntry[]
   /** 扫到但没收进来的文件及原因（诊断用，不影响使用） */
   skipped: Array<{ file: string; reason: string }>
+  /**
+   * 自带插件（首启自动安装）的 id 列表。
+   *
+   * 归属由项目决定（src/plugins/builtinPlugins.ts），不读插件自己的 plume.builtin。
+   * 前端首次启动时按它装；用户卸过之后以用户的选择为准。
+   */
+  builtinInstallIds?: string[]
+  /** 首启时排在最前面的插件（cloud-client 必须先装，否则后台能力不可用） */
+  firstInstallIds?: string[]
 }
 
 /**
@@ -120,7 +132,15 @@ export const KNOWN_GLOBALS = [
  * 所以**不能只看文件开头**；直接全文找那段 e.PlumePluginXxx={} 。
  */
 export function parseUmdGlobalName(text: string): string | undefined {
-  return text.match(/\.(PlumePlugin[A-Za-z0-9_]+)\s*=\s*\{\}/)?.[1]
+  // 两种写法都要认：
+  //   新版 Vite/Rollup：`e.<导出名> = { ... }`（导出名可能与构建配置的 name 不同）；
+  //   老版：`e.PlumePluginXxx = {}`。
+  // 不能只看开头：cssInjectedByJs 会把一大段样式表塞在最前面（实测可到 6 万字符），
+  // 全局赋值被挤到后面。全文找即可 —— 这个模式（`x.PlumePluginY = {`）只出现在 UMD 头。
+  return (
+    text.match(/[,(]\s*[a-zA-Z_$][\w$]*\.(PlumePlugin[A-Za-z0-9_]+)\s*=\s*\{/)?.[1] ??
+    text.match(/[,(]\s*[a-zA-Z_$][\w$]*\.(MiniCanvasPlugin[A-Za-z0-9_]+)\s*=\s*\{/)?.[1]
+  )
 }
 
 /**
@@ -236,6 +256,10 @@ interface PkgJson {
       entry?: string
       format?: 'umd' | 'esm'
     }
+    /** 后台产物入口（相对插件目录），如 `dist/server.js`。缺省表示没有后台半。 */
+    server?: {
+      entry?: string
+    }
     /**
      * 自带插件是否**配套一个后台半**（已在 cloud-server 内置跑着）。
      *
@@ -270,18 +294,19 @@ export async function readServerArtifact(
   pkgDir: string,
   pkgName: string,
   permissions: unknown,
+  /** 配置里声明的后台入口（相对插件目录）；缺省才回退到 server.js / plugin-server.js */
+  declaredEntry?: string,
 ): Promise<PluginCatalogEntry["server"]> {
-  const distDir = path.join(pkgDir, "dist")
-  const candidate = ["server.js", "plugin-server.js"]
+  const candidate = declaredEntry ? [path.join(pkgDir, declaredEntry)] : [path.join(pkgDir, "dist", "server.js"), path.join(pkgDir, "dist", "plugin-server.js")]
   for (const file of candidate) {
     let text: string
     try {
-      text = await fs.readFile(path.join(distDir, file), "utf8")
+      text = await fs.readFile(file, "utf8")
     } catch {
       continue
     }
     return {
-      url: "/plugins/" + pkgName + "/" + file,
+      url: "/plugins/" + pkgName + "/" + path.basename(file),
       sha256: createHash("sha256").update(text, "utf8").digest("hex"),
       ...(Array.isArray(permissions)
         ? { permissions: permissions.filter((p): p is string => typeof p === "string") }
@@ -320,15 +345,9 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
     if (!stat.isDirectory()) continue
 
     const pkg = await readPkgJson(pkgDir)
-    // 收录两类（其余跳过，避免把不相干的目录也列进来）：
-    //   · installable: true —— 可经插件管理装卸（默认已装）；
-    //   · builtin: true     —— 自带（冷启动装配），**只读展示**、不给安装/卸载。
-    const isInstallable = pkg.plume?.installable === true
-    const isBuiltin = pkg.plume?.builtin === true
-    if (!isInstallable && !isBuiltin) {
-      skipped.push({ file: pkgName, reason: '未声明 plume.installable / builtin（不在插件管理里展示）' })
-      continue
-    }
+    // 收录条件：声明了 plume.web.entry（能不能装载）。installable / builtin 只影响面板分类。
+    // 是否自带只看**项目清单**（builtinPlugins.ts），不读插件自己的 plume.builtin。
+    const isBuiltin = BUILTIN_BY_DIR.has(pkgName)
 
     const id = pkgName
     const name = pkg.plume?.pluginName ?? (pkg.name ?? pkgName).replace(/^@[^/]+\//, '')
@@ -336,104 +355,55 @@ export async function buildPluginCatalog(pluginsDir: string | undefined): Promis
     // 这个目录是不是"NPM 安装落盘的副本"（安装路由写进 package.json 的显式标记）
     const isNpmCopy = pkg.plume?.npmInstalled === true
 
-    // 自带插件：**只要 package.json 声明了就能列**（不必构建 UMD —— 它由应用冷启动装配，不靠清单加载）。
-    if (isBuiltin) {
-      // 后台产物：自带插件也可能有 dist/server.js（如可视化节点）。
-      // 它的「安装」不是装前端产物，而是把后台半装进 server-plugins（见 routes/serverPlugins.ts）。
-      // 这里必须和「非自带」那条路一样算 sha256：安装路由拿清单里的哈希当唯一可信源，
-      // 清单不给 → 连自己的自带件都被「未列入清单，拒绝安装」挡掉（2026-10-13 实测踩到）。
-      const builtinServer = await readServerArtifact(pkgDir, pkgName, pkg.plume?.serverPermissions)
-      plugins.push({
-        id,
-        name,
-        title,
-        ...(pkg.plume?.description ? { description: pkg.plume.description } : {}),
-        url: '', // 自带件不经 URL 加载（前端只读展示，不安装）
-        globalName: '',
-        requiresGlobals: [],
-        defaultInstalled: true,
-        builtin: true,
-        ...(isNpmCopy ? { npmInstalled: true } : {}),
-        // 自带件的 server 段：有后台产物就带它的 sha256（安装时的信任源）；
-        // 只声明 serverBuiltin（内置路由）的，仍标一个 url 空的段。
-        ...(builtinServer
-          ? { server: builtinServer }
-          : pkg.plume?.serverBuiltin === true
-            ? { server: { url: "" } }
-            : {}),
-        ...(pkg.version ? { version: pkg.version } : {}),
-      })
+    // 收录条件：声明了 plume.web.entry（能装载）。installable / builtin 只决定面板分类，
+    // 不决定装不装；是否自带由项目清单（builtinPlugins.ts）决定。
+    const declaredEntry = pkg.plume?.web?.entry
+    if (!declaredEntry) {
+      skipped.push({ file: pkgName, reason: '缺少 plume.web.entry（要在 package.json 的 plume 段声明前端入口）' })
+      continue
+    }
+    let text: string
+    try {
+      text = await fs.readFile(path.join(pkgDir, declaredEntry), 'utf8')
+    } catch {
+      skipped.push({ file: pkgName, reason: '声明的 plume.web.entry 不存在：' + declaredEntry })
       continue
     }
 
-    // 可装卸插件：产物必须能被面板装进内核 —— UMD（script + 全局）或自包含 ESM（import）都行。
-    // 两条路必须**明确区分**（看下面的 format）：混着猜就会"列出来了却装不上"。
-    const distDir = path.join(pkgDir, 'dist')
-    let files: string[]
-    try {
-      files = (await fs.readdir(distDir)).filter((f) => f.endsWith('.js') && !f.endsWith('.min.js'))
-    } catch {
-      skipped.push({ file: pkgName, reason: '没有 dist（先跑 pnpm -C packages/plugins/' + pkgName + ' build）' })
-      continue
-    }
-    // 判形态：先看作者有没有在 package.json 里写明（plume.web.format），
-    // 没写就按产物自己认 —— UMD 有 PlumePlugin* 全局；否则看是不是**自包含 ESM**。
-    // 「自包含」= 有顶层 export 且**没有任何裸模块名 import**（ESM 走 manager.install({ url }) 时，
-    // fetch 文本 → import(data:text/javascript)，裸模块名在 data: URL 里解析不了）。
-    const candidates = files.sort()
-    if (!candidates.length) {
-      skipped.push({ file: pkgName, reason: 'dist 里没有 .js' })
-      continue
-    }
-    let file = ''
-    let text = ''
-    let format: 'umd' | 'esm' | undefined
-    for (const candidate of candidates) {
-      let candidateText: string
-      try {
-        candidateText = await fs.readFile(path.join(distDir, candidate), 'utf8')
-      } catch {
-        continue
-      }
-      const declared = pkg.plume?.web?.format
-      const isEsm = declared === 'esm' || (declared === undefined && isSelfContainedEsm(candidateText))
-      if (isEsm) {
-        file = candidate
-        text = candidateText
-        format = 'esm'
-        break
-      }
-      if (parseUmdGlobalName(candidateText)) {
-        file = candidate
-        text = candidateText
-        format = 'umd'
-        break
-      }
-    }
-    if (!file || !format) {
+    // 判形态：作者声明优先（plume.web.format）；没写就按产物自己认。
+    // UMD 走 <script> + window 全局；ESM 必须自包含（裸模块名在 data: URL 里解析不了）。
+    const declaredFormat = pkg.plume?.web?.format
+    const globalName = parseUmdGlobalName(text)
+    const format: 'umd' | 'esm' | undefined =
+      declaredFormat === 'esm' || (declaredFormat === undefined && !globalName && isSelfContainedEsm(text))
+        ? 'esm'
+        : globalName
+          ? 'umd'
+          : undefined
+    if (!format) {
       skipped.push({
         file: pkgName,
         reason: '产物既不是可脚本加载的 UMD（无 PlumePlugin* 全局）、也不是自包含 ESM（有裸模块名 import 或没有顶层 export）',
       })
       continue
     }
-    const globalName = format === 'umd' ? parseUmdGlobalName(text) : undefined
-    // 后台产物：同一个包的 dist/server.js（有就是「前后端成对」的插件）。缺了不报错。
-    const server = await readServerArtifact(pkgDir, pkgName, pkg.plume?.serverPermissions)
+
+    const server = await readServerArtifact(pkgDir, pkgName, pkg.plume?.serverPermissions, pkg.plume?.server?.entry)
     plugins.push({
       id,
       name,
       title,
       ...(pkg.plume?.description ? { description: pkg.plume.description } : {}),
       // 相对地址：与 ui 同源时直接能用；跨源时前端按清单地址的 origin 补全。
-      url: '/plugins/' + pkgName + '/' + file,
+      url: '/plugins/' + pkgName + '/' + path.basename(declaredEntry),
       format,
-      ...(globalName ? { globalName } : { globalName: '' }),
+      globalName: format === 'umd' ? (globalName ?? '') : '',
       requiresGlobals: format === 'umd' ? parseRequiresGlobals(text) : [],
-      // 默认安装改为**显式 opt-in**（缺省 false）：用户要求面板首次一个都不自动装。
+      // 默认安装是显式 opt-in；首启装哪些由项目的自带清单决定（见 builtinInstallIds）。
       defaultInstalled: pkg.plume?.defaultInstalled === true,
+      ...(isBuiltin ? { builtin: true } : {}),
       ...(server ? { server } : {}),
-        ...(isNpmCopy ? { npmInstalled: true } : {}),
+      ...(isNpmCopy ? { npmInstalled: true } : {}),
       ...(pkg.version ? { version: pkg.version } : {}),
     })
   }
