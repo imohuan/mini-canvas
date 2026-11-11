@@ -116,10 +116,10 @@ export function createCreateNodeScope(
    * 那是各类型唯一的写入口，从这里进才不会绕过撤销栈/落盘/默认尺寸（与按钮同一条路）。
    * atFlow 给了就用它当落点（拖拽），没给就级联错开（菜单"添加到画布"）。
    */
-  function createAssetNode(
+  async function createAssetNode(
     asset: { name?: string; url: string; kind?: string; assetKind?: string },
     atFlow?: { x: number; y: number },
-  ): string | null {
+  ): Promise<string | null> {
     // ★ 节点包（.mcnode）走导入那条路，不是"建一个媒体节点"。
     //   为什么要在这里认：从**资源库**拖一个包到画布，与从**文件系统**拖一个包，
     //   对用户来说是同一个动作（用户 2026-10-13 口径："拖拽之后和直接从文件夹中拖拽进来的效果是一样的"），
@@ -153,8 +153,13 @@ export function createCreateNodeScope(
       })
     } else {
       // video / audio：走插件服务（服务名与节点类型同名；插件没装 → undefined → 明确反馈）
-      const svc = ctx?.get<{ addVideoNode?: (p: { x: number; y: number }, url?: string) => string; addAudioNode?: (p: { x: number; y: number }, url?: string) => string }>(type)
-      if (type === 'video' && svc?.addVideoNode) newId = svc.addVideoNode(position, asset.url)
+      const svc = ctx?.get<{
+        addVideoNode?: (p: { x: number; y: number }, url?: string) => string
+        addVideoNodeWithMeta?: (p: { x: number; y: number }, url: string, name?: string) => Promise<string>
+        addAudioNode?: (p: { x: number; y: number }, url?: string) => string
+      }>(type)
+      if (type === 'video' && svc?.addVideoNodeWithMeta) newId = await svc.addVideoNodeWithMeta(position, asset.url, asset.name)
+      else if (type === 'video' && svc?.addVideoNode) newId = svc.addVideoNode(position, asset.url)
       else if (type === 'audio' && svc?.addAudioNode) newId = svc.addAudioNode(position, asset.url)
       else {
         showToast('「' + type + '」节点插件未启用，无法添加')
@@ -179,7 +184,7 @@ export function createCreateNodeScope(
    * 不这么做的话，新节点可能落在当前视口外，用户看不到"加进去了"（以为没生效）。
    */
   function createImageNodeWithUrl(imageUrl: string, name?: string): void {
-    createAssetNode({ url: imageUrl, ...(name ? { name } : {}) }, undefined)
+    void createAssetNode({ url: imageUrl, ...(name ? { name } : {}) }, undefined)
   }
 
   /**
@@ -231,7 +236,7 @@ export function createCreateNodeScope(
    * （用户报的「添加到画布没有效果」）。
    */
   function addAssetToCanvas(asset: { name: string; url: string; kind?: string; assetKind?: string }): void {
-    createAssetNode(asset, undefined)
+    void createAssetNode(asset, undefined)
   }
 
   /**
@@ -239,7 +244,10 @@ export function createCreateNodeScope(
    * 拖拽的落点即指针位置 —— 用户口径：「资源里的图片、音频和视频等，可以直接拖拽到画布上，
    * 拖拽上去就是直接添加一个新的节点」。
    */
-  function dropAssetToCanvas(asset: { name?: string; url: string; kind?: string; assetKind?: string }, client: { x: number; y: number }): string | null {
+  function dropAssetToCanvas(
+    asset: { name?: string; url: string; kind?: string; assetKind?: string },
+    client: { x: number; y: number },
+  ): Promise<string | null> {
     const flow = screenToFlow(client.x, client.y) ?? undefined
     return createAssetNode(asset, flow)
   }
@@ -457,8 +465,14 @@ export function createCreateNodeScope(
     if (newIds.length) hostCtx()?.get<{ set(ids: Iterable<string>): void }>('selection')?.set(newIds)
     return created
   }
-  function addAssetToAgent(asset: { name: string; url: string; path?: string; folderId?: string }): void {
-    const agent = canvasCtx()?.get<{ referenceAsset?: (a: { name: string; url: string; path?: string; folderId?: string }) => void }>('agent')
+  /**
+   * 资产「添加到 Agent」。
+   *
+   * kind 必须一起传（用户 2026-11-11）：资产名可能是 UUID、没有扩展名，
+   * 只靠扩展名认不出音频 —— 标签会退回图片图标。类型以资产列表里的那份为准。
+   */
+  function addAssetToAgent(asset: { name: string; url: string; path?: string; folderId?: string; kind?: string }): void {
+    const agent = canvasCtx()?.get<{ referenceAsset?: (a: { name: string; url: string; path?: string; folderId?: string; kind?: string }) => void }>('agent')
     if (!agent?.referenceAsset) {
       showToast('Agent 插件未启用')
       return

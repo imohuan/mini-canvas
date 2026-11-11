@@ -24,8 +24,8 @@ import {
 } from '@mini-canvas/canvas-base'
 import type { DocService } from '@mini-canvas/canvas-data'
 import { videoThumbTierFields, videoThumbTierKeys } from './videoThumbTier'
-import { videoTitleExtra } from './videoOps'
-import { followedVideoCardSizePatch, readVideoFitLimits } from './videoFit'
+import { defaultTransform, videoTitleExtra, type VideoTransform } from './videoOps'
+import { followedVideoCardSizePatch, readVideoFitLimits, videoCardSizePatch } from './videoFit'
 import { MIN_CLIP_DURATION } from './videoClip'
 import VideoContent from './VideoContent.vue'
 import VideoPreview from './VideoPreview.vue'
@@ -53,6 +53,7 @@ import { videoToAudio } from './videoAudioFlow'
 import { MEDIA_CREATOR_FIELD, type MediaKindCreator } from '@mini-canvas/canvas-render'
 import { captureVideoThumb } from './videoThumbService'
 import { unifiedThumbOf, type ThumbIdentity, type ThumbResourcePort } from './videoThumbUnified'
+import { resolveVideoSrc } from './videoRefs'
 
 /** 本插件注册的节点类型名 */
 export const VIDEO_NODE_TYPE = 'video'
@@ -61,6 +62,14 @@ export const VIDEO_NODE_TYPE = 'video'
 export interface VideoNodeService {
   /** 放一个视频节点；videoUrl 可给初始视频（URL / dataURL / objectURL），不给则显示占位 */
   addVideoNode(position: { x: number; y: number }, videoUrl?: string): string
+  /**
+   * 放一个**已经能播**的视频节点：先读视频真实宽高，再连同卡片尺寸一次建出来。
+   *
+   * 为什么不复用 addVideoNode：那个只写地址，卡片先按默认 480×320 画，
+   * 要等内容组件拿到元数据才纠正 —— 用户看到的是「先留一圈黑边再跳一下」。
+   * 资源面板拖入走这条路（拖入的地址本来就能直接读元数据）。
+   */
+  addVideoNodeWithMeta(position: { x: number; y: number }, videoUrl: string, name?: string): Promise<string>
   /** 换掉某节点的视频；空串 = 清空回到占位态 */
   setVideoUrl(id: string, videoUrl: string): void
   /** 删除节点（走图唯一写入口，连带清边、可撤销、自动落盘） */
@@ -101,8 +110,12 @@ declare module '@mini-canvas/canvas-data' {
 
 /** video 服务：构造即上架 'video'，方法经 this.ctx.get 惰性取现时服务（不缓存） */
 export class VideoService extends Service implements VideoNodeService {
-  constructor(ctx: Context) {
+  /** 视频加工端口（可注入：单测不碰 DOM） */
+  private readonly transform: VideoTransform
+
+  constructor(ctx: Context, transform?: VideoTransform) {
     super(ctx, 'video')
+    this.transform = transform ?? defaultTransform
   }
 
   private doc(): DocService {
@@ -120,6 +133,33 @@ export class VideoService extends Service implements VideoNodeService {
     return this.doc().transaction('add-video-node', (tx) =>
       tx.createNode(VIDEO_NODE_TYPE, position, resourceId ? { resourceId } : {}),
     )
+  }
+
+  /**
+   * 带真实宽高建视频节点：元数据读到就一并写 width/height + 卡片尺寸；
+   * 读不到（跨域 / 解码失败）就退回只写地址 —— 绝不猜一个尺寸。
+   */
+  async addVideoNodeWithMeta(position: { x: number; y: number }, videoUrl: string, name?: string): Promise<string> {
+    if (!videoUrl) return this.addVideoNode(position)
+    // 资产库里给的是**资源引用**（res-… / 画布资源路径）时先换成能直接播放的地址再读元数据；
+    // 读不到也照样建节点，只是退回默认尺寸 —— 拖入的动作不能因为读不了元数据就失败。
+    const playable = (await resolveVideoSrc(this.ctx, { videoUrl })) || videoUrl
+    const meta = await this.transform.readMeta(playable).catch(() => null)
+    const data: Record<string, unknown> = { videoUrl }
+    if (name) data.videoName = name
+    let size: { w: number; h: number } | undefined
+    if (meta && meta.width > 0 && meta.height > 0) {
+      data.videoWidth = meta.width
+      data.videoHeight = meta.height
+      if (Number.isFinite(meta.duration)) data.videoDuration = meta.duration
+      size = videoCardSizePatch(meta.width, meta.height, readVideoFitLimits(this.ctx))?.size
+    }
+    return this.doc().transaction('add-video-node', (tx) => {
+      const id = tx.createNode(VIDEO_NODE_TYPE, position, data)
+      // 尺寸与 data 在**同一次事务**里提交：只记一条撤销，建出来就是对的，不会先闪默认比例
+      if (size) tx.updateNode(id, { size })
+      return id
+    })
   }
 
 
@@ -280,7 +320,9 @@ export function apply(ctx: Context) {
   })
   ctx.effect(() => () => offOverlayMode())
 
-  const service = new VideoService(ctx)
+  // 视频加工端口可由宿主替换（单测 / 特殊宿主）；没给就用浏览器真实实现
+  const transform = ctx.tryGet<VideoTransform | undefined>('videoTransform')
+  const service = new VideoService(ctx, transform)
 
   // 媒体创建器：别的插件要“放一段视频”时经 media 能力路由到这里，
   // 由视频插件自己写标准字段（resourceId），调用方不需要知道 video 服务。

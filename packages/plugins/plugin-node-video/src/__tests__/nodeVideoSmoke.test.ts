@@ -11,7 +11,13 @@ import { NodeFactory, NodeRegistry, ThemeRegistry, resolveSegment } from '@mini-
 import { nodeVideoPlugin, VIDEO_NODE_TYPE } from '../nodeVideoPlugin'
 import { isClipping, isCropping } from '../videoSession'
 
-function boot(toolbarStub?: { enter(nodeId: string, modeId: string): void; exit(nodeId: string): void }) {
+function boot(
+  opts: {
+    toolbarStub?: { enter(nodeId: string, modeId: string): void; exit(nodeId: string): void }
+    /** 假的视频元数据读取（null = 读不到）；不给就用真实浏览器端口（node 下返回 null） */
+    videoMeta?: { width: number; height: number; duration: number } | null
+  } = {},
+) {
   const ctx = new Context()
   const nodeStore = new NodeStore()
   const edgeStore = new EdgeStore()
@@ -35,11 +41,11 @@ function boot(toolbarStub?: { enter(nodeId: string, modeId: string): void; exit(
   ctx.inject('themeRegistry', new ThemeRegistry())
   ctx.inject('settings', { get: () => undefined })
   // 可选的 nodeToolbar 桩：要在装插件**之前**上架（apply 里当场取用，晚注入就取不到）
-  if (toolbarStub) {
+  if (opts.toolbarStub) {
     ctx.provide('nodeToolbar', {
       registerMode: () => {},
-      enter: toolbarStub.enter,
-      exit: toolbarStub.exit,
+      enter: opts.toolbarStub.enter,
+      exit: opts.toolbarStub.exit,
     })
   }
   // 资源库（内存版）：上传命令要把字节存进来、并拿回可用地址 —— 与真实宿主同一条路
@@ -56,11 +62,47 @@ function boot(toolbarStub?: { enter(nodeId: string, modeId: string): void; exit(
       return resourceBlobs.has(ref) ? 'blob:resolved-' + ref : undefined
     },
   })
+  if ('videoMeta' in opts) {
+    // 只替换读元数据这一个端口，服务其它行为保持真实
+    ctx.provide('videoTransform', { readMeta: async () => opts.videoMeta ?? null })
+  }
   ctx.plugin(nodeVideoPlugin)
   return { ctx, nodeStore }
 }
 
 describe('node-video 装配 smoke', () => {
+  /**
+   * 用户 2026-11-11：从资源面板拖入视频，节点先按默认 480×320 画出来，
+   * 上下留黑边；要平移缩放一次才恢复。拖入路径必须在**建节点时**就带上真实宽高。
+   */
+  it('addVideoNodeWithMeta：建节点即带真实宽高与等比卡片尺寸（一次撤销退干净）', async () => {
+    const { ctx, nodeStore } = boot({ videoMeta: { width: 1280, height: 720, duration: 10 } })
+    await ctx.start()
+    const svc = ctx.get<{ addVideoNodeWithMeta(p: { x: number; y: number }, url: string, name?: string): Promise<string> }>('video')
+    const id = await svc.addVideoNodeWithMeta({ x: 10, y: 20 }, '/api/assets/files/a.mp4', '视频 A.mp4')
+    const node = nodeStore.getNode(id)!
+    expect(node.data.videoWidth).toBe(1280)
+    expect(node.data.videoHeight).toBe(720)
+    expect(node.data.videoName).toBe('视频 A.mp4')
+    // 1280×720 → 560×315：卡片一建出来就是视频比例，不用等内容组件补
+    expect(node.size).toEqual({ w: 560, h: 315 })
+    expect(node.data.cardWidth).toBe(560)
+    expect(node.data.cardHeight).toBe(315)
+    ctx.stop()
+  })
+
+  it('addVideoNodeWithMeta：元数据读不到 → 只写地址，不猜尺寸', async () => {
+    const { ctx, nodeStore } = boot({ videoMeta: null })
+    await ctx.start()
+    const svc = ctx.get<{ addVideoNodeWithMeta(p: { x: number; y: number }, url: string, name?: string): Promise<string> }>('video')
+    const id = await svc.addVideoNodeWithMeta({ x: 0, y: 0 }, '/api/assets/files/b.mp4')
+    const node = nodeStore.getNode(id)!
+    expect(node.data.videoUrl).toBe('/api/assets/files/b.mp4')
+    expect(node.data.videoWidth).toBeUndefined()
+    expect(node.size).toBeUndefined()
+    ctx.stop()
+  })
+
   it('插件可装配启动；video 服务上架、节点类型注册、可经 factory 建节点', async () => {
     const { ctx, nodeStore } = boot()
     await ctx.start()
@@ -169,8 +211,10 @@ describe('node-video 装配 smoke', () => {
     const entered: Array<{ nodeId: string; modeId: string }> = []
     const exited: string[] = []
     const { ctx } = boot({
-      enter: (nodeId: string, modeId: string) => void entered.push({ nodeId, modeId }),
-      exit: (nodeId: string) => void exited.push(nodeId),
+      toolbarStub: {
+        enter: (nodeId: string, modeId: string) => void entered.push({ nodeId, modeId }),
+        exit: (nodeId: string) => void exited.push(nodeId),
+      },
     })
     await ctx.start()
     const command = ctx.get<{ execute(id: string, ...payload: unknown[]): unknown }>('command')

@@ -45,6 +45,8 @@ import { useVideoFrameThumb } from './video-content/useVideoFrameThumb'
 import { useVideoAudioMenu } from './video-content/useVideoAudioMenu'
 import { useVideoCapture } from './video-content/useVideoCapture'
 import { useVideoCardSize } from './video-content/useVideoCardSize'
+import { readVideoMeta } from './videoTransform'
+import { videoCardSizePatch } from './videoFit'
 import VideoCaptureMenu from './video-content/VideoCaptureMenu.vue'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
@@ -52,7 +54,7 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 const NodeEmptyState = useUiComponent('nodeEmptyState')
 const Button = useUiComponent('Button')
 
-const { ctx, flow } = useCanvasRender()
+const { ctx, flow, interaction } = useCanvasRender()
 
 const videoRef = ref<HTMLVideoElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
@@ -192,18 +194,53 @@ const isFramed = computed(() => !cropping.value && Object.keys(videoStyle.value)
 const posterStyle = computed<Record<string, string>>(() => videoStyle.value)
 
 /** 卡片尺寸兜底：挂载补缺、换源重算、元数据到手补宽高 */
-const { mountSize, onMeta: onVideoMeta } = useVideoCardSize({
+const { mountSize, onMeta: onVideoMeta, sizeSettled, syncCardSize } = useVideoCardSize({
   nodeId: () => props.id,
   data: () => props.data,
   ops,
   sourceFields,
   onSourceChanged: () => { broken.value = false },
+  // 拖动中先别改卡片尺寸：节点会在指针下跳一下（用户实测「拖不动、要平移缩放才恢复」）
+  dragging: () =>
+    interaction.activity.value.nodeDragging && interaction.activity.value.nodeDragId === props.id,
 })
 
 onMounted(() => {
   mountSize()
   prefetchPoster()
+  void ensureCardSize()
 })
+
+/**
+ * 卡片尺寸还没对上画面比例时，**主动读一次视频元数据**。
+ *
+ * 用户 2026-11-11 实测：从资源面板拖入视频，卡片先按默认 480×320 画，上下留黑边；
+ * 只有悬停播放（那时才挂 video 元素、拿到 loadedmetadata）或平移缩放才恢复。
+ * 视频节点不允许手动 resize，尺寸本就该由画面比例决定 —— 所以不等交互，
+ * 地址一有就量一次；量到就写回宽高与卡片尺寸（派生写入，不进撤销栈）。
+ *
+ * 读不到（跨域 / 编码不支持）就什么都不做：绝不猜一个尺寸。
+ */
+async function ensureCardSize(): Promise<void> {
+  const url = videoUrl.value
+  if (!url || sizeSettled(url) || busy.value) return
+  const meta = await readVideoMeta(url).catch(() => null)
+  // 读的过程中地址被换掉了 → 这次结果作废（换源 watch 会自己再跑一次）
+  if (url !== videoUrl.value) return
+  if (!meta || !(meta.width > 0) || !(meta.height > 0)) return
+  // 真实宽高属于**测量结果**：走运行态写入（落盘、不进撤销栈），和挂载兜底同一口径
+  const current = ops.read(props.id) ?? props.data
+  ops.writeRuntime?.(props.id, {
+    ...current,
+    videoWidth: meta.width,
+    videoHeight: meta.height,
+    ...(Number.isFinite(meta.duration) ? { videoDuration: meta.duration } : {}),
+  })
+  syncCardSize(videoCardSizePatch(meta.width, meta.height, ops.fitLimits?.()))
+}
+
+// 地址一到就量一次（拖入/换源都会走这里；尺寸已对齐时是空操作）
+watch(videoUrl, () => { void ensureCardSize() })
 
 /**
  * 点画布空白：只负责退出裁剪。

@@ -41,6 +41,14 @@ export interface VideoOpsContext {
    *   必须走内核 dataUnset 才真的移除）
    */
   write(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }, unset?: string[]): void
+  /**
+   * 写「测量出来的」派生尺寸：落盘，但**不进撤销栈**。
+   *
+   * 按视频比例补卡片尺寸、补真实宽高都属于量出来的结果，不是用户动作。
+   * 走普通 write 的话，打开画布撤销栈里就多一条自动测量，用户按 Ctrl+Z
+   * 撤销的不是自己刚做的操作（与图片节点的 writeMeasured 同一口径）。
+   */
+  writeMeasured?(nodeId: string, data: Record<string, unknown>, size?: { w: number; h: number }): void
   /** 写节点运行态（进度/失败原因）：落盘但不进撤销栈（进度帧不该吃掉撤销栈）。 */
   writeRuntime?(nodeId: string, data: Record<string, unknown>): void
   /** 视频尺寸限制（配置 videoCardMinShortSide / videoCardMaxLongSide）；不注入则回落最短边 120 / 最长边 560 */
@@ -308,6 +316,13 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
         ? { data, size: { w: size.w, h: size.h }, ...(unset ? { dataUnset: unset } : {}) }
         : { data, ...(unset ? { dataUnset: unset } : {}) },
     ),
+    // 派生尺寸（按画面比例补算）：有 runtime 写口就不进撤销栈；极简宿主退回普通写
+    writeMeasured: (nodeId, data, size) => {
+      const patch = size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }
+      const d = doc()
+      if (d?.updateNodeRuntime) d.updateNodeRuntime(nodeId, patch)
+      else d?.updateNode(nodeId, patch)
+    },
     // 运行态（进度/失败）单独走 updateNodeRuntime：落盘但**不进撤销栈** ——
     // 进度帧要是一次一条撤销，用户按一次 Ctrl+Z 退的只是半格进度条。
     writeRuntime: (nodeId, data) => doc()?.updateNodeRuntime(nodeId, { data }),

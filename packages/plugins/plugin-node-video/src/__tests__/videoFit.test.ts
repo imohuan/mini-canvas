@@ -15,6 +15,7 @@ import {
   readVideoFitLimits,
   resolveVideoFitLimits,
   videoCardSizePatch,
+  videoCardSizeSettled,
 } from '../videoFit'
 
 describe('fitVideoCardSize：等比 + 最短边 / 最长边', () => {
@@ -162,3 +163,19 @@ describe('默认卡片尺寸', () => {
     expect(DEFAULT_VIDEO_CARD_SIZE).toEqual({ width: 480, height: 320 })
   })
 })
+
+describe('videoCardSizeSettled：卡片尺寸是否已与画面比例对齐', () => {
+  it('比例正确 → true（不需要再量）', () => {
+    expect(videoCardSizeSettled({ videoWidth: 1280, videoHeight: 720, cardWidth: 560, cardHeight: 315 })).toBe(true)
+  })
+
+  it('卡片是默认 4:3、视频是 16:9 → false（拖入后黑边的那个场景）', () => {
+    expect(videoCardSizeSettled({ videoWidth: 1280, videoHeight: 720, cardWidth: 480, cardHeight: 320 })).toBe(false)
+  })
+
+  it('还没有卡片尺寸 → false', () => {
+    expect(videoCardSizeSettled({ videoWidth: 1280, videoHeight: 720 })).toBe(false)
+    expect(videoCardSizeSettled(undefined)).toBe(false)
+  })
+})
+

@@ -75,8 +75,11 @@ export function useAssetCanvasDrop() {
     if (!asset) return
     e.preventDefault()
     e.stopPropagation()
-    const created = ui.dropAssetToCanvas({ name: asset.name, url: asset.url, assetKind: asset.assetKind }, { x: e.clientX, y: e.clientY })
-    if (created) ui.showToast('已添加节点：' + asset.name)
+    // 视频要先读元数据再建节点（否则卡片会先按默认比例画、上下留黑边），所以这里必须等它
+    void ui.dropAssetToCanvas(
+      { name: asset.name, url: asset.url, assetKind: asset.assetKind },
+      { x: e.clientX, y: e.clientY },
+    ).then((created) => { if (created) ui.showToast('已添加节点：' + asset.name) })
     draggingAssetId = null
   }
 
