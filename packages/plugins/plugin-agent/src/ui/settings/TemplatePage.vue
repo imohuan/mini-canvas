@@ -6,11 +6,15 @@
  * 变量点一下插到光标处；模板同样可编辑、可保存。
  *
  * 模板里 **必须保留 {{AGENTS_MD}}** —— 少了它，Agent 提示词 / 模式提示词一个字都进不去；
- * 这种情况保存会被后台拒绝并说明原因。恢复出厂仍保留，并且只在用户点按钮时执行。
+ * 这种情况保存会被后台拒绝并说明原因。
+ *
+ * 恢复出厂常驻在底部：用户口径 2026-11-11「提示词进入编辑要有恢复默认，不然容易被改坏」。
+ * 模板坏了时顶部的提示块也会指到同一个按钮。
  */
 import { computed, onMounted, ref } from 'vue'
-import { AlertTriangle, Check, Save, Wrench } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { AlertTriangle, Check, RotateCcw, Save } from 'lucide-vue-next'
+import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
+import type { FeedbackService } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import PromptEditor from './components/PromptEditor.vue'
 import './settings.css'
@@ -19,6 +23,7 @@ const Button = useUiComponent('Button')
 
 const agent = useAgent()
 const s = agent.state
+const feedback = useCanvasContextOrRender().ctx.tryGet<FeedbackService>('feedback')
 
 const draft = ref('')
 const busy = ref(false)
@@ -50,6 +55,14 @@ async function save(): Promise<void> {
 }
 
 async function restore(): Promise<void> {
+  const ok = await feedback?.confirm({
+    title: '恢复系统提示词的出厂模板？',
+    description: '会用出厂模板覆盖当前正文（{{AGENTS_MD}} 仍然保留）。自己改过的内容会丢掉。',
+    confirmText: '恢复默认',
+    cancelText: '取消',
+    tone: 'destructive',
+  })
+  if (!ok) return
   restoring.value = true
   try {
     await agent.restoreTemplate()
@@ -79,9 +92,6 @@ async function restore(): Promise<void> {
           <AlertTriangle :size="13" />
           <span>缺 <code>{{ s.templateHealth.missing.join('、') }}</code>：「Agent 提示词」写什么都进不去模型。</span>
         </p>
-        <Button variant="outline" size="sm" type="button" :disabled="restoring" @click="restore">
-          <Wrench :size="13" aria-hidden="true" /> {{ restoring ? '恢复中…' : '恢复出厂模板' }}
-        </Button>
       </div>
 
       <div class="ap-field">
@@ -107,9 +117,14 @@ async function restore(): Promise<void> {
         <span v-if="saved" class="ap-hint ap-ok"><Check :size="12" /> 已保存</span>
         <span v-else-if="dirty" class="ap-hint">有未保存的修改</span>
         <span v-else class="ap-hint">模板在 system_config.yaml；下次新会话生效</span>
-        <Button type="button" size="sm" :disabled="busy || !dirty || missingAgentsMd" @click="save">
-          <Save :size="13" aria-hidden="true" /> 保存
-        </Button>
+        <span class="ap-detail-actions">
+          <Button variant="outline" size="sm" type="button" :disabled="restoring" @click="restore">
+            <RotateCcw :size="13" aria-hidden="true" /> {{ restoring ? '恢复中…' : '恢复默认' }}
+          </Button>
+          <Button type="button" size="sm" :disabled="busy || !dirty || missingAgentsMd" @click="save">
+            <Save :size="13" aria-hidden="true" /> 保存
+          </Button>
+        </span>
       </div>
     </div>
   </div>
@@ -122,6 +137,7 @@ async function restore(): Promise<void> {
 .ap-field-label { font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
 .ap-count { font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
 .ap-detail-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ap-detail-actions { display: inline-flex; align-items: center; gap: 8px; }
 .ap-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-accent, #0891b2); }
 .ap-warnbody { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .ap-warnline { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-warn, #b45309); }

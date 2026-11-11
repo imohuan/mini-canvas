@@ -274,6 +274,9 @@ export interface PromptPreset {
   text: string
   /** 内置项：不可删除 */
   builtin?: boolean
+  /** 出厂默认的名字与正文（内置项才有；「恢复默认」用） */
+  defaultName?: string
+  defaultText?: string
 }
 
 export interface AgentService {
@@ -371,6 +374,8 @@ export interface AgentService {
   /** 审批：用户点允许 / 拒绝 */
   decide(approvalId: string, decision: 'allow' | 'deny'): Promise<void>
   savePolicy(policy: ApprovalPolicyView): Promise<void>
+  /** 审批规则恢复出厂 */
+  restorePolicy(): Promise<void>
   /** 设置页用的动作 */
   importSkill(dir: string): Promise<void>
   removeSkill(name: string): Promise<void>
@@ -404,6 +409,10 @@ export interface AgentService {
   loadPrompts(): Promise<void>
   /** 整包写回模式提示词清单（增删改都用它；后端会保证内置项不被删） */
   savePrompts(list: PromptPreset[]): Promise<void>
+  /** 一条模式提示词恢复内置默认（自建的不支持） */
+  restorePrompt(id: string): Promise<void>
+  /** 系统提示词恢复出厂（空） */
+  restoreSystemPrompt(): Promise<void>
   /** 拉一次「会话标题模型」配置（打开设置页时调） */
   loadTitleModel(): Promise<void>
   /** 写「会话标题模型」配置（provider/modelId 都空 = 回落会话默认模型） */

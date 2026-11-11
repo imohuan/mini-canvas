@@ -9,7 +9,9 @@
  * 数据仍住后台 KV；整包写回，避免半个列表。
  */
 import { computed, onMounted, ref } from 'vue'
-import { AlertTriangle, Check, Plus, Save, Trash2, Wrench } from 'lucide-vue-next'
+import { useCanvasContextOrRender } from '@mini-canvas/canvas-render'
+import type { FeedbackService } from '@mini-canvas/canvas-render'
+import { AlertTriangle, Check, Plus, RotateCcw, Save, Trash2, Wrench } from 'lucide-vue-next'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import type { PromptPreset } from '../../service/agentService.js'
@@ -22,6 +24,7 @@ const Input = useUiComponent('Input')
 
 const agent = useAgent()
 const s = agent.state
+const feedback = useCanvasContextOrRender().ctx.tryGet<FeedbackService>('feedback')
 
 const draft = ref<PromptPreset[]>([])
 const selectedId = ref('')
@@ -62,6 +65,27 @@ function openPreset(p: PromptPreset): void {
 
 function backToList(): void {
   editingId.value = ''
+  saved.value = false
+}
+
+/**
+ * 恢复这一条到出厂内容（用户口径 2026-11-11：「不然很容易被改坏掉」）。
+ *
+ * 只改**本地草稿**，不立刻写后台：用户还能在保存前反悔（点返回或再编辑）。
+ * 自建模式没有出厂版，按钮不出现。
+ */
+async function restoreActive(): Promise<void> {
+  const p = active.value
+  if (!p || !p.builtin) return
+  const ok = await feedback?.confirm({
+    title: '恢复「' + p.name + '」的默认内容？',
+    description: '会把名字和正文换回出厂版本。现在的修改会丢掉（点保存后才写回后台）。',
+    confirmText: '恢复默认',
+    cancelText: '取消',
+  })
+  if (!ok) return
+  p.name = p.defaultName ?? p.name
+  p.text = p.defaultText ?? ''
   saved.value = false
 }
 
@@ -170,6 +194,16 @@ function previewOf(text: string): string {
         @back="backToList"
       >
         <template #actions>
+          <Button
+            v-if="active.builtin"
+            variant="outline"
+            size="xs"
+            type="button"
+            aria-label="恢复这条模式的默认内容"
+            @click="restoreActive"
+          >
+            <RotateCcw :size="12" aria-hidden="true" /> 恢复默认
+          </Button>
           <Button v-if="!active.builtin" variant="destructive" size="xs" type="button" :aria-label="'删除 ' + active.name" @click="removeActive">
             <Trash2 :size="12" aria-hidden="true" /> 删除
           </Button>

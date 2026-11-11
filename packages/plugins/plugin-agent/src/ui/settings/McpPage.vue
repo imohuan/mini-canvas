@@ -318,10 +318,18 @@ async function save(): Promise<void> {
 .ap-list-item { border-radius: 10px; }
 .ap-list-item:hover { background: var(--ui-hover, #f4f6f9); }
 .ap-list-item .ap-list-row:hover { background: transparent; }
-/* 检测状态：成功绿、失败红（与模型卡片同一套固定状态色） */
+/* 检测状态：成功绿、失败红（与模型卡片同一套固定状态色，暗色下提亮一档） */
+.ap-mcp {
+  --ap-state-ok: #16a34a;
+  --ap-state-bad: #dc2626;
+}
+html.dark .ap-mcp {
+  --ap-state-ok: #4ade80;
+  --ap-state-bad: #f87171;
+}
 .ap-server-state { flex: none; font-size: 10px; font-weight: 600; }
-.ap-server-state.is-ok { color: #16a34a; }
-.ap-server-state.is-bad { color: #dc2626; }
+.ap-server-state.is-ok { color: var(--ap-state-ok); }
+.ap-server-state.is-bad { color: var(--ap-state-bad); }
 /* 折叠详情贴着这一行，左边缩进与文字列对齐 */
 .ap-server-detail { display: flex; flex-direction: column; gap: 6px; margin: 0 8px 8px 8px; padding: 8px 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
 .ap-list-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
@@ -339,14 +347,14 @@ async function save(): Promise<void> {
 .ap-draft-probe { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; }
 .ap-probe-result { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
 /* 信息卡片：默认灰框，成功绿框、失败红框（状态色固定，不跟主题强调色） */
-.ap-probe-result.is-ok { border-color: #16a34a; }
-.ap-probe-result:not(.is-ok) { border-color: #dc2626; }
+.ap-probe-result.is-ok { border-color: var(--ap-state-ok); }
+.ap-probe-result:not(.is-ok) { border-color: var(--ap-state-bad); }
 .ap-probe-title { display: flex; align-items: center; gap: 6px; margin: 0; }
 .ap-probe-state { font-size: 12px; font-weight: 600; }
-.ap-probe-state.is-ok { color: #16a34a; }
-.ap-probe-state.is-bad { color: #dc2626; }
+.ap-probe-state.is-ok { color: var(--ap-state-ok); }
+.ap-probe-state.is-bad { color: var(--ap-state-bad); }
 .ap-probe-desc { margin: 0; font-size: 11px; line-height: 1.5; color: var(--ui-ink-dim, #6b7280); }
-.ap-probe-desc.is-bad-text { color: #dc2626; }
+.ap-probe-desc.is-bad-text { color: var(--ap-state-bad); }
 .ap-form-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; }
 .ap-input { width: 100%; }
 .ap-select { width: 160px; }

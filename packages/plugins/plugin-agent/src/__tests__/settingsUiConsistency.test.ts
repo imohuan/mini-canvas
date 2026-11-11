@@ -90,6 +90,52 @@ describe('Agent 设置页签', () => {
   })
 })
 
+describe('审批规则：能编辑、能恢复默认（用户 2026-11-11）', () => {
+  const src = read('../ui/settings/RulesPage.vue')
+
+  it('每条规则有编辑入口，进入的是二级页而不是塞在列表里', () => {
+    expect(src).toContain('openEdit(r)')
+    expect(src).toContain('返回规则列表')
+    expect(src).toContain('保存')
+  })
+
+  it('列表能整份恢复，走的是一键接口', () => {
+    expect(src).toContain('agent.restorePolicy()')
+    expect(src).toContain('恢复全部审批规则')
+  })
+
+  it('内置单条也能恢复，自建规则不给假按钮', () => {
+    expect(src).toContain('restoreOne')
+    expect(src).toContain('defaultOf')
+    expect(src).toContain('v-if="defaultOf(editing)"')
+  })
+})
+
+describe('提示词编辑里能恢复默认', () => {
+  it('模式提示词：只有内置项出现恢复，并且先改本地草稿', () => {
+    const src = read('../ui/settings/PromptPage.vue')
+    expect(src).toContain('defaultText')
+    expect(src).toContain('defaultName')
+    expect(src).toContain('v-if="active.builtin"')
+    expect(src).toContain('恢复默认')
+  })
+
+  it('Agent 提示词：有恢复默认，且说明要再点保存', () => {
+    const src = read('../ui/settings/AgentPromptPage.vue')
+    expect(src).toContain('restoreDefault')
+    expect(src).toContain('恢复默认')
+    expect(src).toContain('点保存后才写回')
+  })
+
+  it('系统提示词：编辑页底部常驻恢复默认，模板坏了也能回', () => {
+    const src = read('../ui/settings/TemplatePage.vue')
+    expect(src).toContain('agent.restoreTemplate()')
+    expect(src).toContain('恢复默认')
+    // 不能只在体检失败的分支里出现
+    expect(src).not.toContain('恢复出厂模板')
+  })
+})
+
 describe('模型 / MCP 的检测与自定义模型（用户 2026-11-11 续）', () => {
   const models = read('../ui/settings/ModelsPage.vue')
   const mcp = read('../ui/settings/McpPage.vue')

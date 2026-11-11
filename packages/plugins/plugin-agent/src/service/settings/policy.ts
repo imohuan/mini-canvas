@@ -27,9 +27,21 @@ export function createPolicyDomain(ctx: AgentServiceContext, deps: AgentServiceD
     }
   }
 
+  /** 恢复出厂的审批规则（只影响规则清单与总开关） */
+  async function restorePolicy(): Promise<void> {
+    try {
+      const r = await api.restorePolicy()
+      const next = r.policy as ApprovalPolicyView | undefined
+      if (next) state.policy = next
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   return {
     decide,
     savePolicy,
+    restorePolicy,
   }
 }
 

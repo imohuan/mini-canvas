@@ -55,6 +55,18 @@ export function createPromptDomain(ctx: AgentServiceContext, deps: AgentServiceD
     }
   }
 
+  /** 一条模式提示词恢复内置默认（自建的在界面里禁用，不会调到这） */
+  async function restorePrompt(id: string): Promise<void> {
+    const r = await api.restorePrompt(id)
+    state.prompts = (Array.isArray(r.prompts) ? r.prompts : []) as PromptPreset[]
+  }
+
+  /** 系统提示词恢复出厂（空）：等价于「没有额外常驻指令」 */
+  async function restoreSystemPrompt(): Promise<void> {
+    const r = await api.restoreSystemPrompt()
+    state.systemPrompt = typeof r.text === 'string' ? r.text : ''
+  }
+
   async function setActivePrompt(id: string): Promise<void> {
     if (!state.prompts.some((p) => p.id === id)) return
     state.activePromptId = id
@@ -129,6 +141,8 @@ export function createPromptDomain(ctx: AgentServiceContext, deps: AgentServiceD
     ensurePromptFresh,
     loadPrompts,
     savePrompts,
+    restorePrompt,
+    restoreSystemPrompt,
     setActivePrompt,
     loadTitleModel,
     saveTitleModel,

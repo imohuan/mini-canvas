@@ -11,6 +11,7 @@ import { Hono } from 'hono'
 import type { AgentConfigService } from '../agent/config.js'
 import { isSecretMask } from '../agent/config.js'
 import type { AgentRuntime } from '../agent/runtime.js'
+import { DEFAULT_POLICY } from '../agent/approval.js'
 import { iconRoutes } from './icons.js'
 
 export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): Hono {
@@ -288,6 +289,24 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
     return c.json({ ok: true, prompts: r.value })
   })
 
+  /** 把一条模式提示词恢复成内置默认（自建的没有出厂版 → 404，界面按钮禁用） */
+  app.post('/api/agent/prompts/restore', async (c) => {
+    const body = await safeJson(c)
+    const id = typeof body?.id === 'string' ? body.id : ''
+    if (!id) return c.json({ ok: false, error: '需要 id' }, 400)
+    const r = await guard(() => config.restorePrompt(id))
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    if (!r.value) return c.json({ ok: false, error: '这条提示词是自建的，没有默认内容可恢复' }, 404)
+    return c.json({ ok: true, prompts: r.value })
+  })
+
+  /** 把系统提示词（AGENTS.md）恢复成空 = 出厂状态（没有额外常驻指令） */
+  app.post('/api/agent/system-prompt/restore', async (c) => {
+    const r = await guard(() => config.setSystemPrompt(''))
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ok: true, text: await config.systemPrompt() })
+  })
+
   /**
    * 会话标题模型（自动命名用哪个模型）。
    * GET  -> { provider?, modelId? }（空 = 用会话默认模型）
@@ -364,6 +383,12 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
       }))
       .filter((r) => r.pattern)
     runtime.setPolicy({ enabled, rules })
+    return c.json({ ok: true, policy: runtime.getPolicy() })
+  })
+
+  /** 审批规则恢复默认（只恢复规则清单与总开关） */
+  app.post('/api/agent/policy/restore', (c) => {
+    runtime.setPolicy(DEFAULT_POLICY)
     return c.json({ ok: true, policy: runtime.getPolicy() })
   })
 

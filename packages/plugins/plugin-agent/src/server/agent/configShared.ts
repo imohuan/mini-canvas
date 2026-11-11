@@ -245,10 +245,23 @@ export class AgentConfigBase {
    */
   async prompts(): Promise<PromptPreset[]> {
     const stored = await this.promptKv.get<PromptPreset[]>(AGENT_PROMPTS_KV_TYPE, AGENT_PROMPTS_KEY)
-    if (Array.isArray(stored) && stored.length) return normalizePrompts(stored)
+    if (Array.isArray(stored) && stored.length) return this.withDefaults(normalizePrompts(stored))
     const seed = DEFAULT_PROMPTS.map((p) => ({ ...p }))
     await this.promptKv.set(AGENT_PROMPTS_KV_TYPE, AGENT_PROMPTS_KEY, seed)
-    return seed
+    return this.withDefaults(seed)
+  }
+
+  /**
+   * 给内置项补上「出厂默认」快照（界面恢复按钮要显示/确认恢复成什么）。
+   *
+   * 只附在**读出**的这一份上，不写回 KV：用户改过的正文仍以 KV 为准，
+   * 换了版本 SDK 默认内容变了，恢复按钮自然跟着变。
+   */
+  private withDefaults(list: PromptPreset[]): PromptPreset[] {
+    return list.map((p) => {
+      const d = DEFAULT_PROMPTS.find((x) => x.id === p.id)
+      return d ? { ...p, defaultName: d.name, defaultText: d.text } : p
+    })
   }
 
   /**
@@ -277,7 +290,20 @@ export class AgentConfigBase {
     }
     const next = normalizePrompts([...byId.values()])
     await this.promptKv.set(AGENT_PROMPTS_KV_TYPE, AGENT_PROMPTS_KEY, next)
-    return next
+    return this.withDefaults(next)
+  }
+
+  /**
+   * 把**一条**模式提示词恢复成内置默认（用户口径 2026-11-11：编辑里要有恢复按钮，免得改坏）。
+   *
+   * 只动这一条：名字与正文都换回出厂内容；自建的模式没有出厂版，返回 undefined 让界面禁用按钮。
+   */
+  async restorePrompt(id: string): Promise<PromptPreset[] | undefined> {
+    const preset = DEFAULT_PROMPTS.find((p) => p.id === id)
+    if (!preset) return undefined
+    const current = await this.prompts()
+    const next = current.map((p) => (p.id === id ? { ...preset } : p))
+    return this.savePrompts(next)
   }
 
   /** SDK 的数据根（全局配置住它下面） */

@@ -6,8 +6,9 @@
  * 变量面板与模式提示词、系统提示词模板共用 PromptEditor / PromptVariables。
  */
 import { computed, onMounted, ref } from 'vue'
-import { AlertTriangle, Check, Save } from 'lucide-vue-next'
-import { useUiComponent } from '@mini-canvas/canvas-render'
+import { AlertTriangle, Check, RotateCcw, Save } from 'lucide-vue-next'
+import { useCanvasContextOrRender, useUiComponent } from '@mini-canvas/canvas-render'
+import type { FeedbackService } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
 import PromptEditor from './components/PromptEditor.vue'
 import './settings.css'
@@ -18,6 +19,7 @@ const ShadcnSettingsSection = useUiComponent('settingsSection')
 
 const agent = useAgent()
 const s = agent.state
+const feedback = useCanvasContextOrRender().ctx.tryGet<FeedbackService>('feedback')
 
 const draft = ref('')
 const busy = ref(false)
@@ -41,6 +43,24 @@ async function save(): Promise<void> {
   } finally {
     busy.value = false
   }
+}
+
+/**
+ * 恢复这个渠道的出厂提示词：把系统提示词（AGENTS.md）写回空。
+ *
+ * 「空」就是出厂状态：没有额外常驻指令；模板、模式提示词、插件附加小节都不受影响。
+ * 只改**本地草稿**，点保存才落盘 —— 用户还能反悔。
+ */
+async function restoreDefault(): Promise<void> {
+  const ok = await feedback?.confirm({
+    title: '恢复 Agent 提示词的默认内容？',
+    description: '会把常驻指令清空（出厂状态就是没有额外指令）。现在的修改会丢掉，点保存后才写回。',
+    confirmText: '恢复默认',
+    cancelText: '取消',
+  })
+  if (!ok) return
+  draft.value = ''
+  saved.value = false
 }
 </script>
 
@@ -76,9 +96,14 @@ async function save(): Promise<void> {
         <span v-if="saved" class="ap-hint ap-ok"><Check :size="12" /> 已保存</span>
         <span v-else-if="dirty" class="ap-hint">有未保存的修改</span>
         <span v-else class="ap-hint">每次新会话都会带上它（放在系统提示词的 [developer_instructions] 块里）</span>
-        <Button type="button" size="sm" :disabled="busy || !dirty" @click="save">
+        <span class="ap-detail-actions">
+          <Button variant="outline" size="sm" type="button" aria-label="恢复 Agent 提示词的默认内容" @click="restoreDefault">
+            <RotateCcw :size="13" aria-hidden="true" /> 恢复默认
+          </Button>
+          <Button type="button" size="sm" :disabled="busy || !dirty" @click="save">
           <Save :size="13" aria-hidden="true" /> 保存
-        </Button>
+          </Button>
+        </span>
       </div>
     </div>
 
@@ -104,6 +129,7 @@ async function save(): Promise<void> {
 .ap-field-label { font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
 .ap-count { font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
 .ap-detail-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ap-detail-actions { display: inline-flex; align-items: center; gap: 8px; }
 .ap-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-accent, #0891b2); }
 .ap-warnblock { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--ui-warn, #b45309); border-radius: var(--radius-control, 8px); }
 .ap-warnline { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-warn, #b45309); }

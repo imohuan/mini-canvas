@@ -300,6 +300,11 @@ export class AgentApi {
     return this.json('/api/agent/system-prompt', { method: 'PUT', body: JSON.stringify({ text }) })
   }
 
+  /** 系统提示词恢复成出厂状态（空 = 没有额外常驻指令） */
+  restoreSystemPrompt(): Promise<{ text?: string }> {
+    return this.json('/api/agent/system-prompt/restore', { method: 'POST' })
+  }
+
   /**
    * 把提示词模板恢复成 SDK 出厂模板。
    *
@@ -323,6 +328,11 @@ export class AgentApi {
   /** 整包写回模式提示词清单（后端会保证内置项不被删） */
   savePrompts(prompts: unknown[]): Promise<{ prompts?: unknown[] }> {
     return this.json('/api/agent/prompts', { method: 'PUT', body: JSON.stringify({ prompts }) })
+  }
+
+  /** 把一条模式提示词恢复成内置默认 */
+  restorePrompt(id: string): Promise<{ prompts?: unknown[] }> {
+    return this.json('/api/agent/prompts/restore', { method: 'POST', body: JSON.stringify({ id }) })
   }
 
   /** 读「会话标题模型」配置（空 = 用会话默认模型） */
@@ -370,6 +380,11 @@ export class AgentApi {
 
   putPolicy(body: Record<string, unknown>): Promise<Record<string, unknown>> {
     return this.json('/api/agent/policy', { method: 'PUT', body: JSON.stringify(body) })
+  }
+
+  /** 审批规则恢复默认 */
+  restorePolicy(): Promise<Record<string, unknown>> {
+    return this.json('/api/agent/policy/restore', { method: 'POST', body: '{}' })
   }
 
   async listSessions(canvasId: string): Promise<SessionMetaView[]> {

@@ -610,22 +610,31 @@ async function save(): Promise<void> {
 .ap-saved-check { flex: none; width: 14px; height: 14px; accent-color: var(--ui-accent, #0891b2); }
 .ap-saved-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-family: var(--font-mono, ui-monospace, monospace); color: var(--ui-ink, #18202b); }
 /* 状态色固定：成功绿、失败红。这里不跟主题强调色走 —— 强调色可能本身就是红色，
-   会把「成功」也画成红框（2026-11-11 截图）。 */
-.ap-saved-result { flex: none; font-size: 10px; color: #dc2626; }
-.ap-saved-result.is-ok { color: #16a34a; }
+   会把「成功」也画成红框（2026-11-11 截图）。
+   写成组件私有色板：默认块给亮色值，暗色块给提亮一档的值，避免暗画布上看不清。 */
+.ap-models {
+  --ap-state-ok: #16a34a;
+  --ap-state-bad: #dc2626;
+}
+html.dark .ap-models {
+  --ap-state-ok: #4ade80;
+  --ap-state-bad: #f87171;
+}
+.ap-saved-result { flex: none; font-size: 10px; color: var(--ap-state-bad); }
+.ap-saved-result.is-ok { color: var(--ap-state-ok); }
 .ap-probe-results { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
 .ap-probe-model { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
 /* 信息卡片：默认灰框；成功绿框、失败红框。只有这一块用状态色，选中效果仍用主题色。 */
 .ap-probe-result { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
-.ap-probe-result.is-ok { border-color: #16a34a; }
-.ap-probe-result.is-ok .ap-probe-title > svg { color: #16a34a; }
-.ap-probe-result:not(.is-ok) { border-color: #dc2626; }
-.ap-probe-result:not(.is-ok) .ap-probe-title > svg { color: #dc2626; }
+.ap-probe-result.is-ok { border-color: var(--ap-state-ok); }
+.ap-probe-result.is-ok .ap-probe-title > svg { color: var(--ap-state-ok); }
+.ap-probe-result:not(.is-ok) { border-color: var(--ap-state-bad); }
+.ap-probe-result:not(.is-ok) .ap-probe-title > svg { color: var(--ap-state-bad); }
 .ap-probe-title { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-ink, #18202b); }
 .ap-probe-title .ap-probe-model { font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
 .ap-probe-state { margin-left: auto; font-size: 10px; font-weight: 600; }
-.ap-probe-state.is-ok { color: #16a34a; }
-.ap-probe-state.is-bad { color: #dc2626; }
+.ap-probe-state.is-ok { color: var(--ap-state-ok); }
+.ap-probe-state.is-bad { color: var(--ap-state-bad); }
 /* 描述放第二行：协议 / 耗时（或失败原因） */
 .ap-probe-desc { margin: 0; font-size: 11px; line-height: 1.5; color: var(--ui-ink-dim, #6b7280); }
 .ap-probe-reply { margin: 0; font-size: 10px; line-height: 1.5; color: var(--ui-ink-mute, #8c95a3); }

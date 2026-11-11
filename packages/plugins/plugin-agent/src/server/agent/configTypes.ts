@@ -147,6 +147,9 @@ export interface PromptPreset {
   text: string
   /** 内置项：不可删除（用户可以改名/改内容，但不能删掉这一条） */
   builtin?: boolean
+  /** 出厂默认的名字与正文（界面「恢复默认」用；内置项才有） */
+  defaultName?: string
+  defaultText?: string
 }
 
 /** KV 里存提示词清单的 key（type=config） */
