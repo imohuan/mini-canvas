@@ -26,6 +26,8 @@ import {
   McpToolProvider,
   MCP_TOOL_PREFIX,
 } from '@prismshadow/penguin-core'
+import { GenerativeModel } from '@prismshadow/penguin-core'
+import { userText } from '@prismshadow/penguin-core'
 import { AGENT_ID, AGENT_PROJECT_ID } from './agentPaths.js'
 import { AgentConfigBase } from './configShared.js'
 import { AGENT_PROMPTS_KV_TYPE, AGENT_TITLE_MODEL_KEY } from './configTypes.js'
@@ -36,11 +38,13 @@ import type {
   AgentMcpView,
   AgentModelView,
   AgentProviderView,
+  AgentModelProbe,
   UpsertModelInput,
 } from './configTypes.js'
 import {
   assertHttpUrl,
   describe,
+  friendlyProbeError,
   loadSystemConfig,
   maskSecret,
   writeSystemConfig,
@@ -411,6 +415,177 @@ export class AgentConfigService extends AgentConfigBase {
     }
   }
 
+  /**
+   * **真实**发一条很小的对话请求，验证这个模型现在能不能用。
+   *
+   * 为什么不复用 /models 清单：清单只证明「地址和密钥能列模型」，很多网关允许列模型、
+   * 但真正 chat 时才会报「模型不存在 / 没权限 / 协议不对」。用户要的是「选中某个模型点检测，
+   * 确认真能对话」，所以这里走 SDK 的 GenerativeModel 发一条 `只回复 OK` 的短请求。
+   *
+   * clientType 的取值：
+   *  - 传具体协议 → 只测它；
+   *  - 传 `auto` / 空 → 依次试通用协议，第一个通的就回来（并告诉界面用的是哪个）。
+   *
+   * 注意：只试**通用协议**。`deepseek-v4` / `minimax-m3` / vLLM adapter 是厂商专属，
+   * 自动猜会把它们当成万能协议去试，反而浪费用户时间。
+   */
+  async probeModel(input: {
+    provider?: string
+    modelId?: string
+    baseUrl?: string
+    apiKey?: string
+    clientType?: string
+  }): Promise<AgentModelProbe> {
+    const resolved = await this.resolveModel(input.provider, input.modelId)
+    // 手输的新模型还不在配置里：精确查不到时，凭据回落到**同一渠道**已存的那份
+    // （否则「给这个渠道加一个新模型」会因为拿不到密钥而永远测不通）。
+    const fallback = resolved.configured
+      ? undefined
+      : input.provider
+        ? await this.resolveModel(input.provider)
+        : undefined
+    const baseUrl = (input.baseUrl ?? '').trim() || resolved.baseUrl || fallback?.baseUrl || ''
+    const apiKey = (input.apiKey ?? '').trim() || resolved.apiKey || fallback?.apiKey || ''
+    const modelId = (input.modelId ?? '').trim() || resolved.modelId || ''
+    if (!modelId) {
+      return { ok: false, clientType: '', tried: [], latencyMs: 0, error: '先填模型 ID 再检测' }
+    }
+    if (!baseUrl) {
+      return { ok: false, clientType: '', tried: [], latencyMs: 0, error: '先填接口地址再检测' }
+    }
+    assertHttpUrl(baseUrl)
+    const explicit = (input.clientType ?? '').trim()
+    const candidates = explicit && explicit !== 'auto'
+      ? [explicit]
+      : ['openai-chat', 'openai-responses', 'ant-messages']
+
+    const tried: AgentModelProbe['tried'] = []
+    let lastError = ''
+    for (const clientType of candidates) {
+      const started = Date.now()
+      try {
+        const reply = await this.tryChatOnce({ modelId, apiKey, baseUrl, clientType })
+        tried.push({ clientType, ok: true, durationMs: Date.now() - started })
+        return {
+          ok: true,
+          clientType,
+          tried,
+          latencyMs: Date.now() - started,
+          ...(reply ? { reply } : {}),
+        }
+      } catch (err) {
+        lastError = friendlyProbeError(describe(err))
+        // 兼容性兜底：不少第三方网关流式返回不带 usage_metadata，SDK 会判失败；
+        // 这种端点其实能聊。改用一次普通（非流式）chat 请求确认连通，结论按“通”处理。
+        if (clientType === 'openai-chat' && /usage_metadata/i.test(lastError)) {
+          try {
+            const reply = await this.rawChatOnce({ modelId, apiKey, baseUrl, clientType })
+            tried.push({ clientType, ok: true, durationMs: Date.now() - started })
+            return {
+              ok: true,
+              clientType,
+              tried,
+              latencyMs: Date.now() - started,
+              /** 标记：结论来自非流式兜底（不是 SDK 流式链路成功） */
+              fallback: 'non-stream',
+              ...(reply ? { reply } : {}),
+            }
+          } catch (rawErr) {
+            lastError = friendlyProbeError(describe(rawErr))
+          }
+        }
+        tried.push({
+          clientType,
+          ok: false,
+          durationMs: Date.now() - started,
+          ...(lastError ? { error: lastError } : {}),
+        })
+      }
+    }
+    return {
+      ok: false,
+      clientType: '',
+      tried,
+      latencyMs: tried.reduce((n, t) => n + t.durationMs, 0),
+      error: lastError || '没有可用的协议',
+    }
+  }
+
+  /**
+   * 普通（非流式）chat 请求：给“流式响应缺用量字段”的兼容端点兜底。
+   *
+   * 只实现 OpenAI Chat Completions 这一种形状——其它协议的流式字段缺失很罕见，
+   * 不做无根据的猜测。
+   */
+  private async rawChatOnce(input: {
+    modelId: string
+    apiKey: string
+    baseUrl: string
+    clientType: string
+  }): Promise<string> {
+    const base = assertHttpUrl(input.baseUrl).replace(/\/+$/, '')
+    const url = base.endsWith('/chat/completions') ? base : base + '/chat/completions'
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(input.apiKey ? { authorization: 'Bearer ' + input.apiKey } : {}),
+      },
+      body: JSON.stringify({
+        model: input.modelId,
+        messages: [{ role: 'user', content: '只回复：OK' }],
+        max_tokens: 16,
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(25_000),
+    })
+    if (!res.ok) throw new Error('上游返回 ' + res.status + '：' + url)
+    const body = (await res.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>
+    }
+    const text = String(body.choices?.[0]?.message?.content ?? '')
+    return text.trim().slice(0, 80)
+  }
+
+  /** 用 SDK 的 GenerativeModel 发一条极短请求；返回模型正文（可能为空） */
+  private async tryChatOnce(input: {
+    modelId: string
+    apiKey: string
+    baseUrl: string
+    clientType: string
+  }): Promise<string> {
+    const model = new GenerativeModel({
+      modelId: input.modelId,
+      ...(input.apiKey ? { apiKey: input.apiKey } : {}),
+      baseUrl: input.baseUrl,
+      clientType: input.clientType,
+      tools: [],
+      maxTokens: 16,
+      requestTimeoutMs: 25_000,
+    })
+    const stream = model.streamGenerate({ newMessages: [userText('只回复：OK')] })
+    let text = ''
+    for (;;) {
+      const step = await stream.next()
+      if (step.done) {
+        const outcome = step.value as { status?: string; errorMessage?: string } | undefined
+        if (outcome?.status && outcome.status !== 'completed') {
+          throw new Error(outcome.errorMessage || '请求结束状态：' + outcome.status)
+        }
+        break
+      }
+      const msg = step.value as { payload?: { type?: unknown; text?: unknown } } | undefined
+      const payload = msg?.payload
+      if (
+        (payload?.type === 'partial_text' || payload?.type === 'text') &&
+        typeof payload.text === 'string'
+      ) {
+        text += payload.text
+      }
+    }
+    return text.trim().slice(0, 80)
+  }
+
   // -------------------------------------------------- 会话标题模型（自动命名用）
 
   /** 读「生成标题用哪个模型」的配置（没配 = 用会话默认模型） */
@@ -533,10 +708,27 @@ export class AgentConfigService extends AgentConfigBase {
 
   /** addMcpServer 的落盘部分（调用方已持配置写锁） */
   private async writeAddMcpServer(input: AddMcpInput): Promise<void> {
-    const name = input.name.trim()
+    const entry = this.buildMcpEntry(input)
+    const name = entry.name
+    // 写之前先自证能解析：坏条目在被读到时只会静默跳过，用户当下看不到任何问题
+    resolveMCPServer(entry as never)
+    const cfg = await loadSystemConfig(this.sdkRoot)
+    const existing = cfg.tools?.mcpServers ?? []
+    const next = [...existing.filter((e) => e.name !== name), entry]
+    await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } })
+  }
+
+  /** 把添加表单变成 SDK 认的 MCP 条目；检测与保存共用这一份校验 */
+  private buildMcpEntry(input: AddMcpInput, fallbackName = ''): {
+    name: string
+    config: Record<string, unknown>
+  } {
+    const name = input.name.trim() || fallbackName
     // 名字只是标签，端点路径里的 $smart 照旧写在 url 里。SDK 只认这几个字符，
     // 所以在这里就拦住 —— 否则坏名字要到连接时才以「跳过」的形式暴露，用户看不到原因。
-    if (!/^[A-Za-z0-9_-]+$/.test(name)) throw new Error('MCP 服务名只能包含字母、数字、下划线和短横线（名字只是标签，端点里的 $smart 写在 url 里）')
+    if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+      throw new Error('MCP 服务名只能包含字母、数字、下划线和短横线（名字只是标签，端点里的 $smart 写在 url 里）')
+    }
     const perm = input.permission ? { permission: input.permission } : {}
     let config: Record<string, unknown>
     if (input.kind === 'stdio') {
@@ -549,13 +741,7 @@ export class AgentConfigService extends AgentConfigBase {
       assertHttpUrl(url)
       config = { type: input.kind, url, ...perm }
     }
-    const entry = { name, config }
-    // 写之前先自证能解析：坏条目在被读到时只会静默跳过，用户当下看不到任何问题
-    resolveMCPServer(entry as never)
-    const cfg = await loadSystemConfig(this.sdkRoot)
-    const existing = cfg.tools?.mcpServers ?? []
-    const next = [...existing.filter((e) => e.name !== name), entry]
-    await writeSystemConfig(this.sdkRoot, { ...cfg, tools: { ...(cfg.tools ?? {}), mcpServers: next } })
+    return { name, config }
   }
 
   async removeMcpServer(name: string): Promise<AgentMcpView[]> {
@@ -717,6 +903,52 @@ export class AgentConfigService extends AgentConfigBase {
     }
   }
 
+  /**
+   * 探测**还没保存**的 MCP 配置（添加页的「检测」按钮）。
+   *
+   * 只校验并连这一条：用户把地址填错 / 命令起不来，当场就能看到原因，
+   * 不必先保存、再回列表点「检查连接」、发现不对再删掉重来。
+   */
+  async probeMcpDraft(input: AddMcpInput): Promise<AgentMcpProbe> {
+    await this.ensureInit()
+    const entry = this.buildMcpEntry(input, 'draft')
+    const warnings: string[] = []
+    const provider = new McpToolProvider([entry] as never, {
+      workspaceDir: this.sdkRoot,
+      warn: (m: string) => warnings.push(String(m)),
+    })
+    try {
+      const defs = await provider.listTools()
+      const servers = (provider.connectResults() ?? []).map((r) => ({
+        name: String(r.server ?? entry.name),
+        transport: String(r.transport ?? ''),
+        status: String(r.status ?? ''),
+        tools: Number(r.tools ?? 0),
+        ...(r.error_message ? { error: String(r.error_message) } : {}),
+        durationMs: Number(r.duration_ms ?? 0),
+      }))
+      const tools = defs.map((d) => {
+        const full = String(d.name ?? '')
+        const rest = full.startsWith(MCP_TOOL_PREFIX) ? full.slice(MCP_TOOL_PREFIX.length) : full
+        const sep = rest.indexOf('__')
+        return {
+          name: sep >= 0 ? rest.slice(sep + 2) : rest,
+          server: sep >= 0 ? rest.slice(0, sep) : '',
+          description: String((d as { description?: unknown }).description ?? ''),
+          fullName: full,
+        }
+      })
+      const failed = servers.filter((s) => s.status !== 'completed')
+      return { ok: failed.length === 0, servers, tools, warnings }
+    } finally {
+      try {
+        provider.closeQuietly()
+      } catch {
+        /* 关不掉不是用户的问题 */
+      }
+    }
+  }
+
   /** 一次装配会真正拿到哪些工具（界面显示 + 规则列表用） */
   async resolvedTools(): Promise<{ builtin: string[]; mcp: string[]; warnings: string[] }> {
     await this.ensureInit()
@@ -747,6 +979,7 @@ export type {
   AddMcpInput,
   AgentCatalogEntry,
   AgentMcpProbe,
+  AgentModelProbe,
   AgentMcpView,
   AgentModelView,
   AgentProviderView,

@@ -52,6 +52,9 @@ const isStdio = computed(() => form.value.kind === 'stdio')
 
 const probing = ref(false)
 const probe = ref<McpProbeResult | null>(null)
+/** 添加页的「检测」：不保存也先连一次 */
+const draftProbing = ref(false)
+const draftProbe = ref<McpProbeResult | null>(null)
 
 onMounted(() => void agent.refresh())
 
@@ -80,11 +83,30 @@ function openAdd(): void {
   form.value = { name: '', kind: 'http', url: '', command: 'node', args: '' }
   adding.value = true
   s.error = ''
+  draftProbe.value = null
 }
 
 function backToList(): void {
   adding.value = false
   s.error = ''
+}
+
+/** 检测当前填的这份配置（还没保存）；填错时当场看到原因 */
+async function checkDraft(): Promise<void> {
+  draftProbing.value = true
+  draftProbe.value = null
+  s.error = ''
+  try {
+    draftProbe.value = await agent.probeMcpDraft({
+      name: form.value.name.trim() || 'draft',
+      kind: form.value.kind,
+      ...(isStdio.value
+        ? { command: form.value.command, args: form.value.args.split(/\s+/).filter(Boolean) }
+        : { url: form.value.url }),
+    })
+  } finally {
+    draftProbing.value = false
+  }
 }
 
 async function save(): Promise<void> {
@@ -201,10 +223,10 @@ async function save(): Promise<void> {
 
       <form class="ap-form-stack ap-mcp-form" @submit.prevent="save">
         <ShadcnSettingsRow label="名称" description="只作标签，字母、数字、下划线和短横线">
-          <Input v-model="form.name" class="ap-input" aria-label="MCP 名称" placeholder="给这个服务起个名字" />
+          <Input v-model="form.name" class="ap-input" aria-label="MCP 名称" placeholder="给这个服务起个名字" @input="draftProbe = null" />
         </ShadcnSettingsRow>
         <ShadcnSettingsRow label="类型" description="http / sse 用地址；stdio 启动本地命令">
-          <Select v-model="form.kind">
+            <Select v-model="form.kind" @update:model-value="draftProbe = null">
             <SelectTrigger class="ap-select" size="sm" aria-label="MCP 传输类型">
               <SelectValue />
             </SelectTrigger>
@@ -214,14 +236,35 @@ async function save(): Promise<void> {
           </Select>
         </ShadcnSettingsRow>
         <ShadcnSettingsRow v-if="!isStdio" label="URL" description="MCP 端点的完整地址">
-          <Input v-model="form.url" class="ap-input" aria-label="MCP URL" placeholder="https://{服务地址}/mcp" />
+          <Input v-model="form.url" class="ap-input" aria-label="MCP URL" placeholder="https://{服务地址}/mcp" @input="draftProbe = null" />
         </ShadcnSettingsRow>
         <ShadcnSettingsRow v-else label="命令" description="启动这个 MCP 服务的命令">
-          <Input v-model="form.command" class="ap-input" aria-label="MCP 命令" placeholder="例如：npx" />
+          <Input v-model="form.command" class="ap-input" aria-label="MCP 命令" placeholder="例如：npx" @input="draftProbe = null" />
         </ShadcnSettingsRow>
         <ShadcnSettingsRow v-if="isStdio" label="参数" description="用空格分隔">
-          <Input v-model="form.args" class="ap-input" aria-label="MCP 参数" placeholder="用空格分隔" />
+          <Input v-model="form.args" class="ap-input" aria-label="MCP 参数" placeholder="用空格分隔" @input="draftProbe = null" />
         </ShadcnSettingsRow>
+
+        <!-- 检测放在表单正下方：添加时就能确认这份配置连不连得上 -->
+        <div class="ap-draft-probe">
+            <Button variant="outline" size="sm" type="button" :disabled="draftProbing" @click="checkDraft">
+            <PlugZap :size="13" aria-hidden="true" /> {{ draftProbing ? '检测中…' : '检测配置' }}
+          </Button>
+          <span class="ap-hint">用表单里现在填的值连一次，不会保存</span>
+        </div>
+        <div v-if="draftProbe" class="ap-probe-result" :class="{ 'is-ok': draftProbe.ok }">
+          <p v-if="draftProbe.error" class="ap-error">{{ draftProbe.error }}</p>
+          <template v-else>
+            <p class="ap-hint">{{ draftProbe.ok ? '连接成功' : '连接失败' }}：{{ draftProbe.servers.length }} 个服务 · {{ draftProbe.tools.length }} 个工具</p>
+            <div v-if="draftProbe.tools.length" class="ap-tagpool">
+              <Badge v-for="t in draftProbe.tools" :key="t.fullName" variant="secondary" :title="t.description">{{ t.name }}</Badge>
+            </div>
+            <p v-for="sv in draftProbe.servers" :key="sv.name" class="ap-hint" :class="{ 'is-bad': sv.status !== 'completed' }">
+              {{ sv.name }} · {{ sv.status }} · {{ sv.tools }} 个工具<template v-if="sv.error"> · {{ sv.error }}</template>
+            </p>
+            <p v-for="w in draftProbe.warnings" :key="w" class="ap-hint is-bad">{{ w }}</p>
+          </template>
+        </div>
 
         <div class="ap-form-actions is-sticky">
           <!-- 操作条固定在底部：窄窗口 / 长说明时不用滚到底才找到添加 -->
@@ -252,6 +295,9 @@ async function save(): Promise<void> {
 .ap-empty-card span { font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
 .ap-mcp-probe { padding: 10px 0 4px; }
 .ap-mcp-form { padding: 4px 0; }
+.ap-draft-probe { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 0; }
+.ap-probe-result { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
+.ap-probe-result.is-ok { border-color: var(--ui-accent, #0891b2); }
 .ap-form-actions { display: flex; justify-content: flex-end; gap: 8px; padding-top: 10px; }
 .ap-input { width: 100%; }
 .ap-select { width: 160px; }

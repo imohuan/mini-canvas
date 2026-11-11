@@ -207,6 +207,27 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
     return c.json({ ok: r.value.ok, servers: r.value.servers, tools: r.value.tools, warnings: r.value.warnings })
   })
 
+  /** 探测**未保存**的 MCP 配置（添加页的检测）：当场告诉用户这份配置连不连得上 */
+  app.post('/api/agent/mcp/probe-draft', async (c) => {
+    const body = await safeJson(c)
+    if (!body) return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
+    const kind = String(body.kind ?? 'http')
+    if (kind !== 'stdio' && kind !== 'http' && kind !== 'sse') {
+      return c.json({ ok: false, error: 'kind 只能是 stdio / http / sse' }, 400)
+    }
+    const r = await guard(() =>
+      config.probeMcpDraft({
+        name: String(body.name ?? 'draft'),
+        kind: kind as 'stdio' | 'http' | 'sse',
+        ...(typeof body.command === 'string' ? { command: body.command } : {}),
+        ...(Array.isArray(body.args) ? { args: body.args.map(String) } : {}),
+        ...(typeof body.url === 'string' ? { url: body.url } : {}),
+      }),
+    )
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ok: r.value.ok, servers: r.value.servers, tools: r.value.tools, warnings: r.value.warnings })
+  })
+
   /** Agent 的系统提示词（agent_state/AGENTS.md） */
   app.put('/api/agent/system-prompt', async (c) => {
     const body = await safeJson(c)
@@ -302,6 +323,27 @@ export function agentRoutes(config: AgentConfigService, runtime: AgentRuntime): 
       },
     )
     return c.json({ ok: r.ok, models: r.models, ...(r.error ? { error: r.error } : {}) })
+  })
+
+  /**
+   * 真实请求测试（「检测 / 测试这个模型」按钮）。
+   *
+   * body: { provider?, modelId?, baseUrl?, apiKey?, clientType? }
+   * clientType 传 `auto` 或空 = 依次试通用协议，第一个通的回来并告诉界面用了哪个。
+   */
+  app.post('/api/agent/models/probe', async (c) => {
+    const body = (await safeJson(c)) ?? {}
+    const r = await guard(() =>
+      config.probeModel({
+        ...(typeof body.provider === 'string' ? { provider: body.provider } : {}),
+        ...(typeof body.modelId === 'string' ? { modelId: body.modelId } : {}),
+        ...(typeof body.baseUrl === 'string' ? { baseUrl: body.baseUrl } : {}),
+        ...(typeof body.apiKey === 'string' && !isSecretMask(body.apiKey) ? { apiKey: body.apiKey } : {}),
+        ...(typeof body.clientType === 'string' ? { clientType: body.clientType } : {}),
+      }),
+    )
+    if (!r.ok) return c.json({ ok: false, error: r.message }, 400)
+    return c.json({ ...r.value })
   })
 
   // ------------------------------------------------------------ 审批规则列表

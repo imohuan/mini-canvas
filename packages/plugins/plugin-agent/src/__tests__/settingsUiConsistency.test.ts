@@ -89,3 +89,37 @@ describe('Agent 设置页签', () => {
     expect(tab).toContain('height: auto')
   })
 })
+
+describe('模型 / MCP 的检测与自定义模型（用户 2026-11-11 续）', () => {
+  const models = read('../ui/settings/ModelsPage.vue')
+  const mcp = read('../ui/settings/McpPage.vue')
+
+  it('模型页有真实请求检测、自定义模型和“测选中模型”', () => {
+    expect(models).toContain('agent.probeModel')
+    expect(models).toContain('自定义模型 ID')
+    expect(models).toContain('测试选中')
+    expect(models).toContain('testSelectedModels')
+  })
+
+  it('两个多选是分开的：编辑时多选保留哪些，保存后多选测哪些', () => {
+    expect(models).toContain('modelEditing')
+    expect(models).toContain('完成编辑')
+    expect(models).toContain('编辑模型')
+    expect(models).toContain('testSelected')
+    // 两套选中态各自一个字段，不能再用「当前模型」叠第三层描边
+    expect(models).not.toContain('is-active-model')
+  })
+
+  it('协议写清楚通用 / 专属，不确定时默认自动检测', () => {
+    expect(models).toContain("'auto'")
+    expect(models).toContain('自动检测（推荐）')
+    expect(models).toContain('OpenAI Chat（通用）')
+    expect(models).toContain('Anthropic Messages（通用）')
+  })
+
+  it('MCP 添加页有“检测配置”，并且不会保存', () => {
+    expect(mcp).toContain('agent.probeMcpDraft')
+    expect(mcp).toContain('检测配置')
+    expect(mcp).toContain('不会保存')
+  })
+})

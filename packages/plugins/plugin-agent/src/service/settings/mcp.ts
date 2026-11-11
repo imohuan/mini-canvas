@@ -48,10 +48,27 @@ export function createMcpDomain(ctx: AgentServiceContext, deps: AgentServiceDeps
     }
   }
 
+  /** 检测还没保存的 MCP 配置（添加页）：连一次、列出工具、立刻断开 */
+  async function probeMcpDraft(body: Record<string, unknown>): Promise<McpProbeResult> {
+    try {
+      const r = await api.probeMcpDraft(body)
+      return {
+        ok: r.ok === true,
+        servers: (Array.isArray(r.servers) ? r.servers : []) as McpProbeResult['servers'],
+        tools: (Array.isArray(r.tools) ? r.tools : []) as McpProbeResult['tools'],
+        warnings: (Array.isArray(r.warnings) ? r.warnings : []).map(String),
+        ...(typeof r.error === 'string' ? { error: r.error } : {}),
+      }
+    } catch (err) {
+      return { ok: false, servers: [], tools: [], warnings: [], error: err instanceof Error ? err.message : String(err) }
+    }
+  }
+
   return {
     addMcp,
     removeMcp,
     probeMcp,
+    probeMcpDraft,
     reconnectMcp,
   }
 }

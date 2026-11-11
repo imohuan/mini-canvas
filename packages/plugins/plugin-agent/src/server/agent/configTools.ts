@@ -89,6 +89,30 @@ export function describe(err: unknown): string {
 }
 
 /**
+ * 模型检测里的英文报错翻成人话。
+ *
+ * 只翻**能确定含义**的几种（缺密钥、认证失败、连不上、404）；其余原样保留 ——
+ * 乱翻译会把真正的上游原因改掉，反而更难查。
+ */
+export function friendlyProbeError(message: string): string {
+  const m = (message ?? '').trim()
+  if (!m) return '请求失败（没有返回原因）'
+  if (/Missing credentials|apiKey.*required|No API key/i.test(m)) {
+    return '没有可用密钥：先填这个渠道的密钥，或确认它已经保存过'
+  }
+  if (/401|Unauthorized|invalid.*api.*key|authentication/i.test(m)) {
+    return '认证失败（401）：密钥不正确或没有这个模型的权限'
+  }
+  if (/ENOTFOUND|ECONNREFUSED|fetch failed|socket hang up/i.test(m)) {
+    return '连不上接口地址：检查地址、端口和网络'
+  }
+  if (/\b404\b/.test(m)) {
+    return '接口不存在（404）：多半是地址少了 /v1 或协议选错了'
+  }
+  return m
+}
+
+/**
  * 通用「排队取锁」：拿当前队列尾，把自己的放行信号接在后面，等前一个放行。
  * 返回的 release 只应调用一次（调用方都在 finally 里调）。
  */

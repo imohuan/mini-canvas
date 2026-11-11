@@ -84,6 +84,22 @@ export interface AgentMcpProbe {
   warnings: string[]
 }
 
+/** 一次「模型连通性测试」的结果（真实发一条很小的对话请求） */
+export interface AgentModelProbe {
+  ok: boolean
+  /** 实际成功的协议；全部失败时为空串 */
+  clientType: string
+  /** 依次试过哪些协议（自动检测时会有多条） */
+  tried: Array<{ clientType: string; ok: boolean; durationMs: number; error?: string }>
+  /** 成功那次的总耗时 */
+  latencyMs: number
+  /** 模型回了什么（截断到一小段，给用户做“确实通了”的证据） */
+  reply?: string
+  error?: string
+  /** 结论来自非流式兜底（某些兼容网关流式缺 usage 字段） */
+  fallback?: 'non-stream'
+}
+
 export interface AgentSkillView {
   name: string
   description: string

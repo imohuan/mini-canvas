@@ -6,6 +6,7 @@ import type {
   GoalStateView,
   SessionMetaView,
 } from '../api/agentApi.js'
+import type { ModelProbeView } from '../api/agentApi.js'
 import type { AgentTurnView } from '../model/sessionModel.js'
 import type { ConversationGroup, PagerGroup } from '../model/branchNav.js'
 
@@ -377,6 +378,8 @@ export interface AgentService {
   removeMcp(name: string): Promise<void>
   /** 主动连一次 MCP 并列出可用工具（「检查连接」按钮） */
   probeMcp(names?: string[]): Promise<McpProbeResult>
+  /** 检测还没保存的 MCP 配置（添加页） */
+  probeMcpDraft(body: Record<string, unknown>): Promise<McpProbeResult>
   /**
    * 让当前会话**丢掉旧的 MCP 连接**，下一句重新连一次。
    *
@@ -387,6 +390,14 @@ export interface AgentService {
   saveModel(body: Record<string, unknown>): Promise<void>
   /** 批量写一个渠道的模型 + 删掉取消勾选的（「编辑 Provider」用） */
   saveModelsBulk(body: Record<string, unknown>): Promise<void>
+  /** 真实发一条短请求测试模型（clientType 空 / auto = 自动试通用协议） */
+  probeModel(body: {
+    provider?: string
+    modelId?: string
+    baseUrl?: string
+    apiKey?: string
+    clientType?: string
+  }): Promise<ModelProbeView>
   deleteModel(provider: string, modelId: string): Promise<void>
   setDefaultModel(provider: string, modelId: string): Promise<void>
   /** 拉一次模式提示词清单（打开面板 / 进设置页时调） */

@@ -1,24 +1,32 @@
 <script setup lang="ts">
 /**
- * ModelsPage —— 「模型接入」页：**一个渠道配一批模型**。
+ * ModelsPage —— 「模型接入」：一个渠道配一批模型。
  *
- * 结构（用户口径 2026-11-11：编辑像切换二级菜单，不要列表和表单挤在一页）：
- *   列表态：一行一个渠道（名字 / 地址 / 模型数），右上「添加渠道」；
- *   编辑态：整页换成这个渠道的配置页，左上「返回渠道列表」；
- * 不再同时显示「上表 + 下方长表单」。
+ * 结构（用户口径 2026-11-11：列表 → 二级编辑页）：
+ *   列表：一行一个渠道（名字 / 地址 / 模型数），右上「添加渠道」；
+ *   编辑：整页换成这个渠道的配置页，左上「返回渠道列表」，操作条固定在底部；
  *
- * 密钥只写不回读：服务端只给 hasKey / apiKeyMask；编辑时留空或保留掩码 = 不改。
- * UI 全部来自 @mini-canvas/ui-kit-shadcn。
+ * 这一版补的三件事（用户 2026-11-11 续）：
+ *   1. 检测：用表单**当前**填的地址与密钥真发一条短对话（不是只列 /models）；
+ *   2. 自定义模型：拉取清单失败 / 上游漏列时，可以手输模型 ID 加进候选池；
+ *   3. 选中某个模型再「测试」：只测这一个，看它能不能真的聊。
+ *
+ * 协议：清单来自 SDK 内置目录（第三方端点通用的是 openai-chat / openai-responses /
+ * ant-messages）；用户不确定时可选「自动检测」，后端依次试通用协议。
+ *
+ * 密钥只写不回读：服务端只给 hasKey / apiKeyMask；留空或保留掩码 = 不改。
  */
 import { computed, onMounted, ref } from 'vue'
-import { Plus } from 'lucide-vue-next'
+import { CheckCircle2, Plus, XCircle } from 'lucide-vue-next'
 import { useUiComponent } from '@mini-canvas/canvas-render'
 import { useAgent } from '../../plugin/useAgent.js'
+import type { ModelProbeView } from '../../api/agentApi.js'
 import SettingsDetailHeader from './components/SettingsDetailHeader.vue'
 import './settings.css'
 
 const Button = useUiComponent('Button')
 const Input = useUiComponent('Input')
+const Badge = useUiComponent('Badge')
 const Select = useUiComponent('Select')
 const SelectContent = useUiComponent('SelectContent')
 const SelectItem = useUiComponent('SelectItem')
@@ -31,14 +39,34 @@ const agent = useAgent()
 const s = agent.state
 const busy = ref(false)
 
-// 协议清单从后台读（SDK 的真实契约），不在界面里写死。
-// 默认必须是 openai-chat：deepseek-v4 虽能吐思考载荷，但实测会让 Node 进程静默崩溃。
+/**
+ * 接入协议。
+ *
+ * 通用三种来自 SDK 文档（第三方端点用它们）：openai-chat / openai-responses / ant-messages。
+ * 厂商专属（deepseek-v4 / minimax-m3 / openai-chat-vllm-adapter）来自 SDK 目录，
+ * 只有确实用那个厂商时才选；不确定就用「自动检测」。
+ */
 const DEFAULT_CLIENT = 'openai-chat'
+const AUTO_CLIENT = 'auto'
 const clientOptions = computed(() => {
-  const list = s.clientTypes.length ? s.clientTypes : ['openai-chat', 'deepseek-v4']
-  return [DEFAULT_CLIENT, ...list.filter((c) => c !== DEFAULT_CLIENT)]
+  const list = (s.clientTypes.length ? s.clientTypes : [DEFAULT_CLIENT]).filter((c) => c !== AUTO_CLIENT)
+  return [AUTO_CLIENT, DEFAULT_CLIENT, ...list.filter((c) => c !== DEFAULT_CLIENT)]
 })
-const clientChoices = computed(() => clientOptions.value.map((c) => ({ label: c, value: c })))
+const clientChoices = computed(() =>
+  clientOptions.value.map((c) => ({ label: clientLabel(c), value: c })),
+)
+
+/** 协议名称写清楚它是什么：第三方端点通常是前三种通用协议，后面几种只属于特定厂商。 */
+function clientLabel(c: string): string {
+  if (c === AUTO_CLIENT) return '自动检测（推荐）'
+  if (c === 'openai-chat') return 'openai-chat · OpenAI Chat（通用）'
+  if (c === 'openai-responses') return 'openai-responses · OpenAI Responses（通用）'
+  if (c === 'ant-messages') return 'ant-messages · Anthropic Messages（通用）'
+  if (c === 'openai-chat-vllm-adapter') return 'openai-chat-vllm-adapter · vLLM（专属）'
+  if (c === 'deepseek-v4') return 'deepseek-v4 · DeepSeek（专属）'
+  if (c === 'minimax-m3') return 'minimax-m3 · MiniMax（专属）'
+  return c
+}
 
 /** false = 列表态；true = 正在编辑（editingExisting=false 表示新建） */
 const editing = ref(false)
@@ -48,15 +76,25 @@ const form = ref({
   provider: '',
   apiKey: '',
   baseUrl: '',
-  clientType: DEFAULT_CLIENT as string,
+  clientType: AUTO_CLIENT as string,
   vision: true,
 })
 /** 已存密钥的掩码（编辑已有渠道时显示；原样回传 = 不改） */
 const savedKeyMask = ref('')
 const candidates = ref<string[]>([])
 const picked = ref<Set<string>>(new Set())
+/** 编辑模型清单：true = 多选「保留哪些」；false = 已保存后的正常态 */
+const modelEditing = ref(false)
+/** 正常态里勾选「要测试哪些」（与保存无关） */
+const testSelected = ref<Set<string>>(new Set())
+/** 每个模型的测试结果（正常态可一次测多个） */
+const probeResults = ref<Record<string, ModelProbeView>>({})
+const customModel = ref('')
 const upstreamHint = ref('')
 const notice = ref('')
+
+/* —— 检测结果 —— */
+const probing = ref(false)
 
 onMounted(() => void agent.refresh())
 
@@ -98,6 +136,33 @@ const editingTitle = computed(() =>
   editingExisting.value ? '配置渠道 · ' + form.value.provider : '添加渠道',
 )
 
+/** 已保存的模型（正常态展示它；编辑态才看候选池） */
+const savedModels = computed(() => candidates.value.filter((m) => picked.value.has(m)))
+
+/** 已保存模型的真实测试结果：正常态逐条显示（不用 v-for 里的索引推断） */
+const probeEntries = computed(() =>
+  savedModels.value.flatMap((m) => (probeResults.value[m] ? [{ model: m, result: probeResults.value[m]! }] : [])),
+)
+
+function resetProbe(): void {
+  probeResults.value = {}
+}
+
+/** 进入「编辑模型」：才能多选保留哪些、手写模型 ID */
+function startModelEdit(): void {
+  modelEditing.value = true
+  testSelected.value = new Set()
+  resetProbe()
+}
+
+/** 结束编辑：回到正常态，交给上面的「保存」落盘 */
+function finishModelEdit(): void {
+  modelEditing.value = false
+  testSelected.value = new Set()
+  resetProbe()
+  s.error = ''
+}
+
 function editGroup(g: ProviderGroup): void {
   form.value.provider = g.provider
   form.value.baseUrl = g.baseUrl
@@ -109,8 +174,11 @@ function editGroup(g: ProviderGroup): void {
   picked.value = new Set(g.models)
   editingExisting.value = true
   editing.value = true
+  modelEditing.value = false
+  testSelected.value = new Set()
   upstreamHint.value = ''
   notice.value = ''
+  resetProbe()
 }
 
 function startNew(): void {
@@ -118,16 +186,19 @@ function startNew(): void {
     provider: '',
     baseUrl: '',
     apiKey: '',
-    clientType: DEFAULT_CLIENT,
+    clientType: AUTO_CLIENT,
     vision: true,
   }
   savedKeyMask.value = ''
   candidates.value = []
   picked.value = new Set()
+  customModel.value = ''
   editingExisting.value = false
   editing.value = true
+  modelEditing.value = true
   upstreamHint.value = ''
   notice.value = ''
+  resetProbe()
 }
 
 function backToList(): void {
@@ -135,6 +206,7 @@ function backToList(): void {
   editingExisting.value = false
   notice.value = ''
   s.error = ''
+  resetProbe()
 }
 
 async function pullUpstream(): Promise<void> {
@@ -146,20 +218,34 @@ async function pullUpstream(): Promise<void> {
     apiKey: form.value.apiKey,
   })
   if (!r.ok) {
-    upstreamHint.value = '拉取失败：' + (r.error ?? '')
+    upstreamHint.value = '拉取失败：' + (r.error ?? '') + '（可以在下面手动填写模型 ID）'
     return
   }
   upstreamHint.value = '拉到 ' + r.models.length + ' 个模型'
   candidates.value = [...new Set([...r.models, ...candidates.value])]
   if (!editingExisting.value) picked.value = new Set()
+  // 拉到清单 = 正在挑模型，自动进入编辑态
+  modelEditing.value = true
+}
+
+/** 上游没列出来的模型：手输 ID 加进候选池（并默认勾上，省一次点击） */
+function addCustomModel(): void {
+  const id = customModel.value.trim()
+  if (!id) return
+  if (!candidates.value.includes(id)) candidates.value = [...candidates.value, id]
+  picked.value = new Set([...picked.value, id])
+  customModel.value = ''
+  s.error = ''
 }
 
 function togglePick(id: string): void {
   const next = new Set(picked.value)
-  if (next.has(id)) next.delete(id)
+  const wasOn = next.has(id)
+  if (wasOn) next.delete(id)
   else next.add(id)
   picked.value = next
 }
+
 const pickAll = (): void => {
   picked.value = new Set(candidates.value)
 }
@@ -170,6 +256,61 @@ const invertPick = (): void => {
 }
 const clearPick = (): void => {
   picked.value = new Set()
+}
+
+/** 正常态：点一下切换「测试选中」 */
+function toggleTest(id: string): void {
+  const next = new Set(testSelected.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  testSelected.value = next
+  const copy = { ...probeResults.value }
+  delete copy[id]
+  probeResults.value = copy
+}
+
+const testAllSaved = (): void => {
+  testSelected.value = new Set(savedModels.value)
+  resetProbe()
+}
+const clearTest = (): void => {
+  testSelected.value = new Set()
+  resetProbe()
+}
+
+/**
+ * 检测：用表单**当前**的值真发一条短请求。
+ *
+ * 没勾任何模型时测的是「手写的那一个」；检测不会保存配置，所以填错了不会污染已存渠道。
+ */
+/** 正常态：逐个测试选中的模型（可多选），结果分别落在每个模型下面 */
+async function testSelectedModels(): Promise<void> {
+  const ids = [...testSelected.value]
+  if (!ids.length) {
+    s.error = '先勾选要测试的模型'
+    return
+  }
+  probing.value = true
+  s.error = ''
+  resetProbe()
+  try {
+    for (const modelId of ids) {
+      const result = await agent.probeModel({
+        provider: form.value.provider || undefined,
+        modelId,
+        ...(form.value.baseUrl ? { baseUrl: form.value.baseUrl } : {}),
+        ...(form.value.apiKey ? { apiKey: form.value.apiKey } : {}),
+        clientType: form.value.clientType || AUTO_CLIENT,
+      })
+      probeResults.value = { ...probeResults.value, [modelId]: result }
+      // 自动检测通了：把表单协议切到实测值（保存时就用它）
+      if (result.ok && result.clientType && result.clientType !== AUTO_CLIENT) {
+        form.value.clientType = result.clientType
+      }
+    }
+  } finally {
+    probing.value = false
+  }
 }
 
 async function save(): Promise<void> {
@@ -190,13 +331,14 @@ async function save(): Promise<void> {
       modelIds,
       ...(form.value.apiKey ? { apiKey: form.value.apiKey } : {}),
       ...(form.value.baseUrl ? { baseUrl: form.value.baseUrl } : {}),
-      ...(form.value.clientType ? { clientType: form.value.clientType } : {}),
+      ...(form.value.clientType && form.value.clientType !== AUTO_CLIENT
+        ? { clientType: form.value.clientType }
+        : {}),
       vision: form.value.vision,
       removeMissing: editingExisting.value,
       ...(editingExisting.value ? {} : { makeDefault: modelIds[0] }),
     })
     const savedProvider = form.value.provider.trim()
-    // 保存成功回到列表：刚改完的渠道就在第一屏。
     editing.value = false
     editingExisting.value = false
     notice.value = '已保存「' + savedProvider + '」：' + modelIds.length + ' 个模型'
@@ -243,7 +385,7 @@ async function save(): Promise<void> {
       <SettingsDetailHeader
         back-label="返回渠道列表"
         :title="editingTitle"
-        :description="editingExisting ? '改完保存会回到列表；取消勾选等于从渠道里删掉这个模型' : '填地址、拉模型清单、勾选要用的模型，然后保存'"
+        :description="editingExisting ? '改完保存会回到列表；取消勾选等于从渠道里删掉这个模型' : '填地址、拉模型或手动添加，勾选后保存'"
         @back="backToList"
       >
         <template #actions>
@@ -262,7 +404,7 @@ async function save(): Promise<void> {
             <Input v-model="form.provider" class="ap-input" aria-label="渠道名" placeholder="例如 deepseek" />
           </ShadcnSettingsRow>
           <ShadcnSettingsRow label="接口地址" description="上游 OpenAI 兼容地址，通常以 /v1 结尾">
-            <Input v-model="form.baseUrl" class="ap-input" aria-label="接口地址" placeholder="https://{接口地址}/v1" />
+            <Input v-model="form.baseUrl" class="ap-input" aria-label="接口地址" placeholder="https://{接口地址}/v1" @input="resetProbe" />
           </ShadcnSettingsRow>
           <ShadcnSettingsRow
             label="密钥"
@@ -276,9 +418,13 @@ async function save(): Promise<void> {
               autocomplete="off"
               aria-label="密钥"
               :placeholder="editingExisting ? '留空 = 不改动已存密钥' : '粘贴密钥'"
+              @input="resetProbe"
             />
           </ShadcnSettingsRow>
-          <ShadcnSettingsRow label="接入协议" description="默认 openai-chat（稳）。deepseek-v4 会出思考但实测会让服务崩溃，谨慎切换。">
+          <ShadcnSettingsRow
+            label="接入协议"
+            description="不确定就选「自动检测」：会依次试通用协议。第三方端点通用的是 openai-chat / openai-responses / ant-messages。"
+          >
             <Select v-model="form.clientType">
               <SelectTrigger class="ap-select" size="sm" aria-label="接入协议">
                 <SelectValue />
@@ -292,41 +438,115 @@ async function save(): Promise<void> {
 
         <ShadcnSettingsSection
           title="模型清单"
+          :description="modelEditing
+            ? '编辑中：点标签决定保留哪些模型，完成后点「完成编辑」'
+            : savedModels.length + ' 个已保存模型 · 勾选后可以一次测多个'"
           class="ap-flush-card"
-          :description="'已选 ' + picked.size + ' / ' + candidates.length + ' 个 · 点标签切换选中'"
         >
-          <div class="ap-model-pull">
-            <Button variant="outline" size="sm" type="button" @click="pullUpstream">拉取模型清单</Button>
-            <span class="ap-hint">{{ upstreamHint || '向上游要模型清单，再勾选要留下的模型' }}</span>
-          </div>
+          <!-- ===== 编辑模型清单（多选 1）：决定保留哪些模型 ===== -->
+          <template v-if="modelEditing">
+            <div class="ap-model-pull">
+              <Button variant="outline" size="sm" type="button" @click="pullUpstream">拉取模型清单</Button>
+              <span class="ap-hint">{{ upstreamHint || '向上游要模型清单，再勾选要留下的模型' }}</span>
+            </div>
 
-          <div v-if="candidates.length" class="ap-picker">
-            <div class="ap-picker-head">
+            <div class="ap-custom-row">
+              <Input
+                v-model="customModel"
+                class="ap-input"
+                aria-label="自定义模型 ID"
+                placeholder="上游没列出来？直接输入模型 ID"
+                @keydown.enter.prevent="addCustomModel"
+              />
+              <Button variant="outline" size="sm" type="button" :disabled="!customModel.trim()" @click="addCustomModel">
+                <Plus :size="13" aria-hidden="true" /> 添加模型
+              </Button>
+            </div>
+
+            <div v-if="candidates.length" class="ap-picker">
+              <div class="ap-picker-head">
+                <span class="ap-hint">保留 {{ picked.size }} / {{ candidates.length }} 个</span>
+                <span class="ap-quick">
+                  <Button variant="outline" size="xs" type="button" @click="pickAll">全选</Button>
+                  <Button variant="outline" size="xs" type="button" @click="invertPick">反选</Button>
+                  <Button variant="outline" size="xs" type="button" @click="clearPick">清空</Button>
+                </span>
+              </div>
+              <div class="ap-tagpool" role="listbox" aria-multiselectable="true" aria-label="选择要保留的模型">
+                <Button
+                  v-for="m in candidates"
+                  :key="m"
+                  :variant="picked.has(m) ? 'default' : 'outline'"
+                  size="xs"
+                  type="button"
+                  class="ap-tagchip"
+                  :class="{ 'is-on': picked.has(m) }"
+                  role="option"
+                  :aria-selected="picked.has(m)"
+                  :title="m"
+                  @click="togglePick(m)"
+                >{{ m }}</Button>
+              </div>
+            </div>
+            <p v-else class="ap-hint">还没有候选模型 —— 点「拉取模型清单」，或在上面手填模型 ID。</p>
+
+            <div class="ap-edit-foot">
+              <Button variant="outline" size="sm" type="button" @click="finishModelEdit">完成编辑</Button>
+            </div>
+          </template>
+
+          <!-- ===== 正常态（多选 2）：勾选要测的模型，逐个真实请求 ===== -->
+          <template v-else>
+            <div class="ap-test-toolbar">
+              <span class="ap-hint">勾选模型后点「测试选中」——每个都会真发一句请求</span>
+              <Button variant="outline" size="sm" type="button" @click="startModelEdit">编辑模型</Button>
+            </div>
+
+            <div v-if="savedModels.length" class="ap-saved-list">
+              <label v-for="m in savedModels" :key="m" class="ap-saved-row" :class="{ 'is-test-on': testSelected.has(m) }">
+                <input
+                  type="checkbox"
+                  class="ap-saved-check"
+                  :checked="testSelected.has(m)"
+                  :aria-label="'选择测试 ' + m"
+                  @change="toggleTest(m)"
+                />
+                <span class="ap-saved-name">{{ m }}</span>
+                <span v-if="probeResults[m]" class="ap-saved-result" :class="{ 'is-ok': probeResults[m].ok }">
+                  <template v-if="probeResults[m].ok">通 · {{ probeResults[m].clientType }} · {{ probeResults[m].latencyMs }}ms</template>
+                  <template v-else>没通</template>
+                </span>
+              </label>
+            </div>
+            <p v-else class="ap-hint">还没有模型 —— 点「编辑模型」添加。</p>
+
+            <div class="ap-test-actions">
               <span class="ap-quick">
-                <Button variant="outline" size="xs" type="button" @click="pickAll">全选</Button>
-                <Button variant="outline" size="xs" type="button" @click="invertPick">反选</Button>
-                <Button variant="outline" size="xs" type="button" @click="clearPick">清空</Button>
+                <Button variant="outline" size="xs" type="button" @click="testAllSaved">全选</Button>
+                <Button variant="outline" size="xs" type="button" @click="clearTest">清空</Button>
               </span>
+              <Button variant="outline" size="sm" type="button" :disabled="probing || !testSelected.size" @click="testSelectedModels">
+                {{ probing ? '测试中…' : '测试选中（' + testSelected.size + '）' }}
+              </Button>
             </div>
-            <div class="ap-tagpool" role="listbox" aria-multiselectable="true" aria-label="选择模型">
-              <Button
-                v-for="m in candidates"
-                :key="m"
-                :variant="picked.has(m) ? 'default' : 'outline'"
-                size="xs"
-                type="button"
-                class="ap-tagchip"
-                :class="{ 'is-on': picked.has(m) }"
-                role="option"
-                :aria-selected="picked.has(m)"
-                :title="m"
-                @click="togglePick(m)"
-              >{{ m }}</Button>
-            </div>
-          </div>
-          <p v-else class="ap-hint">还没有候选模型 —— 点上面的「拉取模型清单」。</p>
-        </ShadcnSettingsSection>
 
+            <div v-if="probeEntries.length" class="ap-probe-results">
+              <div v-for="e in probeEntries" :key="e.model" class="ap-probe-result" :class="{ 'is-ok': e.result.ok }">
+                <p class="ap-probe-head">
+                  <CheckCircle2 v-if="e.result.ok" :size="14" aria-hidden="true" />
+                  <XCircle v-else :size="14" aria-hidden="true" />
+                  <span class="ap-probe-model">{{ e.model }}</span>
+                  <span v-if="e.result.ok">通了 · {{ e.result.clientType }} · {{ e.result.latencyMs }}ms</span>
+                  <span v-else>没通：{{ e.result.error || '请求失败' }}</span>
+                </p>
+                <p v-if="e.result.reply" class="ap-hint">回复「{{ e.result.reply }}」</p>
+                <p v-if="e.result.fallback === 'non-stream'" class="ap-hint">
+                  这个网关的流式返回缺少用量字段，检测改用了一次普通请求确认连通。
+                </p>
+              </div>
+            </div>
+          </template>
+        </ShadcnSettingsSection>
       </form>
     </template>
   </div>
@@ -345,11 +565,28 @@ async function save(): Promise<void> {
 .ap-list-meta { font-size: 10.5px; color: var(--ui-ink-mute, #8c95a3); }
 .ap-model-form { padding-bottom: 4px; }
 .ap-model-pull { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 4px 0 10px; }
+.ap-custom-row { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; }
+.ap-custom-row .ap-input { flex: 1; min-width: 0; }
 .ap-input { width: 100%; }
-.ap-select { width: 180px; }
+.ap-select { width: 200px; }
 .ap-detail-actions { display: flex; align-items: center; gap: 8px; }
 .ap-tagchip { height: 24px; max-width: 100%; padding: 0 8px; font-family: var(--font-mono, ui-monospace, monospace); font-size: 10px; }
-/* 渠道的字段已经由 SettingsRow 自己排好了：卡片不要再包一层内框，
-   否则同一个「渠道信息」会出现两层边框（2026-11-11 截图里那种套娃观感）。 */
+/* 当前要测的那个：在选中态之外再加一圈虚线，用户一眼知道「测试」测的是谁 */
+.ap-edit-foot { display: flex; justify-content: flex-end; padding-top: 10px; }
+.ap-test-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0 8px; }
+.ap-test-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; }
+.ap-saved-list { display: flex; flex-direction: column; gap: 1px; }
+/* 正常态的行：复选框 + 模型名 + 测试结果；选中只靠复选框，不再额外描边 */
+.ap-saved-row { display: flex; align-items: center; gap: 8px; padding: 7px 6px; border-radius: 8px; cursor: pointer; }
+.ap-saved-row:hover { background: var(--ui-hover, #f4f6f9); }
+.ap-saved-check { flex: none; width: 14px; height: 14px; accent-color: var(--ui-accent, #0891b2); }
+.ap-saved-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-family: var(--font-mono, ui-monospace, monospace); color: var(--ui-ink, #18202b); }
+.ap-saved-result { flex: none; font-size: 10px; color: var(--ui-danger, #ef4444); }
+.ap-saved-result.is-ok { color: var(--ui-accent, #0891b2); }
+.ap-probe-results { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; }
+.ap-probe-model { font-family: var(--font-mono, ui-monospace, monospace); font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
+.ap-probe-result { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 8px; }
+.ap-probe-result.is-ok { border-color: var(--ui-accent, #0891b2); }
+.ap-probe-head { display: flex; align-items: flex-start; gap: 6px; margin: 0; font-size: 12px; color: var(--ui-ink, #18202b); }
 .ap-flush-card :deep(.shadcn-settings-section__body) { border: 0; background: transparent; padding: 0; overflow: visible; }
 </style>

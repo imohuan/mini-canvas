@@ -176,6 +176,18 @@ export interface ContextPlaceholderView {
   source: 'mini-canvas' | 'harness'
 }
 
+/** 一次模型真实请求测试的结果（后端 AgentModelProbe 的同形） */
+export interface ModelProbeView {
+  ok: boolean
+  clientType: string
+  tried: Array<{ clientType: string; ok: boolean; durationMs: number; error?: string }>
+  latencyMs: number
+  reply?: string
+  error?: string
+  /** 结论来自非流式兜底时标出来，界面可以提示“流式兼容性待确认” */
+  fallback?: 'non-stream'
+}
+
 /** 运行环境上下文（后台地址 + 目录 + 可用占位符） */
 export interface AgentContextView {
   baseUrl: string
@@ -272,6 +284,17 @@ export class AgentApi {
     return this.json('/api/agent/models/available', { method: 'POST', body: JSON.stringify(body) })
   }
 
+  /** 真实发一条短请求测试模型；clientType 为空 / 'auto' 时后端依次试通用协议 */
+  probeModel(body: {
+    provider?: string
+    modelId?: string
+    baseUrl?: string
+    apiKey?: string
+    clientType?: string
+  }): Promise<Record<string, unknown>> {
+    return this.json('/api/agent/models/probe', { method: 'POST', body: JSON.stringify(body) })
+  }
+
   /** 写 Agent 的系统提示词 */
   saveSystemPrompt(text: string): Promise<{ text?: string }> {
     return this.json('/api/agent/system-prompt', { method: 'PUT', body: JSON.stringify({ text }) })
@@ -334,6 +357,11 @@ export class AgentApi {
       method: 'POST',
       body: JSON.stringify(names?.length ? { names } : {}),
     })
+  }
+
+  /** 探测还没保存的 MCP 配置（添加页的检测） */
+  probeMcpDraft(body: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.json('/api/agent/mcp/probe-draft', { method: 'POST', body: JSON.stringify(body) })
   }
 
   getPolicy(): Promise<Record<string, unknown>> {
