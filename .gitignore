@@ -105,6 +105,9 @@ packages/docs/.vitepress/data/parsed.data.ts.timestamp-*.mjs
 # cloud-server 运行时数据目录（本地调试用，含令牌与画布资源，不入库）
 .plume-test/
 .plume-e2e/
+# 启动验证用的临时数据根（本机核对，不入库）
+.plume-goal*/
+.plume-verify*/
 # 首启铺入验证用的临时数据根（本地核对用，不入库）
 .plume-seed-check*/
 # 改名前的旧数据根（保留在本机备查，不入库）
