@@ -1,7 +1,7 @@
 {
   "version": 3,
   "tasks": {
-    "@plume-canvas/ui": "2b234c5a83f01d9f7a3a9dac087f66b4072961a6",
+    "@plume-canvas/ui": "0978e05d3eba1eeed5c04ecf30f835dd6b3baf59",
     "@plume-canvas/plugin-align-arrange": "d08ddf53f636e878b32d4f8d28f0b27082f415b9",
     "@plume-canvas/plugin-align-guide": "93f61f1147453854375cb10768c5a41521310b6f",
     "@plume-canvas/plugin-auto-layout": "1ed79b1a719b3823a29165bf7c832d0594ea076d",
@@ -16,7 +16,7 @@
     "@plume-canvas/plugin-node-image-compare": "ad1d75efa727a4d209c595fd522f7b685332591f",
     "@plume-canvas/plugin-showcase": "dfc644e918df77e109077a4ef6e37f542cdb85b6",
     "@plume-canvas/plugin-demo-kit": "d9a738f23a7870c2e09d0ffdfe17ff9d2f506fe1",
-    "@plume-canvas/plugin-agent": "2da7e4d4c0e3c846a7268087d711abfa19872a3f",
+    "@plume-canvas/plugin-agent": "c87ffb1c8dec84687af23392fd697f81d56924cc",
     "@plume-canvas/plugin-bottom-bar": "001dd3f52604bd832ce2f76e153d125d153b9ba5",
     "@plume-canvas/plugin-cloud-client": "102f74184f80d5203f1aa36fa826ee45bb8b54f6",
     "@plume-canvas/plugin-cursor-effect": "9e471945359d158ef23c5bf2737ab0101633c2b7",
