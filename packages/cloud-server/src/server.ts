@@ -60,7 +60,10 @@ import { testModelRoutes, testModelBaseUrl, TEST_PROVIDER, TEST_MODEL_ID, TEST_A
 import type { AgentServices } from '@plume-canvas/plugin-agent/server/agent/assembleAgent.js'
 import { buildRuntimeContext, runtimeContextSection } from '@plume-canvas/plugin-agent/server/agent/runtimeContext.js'
 import { listAgentPromptSections, runAgentMiddleware } from './serverFramework/agent.js'
-import { adminActionFor, createAdminAuth, isAdminPath } from './adminAuth.js'
+import { adminActionFor, createAdminAuth, isAdminPath, needsAuthFor } from './adminAuth.js'
+import { createAuthAccount } from './authAccount.js'
+import { createAuthSession, AUTH_COOKIE_NAME, readCookie } from './authSession.js'
+import { authDeclForRoute } from './serverFramework/routes.js'
 import { createDebugOrigin } from './debugOrigin.js'
 import { createAuditLog } from './audit.js'
 import { createRequestTrust, normalizeOriginEntry } from './requestTrust.js'
@@ -110,6 +113,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       ? { fixedToken: opts.adminToken ?? process.env.PLUME_ADMIN_TOKEN }
       : {}),
   })
+  /** 自定义登录令牌（用户自设，最短 5 位；哈希落 auth.json） */
+  const authAccount = await createAuthAccount({ dataDir })
+  const authSession = await createAuthSession(() => authAccount.secret())
   const audit = createAuditLog(path.join(dataDir, 'audit.log'))
   // 任务脚本（子进程）只能拿这一种令牌：绑定 canvas+node，只允许写自己那一格。
   const taskTokens = createTaskTokens()
@@ -404,6 +410,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   app.use(
     '*',
     cors({
+      // 登录凭据在 HttpOnly cookie 里：跨源 dev（5288 → 8865）必须允许 credentials，
+      // 否则浏览器不把 cookie 带回来，表现为“登录成功但下一个请求还是 403”。
+      credentials: true,
       // 只有明确认识的来源才回 ACAO；不认识的（含跨源恶意页）连预检都过不了。
       origin: (origin) => {
         if (!trustEnabled) return origin || '*'
@@ -464,7 +473,18 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   app.use('/api/*', async (c, next) => {
     const method = c.req.method.toUpperCase()
     if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return next()
-    if (!isAdminPath(method, c.req.path)) return next()
+    /*
+     * 要不要登录：**先问这条路由自己怎么声明**（2026-11-12 收口）。
+     *
+     * - 插件 `ctx.routes.post(..., { auth: 'public' })` → 不验；
+     * - 插件写了 `'admin'` 或没写 → 写方法要验；
+     * - adopt() 搬进来的内置路由（'legacy'）→ 沿用原来的前缀表；
+     * - 宿主直挂、不在注册场里的（/api/auth/*、MCP 等）→ 按前缀表判断（多为放行）。
+     *
+     * 这条替代了「新插件写接口只要不在手写名单里就免检」的旧行为。
+     */
+    const decl = authDeclForRoute(host.ctx, method, c.req.path)
+    if (!needsAuthFor(method, c.req.path, decl)) return next()
     // 任务脚本的产物上传：子进程没有管理令牌，只带一个「绑定 canvas+node 的短时令牌」。
     // 这里只做「看起来像脚本上传」的放行；真正的严格校验在路由里（必须带 slot、签名/过期/归属都要对）。
     // 也就是说：伪造 x-task-token 只能把请求送进路由，不能绕过路由那道关。
@@ -478,7 +498,14 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       // 只放行 POST：将来给这两条路径加 DELETE 时，不能让脚本令牌顺带进去。
       return next()
     }
-    const verdict = adminAuth.verify(c.req.header('x-admin-token'))
+    /*
+     * 两种通过方式：
+     *   ① 会话 cookie（用户在 cloud-client 面板里设的自定义令牌换来）；
+     *   ② x-admin-token 头（恢复通道：启动日志里的 64 位令牌 / PLUME_ADMIN_TOKEN）。
+     * 两者都只在**受保护**的路由上检查；顺序是先 cookie，避免日常请求还带明文令牌。
+     */
+    const sessionOk = await authSession.verify(readCookie(c.req.header('cookie'), AUTH_COOKIE_NAME))
+    const verdict = sessionOk ? 'ok' : adminAuth.verify(c.req.header('x-admin-token'))
     if (verdict !== 'ok') {
       await audit.append({
         action: 'auth-failed',
@@ -490,7 +517,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         ...(c.req.header('host') ? { host: c.req.header('host')! } : {}),
       })
       return c.json(
-        { ok: false, error: '需要管理令牌（x-admin-token）；见启动日志或 ' + (adminAuth.tokenFile ?? '<PLUME_ADMIN_TOKEN>') },
+        { ok: false, error: '需要登录：请在 cloud-client 的登录面板输入密码' },
         403,
       )
     }
@@ -557,6 +584,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
 
   // ② 把宿主建好的实例按名上架（内置插件经 inject 取用；见 §三·补 服务名表）
   host.ctx.inject('kvStore', kvStore)
+  /** 登录接口的服务：账号（auth.json）、会话签名、开关 */
+  host.ctx.inject('authAccount', authAccount)
+  host.ctx.inject('authSession', authSession)
+  host.ctx.inject('authEnabled', adminAuthEnabled)
   host.ctx.inject('canvasStore', canvasStore)
   host.ctx.inject('canvasResources', canvasResources)
   host.ctx.inject('projectStore', projectStore)

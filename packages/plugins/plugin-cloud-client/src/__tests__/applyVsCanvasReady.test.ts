@@ -111,7 +111,10 @@ describe('cloud-client 的应用级 / 画布级边界', () => {
 
     // 往返前：项目页能查历史。
     expect(ctx.hasService('cloud-client:history')).toBe(true)
-    expect(requested, '项目页不该请求画布数据').toEqual([])
+    // 启动时只允许问一次登录状态（cloud-client 负责登录界面）；画布数据仍然一条都不能有。
+    expect(requested.filter((u) => u.includes('/api/canvases/')), '项目页不该请求画布数据').toEqual([])
+    expect(requested.length, '项目页只允许问一次登录状态').toBe(1)
+    expect(requested[0]!.endsWith('/api/auth/status'), '项目页只允许问登录状态').toBe(true)
 
     // 进画布：挂同步（会切存档域）；离开：执行返回的清理。
     ctx.inject('doc', docStub())

@@ -28,8 +28,13 @@ import { normalizeApiBase } from './config.js'
 const ADMIN_TOKEN_KEY = 'plume_admin_token'
 const ADMIN_TOKEN_HEADER = 'x-admin-token'
 
-/** 读本机浏览器里存的管理令牌；没有/读不到就返回 undefined（与 canvas-base 同口径） */
-function readAdminToken(): string | undefined {
+/**
+ * 旧版遗留在 localStorage 里的管理令牌。
+ *
+ * 只在**登录会话拿不到**时用作恢复通道；正常登录后浏览器里不该再有它
+ * （见 packages/ui/src/adoptInjectedAdminToken.ts 的清理逻辑）。
+ */
+function readLegacyAdminToken(): string | undefined {
   try {
     if (typeof localStorage === 'undefined') return undefined
     const token = (localStorage.getItem(ADMIN_TOKEN_KEY) ?? '').trim()
@@ -105,14 +110,17 @@ export class CloudApi {
   constructor(private readonly opts: CloudApiOptions = {}) {
     this.baseUrl = normalizeApiBase(opts.baseUrl)
     const rawFetch = opts.fetchImpl ?? ((url, init) => fetch(url, init))
-    // 唯一请求出口：所有 HTTP 方法都在这里补令牌（一处覆盖画布写 / 资源 / 任务）。
+    // 唯一请求出口：所有 HTTP 方法都在这里带登录凭据。
+    //
+    // 2026-11-12 起，主通道是 HttpOnly 会话 cookie（`credentials: 'include'`），
+    // 浏览器脚本读不到令牌。`x-admin-token` 只作为**恢复通道**：用户在旧版里手填过
+    // 令牌、或后台给了 PLUME_ADMIN_TOKEN 时，仍然能过；正常登录后不会再发这个头。
     // SSE 不走这里（EventSource 不能带头），见 subscribeChanges。
     this.doFetch = (url, init) => {
-      const token = readAdminToken()
-      if (!token) return rawFetch(url, init)
       const headers = new Headers(init?.headers)
-      headers.set(ADMIN_TOKEN_HEADER, token)
-      return rawFetch(url, { ...init, headers })
+      const token = readLegacyAdminToken()
+      if (token) headers.set(ADMIN_TOKEN_HEADER, token)
+      return rawFetch(url, { ...(init ?? {}), headers, credentials: 'include' })
     }
   }
 

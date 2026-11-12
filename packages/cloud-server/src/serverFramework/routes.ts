@@ -46,6 +46,13 @@ export interface RouteEntry {
   method: string
   /** 已归一的路径 */
   path: string
+  /**
+   * 这条路由要不要登录（缺省 = 写方法要、读方法不要）。
+   *
+   * `'admin'` 明确要验；`'public'` 明确放行（图片 / 资源读取、SSE）。
+   * 插件不写时，写方法一律按 `'admin'` 处理 —— 新路由不会再“漏”在名单外。
+   */
+  auth?: RouteAuth
   /** Hono 处理函数 */
   handler: Handler
 }
@@ -54,21 +61,23 @@ export interface RouteEntry {
 export interface MountEntry {
   prefix: string
   app: Hono
+  /** 同 RouteEntry.auth：不写按“写方法要验”处理 */
+  auth?: RouteAuth
 }
 
 /** `ctx.routes` 的形状（插件作者用的那个对象） */
 export interface RouteRegistrar {
-  get(path: string, handler: Handler): void
-  post(path: string, handler: Handler): void
-  put(path: string, handler: Handler): void
-  patch(path: string, handler: Handler): void
-  delete(path: string, handler: Handler): void
+  get(path: string, handler: Handler, auth?: RouteAuth): void
+  post(path: string, handler: Handler, auth?: RouteAuth): void
+  put(path: string, handler: Handler, auth?: RouteAuth): void
+  patch(path: string, handler: Handler, auth?: RouteAuth): void
+  delete(path: string, handler: Handler, auth?: RouteAuth): void
   /** 所有方法都收（含 HEAD/OPTIONS） */
-  all(path: string, handler: Handler): void
+  all(path: string, handler: Handler, auth?: RouteAuth): void
   /** 挂中间件（对该 path 前缀生效；先于方法路由执行） */
   use(path: string, mw: Handler): void
   /** 挂子应用（先把子应用路由建齐，再 mount）；按前缀整段转发 */
-  mount(prefix: string, app: Hono): void
+  mount(prefix: string, app: Hono, auth?: RouteAuth): void
   /**
    * 把已建好的子应用的**路由逐条摊平**进来（前缀由子应用自己写在 path 里）。
    * 用于「把现有 xxxRoutes(honoApp) 原样变成一个插件的路由」——
@@ -76,6 +85,41 @@ export interface RouteRegistrar {
    */
   adopt(app: Hono): void
 }
+
+/** 路由的鉴权声明 */
+/** `'legacy'` 只给 adopt() 用：沿用 cloud-server 原来的前缀表（内置路由行为不变） */
+export type RouteAuth = 'admin' | 'public' | 'legacy'
+
+/**
+ * 按「当前请求方法 + 路径」找它对应的鉴权声明。
+ *
+ * 中间件在路由匹配**之前**跑，所以这里自己按注册场查一遍（模板路径也认）。
+ * 找不到（例如宿主直挂的 `/api/auth/*`）返回 undefined，由调用方按默认规则处理。
+ */
+export function authDeclForRoute(
+  ctx: Context,
+  method: string,
+  pathname: string,
+): RouteAuth | undefined {
+  const field = ctx.registryOf<RouteEntry>(ROUTE_FIELD)
+  const upper = method.toUpperCase()
+  const routes = field
+    .keys()
+    .filter((k) => !k.startsWith('USE '))
+    .flatMap((k) => field.list(k).map((e) => e.value))
+  const hit = findRouteByPath(routes, upper, pathname)
+  if (hit) return hit.auth
+  const mounts = ctx.registryOf<MountEntry>(MOUNT_FIELD)
+  for (const prefix of mounts.keys()) {
+    if (pathname === prefix || pathname.startsWith(prefix + '/')) {
+      return mounts.list(prefix)[0]?.value.auth
+    }
+  }
+  return undefined
+}
+
+/** 需要令牌的写方法（与 adminAuth 的 WRITE_METHODS 同口径） */
+export const AUTH_WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 /** 路径归一：补前导 `/`、去尾斜杠（根除外）。空串 → '/' */
 export function normalizePath(path: string): string {
@@ -147,27 +191,44 @@ export function createRouteRegistrar(ctx: PluginScope, scopeName: string): Route
   const field = ctx.registryOf<RouteEntry>(ROUTE_FIELD)
   const mounts = ctx.registryOf<MountEntry>(MOUNT_FIELD)
 
-  function add(method: string, path: string, handler: Handler): void {
+  function add(method: string, path: string, handler: Handler, auth?: RouteAuth): void {
     const p = normalizePath(path)
+    /*
+     * 「注册时声明、默认要验」只对**改后端状态**的写方法生效。
+     * GET / HEAD / OPTIONS 默认公开：图片、资源、SSE、模型清单这些读接口
+     * 一旦被要求登录，浏览器里 `<img src>` 与 EventSource 直接全部失效。
+     * 真要限制某条读接口，插件显式写 `auth: 'admin'` 即可。
+     */
+    const resolvedAuth: RouteAuth =
+      auth ?? (AUTH_WRITE_METHODS.has(method.toUpperCase()) ? 'admin' : 'public')
     /*
      * ⚠️ 键上的 method 必须统一大写：`a.req.method` 给的是大写，但 adopt(app) 里
      * Hono 的 `r.method` 可能是小写/`ALL`。热装兜底按 method 做模板匹配时，
      * 大小写不一致会让「启动期代理命中、热装期 404」这种最难查的差异出现。
      */
-    field.add(method.toUpperCase() + ' ' + p, { method: method.toUpperCase(), path: p, handler }, { id: scopeName })
+    field.add(
+      method.toUpperCase() + ' ' + p,
+      {
+        method: method.toUpperCase(),
+        path: p,
+        handler,
+        auth: resolvedAuth,
+      },
+      { id: scopeName },
+    )
   }
 
   return {
-    get: (path, handler) => add('GET', path, handler),
-    post: (path, handler) => add('POST', path, handler),
-    put: (path, handler) => add('PUT', path, handler),
-    patch: (path, handler) => add('PATCH', path, handler),
-    delete: (path, handler) => add('DELETE', path, handler),
-    all: (path, handler) => add('ALL', path, handler),
-    use: (path, mw) => add('USE', path, mw),
-    mount: (prefix, app) => {
+    get: (path, handler, auth) => add('GET', path, handler, auth),
+    post: (path, handler, auth) => add('POST', path, handler, auth),
+    put: (path, handler, auth) => add('PUT', path, handler, auth),
+    patch: (path, handler, auth) => add('PATCH', path, handler, auth),
+    delete: (path, handler, auth) => add('DELETE', path, handler, auth),
+    all: (path, handler, auth) => add('ALL', path, handler, auth),
+    use: (path, mw) => add('USE', path, mw, 'public'),
+    mount: (prefix, app, auth) => {
       const p = normalizePath(prefix)
-      mounts.add(p, { prefix: p, app }, { id: scopeName })
+      mounts.add(p, { prefix: p, app, ...(auth !== undefined ? { auth } : {}) }, { id: scopeName })
     },
     adopt: (app) => {
       for (const r of app.routes) {
@@ -177,7 +238,13 @@ export function createRouteRegistrar(ctx: PluginScope, scopeName: string): Route
         // 顺序一反，静态的就被动态的吃掉（events 会返回 kvtype:events）。
         // 子应用内部的注册顺序本来就是对的（eventsRoutes 刻意排在 kvRoutes 前），
         // 这里原样搬过来即可。
-        add(r.method, r.path, r.handler as unknown as Handler)
+        /*
+         * `adopt` 是“把现成的 Hono 子应用原样搬进来”，没有地方写声明。
+         * 这种情况下**按写方法默认要验**（add 里不传 auth，判据同插件新注册的路由）——
+         * 宁可多拦，也不让搬进来的写接口悄悄免检。确实要公开的，改用 mount(prefix, app, 'public')
+         * 或在子应用里显式注册。
+         */
+        add(r.method, r.path, r.handler as unknown as Handler, 'legacy')
       }
     },
   }

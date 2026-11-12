@@ -47,6 +47,11 @@ export type { DocLike as ApplierDoc, ToolResultLike } from './appliers.js'
 export { configFrom } from './config.js'
 export type { CloudClientConfig, SettingsLike } from './config.js'
 
+export { CloudAuth, validateTokenInput } from './auth.js'
+export type { AuthStatus, CloudAuthOptions } from './auth.js'
+export { createAuthGate } from './authGate.js'
+export type { AuthGateHandle } from './authGate.js'
+
 export {
   GRAPH_KEY,
   GRAPH_EDGES_KEY,

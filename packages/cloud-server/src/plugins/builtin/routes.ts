@@ -39,6 +39,10 @@ import type { HistoryStore } from '../../tasks/history.js'
 import type { ProjectStore } from '../../store/projectStore.js'
 import type { AssetStore } from '../../store/assetStore.js'
 import { providerAdminRoutes, type ProviderAdminService } from '../../routes/providerAdmin.js'
+import { authRoutes } from '../../routes/auth.js'
+import type { AuthAccount } from '../../authAccount.js'
+import type { AuthSession } from '../../authSession.js'
+import { AUTH_WRITE_METHODS } from '../../serverFramework/routes.js'
 
 /** 服务名常量（与 server.ts 的 inject 一一对应，改名要一起改） */
 export const S = {
@@ -79,6 +83,35 @@ export const eventsPlugin: PluginModule = {
   inject: [S.kvStore],
   apply(ctx) {
     ctx.routes.adopt(eventsRoutes(need<KvStore>(ctx, S.kvStore), ctx.tryGet<CanvasStore>(S.canvasStore)))
+  },
+}
+
+/**
+ * auth —— 登录接口（cloud-server 一侧）。
+ *
+ * 这几条**永远不要求登录**（它们就是拿来换会话的），并且注册在注册场里；
+ * 中间件查注册场时会拿到 `public`（见下面的声明方式）。
+ */
+export const authPlugin: PluginModule = {
+  name: 'auth',
+  inject: ['authAccount', 'authSession'],
+  apply(ctx) {
+    const account = ctx.tryGet<AuthAccount>('authAccount')
+    const session = ctx.tryGet<AuthSession>('authSession')
+    // 纯框架单测没注入这两项：不装，不报错（登录接口只在真实服务里有意义）
+    if (!account || !session) return
+    const app = authRoutes({
+      account,
+      session,
+      enabled: ctx.tryGet<boolean>('authEnabled') !== false,
+      autoLoginLocal: ctx.tryGet<boolean>('autoLoginLocal') !== false,
+    })
+    // 逐条显式标 public：登录接口自己不能被登录挡住
+    for (const r of app.routes) {
+      const handler = r.handler as never
+      if (r.method === 'GET') ctx.routes.get(r.path, handler, 'public')
+      else ctx.routes.post(r.path, handler, 'public')
+    }
   },
 }
 
@@ -136,13 +169,30 @@ export const projectsPlugin: PluginModule = {
   name: 'projects',
   inject: [S.projectStore, S.canvasStore, S.assetStore],
   apply(ctx) {
-    ctx.routes.adopt(
-      projectsRoutes(
-        need<ProjectStore>(ctx, S.projectStore),
-        need<CanvasStore>(ctx, S.canvasStore),
-        need<AssetStore>(ctx, S.assetStore),
-      ),
+    /*
+     * `adopt()` 会把这些路由标成 `legacy`（沿用旧前缀白名单）。列表 / 读取没问题，
+     * 但历史白名单漏了若干写接口 —— 最严重的是 `DELETE /api/canvases/:id`：
+     * 不登录就能删画布（2026-11-12 体检实测 200）。
+     * 这里逐条注册：**写方法默认要登录**，读方法继续公开；规则与新插件一致。
+     */
+    const app = projectsRoutes(
+      need<ProjectStore>(ctx, S.projectStore),
+      need<CanvasStore>(ctx, S.canvasStore),
+      need<AssetStore>(ctx, S.assetStore),
     )
+    for (const r of app.routes) {
+      const handler = r.handler as never
+      const write = AUTH_WRITE_METHODS.has(r.method.toUpperCase())
+      const auth = write ? 'admin' : 'public'
+      switch (r.method) {
+        case 'GET': ctx.routes.get(r.path, handler, auth); break
+        case 'POST': ctx.routes.post(r.path, handler, auth); break
+        case 'PUT': ctx.routes.put(r.path, handler, auth); break
+        case 'PATCH': ctx.routes.patch(r.path, handler, auth); break
+        case 'DELETE': ctx.routes.delete(r.path, handler, auth); break
+        default: ctx.routes.all(r.path, handler, auth); break
+      }
+    }
   },
 }
 
@@ -290,6 +340,7 @@ export const npmPluginsPlugin: PluginModule = {
 /** 全部内置插件（顺序 = 默认装载序；实际激活顺序由 inject 依赖决定） */
 export const BUILTIN_PLUGINS: PluginModule[] = [
   healthPlugin,
+  authPlugin,
   eventsPlugin,
   pluginPresencePlugin,
   pluginWatchPlugin,

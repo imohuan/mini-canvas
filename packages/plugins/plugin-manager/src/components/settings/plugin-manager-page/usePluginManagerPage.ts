@@ -5,7 +5,6 @@
  * 清单、NPM 市场、安装/更新/卸载仍按原来的顺序执行。
  */
 import { computed, onMounted, ref } from 'vue'
-import { getAdminToken, setAdminToken } from '@plume-canvas/canvas-base'
 import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
 import type { FeedbackService } from '@plume-canvas/canvas-render'
 import { usePluginManager } from '../../../usePluginManager'
@@ -28,13 +27,6 @@ export function usePluginManagerPage() {
 
   /** 地址输入框先写草稿，点「刷新」再写回服务。 */
   const urlDraft = ref(s.catalogUrl)
-  /** 管理令牌存在本机浏览器，受保护的装卸请求会自动带上。 */
-  const tokenDraft = ref(getAdminToken() ?? '')
-
-  function onTokenInput(): void {
-    setAdminToken(tokenDraft.value)
-  }
-
   function onRefresh(): void {
     s.catalogUrl = urlDraft.value.trim() || s.catalogUrl
     void svc.refresh()
@@ -455,8 +447,6 @@ export function usePluginManagerPage() {
     svc,
     s,
     urlDraft,
-    tokenDraft,
-    onTokenInput,
     onRefresh,
     installedCount,
     npmTab,

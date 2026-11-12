@@ -4,12 +4,13 @@
  *
  * 布局：
  *   ① 工具条：中转地址 + 刷新 + 全部安装 + 计数
- *   ② 管理令牌
- *   ③ 页签：市场 / 已装 / 本地清单 / 自带
- *   ④ 筛选 + 两列卡片（窄屏一列）
+ *   ② 页签：市场 / 已装 / 本地清单 / 自带
+ *   ③ 筛选 + 两列卡片（窄屏一列）
  *
  * 数据仍来自 plugin-manager 服务。状态和动作在 usePluginManagerPage，
  * 工具条与页签正文各自拆成子组件。
+ *
+ * 登录不在这里：认证与它的界面归 cloud-client（用户口径 2026-11-12）。
  */
 import { usePluginManagerPage } from './plugin-manager-page/usePluginManagerPage'
 import PluginManagerToolbar from './plugin-manager-page/PluginManagerToolbar.vue'
@@ -19,8 +20,6 @@ const {
   svc,
   s,
   urlDraft,
-  tokenDraft,
-  onTokenInput,
   onRefresh,
   installedCount,
   npmTab,
@@ -45,12 +44,9 @@ const {
       :s="s"
       :service="svc"
       :url-draft="urlDraft"
-      :token-draft="tokenDraft"
       :installed-count="installedCount"
       @update:url-draft="urlDraft = $event"
-      @update:token-draft="tokenDraft = $event"
       @refresh="onRefresh"
-      @token-input="onTokenInput"
     />
 
     <PluginManagerTabs

@@ -24,6 +24,8 @@ import { CANVAS_ID, canvasId, restoreMediaUrls as restoreMediaUrlsList } from '.
 import { createCloudResourceAdapter } from './cloudResourceAdapter.js'
 import { createCloudKvAdapter } from './cloudKvAdapter.js'
 import type { ServerAction, ServerHistoryPage } from './apiTypes.js'
+import { CloudAuth, type AuthStatus } from './auth.js'
+import { createAuthGate, type AuthGateHandle } from './authGate.js'
 
 export const name = 'cloud-client'
 /**
@@ -70,6 +72,12 @@ export interface CloudClientStatus {
 export interface CloudClientService {
   status(): CloudClientStatus
   refreshActions(): Promise<void>
+  /** 登录态（cloud-client 负责界面与令牌，不被其它插件重复实现） */
+  auth(): AuthStatus
+  /** 重新问一次后台登录状态（会话失效 / 403 后调用） */
+  refreshAuth(): Promise<AuthStatus>
+  /** 退出登录 */
+  logout(): Promise<void>
 }
 
 /** 宿主能提供的 doc 面（结构化取，不 import 数据层类型） */
@@ -216,6 +224,8 @@ let shared:
       settings: SettingsLike | undefined
       cfg: ReturnType<typeof configFrom>
       api: CloudApi
+      auth: CloudAuth
+      gate: AuthGateHandle
       status: CloudClientStatus
       notifyHistory: () => void
       offSettings?: { dispose(): void }
@@ -249,6 +259,14 @@ export function apply(ctx: Context): void {
   }
   const cfg = configFrom(settings as never)
   const api = new CloudApi({ baseUrl: cfg.baseUrl })
+  /**
+   * 登录：统一走 cloud-client。
+   *
+   * 首启（没设过令牌）→ 设置面板；设过但没登录 → 输入面板；本机回环由后台自动发会话，
+   * 这两个面板都不会出现。
+   */
+  const auth = new CloudAuth({ baseUrl: cfg.baseUrl })
+  const gate = createAuthGate(auth)
 
   const status: CloudClientStatus = { active: true, baseUrl: cfg.baseUrl, actions: 0 }
 
@@ -277,8 +295,22 @@ export function apply(ctx: Context): void {
     status: () => ({ ...status }),
     // 清单刷新的真实现挂在画布会话里；项目页没有底栏，刷新是安全 no-op。
     refreshActions: async () => undefined,
+    auth: () => auth.status(),
+    refreshAuth: () => auth.refresh(),
+    logout: async () => {
+      await auth.logout()
+      gate.open(auth.status())
+    },
   }
   ctx.inject('cloud-client', service)
+
+  /**
+   * 启动即确认登录：没登录就把全屏遮罩挂上，挡住项目页与画布页。
+   * 后台没起（status 请求失败）时按“不需要登录”处理，应用照常打开，不锁死用户。
+   */
+  void auth.refresh().then((s) => {
+    if (s.enabled && !s.authed) gate.open(s)
+  })
 
   // 设置里改了地址 → 立刻换（不用重装插件）。画布侧的同步对象在会话里，
   // 由 onCanvasReady 用同一份 api 实例，地址切换对它同样生效。
@@ -288,6 +320,7 @@ export function apply(ctx: Context): void {
       // 这里同步把状态里的显示值也纠正，避免底栏显示一个用不了的地址。
       const next = normalizeConfiguredBase(value)
       api.setBaseUrl(next)
+      auth.setBaseUrl(next)
       status.baseUrl = next
       /**
        * 顺手把存储里的脏值改回空串。
@@ -308,10 +341,11 @@ export function apply(ctx: Context): void {
   })
   ctx.effect(() => () => {
     offSettings?.dispose?.()
+    gate.destroy()
   })
 
   /** 连接态存到这里，画布会话（onCanvasReady）复用同一份 api / status。 */
-  shared = { ctx, settings, cfg, api, status, notifyHistory, offSettings }
+  shared = { ctx, settings, cfg, api, auth, gate, status, notifyHistory, offSettings }
 }
 /**
  * onCanvasReady —— 画布会话钩子（mountCanvas 装完 doc/selection 后调用）。

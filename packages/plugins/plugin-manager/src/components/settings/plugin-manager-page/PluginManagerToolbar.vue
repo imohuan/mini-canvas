@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** 插件页顶部：中转地址、刷新、全部安装、计数和管理令牌。 */
+/** 插件页顶部：中转地址、刷新、全部安装、计数。登录不在这里（归 cloud-client）。 */
 import { Download, RefreshCw } from 'lucide-vue-next'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { PluginManagerService } from '../../../pluginManagerService'
@@ -8,15 +8,12 @@ defineProps<{
   s: PluginManagerService['state']
   service: PluginManagerService
   urlDraft: string
-  tokenDraft: string
   installedCount: number
 }>()
 
 const emit = defineEmits<{
   'update:urlDraft': [value: string]
-  'update:tokenDraft': [value: string]
   refresh: []
-  tokenInput: []
 }>()
 
 const Button = useUiComponent('Button')
@@ -51,25 +48,6 @@ const Input = useUiComponent('Input')
     <span class="pmp-count">{{ installedCount }} / {{ s.rows.length }} 已装</span>
   </div>
 
-  <div class="pmp-token">
-    <label class="pmp-field pmp-token-field">
-      <span class="pmp-label">管理令牌</span>
-      <Input
-        :model-value="tokenDraft"
-        class="pmp-input"
-        type="password"
-        autocomplete="off"
-        spellcheck="false"
-        aria-label="管理令牌"
-        placeholder="粘贴后台启动日志或 admin-token 文件里的令牌"
-        @update:model-value="emit('update:tokenDraft', $event)"
-        @input="emit('tokenInput')"
-      />
-    </label>
-    <p class="pmp-token-hint">
-      令牌在后台启动日志或 &lt;数据目录&gt;/admin-token 里。它存在本机浏览器里，装了不可信插件等于把它交出去。
-    </p>
-  </div>
 </template>
 
 <style scoped>
@@ -114,23 +92,6 @@ const Input = useUiComponent('Input')
   font-size: 11px;
   color: var(--ui-ink-dim, #6b7280);
   white-space: nowrap;
-}
-
-.pmp-token {
-  display: flex;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.pmp-token-field { flex: 0 1 280px; }
-
-.pmp-token-hint {
-  flex: 1 1 320px;
-  margin: 0 0 8px;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--ui-ink-dim, #6b7280);
 }
 
 @media (max-width: 640px) {

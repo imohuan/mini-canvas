@@ -1,31 +1,30 @@
 /**
  * 托管版后台会把管理令牌注进页面（`window.__PLUME_ADMIN_TOKEN__`）。
  *
- * 为什么在这里接：令牌是全站写入口的凭证，插件（cloud-client / 节点宿主代发 /
- * 插件管理）都从 localStorage 的同一个键读它。在挂载**之前**写进去，
- * 任何插件第一次发请求就已经带上了 —— 用户不必先去「设置 → 插件」抄一遍。
+ * 2026-11-12 起，登录改由 cloud-client 负责：用户设置自己的令牌，后台发 HttpOnly
+ * 会话 cookie。页面里注入的这份**只给老后台兜底**（旧版没有 /api/auth/*），
+ * 并且只暂存在 sessionStorage（关掉标签页就没了），不再往 localStorage 写长期明文。
  *
- * 只有本机访问才注（服务端判 Host，见 cloud-server 的 uiRoutes）；远程访问时
- * 这个变量不存在，行为与以前一致。写完立刻删掉，避免留在全局被页面脚本读到。
- *
- * 手填优先：本地已有、且不是上一轮注入写进去的值时，不覆盖 —— 用户可能同时在用
- * 另一套后台（换端口 / 换目录）并手填过那套的令牌，静默替换会让另一套后台的
- * 写请求 403，而且用户看不出为什么。
- *
- * `plume_admin_token_injected` 记着上一轮注入写的是什么：本地与它一致 → 用户没改过，
- * 本轮注入的新值覆盖（后台轮换令牌也能跟上）；本地是别的值 → 手填过，不碰。
+ * 只有本机访问才注（服务端判 TCP 对端 + Host + 无转发头，见 cloud-server 的 uiRoutes）；
+ * 远程访问时这个变量不存在。读完立刻删掉，避免留在全局被页面脚本读到。
  */
-export function adoptInjectedAdminToken(storage: Pick<Storage, 'getItem' | 'setItem'> = localStorage): void {
+export function adoptInjectedAdminToken(): void {
   const holder = window as unknown as { __PLUME_ADMIN_TOKEN__?: unknown }
   try {
     const injected = holder.__PLUME_ADMIN_TOKEN__
-    const existing = storage.getItem('plume_admin_token')
     if (typeof injected === 'string' && injected.trim()) {
-      const previousInjection = storage.getItem('plume_admin_token_injected')
-      const handFilled = existing !== null && existing !== previousInjection
-      if (!handFilled) {
-        storage.setItem('plume_admin_token', injected.trim())
-        storage.setItem('plume_admin_token_injected', injected.trim())
+      /*
+       * 2026-11-12：不再往 localStorage 写明文令牌。
+       *
+       * 登录改由 cloud-client 设置自定义令牌、后台发 HttpOnly 会话 cookie；
+       * 页面里注入的这份只作为**老后台的兼容通道**（旧版本没有 /api/auth/*），
+       * 由 downshift 到请求头时使用。所以这里只把注入值暂存到 sessionStorage
+       * （生命周期短、不跨标签页持久），绝不留成长期明文。
+       */
+      try {
+        sessionStorage.setItem('plume_admin_token_legacy', injected.trim())
+      } catch {
+        /* 存储被禁：跳过；老后台的写请求会 403，提示去登录 */
       }
     }
   } catch {

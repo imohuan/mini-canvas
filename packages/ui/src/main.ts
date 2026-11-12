@@ -60,9 +60,12 @@ import { exposePluginReloader } from "./pluginReload";
 import { exposeSharedKvEvents } from "./composables/kvEvents";
 import { router } from "./router";
 import { adoptInjectedAdminToken } from './adoptInjectedAdminToken'
+import { installAuthCredentials } from './authCredentials'
 
 // 托管版后台把令牌注进页面时，在挂载前接住它（见那个文件头的说明）。
 adoptInjectedAdminToken();
+// 登录凭据（HttpOnly cookie）对所有 /api 请求生效：必须在任何插件发请求之前装好。
+installAuthCredentials();
 
 // 先挂共享运行时全局（Vue / PlumeCore / …），再挂载应用 ——
 // 外部 UMD 插件（经「插件管理」安装）靠这些全局取依赖，必须在它们加载前就位。

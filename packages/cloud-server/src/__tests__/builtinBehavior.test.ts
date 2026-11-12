@@ -87,6 +87,7 @@ describe('内置插件 · 行为不变（Task 3）', () => {
         'agent-routes',
         'agent-sessions',
         'assets',
+        'auth',
         'canvas-ops',
         'canvases',
         'events',

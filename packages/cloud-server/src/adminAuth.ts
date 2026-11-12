@@ -16,6 +16,43 @@ export interface AdminAuth {
   verify(v: string | undefined): 'ok' | 'missing' | 'bad'
 }
 
+/** 一条受保护路由的鉴权声明（由注册场给出；缺省按写方法处理） */
+export type RouteAuthDecl = 'admin' | 'public' | 'legacy'
+
+/**
+ * 这条请求要不要登录。
+ *
+ * 规则（2026-11-12 收口，替换原来的“手写前缀表”）：
+ * - 路由显式 `public` → 不要；
+ * - 路由显式 `admin` → 要；
+ * - 路由没声明 → 写方法要、读方法不要（和历史行为一致）；
+ * - `legacy`（adopt 搬进来的内置路由）→ 沿用旧前缀表 `isAdminPath` 的判断。
+ *
+ * 为什么要分 `legacy`：内置那 12 组路由本来就是按前缀表设计的（读一律放行、
+ * 写入口逐个列出），一次性改成“所有读也要令牌”会让 <img src> 全部失效。
+ * 新插件注册的路由没有这个包袱，默认按“写要验、读放行”执行。
+ */
+export function needsAuthFor(
+  method: string,
+  pathname: string,
+  decl: RouteAuthDecl | undefined,
+): boolean {
+  if (decl === 'public') return false
+  if (decl === 'admin') return true
+  if (decl === 'legacy') return isAdminPath(method, pathname)
+  /*
+   * 没声明（宿主直挂的路由，例如 `/api/test-model/...`、MCP 相关的旁路）：
+   * 回退到原来的前缀白名单。
+   *
+   * 为什么**不能**直接按“写方法就要验”处理：那条规则会把本来公开的本地测试模型端点
+   * （`/api/test-model/v1/chat/completions`）一起拦掉，Agent 每次对话都 403
+   * （2026-11-12 用户实测：启动成功、密码也输过，但对话仍报“需要登录”）。
+   * 插件新注册的路由不受影响：它们走 `authDeclForRoute` 拿到 `'admin'` 或 `'public'`，
+   * 不会落到这个分支（缺省即写要验，见 serverFramework/routes.ts 的 RouteEntry.auth）。
+   */
+  return isAdminPath(method, pathname)
+}
+
 /**
  * 任意写方法都保护的路径前缀（结尾带斜杠，避免误伤同名前缀的兄弟路径）。
  *
