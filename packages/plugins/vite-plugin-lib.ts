@@ -45,8 +45,6 @@ export const HOST_GLOBALS: Record<string, string> = {
   // 多份实例会出现"两个真相"，所以和其它 @plume-canvas/* 一样由宿主提供。
   '@plume-canvas/theme-contract': 'PlumeThemeContract',
 }
-/**
- * 生成 build 段（纯数据）。各插件的 vite.config.ts：
 
 /** 一律 external 的依赖（键即模块名） */
 export const HOST_EXTERNALS: string[] = Object.keys(HOST_GLOBALS)
