@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node scripts/kill-port.mjs 5288 && pnpm -C packages/ui dev",
-    "dev:ui-kit": "pnpm -C packages/ui-kit-shadcn dev",
-    "dev:docs": "pnpm -C packages/docs dev",
-    "dev:server": "pnpm -C packages/cloud-server dev",
-    "serve": "pnpm -C packages/cloud-server serve",
+    "dev": "node scripts/kill-port.mjs 5288 && pnpm -C apps/web dev",
+    "dev:ui-kit": "pnpm -C packages/libs/ui-kit dev",
+    "dev:docs": "pnpm -C apps/docs dev",
+    "dev:server": "pnpm -C apps/server dev",
+    "serve": "pnpm -C apps/server serve",
     "start": "node scripts/launch-server.mjs",
     "start:8865": "node scripts/launch-server.mjs --port 8865",
     "kill-port": "node scripts/kill-port.mjs"

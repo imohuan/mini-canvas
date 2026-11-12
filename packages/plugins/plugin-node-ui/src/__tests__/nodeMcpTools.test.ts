@@ -559,7 +559,7 @@ describe('④ canvas_fn_call：不必传 Canvas ID / Node ID', () => {
     */
   it('★ 虚拟画布前缀与 cloud-server 那份一致（防悄悄漂移）', () => {
     const src = readFileSync(
-      path.join(__dirname, '../../../../cloud-server/src/store/canvasPaths.ts'),
+      path.join(__dirname, '../../../../../apps/server/src/store/canvasPaths.ts'),
       'utf8',
     )
     const m = /export const VIRTUAL_CANVAS_PREFIX = '([^']+)'/.exec(src)

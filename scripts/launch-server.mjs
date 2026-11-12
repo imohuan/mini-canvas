@@ -20,7 +20,7 @@ import { freePorts } from './kill-port.mjs'
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..')
-const SERVER_DIR = path.join(REPO_ROOT, 'packages/cloud-server')
+const SERVER_DIR = path.join(REPO_ROOT, 'apps/server')
 const DEFAULT_PORT = 8865
 
 function parsePort(value, name) {

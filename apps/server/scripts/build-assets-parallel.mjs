@@ -74,7 +74,7 @@ const HOST_EXTERNALS = [
 ]
 
 /** 工作区目录（扫这些目录下的 package.json 建 name→dir 索引） */
-const WORKSPACE_ROOTS = ["packages", "packages/plugins"]
+const WORKSPACE_ROOTS = ["apps", "packages/engine", "packages/libs", "packages/plugins"]
 /** 递归收集源文件时跳过的目录名 */
 const SKIP_DIRS = new Set(["node_modules", "dist", ".git", ".vite", ".turbo", ".cache"])
 /** 参与指纹的文件后缀 */
