@@ -7,7 +7,7 @@
  * 1. `settings.nav` 的 `meta.category`（只影响这一项）
  * 2. `settings/navCategory` 场域（按一级菜单名登记，推荐给由 Config 分组推导出来的菜单用）
  * 3. `DEFAULT_NAV_CATEGORY` 里的内置归类
- * 4. 都没写 → 「个人」
+ * 4. 都没写 → 「常规」
  *
  * 例子：
  * ```ts
@@ -29,34 +29,49 @@ import type { Component } from 'vue'
 import { SETTINGS_NAV_ICON_FALLBACK } from '@plume-canvas/theme-contract'
 
 /** 没写分类时落在这里 */
-export const DEFAULT_SETTINGS_CATEGORY = '个人'
+export const DEFAULT_SETTINGS_CATEGORY = '常规'
 
-/** 内置分类的显示顺序（后面的分类排最后） */
 /**
- * 「外观」紧跟个人偏好：形状 / 字体 / 主题配色 / 亮暗模式都只改长相。
- * 用户口径（2026-11-02）：「主题配色应该全部放到外观里面」。
+ * 内置分类的显示顺序（后面的分类排最后）。
+ *
+ * 2026-11-12 用户口径：原来的「个人」和「外观」合成一个「常规」—— 左侧只该有
+ * 四段（常规 / 集成 / 画布 / 开发），不再把"个人信息"和"页面长相"拆成两段。
  */
-export const SETTINGS_CATEGORY_ORDER: readonly string[] = ['个人', '外观', '集成', '画布', '开发']
+export const SETTINGS_CATEGORY_ORDER: readonly string[] = ['常规', '集成', '画布', '开发']
+
+/**
+ * 旧分类名 → 新分类名。
+ *
+ * 插件和文档里还大量写着 meta.category: '个人' / '外观'。这些字符串只决定
+ * 「排在哪一段」，不再各造一个分类；否则合并分类后左侧会重新冒出两段旧标题。
+ */
+const LEGACY_CATEGORY_ALIASES: Readonly<Record<string, string>> = {
+  个人: '常规',
+  外观: '常规',
+}
+
+/** 把旧分类名收拢到当前分类名；未知分类原样返回 */
+export function normalizeSettingsCategory(category: string): string {
+  return LEGACY_CATEGORY_ALIASES[category] ?? category
+}
 
 /** `settings/navCategory` 场域名 */
 export const SETTINGS_NAV_CATEGORY_FIELD = 'settings/navCategory'
 
-/** 已知一级菜单的默认分类；没列出的走「个人」 */
+/** 已知一级菜单的默认分类；没列出的走「常规」 */
 export const DEFAULT_NAV_CATEGORY: Readonly<Record<string, string>> = {
-  // 个人：跟着人走的偏好
-  常规: '个人',
-  通用: '个人',
-  主题: '个人',
-  导入: '个人',
-  存储: '个人',
-  配置: '个人',
-  个性化: '个人',
-  键盘快捷键: '个人',
-  // 外观：形状 / 字体 / 配色这类"只改长相"的项。用户口径（2026-11-02）：
-  // 「主题配色应该全部放到外观里面」—— 它也是外观，不该待在「个人」下被当成功能开关。
-  外观: '外观',
-  主题配色: '外观',
-  暗色主题配色: '外观',
+  // 常规：跟着人走的偏好 + 只改长相的项（2026-11-12 起合成一段）
+  常规: '常规',
+  通用: '常规',
+  主题: '常规',
+  导入: '常规',
+  存储: '常规',
+  配置: '常规',
+  个性化: '常规',
+  键盘快捷键: '常规',
+  外观: '常规',
+  主题配色: '常规',
+  暗色主题配色: '常规',
   // 集成：接外部能力的入口
   插件: '集成',
   Agent: '集成',
@@ -83,9 +98,8 @@ export const DEFAULT_NAV_CATEGORY: Readonly<Record<string, string>> = {
   上传: '开发',
   展示: '开发',
   插件展示: '开发',
-  // 颜色配方（主题工作台）：属于外观 —— 它调的就是主题配色，
-  // 用户口径里「主题配色应该全部放到外观里面」。
-  主题工作台: '外观',
+  // 颜色配方（主题工作台）：它调的就是主题配色，跟「主题」一起归「常规」。
+  主题工作台: '常规',
 }
 
 /** 从 unknown meta 里安全取字符串 */
@@ -148,9 +162,8 @@ export function categoryOf(
   registryCategory?: string,
 ): string {
   const explicit = metaCategory?.trim() || registryCategory?.trim()
-  if (explicit) return explicit
-  // 「常规」这个一级菜单是历史包袱：功能开关与配色曾混在一起。
-  // 配色已经独立成「外观/主题配色」组，剩下的「常规」菜单仍是功能开关，归个人。
+  if (explicit) return normalizeSettingsCategory(explicit)
+  // 没写分类的一级菜单按内置表归类；表里没有的也落在「常规」。
   return DEFAULT_NAV_CATEGORY[nav] ?? DEFAULT_SETTINGS_CATEGORY
 }
 

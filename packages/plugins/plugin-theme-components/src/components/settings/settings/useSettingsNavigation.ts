@@ -227,7 +227,7 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
         return
       }
       // 默认落在第一个带配置分组的页（如「外观 → 主题」），而不是只有一整页面板的
-      // 导航项（如「个人 → 快捷键」）：配置项才是用户打开设置时最先要找的东西。
+      // 导航项（如「常规 → 快捷键」）：配置项才是用户打开设置时最先要找的东西。
       // 没有带字段的页时，再退到任何能直接渲染的页。
       const usable = (e: (typeof entries)[number]): boolean =>
         !e.action && !(e.key === 'nav/personal/shortcuts' && !e.navPage)

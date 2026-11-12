@@ -10,7 +10,7 @@
  * ③ 内容：右侧只显示当前分类；配置项一行一个（标题 + 描述 + 右侧控件）；
  * ④ 兼容：settingsGroup 内容插槽、settings.nav / settings.tab 两个注册场域都继续消费；
  *    卸载时释放滚动锁。
- * ⑤ 用户口径 2026-11-02 追加：第 0 级分类默认「个人」、右侧卡片小节、顶部页签默认隐藏、
+ * ⑤ 用户口径 2026-11-02 追加：第 0 级分类默认「常规」、右侧卡片小节、顶部页签默认隐藏、
  *    所有 number 字段统一「滑块 + 数字框」。
  *
  * 为什么仍读源码：插件包没有 @vue/server-renderer，而"导航由哪个场域取图标"这类
@@ -81,13 +81,15 @@ describe('PluginSettingsContent 左导航：第 0 级分类 + 图标菜单', () 
     expect(NAV).toMatch(/class="ssn-caption"/)
     expect(NAV).toMatch(/v-for="group in groups"/)
     expect(NAV).toMatch(/v-for="item in group.items"/)
-    // 分类顺序固定：个人 → 外观 → 集成 → 画布 → 开发
-    expect(CATEGORY).toMatch(/SETTINGS_CATEGORY_ORDER[^=]*=\s*\[\s*'个人'\s*,\s*'外观'\s*,\s*'集成'\s*,\s*'画布'\s*,\s*'开发'\s*\]/)
+    // 分类顺序固定：常规 → 集成 → 画布 → 开发（个人 + 外观已合并，2026-11-12）
+    expect(CATEGORY).toMatch(/SETTINGS_CATEGORY_ORDER[^=]*=\s*\[\s*'常规'\s*,\s*'集成'\s*,\s*'画布'\s*,\s*'开发'\s*\]/)
   })
 
-  it('没有显式分类时默认落在「个人」', () => {
-    expect(CATEGORY).toMatch(/DEFAULT_SETTINGS_CATEGORY\s*=\s*'个人'/)
+  it('没有显式分类时默认落在「常规」；旧的个人 / 外观收拢成常规', () => {
+    expect(CATEGORY).toMatch(/DEFAULT_SETTINGS_CATEGORY\s*=\s*'常规'/)
     expect(CATEGORY).toMatch(/return DEFAULT_NAV_CATEGORY\[nav\] \?\? DEFAULT_SETTINGS_CATEGORY/)
+    expect(CATEGORY).toMatch(/个人:\s*'常规'/)
+    expect(CATEGORY).toMatch(/外观:\s*'常规'/)
   })
 
   it('分类可配置：meta.category 优先，其次置 navCategory 场域，再回默认表', () => {
@@ -178,6 +180,24 @@ describe('PluginSettingsContent 右内容：二级小标题 + 卡片 + 分割线
       '../ShadcnSettingsRow.vue',
     )
     expect(ROW).toMatch(/\.shadcn-settings-row \+ \.shadcn-settings-row \{[^}]*border-top: 1px solid/s)
+  })
+
+  /**
+   * 用户 2026-11-12 截图：暗色设置卡片里行与行之间是一条条亮白线。
+   * 根因是组件写 var(--ui-line-faint, #eef0f4)，而主题表从没定义这个变量 ——
+   * 暗色下没人覆盖，就一路掉到浅色兜底。这里钉住亮 / 暗两套都必须有值。
+   */
+  it('行分隔线用的 --ui-line-faint 在亮 / 暗两套主题里都有定义', () => {
+    const THEME = read('../../../../../../canvas-render/src/styles/ui-theme.css')
+    const light = /:root \{([\s\S]*?)\n\}/.exec(THEME)?.[1] ?? ''
+    const dark = /html\.dark \{([\s\S]*?)\n\}/.exec(THEME)?.[1] ?? ''
+    expect(light).toMatch(/--ui-line-faint:\s*#/)
+    expect(dark).toMatch(/--ui-line-faint:\s*#/)
+    // 也不能只写一个和卡片底完全一样的值（那等于没线）
+    const darkValue = /--ui-line-faint:\s*(#[0-9a-f]{6})/i.exec(dark)?.[1]?.toLowerCase()
+    const darkPanel = /--ui-panel:\s*(#[0-9a-f]{6})/i.exec(dark)?.[1]?.toLowerCase()
+    expect(darkValue).toBeTruthy()
+    expect(darkValue).not.toBe(darkPanel)
   })
 })
 

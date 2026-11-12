@@ -27,6 +27,13 @@
   --ui-panel-active: #e8eaf0;
   --ui-line: #e2e5ea;
   --ui-line-soft: #eef0f4;
+  /* 比 --ui-line-soft 还浅一档的发丝线：卡片内行与行之间的分隔。
+     以前组件写 var(--ui-line-faint, #eef0f4) 但这里没定义，暗色下就掉进浅色兜底，
+     设置卡片里出现一条条白线（2026-11-12 用户截图）。 */
+  --ui-line-faint: #f2f4f7;
+  /* 比 --ui-line 深一档的强调描边：hover / 打开态 / 勾选框。同样必须在暗色有值，
+      否则 var(--ui-line-strong, rgba(0,0,0,.14)) 在深底上等于没有描边。 */
+  --ui-line-strong: rgb(0 0 0 / 0.14);
   --ui-ink: #18202b;
   --ui-ink-dim: #6b7280;
   --ui-ink-mute: #8c95a3;
@@ -109,6 +116,7 @@
   --dur-card: 0.22s;
   --dur-panel: 0.24s;
   --dur-reveal: 0.3s;
+  --ui-ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-out: ease-out;
   /* 文本选区底色：标签选中与文字选中共用同一个变量（用户口径 2026-10-26）。
@@ -258,6 +266,10 @@ html.dark {
   --ui-panel-active: #363636;
   --ui-line: #363636;
   --ui-line-soft: #2a2a2a;
+  /* 暗色发丝线：只比卡片底(#262626)亮一丁点，行与行能分开又不刺眼 */
+  --ui-line-faint: #2f2f2f;
+  /* 暗色强调描边：白 18%，压在 #262626 卡片上能看出轮廓 */
+  --ui-line-strong: rgb(255 255 255 / 0.18);
   --ui-ink: #f7f7f7;
   --ui-ink-dim: #919191;
   --ui-ink-mute: #a8a8a8;

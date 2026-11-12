@@ -39,7 +39,7 @@ export function apply(ctx: Context): void {
     id: 'nav/personal/shortcuts',
     order: 20,
     component: SettingsShortcutPanel,
-    meta: { title: '快捷键', category: '个人' },
+    meta: { title: '快捷键', category: '常规' },
   })
   // 主题设置皮按名取这一件。
   ctx.registryOf<unknown>('ui').add('settingsShortcutPanel', SettingsShortcutPanel, {

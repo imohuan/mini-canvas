@@ -49,7 +49,7 @@ describe('设置页快捷键配置页', () => {
       .occupants('settings.nav')
       .find((item) => item.id === 'nav/personal/shortcuts')
     expect(entry, '快捷键配置页没有注册到 settings.nav').toBeTruthy()
-    expect(entry?.meta).toMatchObject({ title: '快捷键', category: '个人' })
+    expect(entry?.meta).toMatchObject({ title: '快捷键', category: '常规' })
     expect(ctx.registryOf<unknown>('ui').keys()).toContain('settingsShortcutPanel')
     expect(ctx.tryGet('shortcut-manager')).toBeTruthy()
     ctx.stop()
@@ -74,7 +74,7 @@ describe('设置页快捷键配置页', () => {
       sectionMap: new Map(),
       groupSet: new Set(),
       menuView: {
-        categories: [{ id: 'category/personal', title: '个人', order: 10, position: 0, navs: [] }],
+        categories: [{ id: 'category/personal', title: '常规', order: 10, position: 0, navs: [] }],
         navs: [{
           id: 'nav/personal/shortcuts',
           category: 'category/personal',
@@ -85,7 +85,7 @@ describe('设置页快捷键配置页', () => {
         }],
         issues: [],
       },
-      categoryFor: () => '个人',
+      categoryFor: () => '常规',
       iconOf: () => null,
     })
     expect(entries).toHaveLength(1)

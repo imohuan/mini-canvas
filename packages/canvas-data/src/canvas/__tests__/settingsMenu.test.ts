@@ -142,7 +142,8 @@ describe('SettingsMenuRegistry · 解析后的 position（最终展示顺序）'
     scope.nav(nav('nav/a', 'category/personal', 'A', 90, { before: 'nav/root' }))
     scope.nav(nav('nav/b', 'category/personal', 'B', 900, { after: 'nav/root' }))
 
-    const personal = menu.resolve([]).categories.find((c) => c.title === '个人')!
+    // 没登记分类时自动补的兜底分类现在叫「常规」（个人 + 外观已合并）
+    const personal = menu.resolve([]).categories.find((c) => c.title === '常规')!
     expect(personal.navs.map((n) => n.title)).toEqual(['A', '根', 'B'])
     expect(personal.navs.map((n) => n.position)).toEqual([0, 1, 2])
   })

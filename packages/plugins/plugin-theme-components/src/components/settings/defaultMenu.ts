@@ -8,30 +8,34 @@ import { Blocks, Brush, Grid2x2, Layers, Puzzle } from 'lucide-vue-next'
 import type { SettingsCategoryDef, SettingsMenuScope, SettingsNavDef, SettingsSectionDef } from '@plume-canvas/canvas-data'
 
 const C = {
-  personal: 'category/personal',
-  appearance: 'category/appearance',
+  /**
+   * 保持 id 为 category/personal：外部插件与旧示例仍按这个 id 登记导航项。
+   * 用户口径 2026-11-12：原来的「个人」和「外观」两个分类合成一个「常规」，
+   * 左侧不再按"个人信息 / 页面长相"拆两段。
+   */
+  general: 'category/personal',
   integration: 'category/integration',
   canvas: 'category/canvas',
   development: 'category/development',
 } as const
 
 const categories: SettingsCategoryDef[] = [
-  { id: C.personal, title: '个人', order: 10 },
-  { id: C.appearance, title: '外观', order: 20 },
-  { id: C.integration, title: '集成', order: 30 },
-  { id: C.canvas, title: '画布', order: 40 },
-  { id: C.development, title: '开发', order: 50 },
+  { id: C.general, title: '常规', order: 10 },
+  { id: C.integration, title: '集成', order: 20 },
+  { id: C.canvas, title: '画布', order: 30 },
+  { id: C.development, title: '开发', order: 40 },
 ]
 
 const navs: SettingsNavDef[] = [
-  { id: 'nav/personal/general', category: C.personal, title: '通用', order: 10 },
+  { id: 'nav/personal/general', category: C.general, title: '通用', order: 10 },
+  // 「主题」原来在「外观」分类；两个分类合并后，它跟着通用 / 快捷键一起排在「常规」里。
+  { id: 'nav/appearance/theme', category: C.general, title: '主题', order: 20, icon: Brush },
   /**
    * 快捷键：设置页里的真实配置页。面板由 plugin-shortcut-manager 注册为
    * settings.nav occupant（id 与这里一致），两套设置皮按 id 命中同一页。
    * 不能再标成 action —— 那会只弹出帮助浮层，右侧仍是空白。
    */
-  { id: 'nav/personal/shortcuts', category: C.personal, title: '快捷键', order: 20 },
-  { id: 'nav/appearance/theme', category: C.appearance, title: '主题', order: 10, icon: Brush },
+  { id: 'nav/personal/shortcuts', category: C.general, title: '快捷键', order: 30 },
   { id: 'nav/integration/agent', category: C.integration, title: '智能助手', order: 10 },
   { id: 'nav/integration/plugins', category: C.integration, title: '插件', order: 20, icon: Puzzle },
   { id: 'nav/integration/connect', category: C.integration, title: '连接', order: 30 },

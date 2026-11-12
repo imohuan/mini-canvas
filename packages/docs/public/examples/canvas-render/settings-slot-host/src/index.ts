@@ -17,7 +17,7 @@ export function apply(ctx: Context): void {
     meta: { title: '缩放角标' },
   })
 
-  // ③ 设置菜单：声明「个人 → 我的演示」；左导航外观由面板统一画
+  // ③ 设置菜单：声明「常规 → 我的演示」；左导航外观由面板统一画
   ctx.settingsMenu.nav({
     id: 'nav/personal/demo', category: 'category/personal', title: '我的演示', order: 60,
   })

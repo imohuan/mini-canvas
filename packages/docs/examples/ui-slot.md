@@ -87,10 +87,10 @@ export function apply(ctx: Context): void {
     meta: { title: '画布计数' },        // 可选说明信息，面板/调试工具会读
   })
 
-  // ⑤ 设置菜单：声明「个人 → 计数」，1 级菜单就能出现在左侧导航里
+  // ⑤ 设置菜单：声明「常规 → 计数」，1 级菜单就能出现在左侧导航里
   ctx.settingsMenu.nav({
     id: 'nav/personal/count',
-    category: 'category/personal',   // 默认主题已登记这个 0 级分类
+    category: 'category/personal',   // 默认主题已登记这个 0 级分类（显示名是「常规」）
     title: '计数',
     order: 60,
   })

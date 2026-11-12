@@ -19,9 +19,9 @@ import type { SettingSchema } from '@plume-canvas/kernel'
 export const THEME_MODE_KEY = 'themeMode'
 
 /**
- * 设置面板里的分组：一级「外观」/ 二级「主题模式」。
- * 2026-11-02 用户口径：主题配色等"只改长相"的项全部归到「外观」；
- * 亮/暗模式也是外观的一部分，不再挂在「常规」下。
+ * 设置面板里的分组：一级段「外观」（历史名，保持不变以免已存配置失效），
+ * 菜单里由「常规 → 主题 → 主题模式」这一节收编。
+ * 2026-11-12 用户口径：「个人」和「外观」两个分类合成「常规」。
  */
 export const THEME_MODE_GROUP = '外观/主题模式'
 

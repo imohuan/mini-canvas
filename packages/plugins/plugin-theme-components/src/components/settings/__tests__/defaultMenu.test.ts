@@ -4,18 +4,31 @@
 import { describe, expect, it } from 'vitest'
 import { SettingsMenuRegistry } from '@plume-canvas/canvas-data'
 import { registerDefaultSettingsMenu } from '../defaultMenu'
-import { compareSettingsCategory } from '../navCategory'
+import { categoryOf, compareSettingsCategory } from '../navCategory'
 
 describe('默认设置菜单', () => {
-  it('顶层是五个分类，顺序固定', () => {
+  it('顶层是四个分类，顺序固定（个人 + 外观已合成「常规」）', () => {
     const menu = new SettingsMenuRegistry()
     registerDefaultSettingsMenu(menu.forPlugin('theme-default'))
     const view = menu.resolve([])
-    expect(view.categories.map((c) => c.title)).toEqual(['个人', '外观', '集成', '画布', '开发'])
+    expect(view.categories.map((c) => c.title)).toEqual(['常规', '集成', '画布', '开发'])
     expect(view.navs.map((n) => `${n.title}`)).toEqual([
-      '通用', '快捷键', '主题', '智能助手', '插件', '连接',
+      '通用', '主题', '快捷键', '智能助手', '插件', '连接',
       '交互', '布局', '节点', '边', '工具', '调试', '演示',
     ])
+  })
+
+  it('「常规」里同时放通用 / 主题 / 快捷键；旧分类字符串会被收拢', () => {
+    const menu = new SettingsMenuRegistry()
+    registerDefaultSettingsMenu(menu.forPlugin('theme-default'))
+    const view = menu.resolve([])
+    const general = view.categories.find((c) => c.title === '常规')!
+    expect(general.navs.map((n) => n.title)).toEqual(['通用', '主题', '快捷键'])
+    // 默认分类 id 仍叫 category/personal：外部插件按它登记不会失效
+    expect(general.id).toBe('category/personal')
+    // 老插件还写 category: '个人' / '外观'，也不该在左侧造出第二段
+    expect(categoryOf('我的插件', '个人')).toBe('常规')
+    expect(categoryOf('我的插件', '外观')).toBe('常规')
   })
 
   it('默认二级顺序按 order（外观 → 字体 → 尺寸 → 配色）', () => {
@@ -156,19 +169,19 @@ describe('默认设置菜单', () => {
       after: 'category/canvas',
     })
     const view = menu.resolve([])
-    expect(view.categories.map((c) => c.title)).toEqual(['个人', '外观', '集成', '画布', '实验室', '开发'])
-    expect(view.categories.map((c) => c.position)).toEqual([0, 1, 2, 3, 4, 5])
+    expect(view.categories.map((c) => c.title)).toEqual(['常规', '集成', '画布', '实验室', '开发'])
+    expect(view.categories.map((c) => c.position)).toEqual([0, 1, 2, 3, 4])
   })
 
   it('分类比较：position 优先；旧装配没有 position 时回落内置顺序', () => {
-    // 旧装配（未接菜单）仍要有个稳定顺序：个人 → 外观 → 集成 → 画布 → 开发
-    const legacy = ['开发', '个人', '画布', '外观', '集成'].map((category) => ({ category }))
+    // 旧装配（未接菜单）仍要有个稳定顺序：常规 → 集成 → 画布 → 开发
+    const legacy = ['开发', '常规', '画布', '集成'].map((category) => ({ category }))
     legacy.sort((a, b) => compareSettingsCategory(a, b))
-    expect(legacy.map((c) => c.category)).toEqual(['个人', '外观', '集成', '画布', '开发'])
+    expect(legacy.map((c) => c.category)).toEqual(['常规', '集成', '画布', '开发'])
 
     // 新菜单：after 排出来的位置不被名字顺序覆盖
     expect(
-      compareSettingsCategory({ category: '开发', position: 0 }, { category: '个人', position: 1 }),
+      compareSettingsCategory({ category: '开发', position: 0 }, { category: '常规', position: 1 }),
     ).toBeLessThan(0)
   })
 })

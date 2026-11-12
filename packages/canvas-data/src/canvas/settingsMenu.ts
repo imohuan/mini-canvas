@@ -232,7 +232,7 @@ export class SettingsMenuRegistry {
       for (const group of settingsSectionGroups(section)) groupToSection.set(group, section)
     }
 
-    // 未注册的 group：按「一级/二级」拆；一级没有就自动建到「个人」末尾
+    // 未注册的 group：按「一级/二级」拆；一级没有就自动建到「常规」末尾
     const extraByNav = new Map<string, SettingsMenuSection[]>()
     for (const group of groups) {
       if (groupToSection.has(group)) continue
@@ -258,15 +258,18 @@ export class SettingsMenuRegistry {
       extraByNav.set(nav.id, list)
     }
 
-    // 一级都没注册的 group：按 group 的第一段建临时一级，归到「个人」
+    // 一级都没注册的 group：按 group 的第一段建临时一级，归到「常规」
     const orphans = groups.filter((g) => {
       const navTitle = g.split('/')[0]
       return !navs.some((n) => n.title === navTitle) && !groupToSection.has(g)
     })
     if (orphans.length) {
-      let personalCategory = categories.find((c) => c.title === '个人')
+      // 兼容两种标题：新菜单叫「常规」，旧菜单可能还叫「个人」；id 始终是这一档
+      let personalCategory = categories.find(
+        (c) => c.id === 'category/personal' || c.id === 'auto:category/personal' || c.title === '常规',
+      )
       if (!personalCategory) {
-        personalCategory = { id: 'auto:category/personal', title: '个人', order: 10000 }
+        personalCategory = { id: 'auto:category/personal', title: '常规', order: 10000 }
         categories.push(personalCategory)
       }
       const byTitle = new Map<string, SettingsMenuSection[]>()
@@ -332,13 +335,15 @@ export class SettingsMenuRegistry {
         }),
     }))
 
-    // 一级没有挂到任何分类的：临时补到「个人」，配置不消失
+    // 一级没有挂到任何分类的：临时补到「常规」，配置不消失
     const known = new Set(tree.flatMap((c) => c.navs.map((n) => n.id)))
     const loose = navs.filter((nav) => !known.has(nav.id))
     if (loose.length) {
-      let personal = tree.find((c) => c.title === '个人')
+      let personal = tree.find(
+        (c) => c.id === 'category/personal' || c.id === 'auto:category/personal' || c.title === '常规',
+      )
       if (!personal) {
-        personal = { id: 'auto:category/personal', title: '个人', order: 10000, position: 0, navs: [] }
+        personal = { id: 'auto:category/personal', title: '常规', order: 10000, position: 0, navs: [] }
         tree.push(personal)
       }
       for (const nav of loose) {
