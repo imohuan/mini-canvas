@@ -21,7 +21,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { PluginModule } from '@plume-canvas/kernel'
-import { listPluginIds, resolvePluginDir, type PluginRoots } from '../plugins/pluginRoots.js'
+import { listPluginIds, resolvePluginDirWithServer, type PluginRoots } from '../plugins/pluginRoots.js'
 
 export interface ServerPluginLoadResult {
   modules: PluginModule[]
@@ -59,7 +59,8 @@ export async function loadServerPluginsFromPluginDirs(
 
   for (const name of names.sort()) {
     if (name.startsWith('_') || name.startsWith('.')) continue
-    const resolved = await resolvePluginDir(roots, name)
+    // 只认**真带后台入口**的那一份：旧版全局副本没有 server 段时会回落到随包那份
+    const resolved = await resolvePluginDirWithServer(roots, name)
     if (!resolved) continue
     const dir = resolved
     let entry: string | undefined

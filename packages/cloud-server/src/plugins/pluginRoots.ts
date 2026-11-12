@@ -10,6 +10,7 @@
  * 全局那份自然浮到前面。
  */
 import { readdir, stat } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 export interface PluginRoots {
@@ -68,6 +69,41 @@ export async function resolvePluginDir(roots: PluginRoots, id: string): Promise<
     if (!root) continue
     const dir = path.join(root, id)
     if (await isDir(dir)) return dir
+  }
+  return undefined
+}
+
+/** 读一个插件目录 `package.json` 的 `plume.server.entry`（没有 / 坏了 → undefined） */
+async function declaredServerEntry(dir: string): Promise<string | undefined> {
+  try {
+    const pkg = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8')) as {
+      plume?: { server?: { entry?: unknown } }
+    }
+    const entry = pkg.plume?.server?.entry
+    return typeof entry === 'string' && entry.trim() ? entry.trim() : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * 找**带后台半**的那一份：全局优先，但全局那份必须真的声明了 `plume.server.entry`。
+ *
+ * 为什么不能直接用 `resolvePluginDir`（用户实测的启动失败）：
+ * 数据根里可能有**旧版本**的插件副本（只发布了前端半、`package.json` 里没有 server 段）。
+ * 全局优先会挑到它，于是后台半「消失」，Agent 这类强依赖后台的服务直接起不来。
+ * 这里改成：谁真的带后台入口就用谁 —— 旧副本没有就回落到随包那份。
+ */
+export async function resolvePluginDirWithServer(
+  roots: PluginRoots,
+  id: string,
+): Promise<string | undefined> {
+  if (id.startsWith('.') || id.startsWith('_') || id.includes('/') || id.includes('\\')) return undefined
+  for (const root of [roots.global, roots.packaged]) {
+    if (!root) continue
+    const dir = path.join(root, id)
+    if (!(await isDir(dir))) continue
+    if (await declaredServerEntry(dir)) return dir
   }
   return undefined
 }

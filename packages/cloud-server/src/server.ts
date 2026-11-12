@@ -149,6 +149,15 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     return agentServicesRef
   }
   /**
+   * Agent 服务“可选”的读法：拿不到就返回 undefined（**不抛**）。
+   *
+   * 用在启动阶段那几处（test 模型登记、内置画布 MCP、运行时上下文刷新）：
+   * 那些都是**锦上添花**，Agent 后台插件没装配上（插件目录是旧副本、被手动删了）时，
+   * 整个服务不该跟着起不来 —— 用户实测就是这里把启动炸掉的。
+   * 真正必须要有 Agent 的功能（任务化对话、路由）走 agentServices() 的响亮报错。
+   */
+  const tryAgentServices = (): AgentServices | undefined => agentServicesRef
+  /**
    * 让插件把它装配好的服务组交回来（2026-11-12）。
    *
    * 为什么走这一步：Agent 后台现在是**真正的后台插件**（`plugin-agent/dist/server.js`），
@@ -835,16 +844,15 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    * （port 传 0 / CLI 换端口时实际端口 ≠ 请求端口，与内置画布 MCP 同一套做法）。
    */
   const ensureTestModel = (origin: string): Promise<void> =>
-    agentServices().config
+    // 可选读法：Agent 后台没装配上时直接跳过（test 模型只是便利项）
+    (tryAgentServices()?.config
       .ensureTestModel({
         provider: TEST_PROVIDER,
         modelId: TEST_MODEL_ID,
         baseUrl: testModelBaseUrl(origin),
         apiKey: TEST_API_KEY,
       })
-      .catch((err) => console.warn('[agent] test 模型登记失败：' + String(err)))
-  if (agentEnabled) {
-  }
+      .catch((err) => console.warn('[agent] test 模型登记失败：' + String(err))) ?? Promise.resolve())
 
   /**
    * 重扫目录并整体替换清单。
@@ -950,6 +958,12 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           .ensureBuiltinCanvasMcp(`http://${opts.hostname ?? '127.0.0.1'}:${port}/mcp`)
           .catch((err) => console.warn('[agent] 内置画布 MCP 写入失败：' + String(err)))
       }
+    } else {
+      // 说清楚：插件在，但后台半没装配上（最常见是全局目录那份是旧副本，
+      // package.json 里没有 plume.server.entry）。画布与其它插件照常可用。
+      console.warn('[cloud-server] Agent 后台没有装配：没有找到带后台半的 plugin-agent。')
+      console.warn('  检查 ' + pluginsDir + '/plugin-agent/package.json 是否声明了 plume.server.entry。')
+      console.warn('  画布与其它插件不受影响；Agent 相关接口会 404。')
     }
   }
 
@@ -1146,7 +1160,9 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           releaseSelfOrigin = host.ctx.inject('selfOrigin', `http://${hostname}:${info.port}`)
           // 端口定了 → 把运行环境上下文刷新成**真实地址**（提示词里的 {{BACKEND_BASE_URL}}
           // 与常驻小节都读它）。下一次建会话就是对的，不必重启。
-          if (agentEnabled) agentServices().config.setRuntimeContext(runtimeContext())
+          // 用可选读法：Agent 后台插件没装配上时这里什么都不做，**不能**把监听回调炸掉
+          // （用户实测：抛出后 server 直接退出，整个服务起不来）。
+          tryAgentServices()?.config.setRuntimeContext(runtimeContext())
           // 真实端口定了，纠正内置画布 MCP 与 test 模型的地址：
           //   · port 传 0（测试）时真实端口由系统分配 —— 不纠正就会把 `...:0/mcp` 写死；
           //   · CLI 换端口兜底时实际监听端口 ≠ 请求端口 —— 同理。
@@ -1156,13 +1172,17 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           // 紧接着删数据目录，就会撞出 ENOENT / ENOTEMPTY（实测碰到）。
           // 写入本身幂等（地址没变就一个字节都不写），等它只花几毫秒。
           const settleAgentAddresses = async (): Promise<void> => {
-            if (!agentEnabled) return
+            // 可选读法：Agent 后台没装配上时这两步都跳过（它们是锦上添花，不该拦启动）
+            const services = tryAgentServices()
+            if (!services) return
             if (mcpEnabled && opts.builtinCanvasMcp !== false) {
-              await agentServices().config
+              await services.config
                 .ensureBuiltinCanvasMcp(`http://${hostname}:${info.port}/mcp`)
                 .catch((err) => console.warn('[agent] 内置画布 MCP 地址纠正失败：' + String(err)))
             }
-            await ensureTestModel(`http://${hostname}:${info.port}`)
+            await ensureTestModel(`http://${hostname}:${info.port}`).catch((err) =>
+              console.warn('[agent] test 模型地址纠正失败：' + String(err)),
+            )
           }
           // 端口传 0 时真实端口由系统分配，以 info.port 为准。
           // 写配置失败也照样 resolve：地址纠正不成功不该让整个服务「启动不起来」
