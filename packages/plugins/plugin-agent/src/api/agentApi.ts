@@ -3,7 +3,7 @@
  *
  * baseUrl 缺省空串 = 与画布同源（cloud-server 托管界面时就是这样）。
  */
-import { withAdminToken } from '@plume-canvas/canvas-base'
+import { withAdminToken } from '@plume-canvas/plugin-sdk'
 
 export type ChatEvent =
   | { type: 'session'; sessionId: string; title: string }

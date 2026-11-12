@@ -14,7 +14,7 @@
 import {
   Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize,
   DEFAULT_IMAGE_CARD_LIMITS, IMAGE_CARD_LIMIT_KEYS, isMediaCardLimitKey,
-} from '@plume-canvas/canvas-base'
+} from '@plume-canvas/plugin-sdk'
 import type { DocService } from '@plume-canvas/canvas-data'
 import { thumbTierFields, thumbTierKeys } from './thumbTier'
 import { imageTitleExtra } from './imageNodeData'

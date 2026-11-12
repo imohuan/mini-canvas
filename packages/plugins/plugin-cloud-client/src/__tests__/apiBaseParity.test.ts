@@ -1,10 +1,10 @@
 /**
  * cloud-client 的产物要求零 import，所以它把「后台地址校验」就地内联了一份。
- * 这条测试保证内联副本与 `@plume-canvas/bar-contract` 的唯一真源行为一致 ——
+ * 这条测试保证内联副本与 `@plume-canvas/plugin-sdk` 的唯一真源行为一致 ——
  * 改一边忘了另一边，会在这里红。
  */
 import { describe, expect, it } from 'vitest'
-import { normalizeApiBase } from '@plume-canvas/bar-contract'
+import { normalizeApiBase } from '@plume-canvas/plugin-sdk'
 import { configFrom } from '../config'
 
 /** 用 configFrom 读同一份 settings，间接覆盖内联实现的输出。 */
@@ -15,7 +15,7 @@ function baseUrlOf(value: unknown): string {
 // 用户实测被存进设置里的脏值（单个汉字）；用码点拼，避免源码里出现孤立字符。
 const DIRTY = String.fromCharCode(0x7684)
 
-describe('cloud-client 的地址校验与 bar-contract 一致', () => {
+describe('cloud-client 的地址校验与 plugin-sdk 一致', () => {
   const cases: unknown[] = [
     '',
     '   ',

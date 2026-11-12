@@ -1,0 +1,47 @@
+{
+  "name": "@plume-canvas/plugin-align-guide",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "plume": {
+    "title": "参考线",
+    "description": "拖节点时吸附其它节点边缘/中心并显示蓝线",
+    "pluginName": "align-guide",
+    "installable": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "typecheck:vue": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*"
+  },
+  "peerDependencies": {
+    "@plume-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}

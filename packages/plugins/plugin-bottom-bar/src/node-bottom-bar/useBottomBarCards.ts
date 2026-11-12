@@ -1,7 +1,7 @@
 import { computed, nextTick, ref, watch, type ComputedRef, type Ref } from 'vue'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
+import type { ResourceItem } from '@plume-canvas/editor'
 import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
-import type { ViewContract } from '@plume-canvas/canvas-base'
+import type { ViewContract } from '@plume-canvas/plugin-sdk'
 import { nextRefOrder, placeChipAt, previewListFor, type MaterialCard, type UpstreamMaterial } from '../panelSource'
 import { openPreview } from '../mediaPreview'
 import { peekVideoThumb } from '../videoThumbCache'
@@ -706,4 +706,4 @@ export function useBottomBarCards(deps: CardDeps) {
   }
 }
 
-import { registerItem } from 'prosemirror-editor-bundle'
+import { registerItem } from '@plume-canvas/editor'

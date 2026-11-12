@@ -1,4 +1,4 @@
-import type { ResourceItem } from 'prosemirror-editor-bundle'
+import type { ResourceItem } from '@plume-canvas/editor'
 
 /** ProseMirrorEditor 暴露给底栏的编辑能力（原内联在 NodeBottomBar.vue） */
 export interface BottomBarEditorHandle {

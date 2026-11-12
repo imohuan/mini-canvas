@@ -17,7 +17,7 @@
  */
 import { markRaw } from 'vue'
 import { MousePointer2 } from 'lucide-vue-next'
-import type { Context, PluginModule } from '@plume-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/plugin-sdk'
 import { Config, CURSOR_NAV_ID } from './catalog'
 import CursorEffectOverlay from './CursorEffectOverlay.vue'
 import CursorSettingsNav from './components/settings/CursorSettingsNav.vue'

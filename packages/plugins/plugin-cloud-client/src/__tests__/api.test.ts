@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect } from 'vitest'
-import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@plume-canvas/canvas-base'
+import { ADMIN_TOKEN_HEADER, ADMIN_TOKEN_KEY } from '@plume-canvas/plugin-sdk'
 import { CloudApi } from '../api'
 import type { FetchLike } from '../apiTypes'
 

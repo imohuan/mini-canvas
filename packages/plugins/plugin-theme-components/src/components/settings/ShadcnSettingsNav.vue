@@ -10,7 +10,7 @@
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
-import { ScrollArea } from '@plume-canvas/ui-kit-shadcn'
+import { ScrollArea } from '@plume-canvas/ui-kit'
 import ShadcnSettingsNavItem from './ShadcnSettingsNavItem.vue'
 import { compareSettingsCategory, SETTINGS_CATEGORY_ORDER } from './navCategory'
 

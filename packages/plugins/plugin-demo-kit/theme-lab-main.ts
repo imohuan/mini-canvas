@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
-import '@plume-canvas/ui-kit-shadcn/styles.css'
+import '@plume-canvas/ui-kit/styles.css'
 // 颜色配方已迁进 @plume-canvas/plugin-theme-components（默认主题）。
 // 这个独立页只服务「目验颜色配方」，所以直接从默认主题取页面。
 // 包的 exports 已把 "./*" 映射到 "./src/*"，这里不能再写一层 src/

@@ -1,0 +1,278 @@
+#!/usr/bin/env node
+/**
+ * MCP 端到端验收（**真 MCP 客户端 + 真服务 + 真浏览器**）。
+ *
+ * 验的核心命题只有一句：**AI 改的和网页上看到的是同一张画布**。
+ * 所以不满足于"工具返回 ok"，而是：
+ *   1. 用官方 SDK 的 MCP 客户端连上 /mcp（走的是 AI 客户端真会用的那条协议）；
+ *   2. 让"AI"经 MCP 建节点/连线；
+ *   3. **真浏览器打开**网页画布，确认看到的就是 AI 建的那些；
+ *   4. 反向再来一遍：浏览器里建节点，MCP 读得到；
+ *   5. 重启服务，确认 AI 改的东西还在（落盘了）。
+ *
+ * 跑法：cd packages/cloud-server && pnpm e2e:mcp
+ * （需要先构建 ui：cd packages/ui && pnpm build）
+ */
+import { readFileSync, statSync } from 'node:fs'
+import { promises as fs, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { createCloudServer } from '../src/server.js'
+import { launchChrome, openPage, sleep } from './lib/cdp.js'
+
+const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const REPO_ROOT = path.resolve(PACKAGE_ROOT, '../..')
+const UI_DIST = path.join(REPO_ROOT, 'apps/web/dist')
+
+let failures = 0
+function check(label: string, ok: boolean, extra?: unknown): void {
+  console.log(`${ok ? '  PASS  ' : '  FAIL  '}${label}${extra !== undefined ? '   ' + JSON.stringify(extra) : ''}`)
+  if (!ok) failures += 1
+}
+
+/** 取工具返回里的 JSON（MCP 工具统一返回一段 text） */
+function parseToolResult(r: unknown): any {
+  const content = (r as { content?: { type: string; text?: string }[] }).content ?? []
+  const text = content.find((c) => c.type === 'text')?.text ?? '{}'
+  return JSON.parse(text)
+}
+
+async function main(): Promise<void> {
+  if (!path.isAbsolute(UI_DIST) || !exists(UI_DIST)) {
+    console.error(`✗ 没找到画布构建产物：${UI_DIST}\n  请先执行：cd packages/ui && pnpm build`)
+    process.exit(2)
+  }
+
+  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-e2e-'))
+  const srv = await createCloudServer({ dir: dataDir, uiDist: UI_DIST, port: 0 })
+  const { url } = await srv.start()
+  console.log(`服务已起：${url}（数据目录 ${dataDir}）`)
+  console.log(`MCP 端点：${url}/mcp\n`)
+
+  // ==================== 连上 MCP（AI 客户端视角）====================
+  console.log('--- 用官方 MCP 客户端连接 /mcp ---')
+  const client = new Client({ name: 'cloud-e2e', version: '1.0.0' })
+  const transport = new StreamableHTTPClientTransport(new URL(`${url}/mcp`))
+  await client.connect(transport)
+  check('MCP 客户端连接成功', true)
+
+  const listed = await client.listTools()
+  const toolNames = listed.tools.map((t) => t.name).sort()
+  check(
+    '工具面里有画布读写四件套',
+    ['canvas_batch_edges', 'canvas_batch_nodes', 'canvas_get', 'canvas_overview'].every((n) => toolNames.includes(n)),
+    toolNames,
+  )
+  check(
+    '工具面里有资源上传（AI 要往画布放图，不能只能建空节点）',
+    ['resource_upload', 'resource_list', 'canvas_add_image'].every((n) => toolNames.includes(n)),
+    toolNames,
+  )
+
+  // ==================== AI 经 MCP 改画布 ====================
+  console.log('\n--- AI 经 MCP 建节点 + 连线 ---')
+  const before = parseToolResult(await client.callTool({ name: 'canvas_overview', arguments: {} }))
+  check('空画布起始状态', before.nodeCount === 0 && before.edgeCount === 0, before)
+
+  const addRes = parseToolResult(
+    await client.callTool({
+      name: 'canvas_batch_nodes',
+      arguments: {
+        add: [
+          { type: 'text', id: 'ai-a', position: { x: 80, y: 80 }, data: { text: 'AI 写的第一段' } },
+          { type: 'text', id: 'ai-b', position: { x: 480, y: 80 }, data: { text: 'AI 写的第二段' } },
+        ],
+      },
+    }),
+  )
+  check('AI 经 MCP 建了 2 个节点', addRes.ok === true && addRes.added.length === 2, addRes)
+
+  const edgeRes = parseToolResult(
+    await client.callTool({
+      name: 'canvas_batch_edges',
+      arguments: { add: [{ source: 'ai-a', target: 'ai-b' }] },
+    }),
+  )
+  check('AI 经 MCP 连了一条线', edgeRes.ok === true && edgeRes.added.length === 1, edgeRes)
+
+  const got = parseToolResult(await client.callTool({ name: 'canvas_get', arguments: {} }))
+  check('canvas_get 读回来节点与连线齐全', got.nodeCount === 2 && got.edgeCount === 1, {
+    nodeCount: got.nodeCount,
+    edgeCount: got.edgeCount,
+  })
+
+  // ==================== AI 往画布放一张真图（资源上传）====================
+  console.log('\n--- AI 经 MCP 放一张真图（走资源上传）---')
+  // 造一张真 PNG 写到临时文件（当作"AI 手里有个本地文件"）
+  const pngBytes = makeTinyPng()
+  const pngPath = path.join(dataDir, 'ai-source.png')
+  writeFileSync(pngPath, pngBytes)
+
+  const uploadRes = parseToolResult(
+    await client.callTool({ name: 'resource_upload', arguments: { path: pngPath } }),
+  )
+  check(
+    'resource_upload 从本地路径存下资源，返回同源 URL',
+    uploadRes.ok === true && String(uploadRes.url).startsWith('/api/canvases/default/resources/'),
+    uploadRes,
+  )
+  check('返回的 mime 按扩展名识别正确', uploadRes.mime === 'image/png', { mime: uploadRes.mime })
+
+  // 同一个文件再传一次 → 同一个引用（内容去重）
+  const again = parseToolResult(await client.callTool({ name: 'resource_upload', arguments: { path: pngPath } }))
+  check('同内容重复上传返回同一个地址（去重）', again.url === uploadRes.url, { first: uploadRes.url, second: again.url })
+
+  // 服务器上真能取回这张图（url 是按当前画布拼出来的可展示地址）
+  const fetched = await fetch(url + uploadRes.url)
+  const fetchedBytes = new Uint8Array(await fetched.arrayBuffer())
+  check('按返回的 URL 能取回原始字节', fetched.status === 200 && fetchedBytes.byteLength === pngBytes.byteLength, {
+    status: fetched.status,
+    size: fetchedBytes.byteLength,
+    want: pngBytes.byteLength,
+  })
+
+  // add_image：一步上传 + 建节点
+  const addImage = parseToolResult(
+    await client.callTool({
+      name: 'canvas_add_image',
+      arguments: { path: pngPath, position: { x: 900, y: 80 }, label: 'AI 放的图' },
+    }),
+  )
+  check('canvas_add_image 一步上传并建节点', addImage.ok === true && typeof addImage.nodeId === 'string', addImage)
+  const withImage = parseToolResult(await client.callTool({ name: 'canvas_get', arguments: {} }))
+  const imgNode = withImage.nodes.find((n: { id: string }) => n.id === addImage.nodeId)
+  check('新节点是 image 类型且指向画布资源', imgNode?.type === 'image' && imgNode?.data?.imageUrl === addImage.url, {
+    type: imgNode?.type,
+    imageUrl: imgNode?.data?.imageUrl,
+  })
+
+  const resList = parseToolResult(await client.callTool({ name: 'resource_list', arguments: {} }))
+  // 形状：{ name, mime, kind, url } —— 前端按 kind 决定怎么展示（音频不能塞进 <img>，那是裂图）
+  check(
+    'resource_list 列出了已存资源（带类型与访问地址）',
+    resList.count >= 1 &&
+      typeof resList.resources[0]?.name === 'string' &&
+      ['image', 'video', 'audio', 'other'].includes(resList.resources[0]?.kind) &&
+      String(resList.resources[0]?.url ?? '').startsWith('/api/canvases/'),
+    resList,
+  )
+
+  // 磁盘上确实落了（不是只在内存里）
+  const disk = diskState(dataDir)
+  check('AI 的改动落到了服务器磁盘', disk.nodes?.length === 3 && disk.edges?.length === 1, {
+    nodes: disk.nodes?.length,
+    edges: disk.edges?.length,
+  })
+
+  // ==================== 真浏览器看到的就是 AI 建的那张画布 ====================
+  console.log('\n--- 真浏览器打开网页画布，核对与 AI 改的是同一张 ---')
+  const chrome = await launchChrome()
+  const page = await openPage(chrome.port)
+  await page.goto(url + '/')
+  await sleep(8000)
+
+  const seen = await page.ev<{ nodes: string[]; edges: number; texts: string[] }>(
+    `(() => {
+       const host = window.PlumeUI.getHost()
+       const nodes = host.nodeStore.getNodes()
+       return {
+         nodes: nodes.map((n) => n.id),
+         edges: host.graph.getEdges().length,
+         texts: nodes.map((n) => n.data && n.data.text).filter(Boolean),
+       }
+     })()`,
+  )
+  check(
+    '★ 浏览器里看到 AI 建的 3 个节点（含 AI 上传的那张图）',
+    seen.nodes.length === 3 && seen.nodes.includes('ai-a') && seen.nodes.includes('ai-b') && seen.nodes.includes(addImage.nodeId),
+    seen,
+  )
+  check('★ 浏览器里看到 AI 连的那条线', seen.edges === 1, { edges: seen.edges })
+  check('★ 节点内容正是 AI 写的那两段文字', seen.texts.includes('AI 写的第一段') && seen.texts.includes('AI 写的第二段'), seen.texts)
+
+  // 图在浏览器里真的能显示（src 指向服务器资源且取得到）
+  const imgOk = await page.ev<{ src: string; naturalWidth: number } | null>(
+    `(() => {
+       const node = document.querySelector('.vue-flow__node[data-id="' + ${JSON.stringify(addImage.nodeId)} + '"]')
+       const el = node && node.querySelector('img')
+       if (!el) return null
+       return { src: el.getAttribute('src'), naturalWidth: el.naturalWidth }
+     })()`,
+  )
+  check('★ AI 上传的图在浏览器里真的渲染出来（不是坏图）', imgOk !== null && imgOk.src === addImage.url, imgOk)
+
+  // ==================== 反向：浏览器改 → MCP 读得到 ====================
+  console.log('\n--- 反向：浏览器建节点 → MCP 读得到 ---')
+  const webCreated = await page.ev<{ before: number; after: number }>(
+    `(() => {
+       const host = window.PlumeUI.getHost()
+       const before = host.nodeStore.getNodes().length
+       host.command.execute('command:create-node', { type: 'text', position: { x: 200, y: 400 } })
+       return { before, after: host.nodeStore.getNodes().length }
+     })()`,
+  )
+  check('浏览器里建了一个节点', webCreated.after === webCreated.before + 1, webCreated)
+  await sleep(2500) // 等网页端的防抖落盘 + 云端同步
+
+  const afterWeb = parseToolResult(await client.callTool({ name: 'canvas_overview', arguments: {} }))
+  check('★ MCP 读得到浏览器刚建的那个节点（同一份数据）', afterWeb.nodeCount === 4, afterWeb)
+
+  const errs = page.consoleErrors.filter((e) => !/favicon/i.test(e))
+  check('网页端零控制台报错', errs.length === 0, errs)
+  page.close()
+  chrome.kill()
+
+  // ==================== 重启后仍在（真落盘）====================
+  console.log('\n--- 重启服务，确认 AI 改的东西还在 ---')
+  await client.close()
+  srv.stop()
+  const srv2 = await createCloudServer({ dir: dataDir, uiDist: UI_DIST, port: 0 })
+  const { url: url2 } = await srv2.start()
+  const client2 = new Client({ name: 'cloud-e2e-2', version: '1.0.0' })
+  await client2.connect(new StreamableHTTPClientTransport(new URL(`${url2}/mcp`)))
+  const afterRestart = parseToolResult(await client2.callTool({ name: 'canvas_overview', arguments: {} }))
+  check('★ 重启后画布还在（AI 的改动真的落了盘）', afterRestart.nodeCount === 4, afterRestart)
+  await client2.close()
+  srv2.stop()
+
+  await fs.rm(dataDir, { recursive: true, force: true }).catch(() => {})
+  console.log('\n' + (failures === 0 ? '*** 全部通过 ***' : `${failures} 项失败`))
+  process.exit(failures === 0 ? 0 : 1)
+}
+
+/**
+ * 造一张**最小的合法 PNG**（1×1 真图，带正确 CRC）。
+ * 为什么不随便写几个字节冒充图片：浏览器会按真图去解码，假字节渲染不出来，
+ * 而这条用例恰恰要证明"AI 传的图在画布上真的显示出来了"。
+ */
+function makeTinyPng(): Uint8Array {
+  const b64 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  return new Uint8Array(Buffer.from(b64, 'base64'))
+}
+
+/** 读服务器磁盘上的 kv 文件 */
+/** 读磁盘上的画布文件夹（一个画布一个文件夹：nodes 与 edges 同住 canvas.json） */
+function diskState(dataDir: string): { nodes: unknown[] | null; edges: unknown[] | null } {
+  const file = path.join(dataDir, 'canvases', 'default', 'canvas.json')
+  if (!exists(file)) return { nodes: null, edges: null }
+  const raw = JSON.parse(readFileSync(file, 'utf8')) as { nodes?: unknown[]; edges?: unknown[] }
+  return { nodes: raw.nodes ?? null, edges: raw.edges ?? null }
+}
+
+function exists(p: string): boolean {
+  try {
+    statSync(p)
+    return true
+  } catch {
+    return false
+  }
+}
+
+main().catch((err: unknown) => {
+  console.error('\nMCP 端到端脚本崩了: ' + (err instanceof Error ? err.stack : String(err)))
+  process.exit(1)
+})

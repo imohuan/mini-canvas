@@ -1,0 +1,48 @@
+{
+  "name": "@plume-canvas/plugin-node-3d-preview",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "plume": {
+    "title": "3D 预览节点",
+    "description": "接一张图看 360° 全景（拖拽转向 / 滚轮缩放 / 重置）",
+    "pluginName": "3d-preview",
+    "builtin": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
+    "three": "^0.184.0"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "@plume-canvas/plugin-theme-components": "workspace:*"
+  }
+}

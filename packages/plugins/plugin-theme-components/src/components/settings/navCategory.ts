@@ -26,7 +26,7 @@
  */
 
 import type { Component } from 'vue'
-import { SETTINGS_NAV_ICON_FALLBACK } from '@plume-canvas/theme-contract'
+import { SETTINGS_NAV_ICON_FALLBACK } from './navIconTable'
 
 /** 没写分类时落在这里 */
 export const DEFAULT_SETTINGS_CATEGORY = '常规'

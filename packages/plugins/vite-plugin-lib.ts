@@ -23,7 +23,7 @@ import { basename, dirname } from 'node:path'
 /**
  * 依赖 → 宿主 window 上的全局名（唯一事实源）。
  *
- * ui 侧必须按同一张表把这些挂到 window（见 packages/ui/src/sharedGlobals.ts）——
+ * ui 侧必须按同一张表把这些挂到 window（见 apps/web/src/sharedGlobals.ts）——
  * 名字两边写岔，插件加载时会以"找不到依赖"直接炸，而单测/类型检查都发现不了。
  * ui 的 externalPluginGlobals 测试会逐条核对这张表与 sharedGlobals 一致。
  */
@@ -33,17 +33,14 @@ export const HOST_GLOBALS: Record<string, string> = {
   // 注：three 暂不在表里 —— 只有 plugin-node-3d-preview 用，而它是随应用自带的节点插件
   //（不是 installable）。真要让 3D 预览也可装卸时，这里加 three: 'THREE'，
   // 并同步给 ui 的 sharedGlobals 挂上（那条守卫测试会立刻要求两边一致）。
-  'prosemirror-editor-bundle': 'ProseMirrorEditorBundle',
+  '@plume-canvas/editor': 'ProseMirrorEditorBundle',
   '@plume-canvas/kernel': 'PlumeKernel',
-  '@plume-canvas/canvas-base': 'PlumeBase',
+  '@plume-canvas/plugin-sdk': 'PlumeBase',
   '@plume-canvas/canvas-data': 'PlumeCore',
   '@plume-canvas/canvas-render': 'PlumeRender',
   // 组件库（shadcn-vue 原始件）：插件直接 import Button，靠宿主这一份实例渲染。
   // 打进插件会变成两份组件定义 + 两份样式，主题与 Tailwind 类都对不上。
-  '@plume-canvas/ui-kit-shadcn': 'PlumeUiKit',
-  // 主题契约（纯数据/纯函数）：两个主题包与业务插件都可能读同一张默认值表，
-  // 多份实例会出现"两个真相"，所以和其它 @plume-canvas/* 一样由宿主提供。
-  '@plume-canvas/theme-contract': 'PlumeThemeContract',
+  '@plume-canvas/ui-kit': 'PlumeUiKit',
 }
 
 /** 一律 external 的依赖（键即模块名） */

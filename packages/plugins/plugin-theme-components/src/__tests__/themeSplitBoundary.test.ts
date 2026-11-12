@@ -1,5 +1,5 @@
 /**
- * 拆包边界守卫：两个主题包互不 import，只共享 @plume-canvas/theme-contract 的纯数据。
+ * 拆包边界守卫：两个主题包互不 import；启动默认值住在引擎 @plume-canvas/canvas-render。
  *
  * 为什么钉成测试：拆包的目标是让项目页只启动通用组件、画布外观进画布才启动。
  * 一旦 components 为了某个组件去 import canvas（或反过来），两个包就重新焊在一起，
@@ -13,8 +13,6 @@ import { fileURLToPath } from 'node:url'
 const here = dirname(fileURLToPath(import.meta.url))
 const pkgDir = resolve(here, '../..')
 const pluginsDir = resolve(pkgDir, '..')
-const repo = resolve(pluginsDir, '../..')
-
 interface Pkg {
   name: string
   dependencies?: Record<string, string>
@@ -56,16 +54,17 @@ describe('主题拆包边界', () => {
     }
   })
 
-  it('主题契约包只有纯 TS：不 import .vue', () => {
-    const contractDir = join(repo, 'packages/theme-contract/src')
-    for (const file of collectSources(contractDir)) {
-      expect(file.endsWith('.vue'), file).toBe(false)
-      expect(readFileSync(file, 'utf8'), file).not.toMatch(/from ['"][^'"]+\.vue['"]/)
-    }
-  })
-
   it('旧聚合入口 theme-default 已删除（不留兼容壳）', () => {
     expect(() => statSync(join(pluginsDir, 'plugin-theme-default'))).toThrow()
+  })
+
+  it('不再引用已删除的 theme-contract 包', () => {
+    for (const file of collectSources(join(pkgDir, 'src'))) {
+      for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+        if (!/^\s*(import|export)\b/.test(line)) continue
+        expect(line, file).not.toContain('@plume-canvas/theme-contract')
+      }
+    }
   })
 })
 

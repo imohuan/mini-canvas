@@ -25,7 +25,7 @@ export interface AgentNotifyPrefs {
 /**
  * 缺省（KV 里没这个键 / 字段不是布尔）时回落的默认值 —— **必须与设置弹窗对齐**。
  *
- * 对齐的是 packages/ui/src/composables/agentSettings.ts 的 `DEFAULT_AGENT_NOTIFY`：
+ * 对齐的是 apps/web/src/composables/agentSettings.ts 的 `DEFAULT_AGENT_NOTIFY`：
  * 那个弹窗读不到键时显示的是「开」（绿色开关）。曾经这里回落「关」，于是用户看到
  * 开关本来就是开的、没有理由再去点它，后台就**永远**没有这个键，这里就**永远**读到关，
  * 通知一次都不弹（用户报的「通知没效果」正是它）。
@@ -68,7 +68,7 @@ export function parseNotifyPrefs(raw: unknown): AgentNotifyPrefs {
   return { notify, sound }
 }
 
-/** 通知开关的键名（与 packages/ui/src/composables/agentSettings.ts 钉死同一份，别自创） */
+/** 通知开关的键名（与 apps/web/src/composables/agentSettings.ts 钉死同一份，别自创） */
 const NOTIFY_KEY = 'agentNotify'
 
 /**

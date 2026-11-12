@@ -7,7 +7,7 @@
  */
 import { computed } from 'vue'
 import type { Component } from 'vue'
-import { Button } from '@plume-canvas/ui-kit-shadcn'
+import { Button } from '@plume-canvas/ui-kit'
 import { asSettingsIcon } from './navCategory'
 
 const props = defineProps<{

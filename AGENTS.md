@@ -17,18 +17,18 @@ Plume（羽画，命令行与包名 `plume-canvas`）是一个可扩展的画布
 
 | 包 | 作用 |
 |---|---|
-| `packages/kernel` | 纯插件框架：装载、依赖、事件、作用域回收、注册表。没有画布概念，也不依赖 Vue。 |
-| `packages/canvas-data` | 数据层和画布语义：`doc` 数据门面、节点/边、保存、撤销、选中、连接校验、节点注册。 |
-| `packages/canvas-render` | 渲染层：VueFlow 宿主、DOM、注入令牌、节点布局和视口。 |
-| `packages/canvas-base` | 给插件作者的薄入口，重导出 kernel 和 canvas-data 的类型与常用 API。 |
-| `packages/ui` | 成品应用：装配插件、路由、外壳和设置面板，开发时用 `pnpm dev` 打开画布。 |
+| `packages/engine/kernel` | 纯插件框架：装载、依赖、事件、作用域回收、注册表。没有画布概念，也不依赖 Vue。 |
+| `packages/engine/canvas-data` | 数据层和画布语义：`doc` 数据门面、节点/边、保存、撤销、选中、连接校验、节点注册。 |
+| `packages/engine/canvas-render` | 渲染层：VueFlow 宿主、DOM、注入令牌、节点布局和视口。 |
+| `packages/libs/plugin-sdk` | 给插件作者的薄入口，重导出 kernel 和 canvas-data 的类型与常用 API。 |
+| `apps/web` | 成品应用：装配插件、路由、外壳和设置面板，开发时用 `pnpm dev` 打开画布。 |
 | `packages/plugins/*` | 插件库，当前 37 个插件包，包含主题、节点、工具、Agent、插件管理等。四套开发演示合并为 `plugin-demo-kit`（可安装件，不随产品冷启动）。 |
-| `packages/cloud-server` | 自托管云端：画布与资源存储、静态页面托管、MCP 接口。Agent 后台实现住在 `plugin-agent`，这里只做装配与端口注入。 |
-| `packages/docs` | VitePress 文档站，默认端口 5290。 |
-| `packages/prosemirror-editor-bundle` | 富文本编辑器组件包，供文本节点使用。 |
+| `apps/server` | 自托管云端：画布与资源存储、静态页面托管、MCP 接口。Agent 后台实现住在 `plugin-agent`，这里只做装配与端口注入。 |
+| `apps/docs` | VitePress 文档站，默认端口 5290。 |
+| `packages/libs/editor` | 富文本编辑器组件包，供文本节点使用。 |
 
 `backup/canvas-core` 是已移出的 v1 老版内核，**不再参与构建，也不作为示例**。
-`backup/mcp-server` 是已移出的旧 MCP 后端，当前开发以 `packages/cloud-server` 为准。
+`backup/mcp-server` 是已移出的旧 MCP 后端，当前开发以 `apps/server` 为准。
 根目录的 `src/` 是 v1 老版宿主，不碰。
 
 ## 三、开发流程
@@ -108,7 +108,7 @@ pnpm -C packages/ui typecheck
 
 | 文档 | 写在哪里 | 写什么 |
 | --- | --- | --- |
-| 正式文档 | `packages/docs/`（VitePress 文档站，:5290） | 给用户看的最新功能、完整用法、案例教程、组件说明。功能开发完、行为更新后，用户需要知道的新用法写到这里。 |
+| 正式文档 | `apps/docs/`（VitePress 文档站，:5290） | 给用户看的最新功能、完整用法、案例教程、组件说明。功能开发完、行为更新后，用户需要知道的新用法写到这里。 |
 | 开发过程文档 | 历史归档在 `backup/docs-2026-11-03/`；新问题整理放 `docs/问题整理/` | 计划、调研、方案比较、排障记录、迁移说明、临时笔记和历史记录。只给开发者查，不挂进 VitePress。 |
 
 正式文档讲「现在怎么用」，开发过程文档讲「当时怎么想、怎么做的」。
@@ -121,11 +121,11 @@ pnpm -C packages/ui typecheck
 
 | 文档类型 | 位置 | 挂侧边栏 |
 | --- | --- | --- |
-| 案例教程（照抄能跑） | `packages/docs/examples/<编号>-<名字>.md` | `.vitepress/config.ts` 的 `examplesSidebar` 加一行 |
-| 概念讲解 | `packages/docs/intro/` `start/` `kernel/` `canvas-data/` `canvas-render/` `theme/` | `config.ts` 的 `guideSidebar` 加一行 |
-| 组件说明 | `packages/docs/plugins/theme-components/<组件名>.md` | `config.ts` 的 `pluginsSidebar` 对应分组加一行 |
-| 插件能力解析 | `packages/docs/plugins/parsed/<插件>/index.md` + 子页 | **不用改**：构建时扫目录自动生成 |
-| 速查表入口 | `packages/docs/examples/recipe-map.md` 的表加一行 | — |
+| 案例教程（照抄能跑） | `apps/docs/examples/<编号>-<名字>.md` | `.vitepress/config.ts` 的 `examplesSidebar` 加一行 |
+| 概念讲解 | `apps/docs/intro/` `start/` `kernel/` `canvas-data/` `canvas-render/` `theme/` | `config.ts` 的 `guideSidebar` 加一行 |
+| 组件说明 | `apps/docs/plugins/theme-components/<组件名>.md` | `config.ts` 的 `pluginsSidebar` 对应分组加一行 |
+| 插件能力解析 | `apps/docs/plugins/parsed/<插件>/index.md` + 子页 | **不用改**：构建时扫目录自动生成 |
+| 速查表入口 | `apps/docs/examples/recipe-map.md` 的表加一行 | — |
 | 开发过程文档（计划、调研、排障） | 历史在 `backup/docs-2026-11-03/`，新问题在 `docs/问题整理/` | 不挂：只给开发者查 |
 
 侧边栏显示名 = 页面 H1（插件解析页）。其它分组改标题只改页面，不改 config；
@@ -228,7 +228,7 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
 
 ## 十、找文档
 
-- 正式文档（最新功能与用法）：`packages/docs/`
+- 正式文档（最新功能与用法）：`apps/docs/`
 - 开发过程文档（计划、调研、排障、历史）：`backup/docs-2026-11-03/`
 - 新问题整理：`docs/问题整理/`
 - 问题整理技能：`.codex/skills/issue-briefing/SKILL.md`

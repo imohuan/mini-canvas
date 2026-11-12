@@ -3,7 +3,7 @@
  * SettingsSchemaField —— 单个配置项的控件（默认设置皮的字段级 UI）。
  *
  * 只负责按 schema 画一种控件并提交值，不背分组和页面排版。
- * 控件统一用 @plume-canvas/ui-kit-shadcn 的原始组件：
+ * 控件统一用 @plume-canvas/ui-kit 的原始组件：
  * Switch / Select / Input / Slider / NumberField / ColorPicker。
  *
  * 数字项统一「滑块 + 数字框（带 - / +）」：没有退化成纯输入的例外分支。
@@ -32,9 +32,9 @@ import {
   SelectValue,
   Slider,
   Switch,
-} from '@plume-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit'
 import { Minus, Plus } from 'lucide-vue-next'
-import { componentConfig } from '@plume-canvas/ui-kit-shadcn'
+import { componentConfig } from '@plume-canvas/ui-kit'
 import ShadcnSettingsRow from './ShadcnSettingsRow.vue'
 import ThemeFontField from './ThemeFontField.vue'
 import ThemeRadiusField from './ThemeRadiusField.vue'

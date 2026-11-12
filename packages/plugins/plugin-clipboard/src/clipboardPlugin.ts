@@ -15,8 +15,8 @@
  * 依赖注入：doc/selection 为宿主恒在硬依赖（canvas-data 能力层内置 + 宿主注入）;
  * viewport 由 canvas-render 宿主注入、本插件只做"可选读取"（复制时把最近鼠标屏幕坐标经它换成 flow 锚点）。
  */
-import { Service, type Context, type PluginModule } from '@plume-canvas/canvas-base'
-import { registerEventName } from '@plume-canvas/canvas-base'
+import { Service, type Context, type PluginModule } from '@plume-canvas/plugin-sdk'
+import { registerEventName } from '@plume-canvas/plugin-sdk'
 import type { DocService, SelectionService, CanvasNode } from '@plume-canvas/canvas-data'
 import {
   CLIPBOARD_COPY_KIND,

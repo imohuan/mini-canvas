@@ -34,7 +34,7 @@ describe('设置页快捷键配置数据', () => {
   })
 
   it('设置菜单是配置页，不再只广播动作；插件注册 settings.nav 页面', () => {
-    const menu = readFileSync(new URL('../../../../plugins/plugin-theme-components/src/components/settings/defaultMenu.ts', import.meta.url), 'utf-8')
+    const menu = readFileSync(new URL('../../../../packages/plugins/plugin-theme-components/src/components/settings/defaultMenu.ts', import.meta.url), 'utf-8')
     // 「个人 / 外观」合并成「常规」后，「主题」也进了这一段，快捷键排在它后面。
     expect(menu).toMatch(/id: 'nav\/personal\/shortcuts'[^\n]*title: '快捷键'/)
     expect(menu).not.toMatch(/id: 'nav\/personal\/shortcuts'[^\n]*action:/)

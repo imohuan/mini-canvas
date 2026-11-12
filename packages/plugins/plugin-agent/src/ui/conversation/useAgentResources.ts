@@ -6,7 +6,7 @@
 import { computed, h, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Box, Sparkles, WandSparkles } from 'lucide-vue-next'
 import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
-import { registerItem, type ResourceItem } from 'prosemirror-editor-bundle'
+import { registerItem, type ResourceItem } from '@plume-canvas/editor'
 import {
   skillResources,
   mcpResources,

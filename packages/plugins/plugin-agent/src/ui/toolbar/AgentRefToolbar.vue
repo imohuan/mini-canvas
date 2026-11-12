@@ -53,7 +53,7 @@ function onReference(): void {
 <template>
   <!--
     定位与「整排一个背景块」由宿主的 .selection-frame-slot + .ntp-root 规则统一提供
-    （见 plugin-multi-select 的 SelectionFrame 与 packages/ui/src/app.css）——
+    （见 plugin-multi-select 的 SelectionFrame 与 apps/web/src/app.css）——
     与「加入资产库」按钮逐字同形：这里只放按钮本身，不再自套一层 .ntp-root
     （再套一层会画出第二个背景块，用户报过「两个背景」）。
   -->

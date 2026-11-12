@@ -1,7 +1,7 @@
 /**
  * uniqueLabel —— 给**重复的节点名**算一个不撞的后缀（纯函数，可单测）。
  *
- * 与 packages/ui/src/composables/nodeLabel.ts **同一套规则**，为什么要两个文件：
+ * 与 apps/web/src/composables/nodeLabel.ts **同一套规则**，为什么要两个文件：
  * 插件后台半是**外挂单文件**（打成 dist/server.js 后 import(data:URL) 加载），
  * 不能 import 工作区包（data: URL 里解析不了裸模块名，见 build-server.mjs 的说明）；
  * 而 ui 侧也不能 import 这个插件（会把 node 逻辑拖进浏览器包）。

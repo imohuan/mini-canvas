@@ -14,7 +14,7 @@
  */
 import { computed, nextTick, ref, watch } from 'vue'
 import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
-import type { NotifyContract } from '@plume-canvas/canvas-base'
+import type { NotifyContract } from '@plume-canvas/plugin-sdk'
 import {
   addPreset,
   createTypedPreset,

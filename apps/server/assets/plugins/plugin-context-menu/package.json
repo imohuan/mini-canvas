@@ -1,0 +1,48 @@
+{
+  "name": "@plume-canvas/plugin-context-menu",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "plume": {
+    "title": "右键菜单",
+    "description": "空白新建节点 / 节点删除 / 边删除",
+    "pluginName": "context-menu",
+    "builtin": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "typecheck:vue": "vue-tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
+  },
+  "peerDependencies": {
+    "@plume-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}

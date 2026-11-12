@@ -10,8 +10,8 @@
  * 而组件只管渲染与交互（「算得对不对」与「画得对不对」分开，出问题时能立刻定位是哪一层）。
  */
 import { resolveToolParams, resolveToolTemplates, type ToolDef, type ToolInput, type ToolResource, type ToolResourceKind } from '@plume-canvas/kernel'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
-import type { TagMatch, TagSpec } from 'prosemirror-editor-bundle'
+import type { ResourceItem } from '@plume-canvas/editor'
+import type { TagMatch, TagSpec } from '@plume-canvas/editor'
 import { h } from 'vue'
 import { refNodeChipId, refNameChipId, normalizeRefName } from './refSlots'
 

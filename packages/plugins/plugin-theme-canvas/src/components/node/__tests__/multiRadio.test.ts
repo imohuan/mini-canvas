@@ -15,7 +15,7 @@ import {
   resolveMultiRadio,
   applyMultiRadioChange,
   multiRadioStyle,
-} from '@plume-canvas/theme-contract'
+} from '../../../theme/multiRadio'
 
 describe('resolveMultiRadio：从配置读外观', () => {
   it('一项都没有 → 全用默认值（大小 18、低缩放不显示）', () => {

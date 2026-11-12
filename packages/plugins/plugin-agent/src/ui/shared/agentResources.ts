@@ -10,7 +10,7 @@
  * 拿不到 Vue 组件实例；字符串是两边都能用的形式。
  */
 import { h, type VNode } from 'vue'
-import { REF_ICONS, REF_KIND_ICONS, type ResourceItem } from 'prosemirror-editor-bundle'
+import { REF_ICONS, REF_KIND_ICONS, type ResourceItem } from '@plume-canvas/editor'
 import type { McpRow, SkillRow } from '../../service/agentService.js'
 import { mediaKindOfExt } from './agentChipThumbs.js'
 

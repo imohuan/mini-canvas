@@ -10,7 +10,7 @@
  * 音频节点由音频插件自己负责字段（resourceId / audioName / audioDuration），
  * 视频插件不替它写 —— 两者只通过 media 能力（kind = 'audio'）协作，互不 import。
  */
-import type { Context } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/plugin-sdk'
 import { canCropOnBackend, extractAudioOnBackend } from './videoCropService'
 import { resolveVideoSrc } from './videoRefs'
 import { placeAdjacent } from '@plume-canvas/canvas-render'

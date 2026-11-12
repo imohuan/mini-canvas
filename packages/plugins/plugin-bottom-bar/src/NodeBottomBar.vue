@@ -7,14 +7,14 @@
  * 文案与执行顺序保持不变。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { registerTagSpec } from 'prosemirror-editor-bundle'
+import { registerTagSpec } from '@plume-canvas/editor'
 import './node-bottom-bar/bottom-bar-layout.css'
 import './node-bottom-bar/bottom-bar-cards.css'
 import './node-bottom-bar/bottom-bar-tagmenu.css'
 import './node-bottom-bar/bottom-bar-editor-footer.css'
 import './node-bottom-bar/bottom-bar-preview.css'
 import { useCanvasRender, useGenPanelMetrics, useSoleNodeSelected, useUiComponent, RenderEvents, LAYERS, type FeedbackService } from '@plume-canvas/canvas-render'
-import type { NotifyContract } from '@plume-canvas/canvas-base'
+import type { NotifyContract } from '@plume-canvas/plugin-sdk'
 import type { ToolParamDef } from '@plume-canvas/kernel'
 import type { PromptPreset } from './promptPresets'
 import { bottomBarTagSpecFor, toToolResources } from './panelSource'
@@ -353,7 +353,7 @@ const {
 } = materialApi
 
 const editorComponentRef = ref<BottomBarEditorHandle | null>(null)
-let openTagMenuRef: (item: import('prosemirror-editor-bundle').ResourceItem, anchor: { left: number; top: number; right: number; bottom: number }) => void = () => {}
+let openTagMenuRef: (item: import('@plume-canvas/editor').ResourceItem, anchor: { left: number; top: number; right: number; bottom: number }) => void = () => {}
 
 const cardApi = useBottomBarCards({
   ctx,

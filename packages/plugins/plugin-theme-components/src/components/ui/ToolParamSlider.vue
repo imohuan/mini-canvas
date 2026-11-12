@@ -25,7 +25,7 @@ import {
   NumberFieldIncrement,
   NumberFieldInput,
   Slider,
-} from '@plume-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit'
 
 const props = withDefaults(
   defineProps<{

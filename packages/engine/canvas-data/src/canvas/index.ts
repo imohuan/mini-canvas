@@ -1,0 +1,205 @@
+/**
+ * canvas —— 画布语义层（零 Vue，纯逻辑）。
+ *
+ * 这一层把"通用插件内核"长成一个画布引擎：
+ * - 画布能力段：ctx.nodes / ctx.theme / ctx.commands（由 capabilities.ts 收口）
+ * - 注册表：节点展示段（nodeRegistry/nodeRenderer）、主题/外观槽（themeRegistry）
+ * - 画布规则：连接校验（connection）、建节点（nodeFactory）
+ * - 画布上下文：Context（继承 kernel 的 Context 并默认装画布能力层）
+ *
+ * 依赖：kernel（插件框架 + tools/command/iconKind）+ 本包数据层（../nodeStore 等）。
+ */
+export { createCanvasCapabilityLayer } from './capabilityLayer'
+export { buildCapabilities } from './capabilities'
+export type { NodeRegisterDef, ThemeOccupantOpts, SlotRegisterReq } from './capabilities'
+
+// 剪贴板多路仲裁（注册场 clipboard/copy|cut|paste）：复制/粘贴按 order 仲裁的纯逻辑契约。
+// 宿主绑各一个原生 copy/cut/paste 监听，按 order 问各处理器谁接管（见 clipboardActions 头注释）。
+export {
+  CLIPBOARD_COPY_KIND,
+  CLIPBOARD_COPY_KEY,
+  CLIPBOARD_CUT_KEY,
+  CLIPBOARD_PASTE_KIND,
+  CLIPBOARD_PASTE_KEY,
+  CANVAS_CLIPBOARD_MIME,
+  CANVAS_CLIPBOARD_TEXT_PREFIX,
+  CANVAS_CLIPBOARD_PAYLOAD_VERSION,
+  buildClipboardWritePayload,
+  buildClipboardPastePayload,
+  dispatchClipboardWrite,
+  dispatchClipboardPaste,
+  hasCanvasClipboardMarker,
+  canvasClipboardMarker,
+  canvasClipboardPayload,
+  parseCanvasClipboardText,
+  readCanvasClipboardPayload,
+} from './clipboardActions'
+export type {
+  ClipboardEntry,
+  ClipboardWriteHandler,
+  ClipboardWritePayload,
+  ClipboardPasteHandler,
+  ClipboardPastePayload,
+  CanvasClipboardPayload,
+} from './clipboardActions'
+
+// 画布基础服务的集中类型登记（T03）：让按名调用（ctx.get('doc') 等）自带类型
+import './serviceTypes'
+
+// 渲染层内置服务（view / canvas 及迁移期别名）的纯结构契约（作者 SDK 类型面，零 Vue/零 VueFlow）
+export type {
+  CanvasActions,
+  CanvasCreateNodeOptions,
+  CanvasSelectMode,
+  FitToOptions,
+  FocusPadding,
+  FocusInsets,
+  FocusTarget,
+  NodeLayoutContract,
+  ViewContract,
+  ViewportContract,
+  LayoutRect,
+  ViewportState,
+  FlowPoint,
+} from './renderServiceContracts'
+export type {
+  NotifyContract,
+  NotifyKind,
+  NotifyMessage,
+  NotifyOptions,
+} from './notifyContract'
+
+// 底栏动作的纯类型契约（作者 SDK 类型面）：插件经 ctx.get('nodeBar') 注册，不 import 底栏插件。
+export type {
+  BarAction,
+  BarApplier,
+  BarRunContext,
+  BarRunInput,
+  NodeBarContract,
+  PublishToolActionsOptions,
+} from './barContract'
+export { barToolToAction } from './barContract'
+
+export { Context, canvasCapabilityLayer } from './context'
+
+// 设置菜单：0/1/2 级由插件各自注册；order 小者赢并排前面，before/after 只改位置
+export { SettingsMenuRegistry } from './settingsMenu'
+export type {
+  SettingsCategoryDef,
+  SettingsNavDef,
+  SettingsSectionDef,
+  SettingsMenuCategory,
+  SettingsMenuNav,
+  SettingsMenuSection,
+  SettingsMenuIssue,
+  SettingsMenuIssueKind,
+  SettingsMenuView,
+  SettingsMenuScope,
+} from './settingsMenu'
+
+export { NodeRegistry } from './registry/nodeRegistry'
+export type { NodePresentation, NodeSegment, NodeSegmentContribution } from './registry/nodeRegistry'
+export {
+  resolveSegment,
+  hasContent,
+  activeSegments,
+  nodeSegmentStack,
+  nodeSegmentStackEntries,
+} from './registry/nodeRenderer'
+export type { NodeSegmentEntry } from './registry/nodeRenderer'
+export {
+  NODE_REGIONS,
+  isRegion,
+  assertRegion,
+  regionKey,
+  nodeRegionStackEntries,
+} from './region'
+export { RETIRED_SEGMENT_NAMES, RETIRED_CONTENT_FIELD, isRetiredSegmentName } from './region'
+export type { NodeRegion, NodeRegionAttachment } from './region'
+export { registerNodeType } from './registry/registerNodeType'
+export type { NodeTypeDef } from './registry/registerNodeType'
+
+// 节点数据契约（produces/consumes）与上游遍历（纯函数，前端/后台共用）
+export {
+  DataPortError,
+  assertDataPortDef,
+  assertDataPorts,
+  readDataPort,
+  isResourceRefValue,
+} from './dataPorts'
+export type { DataPortDef, NodeDataTypeDef } from './dataPorts'
+export {
+  GROUP_NODE_TYPE,
+  UpstreamCycleError,
+  buildParentIndex,
+  directUpstreamOf,
+  collectAncestors,
+  topoOrderFrom,
+  upstreamDepth,
+} from './upstreamGraph'
+export type {
+  GraphNodeLike,
+  GraphEdgeLike,
+  UpstreamGraphInput,
+  UpstreamTraversalOptions,
+} from './upstreamGraph'
+export { ThemeRegistry } from './registry/themeRegistry'
+export type { ThemeSlot, ThemePresentation, ThemeOccupantRequest } from './registry/themeRegistry'
+export { registerThemeSlot } from './registry/registerThemeSlot'
+
+export {
+  normalizeConnection,
+  toCanonicalConnection,
+  getCanonicalEndpoints,
+  wouldCreateCycle,
+  isSameConnection,
+  findDuplicate,
+  validateConnection,
+  typeConnectionDef,
+  resolveTargetInputPort,
+  resolveSourceOutputPort,
+} from './connection'
+export type {
+  ConnectionInput,
+  ExistingEdge,
+  NormalizedConnection,
+  CanonicalEndpoints,
+  PortDef,
+  NodeConnectionDef,
+  ValidateContext,
+  InvalidReason,
+  ValidationResult,
+} from './connection'
+
+// 画布通用命令（建节点/删选中/撤销/重做）——宿主 boot 时经 registerCanvasCommands 注册
+export { registerCanvasCommands, CANVAS_COMMAND } from './canvasCommands'
+// 命令运行时句柄（基础插件绑定；canvas 门面 / 宿主键盘分发用，不占服务名）
+export { commandRuntime, commandService, setCommandRuntime, clearCommandRuntime } from './commandRuntime'
+export type { CommandRuntime } from './commandRuntime'
+export { canvasRuntime, setCanvasRuntime } from './canvasRuntime'
+export type { CanvasRuntime } from './canvasRuntime'
+export type { CanvasCommandServices } from './canvasCommands'
+
+// 画布基础装配插件（步骤 4：把 15 行 ctx.inject 收进一个 core 插件；宿主只负责"建 ctx → 装它 → 装业务插件"）
+export { createCanvasBasePlugin, CANVAS_BASE_PLUGIN_NAME } from './canvasBasePlugin'
+export type { CanvasBaseAssembly, CanvasBaseOptions, CanvasBaseServices } from './canvasBasePlugin'
+
+// 应用级底座：根级 Provider 常驻的那一层（save / resources / 注册表容器 / 配置桥）。
+// 插件名就是 `canvas-base`（分层名）；它和下面的 `canvas-data` 会话插件组合起来才是完整画布。
+export {
+  createCanvasAppBasePlugin,
+  CANVAS_APP_BASE_PLUGIN_NAME,
+} from './canvasAppBasePlugin'
+export type {
+  CanvasAppBaseAssembly,
+  CanvasAppBaseOptions,
+  CanvasAppBaseServices,
+} from './canvasAppBasePlugin'
+
+// 画布数据会话插件：doc / selection / 历史 / 图写入 / 节点工厂（可装卸，插件名 `canvas-data`）。
+// 进入画布装它、离开画布卸它；依赖 doc 的业务插件由内核自动在 PENDING 与 active 之间切换。
+export { createCanvasDataPlugin, CANVAS_DATA_PLUGIN_NAME } from './canvasDataPlugin'
+export type { CanvasDataAssembly } from './canvasDataPlugin'
+
+export { NodeFactory } from './nodeFactory'
+export type { NodeCreator, NodeFactoryService } from './nodeFactory'

@@ -7,7 +7,7 @@ import {
   baseOfCatalogUrl,
   type CreateServiceOptions,
 } from '../pluginManagerService'
-import { ADMIN_TOKEN_HEADER, setAdminToken, type PluginModule } from '@plume-canvas/canvas-base'
+import { ADMIN_TOKEN_HEADER, setAdminToken, type PluginModule } from '@plume-canvas/plugin-sdk'
 
 /** 最小的 localStorage 替身（Node 里没有 DOM；令牌读写走全局 localStorage） */
 class MemoryStorage {

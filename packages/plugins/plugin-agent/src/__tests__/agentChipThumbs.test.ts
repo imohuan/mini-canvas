@@ -13,7 +13,7 @@ import {
   mediaKindOfExt,
   __clearAgentChipThumbs,
 } from '../ui/shared/agentChipThumbs'
-import type { Context } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/plugin-sdk'
 
 /** 造一个只实现 tryGet 的最小 ctx（本模块只需要它找 video 服务） */
 function ctxWith(video: unknown): Context {

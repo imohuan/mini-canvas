@@ -9,7 +9,7 @@ import {
   resolveMultiRadio,
   applyMultiRadioChange,
   MULTI_RADIO_KEY_SET,
-} from '@plume-canvas/theme-contract'
+} from '../../../theme/multiRadio'
 
 type SettingsStoreLike = {
   get(key: string): unknown

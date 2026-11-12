@@ -12,7 +12,7 @@
 import { computed, onMounted } from 'vue'
 import { useCanvasContextOrRender, useUiComponent } from '@plume-canvas/canvas-render'
 import type { FeedbackService } from '@plume-canvas/canvas-render'
-import type { NotifyContract } from '@plume-canvas/canvas-base'
+import type { NotifyContract } from '@plume-canvas/plugin-sdk'
 import { createProviderManagerService, type ProviderRow } from '../../providerManagerService'
 import ProviderIcon from './ProviderIcon.vue'
 

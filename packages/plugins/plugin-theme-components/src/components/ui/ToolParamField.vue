@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
   Switch,
-} from '@plume-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit'
 import { resolvePresetKind, resolveBaseControl, gridColumns } from './paramKind'
 import ToolOptionGrid from './ToolOptionGrid.vue'
 import ToolRatioGrid from './ToolRatioGrid.vue'

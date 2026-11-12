@@ -7,7 +7,7 @@
  * - 最短边不小于 videoCardMinShortSide（默认 120）；
  * - 两者冲突时最短边优先，最长边允许超上限。
  *
- * 算法本身在 `@plume-canvas/canvas-base` 的 mediaFit（图片、拖入、翻转共用同一份）。
+ * 算法本身在 `@plume-canvas/plugin-sdk` 的 mediaFit（图片、拖入、翻转共用同一份）。
  * 键名必须带本包前缀：内核 settings 是全局同一张表、先声明者独占，
  * 叫 "maxWidth" 这类通用名会和其他插件抢同一个键。
  *
@@ -22,7 +22,7 @@ import {
   readMediaCardLimits,
   resolveMediaCardLimits,
   type MediaCardLimits,
-} from '@plume-canvas/canvas-base'
+} from '@plume-canvas/plugin-sdk'
 
 /** 视频尺寸限制（最短边 / 最长边） */
 export type VideoFitLimits = MediaCardLimits

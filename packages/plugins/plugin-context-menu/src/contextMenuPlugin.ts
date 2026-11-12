@@ -17,7 +17,7 @@
  * 浏览器守卫：菜单浮层/DOM 绑定仅在浏览器装配（node 装配/测试安全跳过）；命令注册任何时候都做。
  */
 import { createApp, nextTick, reactive, type Component } from 'vue'
-import type { ConfigSchema, Context, PluginModule } from '@plume-canvas/canvas-base'
+import type { ConfigSchema, Context, PluginModule } from '@plume-canvas/plugin-sdk'
 import type { DocService, SelectionService } from '@plume-canvas/canvas-data'
 import type { CommandService } from '@plume-canvas/kernel'
 import type { CanvasActions } from '@plume-canvas/canvas-data'

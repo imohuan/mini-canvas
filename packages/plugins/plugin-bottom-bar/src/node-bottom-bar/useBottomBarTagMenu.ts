@@ -1,6 +1,6 @@
 import { computed, nextTick, ref, watch } from 'vue'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
-import { setChipEditing } from 'prosemirror-editor-bundle'
+import type { ResourceItem } from '@plume-canvas/editor'
+import { setChipEditing } from '@plume-canvas/editor'
 import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import type { UpstreamMaterial } from '../panelSource'
 import { nodeIdOfChip } from '../refSlots'

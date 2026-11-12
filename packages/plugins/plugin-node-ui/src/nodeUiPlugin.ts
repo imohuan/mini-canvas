@@ -25,7 +25,7 @@
  * 只依赖内核（canvas-base / canvas-data）+ 渲染层；**不 import 底栏、不 import Agent**。
  * 与 Agent 的协作走「服务 + 命令」这两条公开缝：Agent 调得到我们，我们不需要认识它。
  */
-import { Service, type Context, type ConfigSchema, bindTypeDefaultSize, type PluginModule } from '@plume-canvas/canvas-base'
+import { Service, type Context, type ConfigSchema, bindTypeDefaultSize, type PluginModule } from '@plume-canvas/plugin-sdk'
 import type { DocService } from '@plume-canvas/canvas-data'
 import { extractHtml, normalizeInputs, normalizeUpstream, type UiInputDecl } from './uiData'
 import DebugBadge from './DebugBadge.vue'

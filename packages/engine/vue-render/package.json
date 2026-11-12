@@ -1,0 +1,78 @@
+{
+  "name": "@plume-canvas/vue-render",
+  "version": "0.0.0",
+  "private": false,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./components/slotComposer": {
+      "types": "./src/components/slotComposer.ts",
+      "default": "./src/components/slotComposer.ts"
+    },
+    "./context": {
+      "types": "./src/context.ts",
+      "default": "./src/context.ts"
+    },
+    "./components/settingsSource": {
+      "types": "./src/components/settingsSource.ts",
+      "default": "./src/components/settingsSource.ts"
+    },
+    "./components/settingsPanelTypes": {
+      "types": "./src/components/settingsPanelTypes.ts",
+      "default": "./src/components/settingsPanelTypes.ts"
+    },
+    "./contracts/uiCatalog": {
+      "types": "./src/contracts/uiCatalog.ts",
+      "default": "./src/contracts/uiCatalog.ts"
+    },
+    "./contracts/feedback": {
+      "types": "./src/contracts/feedback.ts",
+      "default": "./src/contracts/feedback.ts"
+    },
+    "./contracts/layers": {
+      "types": "./src/contracts/layers.ts",
+      "default": "./src/contracts/layers.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "build": "vite build && vue-tsc -p tsconfig.build.json",
+    "prepack": "pnpm build"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./*": "./dist/*"
+    }
+  },
+  "peerDependencies": {
+    "vue": "^3.5.34"
+  },
+  "dependencies": {
+    "@plume-canvas/kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}

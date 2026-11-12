@@ -1,7 +1,7 @@
 /**
  * 插槽与工具栏演示（demo-kit 的一间展台，不做业务，只演示接线）。
  *
- * 它**不是**产品自带能力：默认不随 `packages/ui/src/assembly.ts` 冷启动，
+ * 它**不是**产品自带能力：默认不随 `apps/web/src/assembly.ts` 冷启动，
  * 而是随 demo-kit 由「设置 → 插件」装进来。
  *
  * 演示三件事：
@@ -17,7 +17,7 @@
  * 卸载 demo-kit：条目自动回收，画布回原样。
  */
 import { markRaw } from 'vue'
-import type { Context } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/plugin-sdk'
 import DemoTopEntry from './DemoTopEntry.vue'
 import DemoFeaturePanel from './DemoFeaturePanel.vue'
 import { closeDemoMode } from './demoMode'

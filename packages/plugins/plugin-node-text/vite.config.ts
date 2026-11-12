@@ -27,14 +27,14 @@ export default defineConfig({
         'vue',
         '@plume-canvas/canvas-data',
         '@plume-canvas/canvas-render',
-        'prosemirror-editor-bundle',
+        '@plume-canvas/editor',
       ],
       output: {
         globals: {
           vue: 'Vue',
           '@plume-canvas/canvas-data': 'PlumeCore',
           '@plume-canvas/canvas-render': 'PlumeRender',
-          'prosemirror-editor-bundle': 'ProseMirrorEditorBundle',
+          '@plume-canvas/editor': 'ProseMirrorEditorBundle',
         },
       },
     },

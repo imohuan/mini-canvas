@@ -18,7 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*"
   },
   "devDependencies": {

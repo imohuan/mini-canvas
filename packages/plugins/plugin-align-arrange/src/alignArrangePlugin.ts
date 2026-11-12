@@ -12,7 +12,7 @@
  * - align-arrange:distribute-h / align-arrange:distribute-v —— 等距分布
  * - align-arrange:compact-arrowleft/right/up/down —— 老版核心：沿方向紧凑推挤排列（Ctrl+方向键）
  */
-import type { ConfigSchema, Context, InferConfig, PluginModule } from '@plume-canvas/canvas-base'
+import type { ConfigSchema, Context, InferConfig, PluginModule } from '@plume-canvas/plugin-sdk'
 import type { DocService, SelectionService, CanvasNode } from '@plume-canvas/canvas-data'
 import {
   alignNodes,

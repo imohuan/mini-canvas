@@ -1,5 +1,5 @@
 import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
-import { withAdminToken } from '@plume-canvas/canvas-base'
+import { withAdminToken } from '@plume-canvas/plugin-sdk'
 import {
   UI_DEBUG_INVITE_KEY,
   appendSdkScript,

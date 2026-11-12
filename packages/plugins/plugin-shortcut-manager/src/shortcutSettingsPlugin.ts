@@ -8,7 +8,7 @@
  * - 登记 settings.nav 配置页；
  * - 把面板按名放进 ui 目录（主题按名取，业务插件之间零引用）。
  */
-import type { Context, PluginModule } from '@plume-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/plugin-sdk'
 import { commandRuntime } from '@plume-canvas/canvas-data'
 import SettingsShortcutPanel from './SettingsShortcutPanel.vue'
 import { ensureShortcutManager } from './ensureShortcutManager'

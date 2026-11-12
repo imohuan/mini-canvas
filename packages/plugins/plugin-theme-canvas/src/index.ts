@@ -7,12 +7,12 @@
  * 为什么 inject: ['doc']：这些槽最终都要挂在节点/画布上；没有 doc 时启动
  * 只会注册一堆取不到数据的组件，反而让 PENDING 状态更清楚。
  *
- * 与通用组件半边的关系：互不 import。共享的默认值与设置键在 @plume-canvas/theme-contract；
+ * 与通用组件半边的关系：互不 import。启动默认值与设置键在引擎 @plume-canvas/canvas-render；
  * 本包自己的 Config 只声明画布相关字段（端口 / 标题 / 吸附带 / 连线）。
  */
-import type { InferConfig, PluginModule, PluginScope } from "@plume-canvas/canvas-base"
+import type { InferConfig, PluginModule, PluginScope } from "@plume-canvas/plugin-sdk"
 import { NodeToolbarService } from "@plume-canvas/canvas-render"
-import { CanvasConfig } from "@plume-canvas/theme-contract"
+import { CanvasConfig } from "./config/canvasConfig"
 import BaseNode from "./components/node/BaseNode.vue"
 import CustomEdge from "./components/edge/CustomEdge.vue"
 import DefaultBackground from "./components/background/DefaultBackground.vue"
@@ -23,7 +23,7 @@ import NodeModeBottomBar from "./components/node/NodeModeBottomBar.vue"
 
 export const name = "theme-canvas"
 export const inject = ['doc'] as string[]
-/** 本包的配置声明：端口 / 标题 / 吸附带 / 连线（纯数据来自 theme-contract）。 */
+/** 本包的配置声明：端口 / 标题 / 吸附带 / 连线（默认值来自引擎 canvas-render）。 */
 export const Config = CanvasConfig
 
 export interface ThemeCanvasConfig extends InferConfig<typeof Config> {}

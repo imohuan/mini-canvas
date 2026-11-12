@@ -9,7 +9,7 @@
  */
 import { markRaw } from 'vue'
 import { Sparkles } from 'lucide-vue-next'
-import type { Context, PluginModule } from '@plume-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/plugin-sdk'
 import type { ConfigSchema } from '@plume-canvas/kernel'
 import ShowcaseNav from './components/ShowcaseNav.vue'
 import ShowcasePage from './components/ShowcasePage.vue'

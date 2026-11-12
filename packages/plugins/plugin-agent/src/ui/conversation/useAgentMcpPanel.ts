@@ -4,7 +4,7 @@
  * 纯拆分：从 useAgentConversation 原样搬出，语句与顺序不变。
  */
 import { computed, ref } from 'vue'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
+import type { ResourceItem } from '@plume-canvas/editor'
 import type { AgentService } from '../../service/types.js'
 import type { AgentServiceState } from '../../service/types.js'
 import { mcpResources, mcpToolResource } from '../../ui/shared/agentResources.js'

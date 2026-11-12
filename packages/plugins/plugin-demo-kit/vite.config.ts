@@ -15,7 +15,7 @@ import { shikiStubPlugin } from './shikiStubPlugin'
 // 它在 GalleryCanvasStage 里只被喂给**一块嵌在展厅里的独立小画布**（自己的 Context、自己的内存
 // 存储、不进主画布的注册表）。所以它根本不参与主画布的任何注册，打进本产物不会造出「两份节点壳
 // 抢同一个槽」那种问题。反过来，若 external 掉它，宿主必须额外把 PlumePluginThemeDefault
-// 全局挂到 window 才装得上 —— 而宿主其实把主题当**源码**冷启动装配（packages/ui/src/assembly.ts），
+// 全局挂到 window 才装得上 —— 而宿主其实把主题当**源码**冷启动装配（apps/web/src/assembly.ts），
 // 并不存在这个全局，装上去只会「找不到依赖」直接炸。
 // vue / @vue-flow/core / 内核那批仍然 external：它们是块内小画布与展厅共享的真运行时。
 export default defineConfig(({ command }) => {
@@ -27,9 +27,9 @@ export default defineConfig(({ command }) => {
         exclude: [
           '@plume-canvas/canvas-data',
           '@plume-canvas/canvas-render',
-          '@plume-canvas/canvas-base',
+          '@plume-canvas/plugin-sdk',
           '@plume-canvas/kernel',
-          '@plume-canvas/ui-kit-shadcn',
+          '@plume-canvas/ui-kit',
           '@plume-canvas/plugin-theme-components',
           '@plume-canvas/plugin-theme-canvas',
           '@plume-canvas/plugin-multi-select',

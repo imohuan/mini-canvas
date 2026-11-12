@@ -14,8 +14,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { ref } from 'vue'
-import { computeSideBandRect } from '@plume-canvas/canvas-render'
-import { DEFAULT_THEME_SNAP_ZONE } from '@plume-canvas/theme-contract'
+import { computeSideBandRect, DEFAULT_THEME_SNAP_ZONE } from '@plume-canvas/canvas-render'
 import { useNodeDebugOverlay } from '../useNodeDebugOverlay'
 
 describe('吸附调试几何 —— 带"看得见"的回归锁', () => {

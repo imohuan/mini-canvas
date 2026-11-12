@@ -18,7 +18,7 @@
  */
 import { computed } from 'vue'
 import type { ToolParamDef } from '@plume-canvas/kernel'
-import { Popover, PopoverContent, PopoverTrigger, ScrollArea } from '@plume-canvas/ui-kit-shadcn'
+import { Popover, PopoverContent, PopoverTrigger, ScrollArea } from '@plume-canvas/ui-kit'
 import ToolParamField from './ToolParamField.vue'
 import ToolParamHint from './ToolParamHint.vue'
 import { drawsOwnTitle, resolveInlineSoleSelect } from './paramKind'

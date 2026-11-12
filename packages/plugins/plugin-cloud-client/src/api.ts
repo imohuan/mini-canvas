@@ -22,7 +22,7 @@ import { normalizeApiBase } from './config.js'
 /**
  * 管理令牌的键名与头名（就地内联 —— 本插件产物必须零 import）。
  *
- * 与 `@plume-canvas/canvas-base` 的 ADMIN_TOKEN_KEY / ADMIN_TOKEN_HEADER 必须一致，
+ * 与 `@plume-canvas/plugin-sdk` 的 ADMIN_TOKEN_KEY / ADMIN_TOKEN_HEADER 必须一致，
  * `constants.test` 会用那边的 setAdminToken 写一份、这里读到的必须是同一个值。
  */
 const ADMIN_TOKEN_KEY = 'plume_admin_token'
@@ -32,7 +32,7 @@ const ADMIN_TOKEN_HEADER = 'x-admin-token'
  * 旧版遗留在 localStorage 里的管理令牌。
  *
  * 只在**登录会话拿不到**时用作恢复通道；正常登录后浏览器里不该再有它
- * （见 packages/ui/src/adoptInjectedAdminToken.ts 的清理逻辑）。
+ * （见 apps/web/src/adoptInjectedAdminToken.ts 的清理逻辑）。
  */
 function readLegacyAdminToken(): string | undefined {
   try {

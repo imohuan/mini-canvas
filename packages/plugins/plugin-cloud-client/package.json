@@ -23,7 +23,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-render": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },
@@ -32,7 +32,6 @@
   },
   "devDependencies": {
     "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/bar-contract": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",

@@ -15,7 +15,7 @@
 import { isTransient } from '@plume-canvas/canvas-data'
 import { validateConnection, type ExistingEdge, type NodeConnectionDef } from '@plume-canvas/canvas-data'
 import type { ContextMenuItem, MenuNodeTypeLike } from './menuBuilder'
-import { registerEventName } from '@plume-canvas/canvas-base'
+import { registerEventName } from '@plume-canvas/plugin-sdk'
 
 /** 临时菜单节点的节点类型名（本插件经 ctx.nodes.register 注册，带菜单卡片 content） */
 export const CONNECTION_MENU_TYPE = 'connection-menu'

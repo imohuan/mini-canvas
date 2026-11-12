@@ -10,7 +10,7 @@
 ```
 packages/plugins/plugin-node-<你的类型>/
   package.json            # name:@plume-canvas/plugin-node-xxx
-                          #   dependencies: @plume-canvas/canvas-base: workspace:*（= kernel + canvas-data 的薄入口）
+                          #   dependencies: @plume-canvas/plugin-sdk: workspace:*（= kernel + canvas-data 的薄入口）
                           #   peerDependencies: vue ^3.5
   tsconfig.json           # moduleResolution: Bundler + DOM lib + src 下放 env.d.ts(*.vue shim)
   src/
@@ -61,7 +61,7 @@ export const nodeTextPlugin: PluginModule = {
 ## 三、宿主怎么加载（manifest 即 plugins 数组）
 
 宿主(任何消费方)把想启用的插件列进 `<CanvasHost :plugins="…">` 的数组（或
-`createPlumeHost({ coldPlugins })` / 给一份 `manifest`，见 `packages/ui/src/assembly.ts`）：
+`createPlumeHost({ coldPlugins })` / 给一份 `manifest`，见 `apps/web/src/assembly.ts`）：
 ```ts
 import { CanvasHost } from '@plume-canvas/canvas-render'
 import { LocalStorageAdapter } from '@plume-canvas/canvas-data'
@@ -80,7 +80,7 @@ import { APP_PLUGINS } from './assembly'
 1. 复制 `plugin-node-text` 目录为 `plugin-node-<type>`，改 `package.json` 的 name。
 2. 写 `<Type>Content.vue`（展示/编辑该类型内容；需要服务就 `useCanvasRender()` 拿 `ctx` 后 `ctx.get('你的服务')`）。
 3. 写 `<Type>NodePlugin.ts`：`registerNodeType` 注册 + 可选 `ctx.inject('<type>', service)` + 建节点逻辑。
-4. 宿主 `packages/ui/src/assembly.ts` 的 `APP_PLUGINS` 数组里加它（若想在成品应用里看到）。
+4. 宿主 `apps/web/src/assembly.ts` 的 `APP_PLUGINS` 数组里加它（若想在成品应用里看到）。
 5. `pnpm install` 认到新包；`pnpm -C packages/plugins/<你的包> typecheck` 干净。
 6. `pnpm -C packages/plugins/<你的包> test` 全绿；
    起 `pnpm -C packages/ui dev` 目验能看到、能操作。
@@ -179,5 +179,5 @@ publishToolActions(ctx, { types: ['image'], produces: 'image', needsPrompt: true
 ```
 
 完整示例：`packages/plugins/plugin-web2api-tools`（多平台预置动作 + 参数下拉 + 异步轮询
-+ 刷新续查 + 结果写入器），以及 `packages/ui/e2e/web2api-bottom-bar.mjs`（浏览器里
++ 刷新续查 + 结果写入器），以及 `apps/web/e2e/web2api-bottom-bar.mjs`（浏览器里
 现场注册一条假动作，演示覆盖层与落盘，不进成品清单）。

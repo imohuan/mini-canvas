@@ -1,0 +1,61 @@
+{
+  "name": "@plume-canvas/plugin-demo-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "plume": {
+    "title": "示例 · 插件演练场",
+    "description": "开发演示合集：组件展厅、插槽与工具栏、外壳插槽、热重载靶子。装一个就够，不混进产品冷启动",
+    "pluginName": "demo-kit",
+    "installable": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/plugin-align-guide": "workspace:*",
+    "@plume-canvas/plugin-edge-cutting": "workspace:*",
+    "@plume-canvas/plugin-multi-select": "workspace:*",
+    "@plume-canvas/ui-kit-shadcn": "workspace:*",
+    "lucide-vue-next": "^1.0.0",
+    "@plume-canvas/plugin-theme-components": "workspace:*",
+    "@plume-canvas/plugin-theme-canvas": "workspace:*"
+  },
+  "peerDependencies": {
+    "@vue-flow/core": "^1.48.2",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@plume-canvas/kernel": "workspace:*",
+    "@vue-flow/core": "^1.48.2",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/server-renderer": "3.5.38",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  }
+}

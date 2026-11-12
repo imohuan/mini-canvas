@@ -13,7 +13,7 @@ import {
   THEME_RADIUS_CHOICES,
   THEME_RADIUS_LABELS,
   THEME_RADIUS_VALUES,
-} from '@plume-canvas/theme-contract'
+} from '../../theme/themeBridge'
 
 defineProps<{ modelValue: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()

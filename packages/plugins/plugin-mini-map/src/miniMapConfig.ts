@@ -6,8 +6,8 @@
  * 登记进 ⚙ 设置面板，改动实时生效（浮层订阅 onChange 后重读本函数）。
  * 独立成文件避免 miniMapPlugin ↔ MiniMapOverlay 循环 import。
  */
-import type { ConfigSchema, InferConfig } from '@plume-canvas/canvas-base'
-import type { Context } from '@plume-canvas/canvas-base'
+import type { ConfigSchema, InferConfig } from '@plume-canvas/plugin-sdk'
+import type { Context } from '@plume-canvas/plugin-sdk'
 
 export const Config = {
   miniMapWidth: {

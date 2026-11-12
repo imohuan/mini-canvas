@@ -61,10 +61,10 @@ import type {
   Context,
   ConfigSchema,
   InferConfig,
-} from '@plume-canvas/canvas-base'
+} from '@plume-canvas/plugin-sdk'
 import type { SelectionService } from '@plume-canvas/canvas-data'
 import { isTransient } from '@plume-canvas/canvas-data'
-import { registerEventName } from '@plume-canvas/canvas-base'
+import { registerEventName } from '@plume-canvas/plugin-sdk'
 import { toCanvas } from 'html-to-image'
 import { buildExportFontCss } from './exportFonts'
 import { stripXmlUnsafeComments, withXmlSafeSerialization } from './xmlSanitize'

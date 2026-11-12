@@ -1,7 +1,7 @@
 /**
  * 下拉 / 参数面板与**右键菜单**同款（用户口径 2026-10-12）。
  *
- * 实现已经全部换成 @plume-canvas/ui-kit-shadcn 的分离件，所以这里不再读旧组件的源码，
+ * 实现已经全部换成 @plume-canvas/ui-kit 的分离件，所以这里不再读旧组件的源码，
  * 只锁住主题自己那层的外观 token 与「参数面板仍然是右键菜单那一档」的尺寸。
  */
 import { describe, it, expect } from 'vitest'

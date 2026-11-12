@@ -6,7 +6,7 @@
 ⚠️ **两条边界，先记住**：
 
 1. **别去翻项目源码**。你在对话框里，看的应该是本手册 + 运行时接口。
-   开发期源码可能就摆在用户项目里（`packages/cloud-server/src/…`、
+   开发期源码可能就摆在用户项目里（`apps/server/src/…`、
    `packages/plugins/plugin-node-ui/src/…`），看着很诱人，但那是**实现**、随时会变；
    本手册给的是**稳定契约**。依赖实现，改一次就失效。
    要问"有哪些脚本 / 有哪些动作"，用运行时接口（`{type:"list"}`、`generation_actions`），

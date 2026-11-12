@@ -26,9 +26,9 @@ import {
   fontStack,
   loadFont,
   type FontGroup,
-} from '@plume-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit'
 import { useUiComponentOutside } from '../../composables/useUiComponentOutside'
-import { THEME_FONT_OPTIONS } from '@plume-canvas/theme-contract'
+import { THEME_FONT_OPTIONS } from '../../theme/themeBridge'
 
 const props = withDefaults(
   defineProps<{

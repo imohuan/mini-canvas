@@ -14,7 +14,7 @@
  */
 import { markRaw, reactive } from 'vue'
 import { Puzzle, Server } from 'lucide-vue-next'
-import type { Context, PluginModule } from '@plume-canvas/canvas-base'
+import type { Context, PluginModule } from '@plume-canvas/plugin-sdk'
 import {
   DEFAULT_CATALOG_URL,
   createPluginManagerService,

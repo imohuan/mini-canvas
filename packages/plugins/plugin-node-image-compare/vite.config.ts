@@ -18,12 +18,12 @@ export default defineConfig({
       fileName: () => 'plugin-node-image-compare.js',
     },
     rollupOptions: {
-      external: ['vue', '@plume-canvas/canvas-data', '@plume-canvas/canvas-base', '@plume-canvas/canvas-render'],
+      external: ['vue', '@plume-canvas/canvas-data', '@plume-canvas/plugin-sdk', '@plume-canvas/canvas-render'],
       output: {
         globals: {
           vue: 'Vue',
           '@plume-canvas/canvas-data': 'PlumeCore',
-          '@plume-canvas/canvas-base': 'PlumeBase',
+          '@plume-canvas/plugin-sdk': 'PlumeBase',
           '@plume-canvas/canvas-render': 'PlumeRender',
         },
       },

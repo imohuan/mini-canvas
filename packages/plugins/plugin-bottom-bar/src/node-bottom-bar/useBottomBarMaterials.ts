@@ -1,5 +1,5 @@
 import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
+import type { ResourceItem } from '@plume-canvas/editor'
 import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import {
   collectUpstreamMaterials,

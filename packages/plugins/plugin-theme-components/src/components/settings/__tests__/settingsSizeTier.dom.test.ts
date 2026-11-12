@@ -12,7 +12,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
-import { componentConfig, resetComponentConfig } from '@plume-canvas/ui-kit-shadcn/componentConfig'
+import { componentConfig, resetComponentConfig } from '@plume-canvas/ui-kit/componentConfig'
 import type { SettingEntry, SettingsPanelSource } from '@plume-canvas/canvas-render'
 import SettingsSchemaField from '../SettingsSchemaField.vue'
 import ShadcnSettingsRow from '../ShadcnSettingsRow.vue'
@@ -95,7 +95,7 @@ describe('设置面板控件跟「尺寸」档位走', () => {
    * 一段量**组件样式确实引用这个变量**；中间那层继承是浏览器标准行为。
    */
   it('尺寸档把行高变量写进根节点（小 < 标准 < 大）', async () => {
-    const { applyThemeBridge } = await import('@plume-canvas/theme-contract')
+    const { applyThemeBridge } = await import('../../../theme/themeBridge')
     const rowVar = (): number => {
       const value = document.documentElement.style.getPropertyValue('--plume-size-control-h').trim()
       const rem = /^([\d.]+)rem$/.exec(value)

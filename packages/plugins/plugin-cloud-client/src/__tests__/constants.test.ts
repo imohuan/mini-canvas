@@ -1,7 +1,7 @@
 // 常量防漂移：这些字面量在本插件里是**就地内联**的（产物要自包含），
 // 与数据层 / 后端各有一份。改了一边没改另一边，这里立刻红。
 import { describe, it, expect } from 'vitest'
-import { ADMIN_TOKEN_KEY, ADMIN_TOKEN_HEADER, setAdminToken } from '@plume-canvas/canvas-base'
+import { ADMIN_TOKEN_KEY, ADMIN_TOKEN_HEADER, setAdminToken } from '@plume-canvas/plugin-sdk'
 import { CloudApi } from '../api'
 import {
   GRAPH_KEY,

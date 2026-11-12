@@ -23,8 +23,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { useUiComponent, useCanvasRender } from '@plume-canvas/canvas-render'
 // 输入框工具行与发送键使用主题登记的 shadcn Button；两个下拉的**内容 UI 不改**，只换触发按钮。
-import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
-import type { ResourceItem } from 'prosemirror-editor-bundle'
+import { ProseMirrorEditor } from '@plume-canvas/editor'
+import type { ResourceItem } from '@plume-canvas/editor'
 import { useAgent } from '../../plugin/useAgent.js'
 import { useStickyScroll } from '../../ui/shared/useStickyScroll.js'
 // ICON_SKILL / ICON_MCP 由模板直接 v-html（@ 下拉里的菜单卡片头图）；解析那一段已搬去 userSegments。

@@ -9,8 +9,7 @@
  *   ③ 空串 = 同源（界面由 cloud-server 托管时的正常情况）。
  */
 import type { StyleMeta, StylePage, StyleSort } from './types'
-import { withAdminToken } from '@plume-canvas/canvas-base'
-import { apiUrl, normalizeApiBase } from '@plume-canvas/bar-contract'
+import { apiUrl, normalizeApiBase, withAdminToken } from '@plume-canvas/plugin-sdk'
 
 /**
  * 素材库种类：「风格库」与「特效库」共用同一套后台逻辑（路由前缀不同）。

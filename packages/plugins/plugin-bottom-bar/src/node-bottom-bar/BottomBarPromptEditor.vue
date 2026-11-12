@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ProseMirrorEditor, type ResourceItem } from 'prosemirror-editor-bundle'
+import { ProseMirrorEditor, type ResourceItem } from '@plume-canvas/editor'
 import type { BottomBarEditorHandle } from './types'
 
 const props = defineProps<{

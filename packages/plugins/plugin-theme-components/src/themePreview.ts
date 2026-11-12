@@ -8,9 +8,9 @@
  * 复用同一套语义：颜色读主题色板（readPreviewColor），连线几何用 buildEdgePath，
  * 节点内的按钮用 shadcn Button 的同一套 token（这里手写 DOM，避免预览依赖 VueFlow）。
  */
-import type { Context } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/plugin-sdk'
 import { THEME_PREVIEW_SLOT, type PreviewLayer, type PreviewNodeRect, type PreviewPaintCtx } from '@plume-canvas/canvas-render'
-import { buildEdgePath, Position } from '@plume-canvas/theme-contract'
+import { buildEdgePath, EdgeDirection } from '@plume-canvas/canvas-render'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -172,7 +172,7 @@ function paintImageCard(card: HTMLElement, node: PreviewNodeRect, accent: string
 function paintEdge(svgEl: SVGSVGElement, a: PreviewNodeRect, b: PreviewNodeRect, rail: string, flow: string, motion: boolean): void {
   const from = { x: a.x + a.w, y: a.y + a.h / 2 }
   const to = { x: b.x, y: b.y + b.h / 2 }
-  const d = buildEdgePath(from.x, from.y, to.x, to.y, Position.Right, Position.Left, 'bezier', {
+    const d = buildEdgePath(from.x, from.y, to.x, to.y, EdgeDirection.Right, EdgeDirection.Left, 'bezier', {
     minCurvature: 40,
   })
 

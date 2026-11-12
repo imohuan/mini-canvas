@@ -9,7 +9,7 @@ import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { readFileSync } from 'node:fs'
 import UiKitDebugOverlay from '../UiKitDebugOverlay.vue'
-import { parseDebugLoc } from '@plume-canvas/ui-kit-shadcn'
+import { parseDebugLoc } from '@plume-canvas/ui-kit'
 
 const SRC = readFileSync(new URL('../UiKitDebugOverlay.vue', import.meta.url), 'utf-8')
 /** 只看代码、不看注释：注释里也会出现 pointer-events 字样 */
@@ -17,9 +17,9 @@ const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, ''
 
 describe('组件库使用标记', () => {
   it('路径和行列号按最后两个冒号拆分（兼容 Windows 盘符）', () => {
-    expect(parseDebugLoc('C:/repo/packages/ui/src/X.vue:28:11', 'Button')).toEqual({
+    expect(parseDebugLoc('C:/repo/apps/web/src/X.vue:28:11', 'Button')).toEqual({
       component: 'Button',
-      file: 'C:/repo/packages/ui/src/X.vue',
+      file: 'C:/repo/apps/web/src/X.vue',
       line: 28,
       column: 11,
     })

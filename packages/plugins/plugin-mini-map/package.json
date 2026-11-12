@@ -25,7 +25,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@plume-canvas/canvas-base": "workspace:*"
+    "@plume-canvas/plugin-sdk": "workspace:*"
   },
   "peerDependencies": {
     "@plume-canvas/canvas-render": "workspace:*",

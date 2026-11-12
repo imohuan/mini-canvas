@@ -21,7 +21,7 @@
 import {
   Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize,
   DEFAULT_VIDEO_CARD_LIMITS, VIDEO_CARD_LIMIT_KEYS, isMediaCardLimitKey,
-} from '@plume-canvas/canvas-base'
+} from '@plume-canvas/plugin-sdk'
 import type { DocService } from '@plume-canvas/canvas-data'
 import { videoThumbTierFields, videoThumbTierKeys } from './videoThumbTier'
 import { defaultTransform, videoTitleExtra, type VideoTransform } from './videoOps'
@@ -33,7 +33,7 @@ import VideoFullscreenOverlay from './VideoFullscreenOverlay.vue'
 import VideoTopToolbar from './VideoTopToolbar.vue'
 import VideoClipPanel from './VideoClipPanel.vue'
 import VideoFrameOverlay from './VideoFrameOverlay.vue'
-import { publishToolActions } from '@plume-canvas/bar-contract'
+import type { NodeBarContract } from '@plume-canvas/canvas-data'
 import { beginOverlay, endOverlay, isClipPending, onOverlayModeChange, setClipPending, setCropPending } from './videoSession'
 import { clearClipPrefs } from './videoClipStore'
 import {
@@ -358,9 +358,10 @@ export function apply(ctx: Context) {
   // 0.5 底栏动作（T9：剪辑面板搬进 plugin-bottom-bar，本包只发布动作）
   //     §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
   const registerBar = (): boolean => {
-    if (!ctx.tryGet('nodeBar')) return false
+    const bar = ctx.tryGet<NodeBarContract>('nodeBar')
+    if (!bar) return false
     // AI 生成视频：每个 produces:'video' 的工具一条动作（输入框是临时的，发送时组装）
-    publishToolActions(ctx, { types: ['video'], produces: 'video', needsPrompt: true })
+    bar.publishTools(ctx, { types: ['video'], produces: 'video', needsPrompt: true })
     // 剪辑不再注册成底栏「动作」：它现在是 video/clip 模式，底栏整格换成胶片条。
     // 从前注册成动作时，面板动作会被写进 data.barValues，退出剪辑后底栏按"上次的动作"
     // 又把它选回来 → 立刻重新进入剪辑，用户永远退不出去（实测会形成循环）。

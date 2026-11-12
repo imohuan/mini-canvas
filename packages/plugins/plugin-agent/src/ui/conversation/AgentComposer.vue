@@ -7,7 +7,7 @@
  */
 import { computed, inject } from 'vue'
 import { useUiComponent } from '@plume-canvas/canvas-render'
-import { ProseMirrorEditor } from 'prosemirror-editor-bundle'
+import { ProseMirrorEditor } from '@plume-canvas/editor'
 import { X, Plus, Upload, Target, Minimize2, Search, Check, Layers, WandSparkles, Plug, RefreshCw, BellRing, GripVertical, CornerUpRight, Trash2, MoreHorizontal, Pencil, Play, Pause, ChevronDown, ArrowUp, Hand, ShieldAlert, Box, Sparkles, ListOrdered } from 'lucide-vue-next'
 import { VueDraggable } from 'vue-draggable-plus'
 import { ICON_SKILL, ICON_MCP } from '../shared/agentResources.js'

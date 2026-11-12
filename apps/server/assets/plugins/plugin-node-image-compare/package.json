@@ -1,0 +1,47 @@
+{
+  "name": "@plume-canvas/plugin-node-image-compare",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "plume": {
+    "title": "图片对比节点",
+    "description": "连两张图，用可拖拽分割线左右对照",
+    "pluginName": "image-compare",
+    "installable": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "build": "vite build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
+  },
+  "peerDependencies": {
+    "vue": "^3.5.34"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34",
+    "@plume-canvas/plugin-theme-components": "workspace:*"
+  }
+}

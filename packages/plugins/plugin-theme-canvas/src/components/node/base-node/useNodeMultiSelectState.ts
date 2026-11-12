@@ -1,7 +1,7 @@
 import { computed, onBeforeUnmount, ref, type Ref } from 'vue'
 import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
-import type { MultiRadioConfig } from '@plume-canvas/theme-contract'
-import { multiRadioStyle } from '@plume-canvas/theme-contract'
+import type { MultiRadioConfig } from '../../../theme/multiRadio'
+import { multiRadioStyle } from '../../../theme/multiRadio'
 
 export interface NodeMultiSelectStateInput {
   ctx: CanvasRenderContext['ctx']

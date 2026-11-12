@@ -3,7 +3,7 @@
  *
  * 为什么从全局取 Vue / PlumeUiKit：本插件产物是「零 import 自包含 ESM」，
  * 直接 import vue 会让 data: 模块解析失败，也会造出第二份 Vue。
- * 宿主在挂载前已把同一份 Vue 与 shadcn 组件挂到 window（见 packages/ui/src/sharedGlobals.ts），
+ * 宿主在挂载前已把同一份 Vue 与 shadcn 组件挂到 window（见 apps/web/src/sharedGlobals.ts），
  * 这里只读它们，组件外观仍是组件库那一套（换主题跟着换）。
  *
  * 界面文案不出现「令牌」：对用户只说「登录 / 密码」（用户口径 2026-11-12）。

@@ -25,7 +25,7 @@ import {
   Service, type Context, type PluginModule,
   DEFAULT_IMAGE_CARD_LIMITS, DEFAULT_VIDEO_CARD_LIMITS,
   IMAGE_CARD_LIMIT_KEYS, VIDEO_CARD_LIMIT_KEYS, readMediaCardLimits,
-} from '@plume-canvas/canvas-base'
+} from '@plume-canvas/plugin-sdk'
 import type { DocService, SelectionService, ResourceService } from '@plume-canvas/canvas-data'
 import {
   CLIPBOARD_PASTE_KIND,

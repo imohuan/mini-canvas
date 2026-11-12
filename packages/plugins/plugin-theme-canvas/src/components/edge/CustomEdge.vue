@@ -23,7 +23,7 @@ import {
   type DragEventPayload,
 } from '@plume-canvas/canvas-render'
 import { isTransient } from '@plume-canvas/canvas-data'
-import { Button } from '@plume-canvas/ui-kit-shadcn'
+import { Button } from '@plume-canvas/ui-kit'
 import type { EdgeVisual } from '@plume-canvas/canvas-render'
 import {
   getSourcePosition,

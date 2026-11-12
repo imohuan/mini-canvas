@@ -4,7 +4,7 @@
  * 参考线本来就是一个 1px 的横条：这里按预览节点的顶边画一条，
  * 颜色取本插件申报的 alignGuideColor（清空时跟随强调色）。
  */
-import type { Context } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/plugin-sdk'
 import { THEME_PREVIEW_SLOT, type PreviewLayer, type PreviewPaintCtx } from '@plume-canvas/canvas-render'
 
 export const alignGuidePreviewLayer: PreviewLayer = {

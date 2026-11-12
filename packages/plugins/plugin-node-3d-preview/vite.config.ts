@@ -18,13 +18,13 @@ export default defineConfig({
       fileName: () => 'plugin-node-3d-preview.js',
     },
     rollupOptions: {
-      external: ['vue', 'three', '@plume-canvas/canvas-data', '@plume-canvas/canvas-base', '@plume-canvas/canvas-render'],
+      external: ['vue', 'three', '@plume-canvas/canvas-data', '@plume-canvas/plugin-sdk', '@plume-canvas/canvas-render'],
       output: {
         globals: {
           vue: 'Vue',
           three: 'THREE',
           '@plume-canvas/canvas-data': 'PlumeCore',
-          '@plume-canvas/canvas-base': 'PlumeBase',
+          '@plume-canvas/plugin-sdk': 'PlumeBase',
           '@plume-canvas/canvas-render': 'PlumeRender',
         },
       },

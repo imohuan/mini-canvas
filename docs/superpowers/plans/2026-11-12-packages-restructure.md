@@ -46,8 +46,8 @@
 
 **Files:** 所有 `.ts/.vue/.js/.mjs/.json/.md` 中出现的旧包名。
 
-- [ ] **Step 1:** codemod 替换 `@plume-canvas/canvas-base` → `@plume-canvas/plugin-sdk`。
-- [ ] **Step 2:** codemod 替换 `@plume-canvas/ui-kit-shadcn` → `@plume-canvas/ui-kit`。
+- [ ] **Step 1:** codemod 替换 `@plume-canvas/plugin-sdk` → `@plume-canvas/plugin-sdk`。
+- [ ] **Step 2:** codemod 替换 `@plume-canvas/ui-kit` → `@plume-canvas/ui-kit`。
 - [ ] **Step 3:** codemod 替换 `prosemirror-editor-bundle` → `@plume-canvas/editor`（保留 `@plume-canvas/editor/style.css` 等子路径）。
 - [ ] **Step 4:** 更新 `packages/plugins/vite-plugin-lib.ts` 的 `HOST_GLOBALS` 键与 `apps/web/src/sharedGlobals.ts` 的 import；全局名 `PlumeBase` 不变。
 - [ ] **Step 5:** 跑 `pnpm -C packages/engine/kernel test` 与 `pnpm -C apps/web typecheck`，先修最直接的解析错误。

@@ -2,7 +2,7 @@
  * 主题拆包边界守卫（画布半边）。
  *
  * canvas 包只放画布外观；通用组件在 plugin-theme-components，两边互不 import。
- * 共享的默认值 / Config 分片 / 边几何都在 @plume-canvas/theme-contract。
+ * 启动默认值 / 设置键表 / 边几何都在引擎 @plume-canvas/canvas-render。
  */
 import { describe, expect, it } from 'vitest'
 import { readFileSync, readdirSync } from 'node:fs'

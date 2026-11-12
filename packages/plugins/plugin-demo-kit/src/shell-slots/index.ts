@@ -16,7 +16,7 @@
  * 装载方式：随 demo-kit 的 UMD 产物一起装（pnpm build → dist/plugin-demo-kit.js）。
  */
 import { markRaw } from 'vue'
-import type { Context } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/plugin-sdk'
 import StatusBadge from './StatusBadge.vue'
 import DockEndButton from './DockEndButton.vue'
 import DrawerTabButton from './DrawerTabButton.vue'

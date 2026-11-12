@@ -13,169 +13,32 @@ importers:
 
   .: {}
 
-  packages/bar-contract:
-    dependencies:
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../kernel
-    devDependencies:
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/canvas-base:
-    dependencies:
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../canvas-data
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../kernel
-    devDependencies:
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/canvas-data:
-    dependencies:
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../kernel
-    devDependencies:
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/canvas-render:
-    dependencies:
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../canvas-data
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../kernel
-      '@plume-canvas/vue-render':
-        specifier: workspace:*
-        version: link:../vue-render
-    devDependencies:
-      '@plume-canvas/plugin-multi-select':
-        specifier: workspace:*
-        version: link:../plugins/plugin-multi-select
-      '@plume-canvas/plugin-node-image':
-        specifier: workspace:*
-        version: link:../plugins/plugin-node-image
-      '@plume-canvas/plugin-node-text':
-        specifier: workspace:*
-        version: link:../plugins/plugin-node-text
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue-flow/core':
-        specifier: ^1.48.2
-        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/cloud-server:
-    dependencies:
-      '@hono/node-server':
-        specifier: ^2.1.1
-        version: 2.1.1(hono@4.13.5)
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.0.0
-        version: 1.30.0(zod@3.25.76)
-      '@plume-canvas/plugin-agent':
-        specifier: workspace:*
-        version: link:../plugins/plugin-agent
-      '@prismshadow/penguin-core':
-        specifier: 0.2.13
-        version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
-      hono:
-        specifier: ^4.6.0
-        version: 4.13.5
-      yaml:
-        specifier: ^2.9.1
-        version: 2.9.1
-      zod:
-        specifier: ^3.23.0
-        version: 3.25.76
-    devDependencies:
-      '@microsoft/api-extractor':
-        specifier: 7.58.9
-        version: 7.58.9(@types/node@24.13.2)
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../kernel
-      '@types/node':
-        specifier: ^24.12.3
-        version: 24.13.2
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
-      tsx:
-        specifier: ^4.22.4
-        version: 4.22.4
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/docs:
+  apps/docs:
     devDependencies:
       '@plume-canvas/canvas-data':
         specifier: workspace:*
-        version: link:../canvas-data
+        version: link:../../packages/engine/canvas-data
       '@plume-canvas/canvas-render':
         specifier: workspace:*
-        version: link:../canvas-render
+        version: link:../../packages/engine/canvas-render
       '@plume-canvas/kernel':
         specifier: workspace:*
-        version: link:../kernel
+        version: link:../../packages/engine/kernel
       '@plume-canvas/plugin-node-image':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-image
+        version: link:../../packages/plugins/plugin-node-image
       '@plume-canvas/plugin-node-text':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-text
+        version: link:../../packages/plugins/plugin-node-text
       '@plume-canvas/plugin-theme-canvas':
         specifier: workspace:*
-        version: link:../plugins/plugin-theme-canvas
+        version: link:../../packages/plugins/plugin-theme-canvas
       '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugins/plugin-theme-components
-      '@plume-canvas/theme-contract':
+        version: link:../../packages/plugins/plugin-theme-components
+      '@plume-canvas/ui-kit':
         specifier: workspace:*
-        version: link:../theme-contract
-      '@plume-canvas/ui-kit-shadcn':
-        specifier: workspace:*
-        version: link:../ui-kit-shadcn
+        version: link:../../packages/libs/ui-kit
       '@vue-flow/core':
         specifier: ^1.48.2
         version: 1.48.2(vue@3.5.38(typescript@6.0.3))
@@ -195,193 +58,45 @@ importers:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
 
-  packages/kernel:
-    devDependencies:
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/plugins/plugin-agent:
+  apps/server:
     dependencies:
-      '@plume-canvas/canvas-base':
+      '@hono/node-server':
+        specifier: ^2.1.1
+        version: 2.1.1(hono@4.13.5)
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.0.0
+        version: 1.32.2(zod@3.25.76)
+      '@plume-canvas/plugin-agent':
         specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
+        version: link:../../packages/plugins/plugin-agent
       '@prismshadow/penguin-core':
         specifier: 0.2.13
-        version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
-      '@vueuse/core':
-        specifier: ^14.3.0
-        version: 14.3.0(vue@3.5.38(typescript@6.0.3))
-      cn:
-        specifier: ^0.5.1
-        version: 0.5.1
+        version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
       hono:
         specifier: ^4.6.0
         version: 4.13.5
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-      prosemirror-editor-bundle:
-        specifier: workspace:*
-        version: link:../../prosemirror-editor-bundle
-      reka-ui:
-        specifier: ^2.11.0
-        version: 2.11.0(vue@3.5.38(typescript@6.0.3))
-      vue-draggable-plus:
-        specifier: ^0.6.1
-        version: 0.6.1(@types/sortablejs@1.15.9)
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
     devDependencies:
-      '@plume-canvas/canvas-data':
+      '@microsoft/api-extractor':
+        specifier: 7.58.9
+        version: 7.58.9(@types/node@24.13.2)
+      '@plume-canvas/kernel':
         specifier: workspace:*
-        version: link:../../canvas-data
+        version: link:../../packages/engine/kernel
       '@types/node':
         specifier: ^24.12.3
         version: 24.13.2
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-align-arrange:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-align-guide:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-auto-layout:
-    dependencies:
-      '@dagrejs/dagre':
-        specifier: ^3.0.0
-        version: 3.0.0
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-auto-save:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-    devDependencies:
+      tsx:
+        specifier: ^4.22.4
+        version: 4.22.4
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
@@ -389,1393 +104,125 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
 
-  packages/plugins/plugin-bottom-bar:
-    dependencies:
-      '@plume-canvas/bar-contract':
-        specifier: workspace:*
-        version: link:../../bar-contract
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      prosemirror-editor-bundle:
-        specifier: workspace:*
-        version: link:../../prosemirror-editor-bundle
-      vue-draggable-plus:
-        specifier: ^0.6.1
-        version: 0.6.1(@types/sortablejs@1.15.9)
-    devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-canvas-export:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      html-to-image:
-        specifier: ^1.11.13
-        version: 1.11.13
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-clipboard:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-cloud-client:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@plume-canvas/bar-contract':
-        specifier: workspace:*
-        version: link:../../bar-contract
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-context-menu:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-cursor-effect:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-demo-kit:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/plugin-align-guide':
-        specifier: workspace:*
-        version: link:../plugin-align-guide
-      '@plume-canvas/plugin-edge-cutting':
-        specifier: workspace:*
-        version: link:../plugin-edge-cutting
-      '@plume-canvas/plugin-multi-select':
-        specifier: workspace:*
-        version: link:../plugin-multi-select
-      '@plume-canvas/plugin-theme-canvas':
-        specifier: workspace:*
-        version: link:../plugin-theme-canvas
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@plume-canvas/ui-kit-shadcn':
-        specifier: workspace:*
-        version: link:../../ui-kit-shadcn
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue-flow/core':
-        specifier: ^1.48.2
-        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-edge-cutting:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-file-drop:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-group:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.0
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-history:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/plugins/plugin-hot-reload:
-    dependencies:
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-image-grid-split:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-manager:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-mini-map:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-multi-select:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      vue:
-        specifier: ^3.5.0
-        version: 3.5.38(typescript@6.0.3)
-    devDependencies:
-      '@plume-canvas/plugin-theme-canvas':
-        specifier: workspace:*
-        version: link:../plugin-theme-canvas
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-
-  packages/plugins/plugin-node-3d-preview:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      three:
-        specifier: ^0.184.0
-        version: 0.184.0
-    devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-node-audio:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-node-find:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-node-image:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      prosemirror-editor-bundle:
-        specifier: workspace:*
-        version: link:../../prosemirror-editor-bundle
-    devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-node-image-compare:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-node-rotate:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-node-text:
-    dependencies:
-      '@plume-canvas/bar-contract':
-        specifier: workspace:*
-        version: link:../../bar-contract
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      prosemirror-editor-bundle:
-        specifier: workspace:*
-        version: link:../../prosemirror-editor-bundle
-    devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-node-ui:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-node-video:
-    dependencies:
-      '@plume-canvas/bar-contract':
-        specifier: workspace:*
-        version: link:../../bar-contract
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      '@plume-canvas/plugin-theme-canvas':
-        specifier: workspace:*
-        version: link:../plugin-theme-canvas
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-shortcut-manager:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-showcase:
-    dependencies:
-      '@plume-canvas/bar-contract':
-        specifier: workspace:*
-        version: link:../../bar-contract
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-style-library:
-    dependencies:
-      '@plume-canvas/bar-contract':
-        specifier: workspace:*
-        version: link:../../bar-contract
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@types/node':
-        specifier: ^24.1.0
-        version: 24.13.2
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      esbuild:
-        specifier: ^0.28.2
-        version: 0.28.2
-      happy-dom:
-        specifier: ^21.0.4
-        version: 21.0.4
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-      vue-tsc:
-        specifier: ^3.2.8
-        version: 3.3.5(typescript@6.0.3)
-
-  packages/plugins/plugin-theme-canvas:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      '@plume-canvas/theme-contract':
-        specifier: workspace:*
-        version: link:../../theme-contract
-      '@plume-canvas/ui-kit-shadcn':
-        specifier: workspace:*
-        version: link:../../ui-kit-shadcn
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue-flow/core':
-        specifier: ^1.48.2
-        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/plugins/plugin-theme-components:
-    dependencies:
-      '@ckpack/vue-color':
-        specifier: 1.6.0
-        version: 1.6.0(vue@3.5.38(typescript@6.0.3))
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../../canvas-data
-      '@plume-canvas/canvas-render':
-        specifier: workspace:*
-        version: link:../../canvas-render
-      '@plume-canvas/kernel':
-        specifier: workspace:*
-        version: link:../../kernel
-      '@plume-canvas/theme-contract':
-        specifier: workspace:*
-        version: link:../../theme-contract
-      '@plume-canvas/ui-kit-shadcn':
-        specifier: workspace:*
-        version: link:../../ui-kit-shadcn
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-      vue-sonner:
-        specifier: ^2.0.9
-        version: 2.0.9
-    devDependencies:
-      '@plume-canvas/plugin-shortcut-manager':
-        specifier: workspace:*
-        version: link:../plugin-shortcut-manager
-      '@vitejs/plugin-vue':
-        specifier: ^6.0.6
-        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
-      '@vue/server-renderer':
-        specifier: 3.5.38
-        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
-      happy-dom:
-        specifier: ^21.0.4
-        version: 21.0.4
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vite:
-        specifier: ^8.0.12
-        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-css-injected-by-js:
-        specifier: ^3.5.2
-        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/prosemirror-editor-bundle:
-    dependencies:
-      prosemirror-commands:
-        specifier: ^1.6.2
-        version: 1.7.1
-      prosemirror-history:
-        specifier: ^1.4.1
-        version: 1.5.0
-      prosemirror-keymap:
-        specifier: ^1.2.2
-        version: 1.2.3
-      prosemirror-model:
-        specifier: ^1.23.0
-        version: 1.25.9
-      prosemirror-schema-basic:
-        specifier: ^1.2.3
-        version: 1.2.4
-      prosemirror-state:
-        specifier: ^1.4.3
-        version: 1.4.4
-      prosemirror-view:
-        specifier: ^1.35.1
-        version: 1.41.9
-      vue:
-        specifier: ^3.5.13
-        version: 3.5.38(typescript@5.9.3)
-    devDependencies:
-      '@vitejs/plugin-vue':
-        specifier: ^5.2.1
-        version: 5.2.4(vite@6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@5.9.3))
-      typescript:
-        specifier: ^5.7.3
-        version: 5.9.3
-      vite:
-        specifier: ^6.0.7
-        version: 6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vite-plugin-dts:
-        specifier: ^4.4.1
-        version: 4.5.4(@types/node@24.13.2)(rollup@4.62.2)(typescript@5.9.3)(vite@6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue-tsc:
-        specifier: ^2.2.0
-        version: 2.2.12(typescript@5.9.3)
-
-  packages/theme-contract:
-    dependencies:
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../canvas-base
-      '@plume-canvas/canvas-data':
-        specifier: workspace:*
-        version: link:../canvas-data
-      '@plume-canvas/ui-kit-shadcn':
-        specifier: workspace:*
-        version: link:../ui-kit-shadcn
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
-      vue-sonner:
-        specifier: ^2.0.9
-        version: 2.0.9
-    devDependencies:
-      typescript:
-        specifier: ~6.0.2
-        version: 6.0.3
-      vitest:
-        specifier: ^3.0.0
-        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
-      vue:
-        specifier: ^3.5.34
-        version: 3.5.38(typescript@6.0.3)
-
-  packages/ui:
+  apps/web:
     dependencies:
       '@floating-ui/vue':
         specifier: ^1.1.11
         version: 1.1.11(vue@3.5.38(typescript@6.0.3))
-      '@plume-canvas/bar-contract':
-        specifier: workspace:*
-        version: link:../bar-contract
-      '@plume-canvas/canvas-base':
-        specifier: workspace:*
-        version: link:../canvas-base
       '@plume-canvas/canvas-data':
         specifier: workspace:*
-        version: link:../canvas-data
+        version: link:../../packages/engine/canvas-data
       '@plume-canvas/canvas-render':
         specifier: workspace:*
-        version: link:../canvas-render
+        version: link:../../packages/engine/canvas-render
+      '@plume-canvas/editor':
+        specifier: workspace:*
+        version: link:../../packages/libs/editor
       '@plume-canvas/kernel':
         specifier: workspace:*
-        version: link:../kernel
+        version: link:../../packages/engine/kernel
       '@plume-canvas/plugin-agent':
         specifier: workspace:*
-        version: link:../plugins/plugin-agent
+        version: link:../../packages/plugins/plugin-agent
       '@plume-canvas/plugin-align-arrange':
         specifier: workspace:*
-        version: link:../plugins/plugin-align-arrange
+        version: link:../../packages/plugins/plugin-align-arrange
       '@plume-canvas/plugin-align-guide':
         specifier: workspace:*
-        version: link:../plugins/plugin-align-guide
+        version: link:../../packages/plugins/plugin-align-guide
       '@plume-canvas/plugin-auto-layout':
         specifier: workspace:*
-        version: link:../plugins/plugin-auto-layout
+        version: link:../../packages/plugins/plugin-auto-layout
       '@plume-canvas/plugin-bottom-bar':
         specifier: workspace:*
-        version: link:../plugins/plugin-bottom-bar
+        version: link:../../packages/plugins/plugin-bottom-bar
       '@plume-canvas/plugin-canvas-export':
         specifier: workspace:*
-        version: link:../plugins/plugin-canvas-export
+        version: link:../../packages/plugins/plugin-canvas-export
       '@plume-canvas/plugin-clipboard':
         specifier: workspace:*
-        version: link:../plugins/plugin-clipboard
+        version: link:../../packages/plugins/plugin-clipboard
       '@plume-canvas/plugin-cloud-client':
         specifier: workspace:*
-        version: link:../plugins/plugin-cloud-client
+        version: link:../../packages/plugins/plugin-cloud-client
       '@plume-canvas/plugin-context-menu':
         specifier: workspace:*
-        version: link:../plugins/plugin-context-menu
+        version: link:../../packages/plugins/plugin-context-menu
       '@plume-canvas/plugin-demo-kit':
         specifier: workspace:*
-        version: link:../plugins/plugin-demo-kit
+        version: link:../../packages/plugins/plugin-demo-kit
       '@plume-canvas/plugin-edge-cutting':
         specifier: workspace:*
-        version: link:../plugins/plugin-edge-cutting
+        version: link:../../packages/plugins/plugin-edge-cutting
       '@plume-canvas/plugin-file-drop':
         specifier: workspace:*
-        version: link:../plugins/plugin-file-drop
+        version: link:../../packages/plugins/plugin-file-drop
       '@plume-canvas/plugin-group':
         specifier: workspace:*
-        version: link:../plugins/plugin-group
+        version: link:../../packages/plugins/plugin-group
       '@plume-canvas/plugin-hot-reload':
         specifier: workspace:*
-        version: link:../plugins/plugin-hot-reload
+        version: link:../../packages/plugins/plugin-hot-reload
       '@plume-canvas/plugin-image-grid-split':
         specifier: workspace:*
-        version: link:../plugins/plugin-image-grid-split
+        version: link:../../packages/plugins/plugin-image-grid-split
       '@plume-canvas/plugin-manager':
         specifier: workspace:*
-        version: link:../plugins/plugin-manager
+        version: link:../../packages/plugins/plugin-manager
       '@plume-canvas/plugin-mini-map':
         specifier: workspace:*
-        version: link:../plugins/plugin-mini-map
+        version: link:../../packages/plugins/plugin-mini-map
       '@plume-canvas/plugin-multi-select':
         specifier: workspace:*
-        version: link:../plugins/plugin-multi-select
+        version: link:../../packages/plugins/plugin-multi-select
       '@plume-canvas/plugin-node-3d-preview':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-3d-preview
+        version: link:../../packages/plugins/plugin-node-3d-preview
       '@plume-canvas/plugin-node-audio':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-audio
+        version: link:../../packages/plugins/plugin-node-audio
       '@plume-canvas/plugin-node-find':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-find
+        version: link:../../packages/plugins/plugin-node-find
       '@plume-canvas/plugin-node-image':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-image
+        version: link:../../packages/plugins/plugin-node-image
       '@plume-canvas/plugin-node-image-compare':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-image-compare
+        version: link:../../packages/plugins/plugin-node-image-compare
       '@plume-canvas/plugin-node-rotate':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-rotate
+        version: link:../../packages/plugins/plugin-node-rotate
       '@plume-canvas/plugin-node-text':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-text
+        version: link:../../packages/plugins/plugin-node-text
       '@plume-canvas/plugin-node-ui':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-ui
+        version: link:../../packages/plugins/plugin-node-ui
       '@plume-canvas/plugin-node-video':
         specifier: workspace:*
-        version: link:../plugins/plugin-node-video
+        version: link:../../packages/plugins/plugin-node-video
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../packages/libs/plugin-sdk
       '@plume-canvas/plugin-shortcut-manager':
         specifier: workspace:*
-        version: link:../plugins/plugin-shortcut-manager
+        version: link:../../packages/plugins/plugin-shortcut-manager
       '@plume-canvas/plugin-style-library':
         specifier: workspace:*
-        version: link:../plugins/plugin-style-library
+        version: link:../../packages/plugins/plugin-style-library
       '@plume-canvas/plugin-theme-canvas':
         specifier: workspace:*
-        version: link:../plugins/plugin-theme-canvas
+        version: link:../../packages/plugins/plugin-theme-canvas
       '@plume-canvas/plugin-theme-components':
         specifier: workspace:*
-        version: link:../plugins/plugin-theme-components
-      '@plume-canvas/theme-contract':
+        version: link:../../packages/plugins/plugin-theme-components
+      '@plume-canvas/ui-kit':
         specifier: workspace:*
-        version: link:../theme-contract
-      '@plume-canvas/ui-kit-shadcn':
-        specifier: workspace:*
-        version: link:../ui-kit-shadcn
+        version: link:../../packages/libs/ui-kit
       '@plume-canvas/vue-render':
         specifier: workspace:*
-        version: link:../vue-render
+        version: link:../../packages/engine/vue-render
       '@vueuse/core':
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.38(typescript@6.0.3))
@@ -1785,9 +232,6 @@ importers:
       motion-v:
         specifier: ^2.4.4
         version: 2.4.4(@vueuse/core@14.3.0(vue@3.5.38(typescript@6.0.3)))(vue@3.5.38(typescript@6.0.3))
-      prosemirror-editor-bundle:
-        specifier: workspace:*
-        version: link:../prosemirror-editor-bundle
       vue-router:
         specifier: ^4.6.4
         version: 4.6.4(vue@3.5.38(typescript@6.0.3))
@@ -1838,7 +282,171 @@ importers:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
 
-  packages/ui-kit-shadcn:
+  packages/engine/canvas-data:
+    dependencies:
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/engine/canvas-render:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../canvas-data
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+      '@plume-canvas/vue-render':
+        specifier: workspace:*
+        version: link:../vue-render
+    devDependencies:
+      '@plume-canvas/plugin-multi-select':
+        specifier: workspace:*
+        version: link:../../plugins/plugin-multi-select
+      '@plume-canvas/plugin-node-image':
+        specifier: workspace:*
+        version: link:../../plugins/plugin-node-image
+      '@plume-canvas/plugin-node-text':
+        specifier: workspace:*
+        version: link:../../plugins/plugin-node-text
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue-flow/core':
+        specifier: ^1.48.2
+        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/engine/kernel:
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+
+  packages/engine/vue-render:
+    dependencies:
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../kernel
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/libs/editor:
+    dependencies:
+      prosemirror-commands:
+        specifier: ^1.6.2
+        version: 1.7.1
+      prosemirror-history:
+        specifier: ^1.4.1
+        version: 1.5.0
+      prosemirror-keymap:
+        specifier: ^1.2.2
+        version: 1.2.3
+      prosemirror-model:
+        specifier: ^1.23.0
+        version: 1.25.9
+      prosemirror-schema-basic:
+        specifier: ^1.2.3
+        version: 1.2.4
+      prosemirror-state:
+        specifier: ^1.4.3
+        version: 1.4.4
+      prosemirror-view:
+        specifier: ^1.35.1
+        version: 1.41.9
+      vue:
+        specifier: ^3.5.13
+        version: 3.5.38(typescript@5.9.3)
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.1
+        version: 5.2.4(vite@6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@5.9.3))
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      vite:
+        specifier: ^6.0.7
+        version: 6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-dts:
+        specifier: ^4.4.1
+        version: 4.5.4(@types/node@24.13.2)(rollup@4.62.2)(typescript@5.9.3)(vite@6.4.3(@types/node@24.13.2)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue-tsc:
+        specifier: ^2.2.0
+        version: 2.2.12(typescript@5.9.3)
+
+  packages/libs/plugin-sdk:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+
+  packages/libs/ui-kit:
     dependencies:
       '@lucide/vue':
         specifier: ^1.66.0
@@ -1893,12 +501,320 @@ importers:
         specifier: ^2.2.0
         version: 2.2.12(typescript@5.9.3)
 
-  packages/vue-render:
+  packages/plugins/plugin-agent:
     dependencies:
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/editor':
+        specifier: workspace:*
+        version: link:../../libs/editor
       '@plume-canvas/kernel':
         specifier: workspace:*
-        version: link:../kernel
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      '@prismshadow/penguin-core':
+        specifier: 0.2.13
+        version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+      '@vueuse/core':
+        specifier: ^14.3.0
+        version: 14.3.0(vue@3.5.38(typescript@6.0.3))
+      cn:
+        specifier: ^0.5.1
+        version: 0.5.1
+      hono:
+        specifier: ^4.6.0
+        version: 4.13.5
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+      reka-ui:
+        specifier: ^2.11.0
+        version: 2.11.0(vue@3.5.38(typescript@6.0.3))
+      vue-draggable-plus:
+        specifier: ^0.6.1
+        version: 0.6.1(@types/sortablejs@1.15.9)
+      yaml:
+        specifier: ^2.9.1
+        version: 2.9.1
     devDependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@types/node':
+        specifier: ^24.12.3
+        version: 24.13.2
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-align-arrange:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-align-guide:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-auto-layout:
+    dependencies:
+      '@dagrejs/dagre':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-auto-save:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+
+  packages/plugins/plugin-bottom-bar:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/editor':
+        specifier: workspace:*
+        version: link:../../libs/editor
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      vue-draggable-plus:
+        specifier: ^0.6.1
+        version: 0.6.1(@types/sortablejs@1.15.9)
+    devDependencies:
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-canvas-export:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      html-to-image:
+        specifier: ^1.11.13
+        version: 1.11.13
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-clipboard:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-cloud-client:
+    dependencies:
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1914,9 +830,1028 @@ importers:
       vue:
         specifier: ^3.5.34
         version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-context-menu:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
       vue-tsc:
         specifier: ^3.2.8
         version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-cursor-effect:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-demo-kit:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-align-guide':
+        specifier: workspace:*
+        version: link:../plugin-align-guide
+      '@plume-canvas/plugin-edge-cutting':
+        specifier: workspace:*
+        version: link:../plugin-edge-cutting
+      '@plume-canvas/plugin-multi-select':
+        specifier: workspace:*
+        version: link:../plugin-multi-select
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      '@plume-canvas/plugin-theme-canvas':
+        specifier: workspace:*
+        version: link:../plugin-theme-canvas
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@plume-canvas/ui-kit':
+        specifier: workspace:*
+        version: link:../../libs/ui-kit
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue-flow/core':
+        specifier: ^1.48.2
+        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-edge-cutting:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-file-drop:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-group:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-history:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+
+  packages/plugins/plugin-hot-reload:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-image-grid-split:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-manager:
+    dependencies:
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-mini-map:
+    dependencies:
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-multi-select:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.38(typescript@6.0.3)
+    devDependencies:
+      '@plume-canvas/plugin-theme-canvas':
+        specifier: workspace:*
+        version: link:../plugin-theme-canvas
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+
+  packages/plugins/plugin-node-3d-preview:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      three:
+        specifier: ^0.184.0
+        version: 0.184.0
+    devDependencies:
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-node-audio:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-node-find:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-node-image:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/editor':
+        specifier: workspace:*
+        version: link:../../libs/editor
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-node-image-compare:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-node-rotate:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-node-text:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/editor':
+        specifier: workspace:*
+        version: link:../../libs/editor
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-node-ui:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-node-video:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      '@plume-canvas/plugin-theme-canvas':
+        specifier: workspace:*
+        version: link:../plugin-theme-canvas
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@plume-canvas/plugin-theme-components':
+        specifier: workspace:*
+        version: link:../plugin-theme-components
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-shortcut-manager:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-showcase:
+    dependencies:
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-style-library:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@types/node':
+        specifier: ^24.1.0
+        version: 24.13.2
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
+      happy-dom:
+        specifier: ^21.0.4
+        version: 21.0.4
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+      vue-tsc:
+        specifier: ^3.2.8
+        version: 3.3.5(typescript@6.0.3)
+
+  packages/plugins/plugin-theme-canvas:
+    dependencies:
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      '@plume-canvas/ui-kit':
+        specifier: workspace:*
+        version: link:../../libs/ui-kit
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue-flow/core':
+        specifier: ^1.48.2
+        version: 1.48.2(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
+
+  packages/plugins/plugin-theme-components:
+    dependencies:
+      '@ckpack/vue-color':
+        specifier: 1.6.0
+        version: 1.6.0(vue@3.5.38(typescript@6.0.3))
+      '@plume-canvas/canvas-data':
+        specifier: workspace:*
+        version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
+      '@plume-canvas/kernel':
+        specifier: workspace:*
+        version: link:../../engine/kernel
+      '@plume-canvas/plugin-sdk':
+        specifier: workspace:*
+        version: link:../../libs/plugin-sdk
+      '@plume-canvas/ui-kit':
+        specifier: workspace:*
+        version: link:../../libs/ui-kit
+      lucide-vue-next:
+        specifier: ^1.0.0
+        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
+      vue-sonner:
+        specifier: ^2.0.9
+        version: 2.0.9
+    devDependencies:
+      '@plume-canvas/plugin-shortcut-manager':
+        specifier: workspace:*
+        version: link:../plugin-shortcut-manager
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.6
+        version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      '@vue/server-renderer':
+        specifier: 3.5.38
+        version: 3.5.38(vue@3.5.38(typescript@6.0.3))
+      happy-dom:
+        specifier: ^21.0.4
+        version: 21.0.4
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vite:
+        specifier: ^8.0.12
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: ^3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
 
 packages:
 
@@ -2708,14 +2643,8 @@ packages:
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
 
-  '@floating-ui/dom@1.7.6':
-    resolution: {integrity: sha512-9gZSAI5XM36880PPMm//9dfiEngYoC6Am2izES1FF406YFsjvyBMmeJ2g4SAju3xWwtuynNRFL2s9hgxpLI5SQ==}
-
   '@floating-ui/dom@1.8.0':
     resolution: {integrity: sha512-yXSrzeHZBTZadLOlfyhCkJHNeLJnHRnRInwdZ40L7ZiaAtrBwoYlsDrX3v5zB1Utk7CLfzcOVnVVWoXEky7Ceg==}
-
-  '@floating-ui/utils@0.2.11':
-    resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
 
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
@@ -2838,16 +2767,6 @@ packages:
   '@modelcontextprotocol/core@2.2.0':
     resolution: {integrity: sha512-iLhmprRmWI8EcosOA3wVvww22z02NkgqhV4fBH6f/odQBsi7xnJc0HGmi21yWO+/iKw2yzqVE127Zhna5/+JXw==}
     engines: {node: '>=20'}
-
-  '@modelcontextprotocol/sdk@1.30.0':
-    resolution: {integrity: sha512-xKd8OIzlqNzcqcNumGAa6g+PW2kjD5vrpcKOnfldAUPP3j7lnqMPwlTXQm8gF+UwH72z0lqaRbjr9hqGz0eITA==}
-    engines: {node: '>=18'}
-    peerDependencies:
-      '@cfworker/json-schema': ^4.1.1
-      zod: ^3.25 || ^4.0
-    peerDependenciesMeta:
-      '@cfworker/json-schema':
-        optional: true
 
   '@modelcontextprotocol/sdk@1.32.2':
     resolution: {integrity: sha512-SWsVtH/0vULSQStoZ6xxH2K09Li8fXYTMC64ZeogCdpZ3XSi1eCPOByV1OpuJxuI3OcmHhosDWYyii07tpPsLw==}
@@ -3346,6 +3265,9 @@ packages:
   '@smithy/core@3.35.1':
     resolution: {integrity: sha512-i4YPS4B6ts7bjn7UwLnGjiZdprOvHvgGobFZsYK3GIY3E5hIqtj0rReU69BcTpGp+fvtraSNXeG1l+jtJvF55w==}
     engines: {node: '>=18.0.0'}
+    deprecated: |-
+      Deprecated due to a bug in custom logger data redaction. Upgrade to the latest version. If you used a custom logger with this
+        version, review your logs and rotate any credentials or other secrets. See https://github.com/aws/aws-sdk-js-v3/issues/8393.
 
   '@smithy/credential-provider-imds@4.5.2':
     resolution: {integrity: sha512-A9uSdn72ozbRUSit0eib0TW7nXuNPlaeM0zcGkJ+nE6tFcSDbnmtwoxbTCFBukVQcszDAyvsd7+rTduPTXpygg==}
@@ -4963,11 +4885,12 @@ packages:
   glob@11.1.0:
     resolution: {integrity: sha512-vuNwKSaKiqm7g0THUBu2x7ckSs3XJLXE+2ssL7/MfTGPLLcrJQ/4Uq1CjPTtO5cCIiRxqvN6Twy1qOwhL0Xjcw==}
     engines: {node: 20 || >=22}
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
     hasBin: true
 
   glob@7.2.3:
     resolution: {integrity: sha512-nFR0zLpU2YCaRxwoCJvL6UvCH2JFyFVIvwTLsIf21AuHlMskA1hhTdk+LlYJtOlYt9v6dvszD2BGRqBL+iQK9Q==}
-    deprecated: Glob versions prior to v9 are no longer supported
+    deprecated: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
 
   gonzales-pe@4.3.0:
     resolution: {integrity: sha512-otgSPpUmdWJ43VXyiNgEYE4luzHCL2pz4wQ0OnDluC6Eg4Ko3Vexy/SrSynglw/eR+OhkzmqFCZa/OFa/RgAOQ==}
@@ -7428,24 +7351,17 @@ snapshots:
     dependencies:
       '@floating-ui/utils': 0.2.12
 
-  '@floating-ui/dom@1.7.6':
-    dependencies:
-      '@floating-ui/core': 1.8.0
-      '@floating-ui/utils': 0.2.12
-
   '@floating-ui/dom@1.8.0':
     dependencies:
       '@floating-ui/core': 1.8.0
       '@floating-ui/utils': 0.2.12
 
-  '@floating-ui/utils@0.2.11': {}
-
   '@floating-ui/utils@0.2.12': {}
 
   '@floating-ui/vue@1.1.11(vue@3.5.38(typescript@6.0.3))':
     dependencies:
-      '@floating-ui/dom': 1.7.6
-      '@floating-ui/utils': 0.2.11
+      '@floating-ui/dom': 1.8.0
+      '@floating-ui/utils': 0.2.12
       vue-demi: 0.14.10(vue@3.5.38(typescript@6.0.3))
     transitivePeerDependencies:
       - '@vue/composition-api'
@@ -7469,14 +7385,14 @@ snapshots:
       '@floating-ui/utils': 0.2.12
       vue: 3.5.44(typescript@5.9.3)
 
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))':
+  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.32.2(zod@3.25.76))':
     dependencies:
       google-auth-library: 10.9.1
       p-retry: 4.6.2
       protobufjs: 7.6.6
       ws: 8.22.0
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.30.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.32.2(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -7619,28 +7535,6 @@ snapshots:
     dependencies:
       zod: 4.6.5
 
-  '@modelcontextprotocol/sdk@1.30.0(zod@3.25.76)':
-    dependencies:
-      '@hono/node-server': 2.1.1(hono@4.13.5)
-      ajv: 8.18.0
-      ajv-formats: 3.0.1(ajv@8.18.0)
-      content-type: 1.0.5
-      cors: 2.8.6
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.1.1
-      express: 5.2.1
-      express-rate-limit: 8.7.0(express@5.2.1)
-      hono: 4.13.5
-      jose: 6.2.10
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
-    transitivePeerDependencies:
-      - supports-color
-
   '@modelcontextprotocol/sdk@1.32.2(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.5)
@@ -7700,11 +7594,11 @@ snapshots:
 
   '@penguinharness/use-firecrawl@0.2.13': {}
 
-  '@prismshadow/agenthub@0.4.15(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)':
+  '@prismshadow/agenthub@0.4.15(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/bedrock-sdk': 0.26.4(zod@3.25.76)
       '@anthropic-ai/sdk': 0.81.0(zod@3.25.76)
-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))
+      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.32.2(zod@3.25.76))
       express: 4.22.3
       openai: 6.49.0(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
     transitivePeerDependencies:
@@ -7718,7 +7612,7 @@ snapshots:
       - ws
       - zod
 
-  '@prismshadow/penguin-core@0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)':
+  '@prismshadow/penguin-core@0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)':
     dependencies:
       '@modelcontextprotocol/client': 2.2.0
       '@penguinharness/agent-company': 0.2.13
@@ -7734,7 +7628,7 @@ snapshots:
       '@penguinharness/use-bento-slides': 0.2.13
       '@penguinharness/use-claude-code': 0.2.13
       '@penguinharness/use-firecrawl': 0.2.13
-      '@prismshadow/agenthub': 0.4.15(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+      '@prismshadow/agenthub': 0.4.15(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
       arktype: 2.2.6
       smol-toml: 1.9.0
       yaml: 2.9.1
@@ -11101,7 +10995,7 @@ snapshots:
     dependencies:
       '@dotenvx/dotenvx': 2.38.2
       '@modelcontextprotocol/sdk': 1.32.2(zod@3.25.76)
-      '@vue/compiler-core': 3.5.38
+      '@vue/compiler-core': 3.5.44
       c12: 3.3.4
       commander: 15.0.0
       consola: 3.4.2
@@ -11135,7 +11029,7 @@ snapshots:
       validate-npm-package-name: 8.0.0
       vue: 3.5.44(typescript@5.9.3)
       vue-metamorph: 3.3.4(eslint@10.14.0(jiti@2.7.0))
-      vue-sfc-transformer: 0.3.1(@volar/typescript@2.4.28)(@vue/compiler-core@3.5.38)(@vue/language-core@3.3.5)(esbuild@0.28.2)(rolldown@1.2.16)(typescript@5.9.3)(vue@3.5.44(typescript@5.9.3))
+      vue-sfc-transformer: 0.3.1(@volar/typescript@2.4.28)(@vue/compiler-core@3.5.44)(@vue/language-core@3.3.5)(esbuild@0.28.2)(rolldown@1.2.16)(typescript@5.9.3)(vue@3.5.44(typescript@5.9.3))
       zod: 3.25.76
       zod-to-json-schema: 3.25.2(zod@3.25.76)
     transitivePeerDependencies:
@@ -11513,7 +11407,7 @@ snapshots:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
-      postcss: 8.5.15
+      postcss: 8.5.32
       rollup: 4.62.2
       tinyglobby: 0.2.17
     optionalDependencies:
@@ -11559,7 +11453,7 @@ snapshots:
       '@types/markdown-it': 14.2.0
       '@vitejs/plugin-vue': 5.2.4(vite@5.4.21(@types/node@24.13.2)(lightningcss@1.32.0)(stylus@0.57.0))(vue@3.5.38(typescript@6.0.3))
       '@vue/devtools-api': 7.7.9
-      '@vue/shared': 3.5.38
+      '@vue/shared': 3.5.44
       '@vueuse/core': 12.8.2(typescript@6.0.3)
       '@vueuse/integrations': 12.8.2(focus-trap@7.8.0)(typescript@6.0.3)
       focus-trap: 7.8.0
@@ -11693,9 +11587,9 @@ snapshots:
       '@vue/devtools-api': 6.6.4
       vue: 3.5.38(typescript@6.0.3)
 
-  vue-sfc-transformer@0.3.1(@volar/typescript@2.4.28)(@vue/compiler-core@3.5.38)(@vue/language-core@3.3.5)(esbuild@0.28.2)(rolldown@1.2.16)(typescript@5.9.3)(vue@3.5.44(typescript@5.9.3)):
+  vue-sfc-transformer@0.3.1(@volar/typescript@2.4.28)(@vue/compiler-core@3.5.44)(@vue/language-core@3.3.5)(esbuild@0.28.2)(rolldown@1.2.16)(typescript@5.9.3)(vue@3.5.44(typescript@5.9.3)):
     dependencies:
-      '@vue/compiler-core': 3.5.38
+      '@vue/compiler-core': 3.5.44
       tinyglobby: 0.2.17
       vue: 3.5.44(typescript@5.9.3)
     optionalDependencies:

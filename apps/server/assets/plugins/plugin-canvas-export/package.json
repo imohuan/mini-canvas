@@ -1,0 +1,43 @@
+{
+  "name": "@plume-canvas/plugin-canvas-export",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "plume": {
+    "title": "导出图片",
+    "description": "Ctrl/Cmd+E 整图 / Ctrl/Cmd+Shift+E 选中",
+    "pluginName": "canvas-export",
+    "installable": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./*": "./src/*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
+    "html-to-image": "^1.11.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vite-plugin-css-injected-by-js": "^3.5.2",
+    "vitest": "^3.0.0",
+    "vue": "^3.5.34"
+  }
+}

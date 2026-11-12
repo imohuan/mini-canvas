@@ -19,7 +19,7 @@
  * 依赖方向：只依赖 canvas-base / canvas-data / canvas-render / kernel。
  * 不 import plugin-theme-components（设计系统按钮走 ui 目录按名取，见 T08 守卫）。
  */
-import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@plume-canvas/canvas-base'
+import { Service, type Context, type ConfigSchema, type PluginModule, bindTypeDefaultSize } from '@plume-canvas/plugin-sdk'
 import type { DocService } from '@plume-canvas/canvas-data'
 import AudioPreview from './AudioPreview.vue'
 import AudioContent from './AudioContent.vue'

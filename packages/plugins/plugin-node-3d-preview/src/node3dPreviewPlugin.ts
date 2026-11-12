@@ -11,7 +11,7 @@
  *
  * 依赖方向：只依赖内核(canvas-base/canvas-data) + 渲染层类型(useCanvasRender)，不反向依赖宿主/demo。
  */
-import { Service, type Context, type PluginModule, type ConfigSchema } from '@plume-canvas/canvas-base'
+import { Service, type Context, type PluginModule, type ConfigSchema } from '@plume-canvas/plugin-sdk'
 import type { DocService } from '@plume-canvas/canvas-data'
 import PanoramaContent from './PanoramaContent.vue'
 import {

@@ -15,8 +15,8 @@ import {
   fitMediaCard,
   readMediaCardLimits,
   type MediaCardLimits,
-} from '@plume-canvas/canvas-base'
-import type { Context } from '@plume-canvas/canvas-base'
+} from '@plume-canvas/plugin-sdk'
+import type { Context } from '@plume-canvas/plugin-sdk'
 
 export type FlipAxis = 'horizontal' | 'vertical'
 

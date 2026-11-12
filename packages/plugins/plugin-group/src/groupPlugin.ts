@@ -12,7 +12,7 @@
  * 写模型：所有图变更统一走 ctx.get('doc')（唯一写入口，历史 + 落盘自动）。
  * 分层：只依赖内核(canvas-base/canvas-data) + 渲染层类型/事件，不直碰 VueFlow，不碰老版 src/。
  */
-import { Service, type Context, type PluginModule, type ConfigSchema, type InferConfig } from '@plume-canvas/canvas-base'
+import { Service, type Context, type PluginModule, type ConfigSchema, type InferConfig } from '@plume-canvas/plugin-sdk'
 import type { DocService, SelectionService } from '@plume-canvas/canvas-data'
 // 注意：canvas-render 只是 devDependency（类型/令牌），不能 runtime import。
 // 渲染层事件名是稳定字符串常量（canvas-render RenderEvents.NodeDragEnd 同名），这里本地定义，

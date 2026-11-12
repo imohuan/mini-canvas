@@ -11,7 +11,7 @@
  * UI 与逻辑同包：ImageCompareContent.vue 是 content 组件，二者在 apply(ctx) 里一次注册。
  * 依赖方向：只依赖内核 + 渲染层类型，不反向依赖宿主。
  */
-import { Service, type Context, type PluginModule } from '@plume-canvas/canvas-base'
+import { Service, type Context, type PluginModule } from '@plume-canvas/plugin-sdk'
 import type { DocService } from '@plume-canvas/canvas-data'
 import ImageCompareContent from './ImageCompareContent.vue'
 import {

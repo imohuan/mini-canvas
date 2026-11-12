@@ -17,8 +17,7 @@
  *
  * 这样"同源托管"和"跨源独立界面"两种部署都不用手填地址。
  */
-import { withAdminToken } from '@plume-canvas/canvas-base'
-import { apiUrl, normalizeApiBase } from '@plume-canvas/bar-contract'
+import { apiUrl, normalizeApiBase, withAdminToken } from '@plume-canvas/plugin-sdk'
 
 /** 从 settings 读 cloud-server 根地址（缺省/未就绪 → 空串 = 同源） */
 export function resolveApiBase(ctx: { tryGet<T>(name: string): T | undefined }): string {

@@ -13,9 +13,9 @@
  * - `declare module '@plume-canvas/canvas-data'` 给 `ctx.text` 加直访类型（运行靠服务解析 Proxy），
  *   宿主/作者可 `ctx.text` 直访或 `ctx.get<TextService>('text')` 类型安全消费。
  *
- * 依赖方向：只依赖内核(@plume-canvas/canvas-base / canvas-data)，不反向依赖宿主/其它插件。
+ * 依赖方向：只依赖内核(@plume-canvas/plugin-sdk / canvas-data)，不反向依赖宿主/其它插件。
  */
-import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@plume-canvas/canvas-base'
+import { Service, type PluginModule, type Context, type ConfigSchema, bindTypeDefaultSize } from '@plume-canvas/plugin-sdk'
 import TextPreview from './TextPreview.vue'
 
 /**
@@ -38,7 +38,7 @@ export const Config: ConfigSchema = {
 }
 import type { DocService } from '@plume-canvas/canvas-data'
 import TextContent from './TextContent.vue'
-import { publishToolActions, registerBarAction, registerBarApplier } from '@plume-canvas/bar-contract'
+import type { NodeBarContract } from '@plume-canvas/canvas-data'
 
 /** text 插件暴露给外部的服务形状（content 组件经 ctx.get('text') 使用；形状保持不变，.vue 零改动） */
 export interface TextNodeService {
@@ -126,13 +126,15 @@ export function apply(ctx: Context) {
   //     §0.3：nodeBar 是插件服务（不是宿主恒在服务），故不进 inject；没装 bottom-bar 的宿主照常工作。
   //     注册糖把条目落在**本插件** scope（卸载自动摘除），所以这里不自己 ctx.effect。
   const registerBar = (): boolean => {
-    if (!ctx.tryGet('nodeBar')) return false
+    // 底栏是可装卸插件：没装时本插件照常工作，等它上架后再注册一次。
+    const bar = ctx.tryGet<NodeBarContract>('nodeBar')
+    if (!bar) return false
     // AI 生成文本：每个 produces:'text' 的工具一条动作（输入框= data.text，编辑即写回）
-    publishToolActions(ctx, { types: ['text'], produces: 'text', needsPrompt: true, promptBinding: 'text' })
+    bar.publishTools(ctx, { types: ['text'], produces: 'text', needsPrompt: true, promptBinding: 'text' })
     // 复制 / 删除已按用户口径（2026-11-07）删除：底栏那个位置留给模型下拉，
     // 节点操作走画布快捷键与右键菜单（clipboard 插件那套），不占底栏。
     // 生成结果写入器：把 result.text 写进 data.text（走 doc.updateNode，是作品、可撤销）
-    registerBarApplier(ctx, 'text', (nodeId, result) => {
+    bar.registerApplier(ctx, 'text', (nodeId, result) => {
       ctx.doc.updateNode(nodeId, { data: { text: typeof result.text === 'string' ? result.text : '' } })
     })
     return true

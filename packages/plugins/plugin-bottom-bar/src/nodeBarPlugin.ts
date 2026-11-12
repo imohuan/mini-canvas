@@ -10,15 +10,14 @@
  * 服务取值（见计划 §0.1）：插件 apply 内可直访 ctx.nodeBar；组件与根级测试一律
  * ctx.get('nodeBar') —— 服务解析 Proxy 只存在于插件作用域。
  */
-import { Service, type Context } from '@plume-canvas/canvas-base'
+import { Service, type Context } from '@plume-canvas/plugin-sdk'
 import type { PluginScope } from '@plume-canvas/kernel'
 import type { DocService } from '@plume-canvas/canvas-data'
 import type { BarAction, BarApplier } from './barTypes'
-import { registerBarAction, registerBarApplier } from '@plume-canvas/bar-contract'
 import type { ToolResourceKind } from '@plume-canvas/kernel'
 import { runAction, type TaskDeps } from './taskRuntime'
 import { errorState, readRunState } from './runState'
-import { publishToolActions, type PublishToolActionsOptions } from './toolActions'
+import { BAR_FIELD, publishToolActions, type PublishToolActionsOptions } from './toolActions'
 import NodeBottomBar from './NodeBottomBar.vue'
 // 参考选择态浮层（顶行「参考」按钮引发）：注册进同一 overlay 槽，与底栏宿主同层。
 import ReferenceSelectOverlay from './ReferenceSelectOverlay.vue'
@@ -34,8 +33,19 @@ export const BOTTOM_BAR_SLOT = 'bottomBar'
  *  保留这个常量是因为参考选择态 / 媒体预览等其它浮层仍挂在同一槽（见 apply 里的注册）。 */
 export const BOTTOM_BAR_SLOT_NAME = 'overlay'
 
-/** 跨插件共用的两张注册场 */
-export const BAR_FIELD = 'node/bar'
+export { BAR_FIELD }
+
+/** 注册糖：条目落调用方插件作用域（卸载自动摘除、同 id 替换）。 */
+export function registerBarAction(scope: PluginScope, action: BarAction): void {
+  scope.registryOf<BarAction>(BAR_FIELD).add(`actions/${action.id}`, action, { id: action.id })
+}
+
+export function registerBarApplier(scope: PluginScope, kind: string, fn: BarApplier): void {
+  const field = scope.registryOf<BarApplier>(BAR_FIELD)
+  const key = `appliers/${kind}`
+  if (field.has(key)) throw new Error('[bottom-bar] applier already registered: ' + kind)
+  field.add(key, fn, { id: kind })
+}
 
 /** 类型 → 内容 kind（publishToolActions 用；与内核 ToolResourceKind 同词表） */
 export function kindOf(nodeType: string): ToolResourceKind | undefined {
@@ -243,10 +253,6 @@ export class NodeTaskService extends Service {
     return typeof action.onCancel === 'function'
   }
 }
-
-// ==================== 注册糖（写走调用方作用域，条目归注册方） ====================
-
-export { registerBarAction, registerBarApplier }
 
 export const name = 'bottom-bar'
 export const inject = ['doc'] as string[]

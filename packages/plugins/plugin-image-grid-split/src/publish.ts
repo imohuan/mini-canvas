@@ -9,7 +9,7 @@
  *
  * 纯 DOM/服务编排，不碰会话状态（publishing 锁由调用方管）。
  */
-import type { Context } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/plugin-sdk'
 import { mediaCapabilityOf } from '@plume-canvas/canvas-render'
 import { uniformGridPositions, toPixelRect, unitCells } from './gridSplit'
 import { DEFAULT_IMAGE_LIMITS, fitCardSize, fitImageLimits, type ImageFitLimitsLike } from './imageFitBridge'

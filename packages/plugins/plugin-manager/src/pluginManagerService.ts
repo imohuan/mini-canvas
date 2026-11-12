@@ -9,7 +9,7 @@
  * 边界：本服务不认识具体插件，只认清单行的「地址 + 全局名」。装什么、从哪装由清单决定。
  */
 import { reactive } from 'vue'
-import { withAdminToken, type Context, type PluginModule } from '@plume-canvas/canvas-base'
+import { withAdminToken, type Context, type PluginModule } from '@plume-canvas/plugin-sdk'
 import type { FeedbackService } from '@plume-canvas/canvas-render'
 import {
   normalizeCatalog,

@@ -2,7 +2,7 @@
 /**
  * SkillsPage —— 技能页：已安装 / 可导入 / 按目录导入。
  *
- * 只换 UI 层：控件全部来自 @plume-canvas/ui-kit-shadcn，数据与调用仍走 agent 服务。
+ * 只换 UI 层：控件全部来自 @plume-canvas/ui-kit，数据与调用仍走 agent 服务。
  * 行结构 = 左侧名称与说明、右侧动作（ShadcnSettingsRow 在同一张卡片里带分割线）。
  */
 import { onMounted, ref } from 'vue'

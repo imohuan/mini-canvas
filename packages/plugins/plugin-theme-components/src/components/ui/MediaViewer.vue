@@ -20,7 +20,7 @@
  * 换张、下载、键盘、滚动锁、打开关闭接线；模板与 scoped 样式仍留在本入口。
  */
 import { computed } from "vue"
-import { Button } from "@plume-canvas/ui-kit-shadcn"
+import { Button } from "@plume-canvas/ui-kit"
 import { useMediaViewerController } from "./media-viewer/useMediaViewerController"
 import type { MediaViewerItem } from "./media-viewer/types"
 

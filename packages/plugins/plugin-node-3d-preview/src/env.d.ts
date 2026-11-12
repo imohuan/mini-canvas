@@ -7,7 +7,7 @@
  * 贴图/OrbitControls），装一整套类型会拉进几十个 d.ts 与额外依赖，收益不抵成本。
  * 声明成 any 的代价只是本包内 three 相关代码没有类型检查 —— 行为由测试与真机验证兜住。
  * 注意：这是**插件自己的** shim；宿主（packages/ui）跨包引用本插件源码时读不到它，
- * 所以宿主侧另有一份同名声明（packages/ui/src/three.d.ts）。
+ * 所以宿主侧另有一份同名声明（apps/web/src/three.d.ts）。
  */
 declare module 'three'
 
