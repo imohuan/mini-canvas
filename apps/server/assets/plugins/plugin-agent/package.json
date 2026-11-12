@@ -49,12 +49,12 @@
     "@prismshadow/penguin-core": "0.2.13",
     "hono": "^4.6.0",
     "yaml": "^2.9.1",
-    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-render": "workspace:*",
     "@plume-canvas/kernel": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "vue-draggable-plus": "^0.6.1",
-    "prosemirror-editor-bundle": "workspace:*"
+    "@plume-canvas/editor": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"

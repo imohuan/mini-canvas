@@ -96,7 +96,7 @@ const hasCanvas = computed(() => Boolean(ctx.tryGet('doc')))
 | `@plume-canvas/plugin-theme-components` | `themeComponentsPlugin`（`theme-components`） | 通用 UI 目录、设置面板、外观变量、通知服务 | 应用级常驻 |
 | `@plume-canvas/plugin-theme-canvas` | `themeCanvasPlugin`（`theme-canvas`） | 节点壳、连线、背景、节点工具栏 | 进画布（`inject: ['doc']`） |
 
-两个包共享的纯数据（配置默认值、外观桥接、图标表）住在 `@plume-canvas/theme-contract`，
+两个包共享的启动默认值住在引擎 `@plume-canvas/canvas-render`，其余外观件各归自己的插件，
 两边都能读，但谁也不认识对方的组件。旧的聚合入口 `themeDefaultPlugin` 已删除。
 
 ## 云端插件也分两段

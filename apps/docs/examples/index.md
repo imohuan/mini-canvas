@@ -70,8 +70,8 @@ if (!ctx.tryGet('nodeBar')) {
 
 ```text
 plugin-node-text / node-video / web2api-tools
-       │ 往 node/bar 注册动作
-       └──► @plume-canvas/bar-contract（纯类型 + 注册糖）
+       │ ctx.get('nodeBar').publishTools / register / registerApplier
+       └──► 类型来自 @plume-canvas/canvas-data（引擎），实现在 plugin-bottom-bar
 
 theme-canvas（默认皮）←── 不依赖任何节点插件（刻意解耦）
 plugin-tool-*-generation（生成工具）←── 不依赖节点插件（节点面板反向调它）

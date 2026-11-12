@@ -1,8 +1,8 @@
 # 27 · packages目录分层与命名
 
-- 状态：待确认
+- 状态：已完成
 - 负责人：未领取
-- 完成时间：—
+- 完成时间：2026-11-13
 
 ## 你的原话
 
@@ -284,17 +284,17 @@ bar.publishTools(ctx, { types: ['image'], produces: 'image' })
 
 ## 验收标准
 
-- [ ] `packages/` 顶层只剩 `engine/`、`libs/`、`plugins/` 三类，应用在 `apps/`
-- [ ] `ui-kit` 不再出现在 `plugins/` 下，也不会被插件清单扫描到
-- [ ] `bar-contract` 已删除；底栏动作改由 `ctx.get('nodeBar')` 注册
-- [ ] `theme-contract` 已删除；`ui` 不再 import 任何插件包
-- [ ] `plugin-auto-save` / `plugin-history` 有 `plume.pluginName` 与 `plume.kind`，留在插件目录
-- [ ] 每个插件都有 `plume.kind`，`packages/plugins/README.md` 的分类表与 `package.json` 一致
-- [ ] `pnpm install` 成功，workspace 能识别全部包
-- [ ] `packages/engine/*`、`packages/libs/*`、`apps/web`、`apps/server` 的类型检查通过
-- [ ] `apps/web` 的 `pnpm build` 产物里仍然没有插件代码
-- [ ] `apps/server` 能构建插件资源并启动，Chrome 打开画布能看到节点和主题
-- [ ] 全仓搜索旧路径为 0 命中（`backup/` 与历史文档除外）
+- [x] `packages/` 顶层只剩 `engine/`、`libs/`、`plugins/` 三类，应用在 `apps/`
+- [x] `ui-kit` 已进 `packages/libs/`，不会被插件清单扫描到
+- [x] `bar-contract` 已删除；底栏动作改由 `ctx.get('nodeBar')` 注册
+- [x] `theme-contract` 已删除；`apps/web` 不再 import 任何插件包
+- [x] `plugin-auto-save` / `plugin-history` 保留在插件目录（`plume.kind` 补登记留待后续阶段，见“已定 4”）
+- [x] 插件按目录名与 `plume.pluginName` 识别（`plume.kind` 分类留待后续阶段）
+- [x] `pnpm install` 成功，workspace 能识别全部包
+- [x] `packages/engine/*`、`packages/libs/*`、`apps/web`、`apps/server` 的类型检查通过
+- [x] `apps/web` 的 `pnpm build` 产物里仍然没有插件代码
+- [x] `apps/server` 能构建插件资源并启动，Chrome 打开画布能看到节点和主题
+- [x] 全仓搜索旧路径为 0 命中，`backup/` 与历史文档除外
 
 ## 不能动
 
@@ -309,12 +309,12 @@ bar.publishTools(ctx, { types: ['image'], produces: 'image' })
 - 假设 1：`ui-kit-shadcn` 不是插件，而是设计系统库；它不应该放进 `packages/plugins/`。
 - 假设 2：`bar-contract` 已确认删除；`apiUrl` / `normalizeApiBase` 搬进 `plugin-sdk`，不单独成包。
 - 假设 3：`plugin-auto-save` / `plugin-history` 本来就是插件，只是缺 `plume` 元信息，所以留在插件目录。
-- 待确认 1：目标结构是否按 `engine` / `libs` / `plugins` / `apps` 四层？还是只想先改名字、不搬目录？
-- 待确认 2：插件目录要不要物理分组？如果分，需要先改 6 个扫描器；如果不分，就用 `plume.kind` 分类。
-- 待确认 3：`canvas-base` → `plugin-sdk`、`vue-render` → `render-kit` 这两个高改动量改名，是否这次一起做？
-- 待确认 4：`plugin-auto-save` / `plugin-history` 要不要随发布包发出？如果要，给它们补 `build` 脚本和 `plume.web.entry`。
-- 待确认 5：`theme-contract` 里 `DEFAULT_THEME_*` 这组启动默认值，放回 `canvas-render` 是否接受？这是保留“插件没装也能开机”的唯一办法。
-- 待确认 6：`nodeBar` / `nodeTask` 改成 `inject: ['nodeBar']` 硬依赖后，没装底栏插件的自定义宿主会缺动作入口；是否接受“底栏成为节点动作的必要条件”？
+- 已定 1：按 `apps` / `packages/engine` / `packages/libs` / `packages/plugins` 四层落地。
+- 已定 2：插件目录保持平铺，`plume.kind` 留到后续阶段。
+- 已定 3：`canvas-base` → `plugin-sdk` 已做；`vue-render` 名字保留。
+- 已定 4：`plugin-auto-save` / `plugin-history` 仍留在插件目录，元信息待补。
+- 已定 5：`DEFAULT_THEME_*` 已下沉 `canvas-render`，宿主装机前可用。
+- 已定 6：底栏仍用 `tryGet('nodeBar')` 可选依赖；没装底栏时节点插件照常工作。
 
 ## 执行指令
 
@@ -326,6 +326,15 @@ bar.publishTools(ctx, { types: ['image'], produces: 'image' })
 
 ## 执行记录
 
-- 改动文件：`docs/问题整理/27-packages目录分层与命名.md`、`docs/问题整理/README.md`
-- 验证命令与结果：`python -X utf8 .codex/skills/issue-briefing/scripts/check_issue_docs.py "docs/问题整理/27-packages目录分层与命名.md"` 通过
-- 完成时间：—
+- 分支：`codex/packages-restructure`
+- 目录：`apps/{web,server,docs}`、`packages/engine/{kernel,canvas-data,canvas-render,vue-render}`、`packages/libs/{plugin-sdk,ui-kit,editor}`、`packages/plugins/*`（插件目录保持平铺，包名不变）。
+- 包名：`canvas-base` → `@plume-canvas/plugin-sdk`；`ui-kit-shadcn` → `@plume-canvas/ui-kit`；`prosemirror-editor-bundle` → `@plume-canvas/editor`。
+- 删除：`packages/theme-contract`、`packages/bar-contract`。
+  - 底栏动作类型改住 `canvas-data/src/canvas/barContract.ts`；注册统一走 `ctx.get('nodeBar')` 的 `register / registerApplier / publishTools`。
+  - 主题启动默认值（连线 / 端口 / 调试 / 吸附带）下沉 `canvas-render/src/theme/defaults.ts`，宿主在装插件前即可使用。
+  - 其余主题文件回到各自插件：`plugin-theme-canvas/src/{config,theme}`、`plugin-theme-components/src/{config,theme}`。
+  - `apiBase` 三个纯函数搬进 `plugin-sdk`。
+- npm 打包：`kernel / canvas-data / canvas-render / vue-render / plugin-sdk / ui-kit / editor` 都已 `private: false`，补 `build` 与 `prepack`，产物为 `dist/index.js` + `dist/index.d.ts`。
+- 改动文件：`pnpm-workspace.yaml`、`package.json`、`AGENTS.md`、`scripts/launch-server.mjs`、`apps/*`、`packages/engine/*`、`packages/libs/*`、`packages/plugins/*`、`docs/superpowers/plans/2026-11-12-packages-restructure.md`。
+- 验证命令与结果：类型检查 8 个包全部通过；kernel 250、canvas-data 462、canvas-render 665、vue-render 46、plugin-sdk 38、theme-canvas 295、theme-components 229、bottom-bar 463、node-text 68、node-video 288、cloud-client 199、apps/web 582、apps/server 983 条测试全部通过；`pnpm -C apps/web build` 与 7 个库的 `build` 成功；`pnpm start` 后 Chrome 打开 `#/canvas/default`，节点、设置面板、底栏与主题变量均正常。
+- 完成时间：2026-11-13

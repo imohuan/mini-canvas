@@ -14,6 +14,7 @@ Plume（羽画，命令行与包名 `plume-canvas`）是一个可扩展的画布
 ## 二、packages 里有什么
 
 依赖方向是单向的：`kernel ← canvas-data ← canvas-render ← plugins`。
+源码分四层：`apps/`（能启动的产品）、`packages/engine/`（引擎）、`packages/libs/`（库）、`packages/plugins/`（能装能卸的插件）。
 
 | 包 | 作用 |
 |---|---|
@@ -22,10 +23,11 @@ Plume（羽画，命令行与包名 `plume-canvas`）是一个可扩展的画布
 | `packages/engine/canvas-render` | 渲染层：VueFlow 宿主、DOM、注入令牌、节点布局和视口。 |
 | `packages/libs/plugin-sdk` | 给插件作者的薄入口，重导出 kernel 和 canvas-data 的类型与常用 API。 |
 | `apps/web` | 成品应用：装配插件、路由、外壳和设置面板，开发时用 `pnpm dev` 打开画布。 |
-| `packages/plugins/*` | 插件库，当前 37 个插件包，包含主题、节点、工具、Agent、插件管理等。四套开发演示合并为 `plugin-demo-kit`（可安装件，不随产品冷启动）。 |
+| `packages/plugins/*` | 插件库，当前 35 个插件包，包含主题、节点、工具、Agent、插件管理等。四套开发演示合并为 `plugin-demo-kit`（可安装件，不随产品冷启动）。 |
 | `apps/server` | 自托管云端：画布与资源存储、静态页面托管、MCP 接口。Agent 后台实现住在 `plugin-agent`，这里只做装配与端口注入。 |
 | `apps/docs` | VitePress 文档站，默认端口 5290。 |
 | `packages/libs/editor` | 富文本编辑器组件包，供文本节点使用。 |
+| `packages/libs/ui-kit` | shadcn-vue 设计系统库：按钮、下拉、弹窗、字体与圆角选项。 |
 
 `backup/canvas-core` 是已移出的 v1 老版内核，**不再参与构建，也不作为示例**。
 `backup/mcp-server` 是已移出的旧 MCP 后端，当前开发以 `apps/server` 为准。

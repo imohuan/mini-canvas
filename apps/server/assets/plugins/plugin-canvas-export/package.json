@@ -27,7 +27,7 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*",
     "@plume-canvas/kernel": "workspace:*",
     "html-to-image": "^1.11.13"

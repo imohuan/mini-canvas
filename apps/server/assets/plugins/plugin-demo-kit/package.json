@@ -31,12 +31,12 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*",
     "@plume-canvas/plugin-align-guide": "workspace:*",
     "@plume-canvas/plugin-edge-cutting": "workspace:*",
     "@plume-canvas/plugin-multi-select": "workspace:*",
-    "@plume-canvas/ui-kit-shadcn": "workspace:*",
+    "@plume-canvas/ui-kit": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "@plume-canvas/plugin-theme-components": "workspace:*",
     "@plume-canvas/plugin-theme-canvas": "workspace:*"

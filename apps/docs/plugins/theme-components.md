@@ -15,7 +15,7 @@
 | `@plume-canvas/plugin-theme-components` | `theme-components` | 本页讲的通用组件、设置面板、外观变量、通知服务（应用级常驻） |
 | `@plume-canvas/plugin-theme-canvas` | `theme-canvas` | 节点壳 / 连线 / 背景 / 节点工具栏（进画布才启动），见 [默认主题](/plugins/theme-canvas) |
 
-两者共享的纯数据在 `@plume-canvas/theme-contract`。
+启动默认值住在引擎 `@plume-canvas/canvas-render`；外观桥接、图标表与通知实现都在本包内。
 
 ## 二、它注册了两类东西
 

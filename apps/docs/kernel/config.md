@@ -203,7 +203,7 @@ export function apply(ctx: Context, config: MyPluginConfig): void {
 }
 ```
 
-真实例子：`packages/theme-contract/src/themeDefaults.ts` 用两份 schema（`CanvasConfig` + `AppearanceConfig`）导出几十项外观参数，
+真实例子：`packages/plugins/plugin-theme-canvas/src/config` 与 `plugin-theme-components/src/config` 各自导出外观参数（`CanvasConfig` / `AppearanceConfig`），
 `packages/plugins/plugin-align-guide/src/alignGuidePlugin.ts` 用 `ctx.tryGet('settings')` + `onChange` 把颜色实时写进 CSS 变量。
 
 ## 会在哪里用到

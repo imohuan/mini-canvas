@@ -9,8 +9,8 @@
 | `@plume-canvas/plugin-theme-canvas` | `theme-canvas` | 节点壳 / 连线 / 背景 / 拖线临时线 / 节点上下工具栏 | 进画布才启动（`inject: ['doc']`） | `packages/plugins/plugin-theme-canvas` |
 | `@plume-canvas/plugin-theme-components` | `theme-components` | 通用组件目录 / 设置面板 / 外观变量 / 通知服务 | 应用级常驻 | `packages/plugins/plugin-theme-components` |
 
-两边**互不 import**。要共用的纯数据（配置默认值、`Config` 分片、外观桥接、图标表）
-放在 `packages/theme-contract`，只放 TS 数据与纯函数，不放 `.vue`。
+两边**互不 import**。启动就要用的默认值（连线 / 端口 / 调试 / 吸附带）住在引擎
+`@plume-canvas/canvas-render`；画布自己的配置表在 `plugin-theme-canvas/src/config`。
 
 本页讲**画布这一半**（theme-canvas）；组件那一半见 [默认主题组件库](/plugins/theme-components)。
 
@@ -37,7 +37,7 @@
 ```ts
 export const name = 'theme-canvas'
 export const inject = ['doc'] as string[]
-export const Config = CanvasConfig   // 来自 @plume-canvas/theme-contract
+export const Config = CanvasConfig   // 来自本包 ./config/canvasConfig
 
 export function apply(ctx, config) {
   ctx.theme.register('nodeShell', BaseNode)
@@ -50,7 +50,7 @@ export function apply(ctx, config) {
 
 ## 它声明的配置
 
-画布这一半的配置键都住在 `theme-contract` 的 `CanvasConfig`：
+画布这一半的配置键都住在 `plugin-theme-canvas/src/config/canvasConfig.ts`：
 
 | 配置组 | 管什么 | 举例 |
 | --- | --- | --- |

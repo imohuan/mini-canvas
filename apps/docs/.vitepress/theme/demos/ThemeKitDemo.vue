@@ -9,7 +9,7 @@
  *
  * 用法（MD 里）：<ThemeKitDemo name="slider" />
  */
-import '@plume-canvas/ui-kit-shadcn/styles.css'
+import '@plume-canvas/ui-kit/styles.css'
 import { ref } from 'vue'
 import {
   PrecisionSlider,
@@ -32,7 +32,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@plume-canvas/ui-kit-shadcn'
+} from '@plume-canvas/ui-kit'
 import ToolParamGroup from '@plume-canvas/plugin-theme-components/components/ui/ToolParamGroup.vue'
 // 三个参数预设件没有从包根导出 → 从组件子路径取（同一份实现）
 import ToolOptionGrid from '@plume-canvas/plugin-theme-components/components/ui/ToolOptionGrid.vue'

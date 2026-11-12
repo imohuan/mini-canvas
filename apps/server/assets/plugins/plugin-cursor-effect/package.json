@@ -28,7 +28,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },

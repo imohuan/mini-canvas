@@ -28,12 +28,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@plume-canvas/bar-contract": "workspace:*",
-    "@plume-canvas/canvas-base": "workspace:*",
+    "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*",
     "@plume-canvas/canvas-render": "workspace:*",
     "@plume-canvas/kernel": "workspace:*",
-    "prosemirror-editor-bundle": "workspace:*",
+    "@plume-canvas/editor": "workspace:*",
     "vue-draggable-plus": "^0.6.1"
   },
   "peerDependencies": {
