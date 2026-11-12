@@ -65,14 +65,14 @@ describe('全局目录里是旧副本时，后台半要回落到随包版本', (
     expect(picked?.replace(/\\/g, '/')).toContain('/packaged/plugin-agent')
   })
 
-  it('全局那份**带**后台半时仍以全局为准（更新过的版本优先）', async () => {
+  it('自带插件的全局副本不是 NPM 装的 → 用随包那份（避免旧副本盖住新构建）', async () => {
     const globalRoot = path.join(dir, 'global')
     const packagedRoot = path.join(dir, 'packaged')
     await writeWithServer(globalRoot, 'plugin-agent')
     await writeWithServer(packagedRoot, 'plugin-agent')
 
     const picked = await resolvePluginDirWithServer({ global: globalRoot, packaged: packagedRoot }, 'plugin-agent')
-    expect(picked?.replace(/\\/g, '/')).toContain('/global/plugin-agent')
+    expect(picked?.replace(/\\/g, '/')).toContain('/packaged/plugin-agent')
   })
 })
 

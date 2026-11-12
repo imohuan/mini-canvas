@@ -243,25 +243,40 @@ async function main(): Promise<void> {
   console.log('')
   console.log(`  画布   ${info.url}/`)
   if (portChanged) console.log(`         （端口 ${opts.port} 被占用，已自动改用 ${info.port}）`)
-  console.log(`  数据   ${srv.paths.data}`)
-  console.log(`         kv/       ${srv.paths.kv}（设置 / 快捷这类小数据）`)
-  console.log(`         canvases/ ${srv.paths.canvases}（一个画布一个文件夹）`)
+  /*
+   * 数据目录打印**真实路径**：本地 `.plume` 现在是指向 `~/.plume` 的链接，
+   * 直接打 `srv.paths.data` 会显示链接位置，用户看不出数据到底落在哪。
+   * 子目录只列名字：同一段长路径重复三遍既难读，也看不出层级。
+   */
+  const realDir = await realPathOf(srv.paths.data)
+  console.log(`  数据   ${realDir}`)
+  console.log('         画布 canvases/ · 设置 kv/ · 平台 providers/ · 插件 plugins/')
   console.log(`  界面   ${srv.paths.ui ?? '未找到 packages/ui/dist —— 先执行 cd packages/ui && pnpm build'}`)
+  const realPlugins = await realPathOf(srv.paths.plugins)
   console.log(
-    `  插件   ${srv.paths.plugins ?? '(未找到插件目录)'} · 识别到 ${catalog.plugins.length} 个，` +
+    `  插件   ${realPlugins ?? '(未找到插件目录)'} · 识别到 ${catalog.plugins.length} 个，` +
       `开箱自动装 ${builtinEntries.length} 个（首装 ${FIRST_INSTALL_DIRS.length} 个）`,
   )
   for (const p of builtinEntries) console.log(`         - ${p.id}  → ${p.url}`)
-  console.log(`  平台   ${srv.paths.providers}（丢 .js 进去即多一个平台）`)
+  console.log(`  平台   ${await realPathOf(srv.paths.providers)}（丢 .js 进去即多一个平台）`)
   // ---- 管理面安全：令牌与白名单**逐行**打印（配错时能一眼看出来，而不是等 403 才猜）----
   if (srv.adminTokenSource === 'disabled') {
     console.log('')
     console.log('  ⚠️  管理鉴权已关闭（--no-admin-auth）—— 任何网页都能装插件 / 跑脚本 / 改画布')
   } else {
     console.log('')
-    console.log('  管理令牌 ' + (srv.adminTokenSource === 'env' ? '（来自 PLUME_ADMIN_TOKEN）' : srv.adminTokenFile))
+    /*
+     * 这串不是日常登录密码：登录用 cloud-client 面板里自己设的密码（首次打开设置一次，
+     * 之后自动登录）。它只是「忘记密码 / 直接调用接口」时的恢复通道，打印出来备用。
+     */
+    console.log(
+      '  恢复令牌 ' +
+        (srv.adminTokenSource === 'env'
+          ? '（来自 PLUME_ADMIN_TOKEN）'
+          : await realPathOf(srv.adminTokenFile)),
+    )
     console.log('           ' + srv.adminToken)
-    console.log('           前端在「设置 → 插件」里填一次；删掉令牌文件重启即轮换')
+    console.log('           忘记登录密码时用它重置；删掉该文件并重启即轮换')
   }
   console.log('  信任来源 ' + srv.trust.hosts.join(' · '))
   if (srv.trust.origins.length) console.log('           额外 Origin: ' + srv.trust.origins.join(' · '))
@@ -300,6 +315,16 @@ function openBrowser(url: string): void {
     spawn(cmd, args, { stdio: 'ignore', detached: true, windowsHide: true }).unref()
   } catch {
     console.log(`  （没能自动打开浏览器，手动访问 ${url} 即可）`)
+  }
+}
+
+/** 打印用的真实路径：链接（`.plume` → `~/.plume`）解析成实际目录，取不到就原样 */
+async function realPathOf(target: string | null | undefined): Promise<string | undefined> {
+  if (!target) return undefined
+  try {
+    return await fs.realpath(target)
+  } catch {
+    return target
   }
 }
 

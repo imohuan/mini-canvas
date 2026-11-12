@@ -45,6 +45,8 @@ packages/ui/e2e/_tmp-*.mjs
 .plume/
 # cloud-server 数据目录的备份（手动/脚本备份出来的运行时快照，可能几百 MB，不入库）
 .plume-backup-*/
+# 本机运行数据快照（画布 / 插件 / 令牌 / 日志，可能上百 MB，不入库）
+backup/plume-*/
 
 # cloud-server 打包时收集的随包产物（由 scripts/bundle-assets.mjs 生成，不入库）
 packages/cloud-server/assets/

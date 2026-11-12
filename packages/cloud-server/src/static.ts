@@ -15,7 +15,7 @@ import { Hono } from 'hono'
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { buildPluginCatalog } from './plugins/catalog.js'
 import { BUILTIN_BY_DIR, BUILTIN_PLUGINS, FIRST_INSTALL_DIRS } from './plugins/builtinPlugins.js'
-import type { PluginRoots } from './plugins/pluginRoots.js'
+import { resolvePluginDir, type PluginRoots } from './plugins/pluginRoots.js'
 
 /**
  * 本包自己的根目录（用于找随包发布的 assets/）。
@@ -476,7 +476,7 @@ function injectAdminToken(html: Uint8Array<ArrayBuffer>, token: string | undefin
  *
  * 拿不到对端地址（非 Node 适配器 / 测试里的裸 request）→ 一律当作**不是**本机。
  */
-function isLoopbackRequest(c: unknown): boolean {
+export function isLoopbackRequest(c: unknown): boolean {
   let remote: string | undefined
   try {
     remote = getConnInfo(c as never).remote.address
@@ -565,12 +565,27 @@ export function pluginRoutes(pluginsDir: string | PluginRoots | undefined): Hono
     if (!pluginsDir) return c.json({ ok: false, error: '未配置插件目录' }, 404)
     const resolved = resolvePluginAsset(c.req.path)
     if ('error' in resolved) return c.json({ ok: false, error: resolved.error }, 400)
-    // 先按原路径找，再回退到 dist/ 下的同名文件（兼容旧产物与只声明文件名的插件）
-    // 两级根：全局优先、随包兜底。
+    /*
+     * 先按原路径找，再回退到 dist/ 下的同名文件（兼容旧产物与只声明文件名的插件）。
+     *
+     * 根的顺序必须与清单（plugins/catalog.ts 的 resolvePluginDir）**同一套规则**：
+     * 否则会出现「清单指向新产物、文件却从旧副本发出」—— `pnpm start` 重新编译后
+     * 页面仍是旧代码（2026-11-12 用户实测：删掉的「管理令牌」又出现了）。
+     * 这里按插件目录逐级解析：自带插件默认随包，NPM 安装副本或非自带件用全局。
+     */
+    const firstSeg = resolved.rel.split('/')[0] ?? ''
     const roots: string[] =
       typeof pluginsDir === 'string'
         ? [pluginsDir]
-        : [pluginsDir.global, pluginsDir.packaged].filter((p): p is string => !!p)
+        : (
+            await (async () => {
+              const picked = await resolvePluginDir(pluginsDir, firstSeg)
+              // 单文件插件（`/plugins/xxx.js`）没有目录可解析：保持全局优先
+              if (!picked) return [pluginsDir.global, pluginsDir.packaged].filter((p): p is string => !!p)
+              // readWithin 的根是「插件们所在的目录」，rel 里已经带了插件目录名
+              return [path.dirname(picked)]
+            })()
+          )
     let bytes: Uint8Array<ArrayBuffer> | undefined
     for (const root of roots) {
       bytes =

@@ -12,6 +12,7 @@
 import { readdir, stat } from 'node:fs/promises'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { BUILTIN_BY_DIR } from './builtinPlugins.js'
 
 export interface PluginRoots {
   /** 全局目录（可写）：安装 / 更新 / 用户自己放插件都在这里 */
@@ -59,17 +60,44 @@ export async function listPluginIds(roots: PluginRoots): Promise<string[]> {
   return [...ids].sort()
 }
 
+/** 该目录的 package.json 是否声明了 `plume.npmInstalled: true`（NPM 安装副本的显式标记） */
+async function isNpmInstalledDir(dir: string): Promise<boolean> {
+  try {
+    const pkg = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8')) as {
+      plume?: { npmInstalled?: unknown }
+    }
+    return pkg.plume?.npmInstalled === true
+  } catch {
+    return false
+  }
+}
+
 /**
- * 单个插件实际生效的目录：**全局优先**，全局没有才用随包那份。
+ * 单个插件实际生效的目录。
+ *
+ * 规则（2026-11-12 用户实测修正）：
+ * - **自带插件默认用随包那份**。否则数据根里早先留下的旧副本会一直盖住新构建的
+ *   `assets/plugins`：`pnpm start` 明明重新编译了，页面却还是旧代码。
+ * - 自带插件确实从 NPM 安装/更新过（`plume.npmInstalled: true`）时，仍用全局那份。
+ * - 非自带插件维持「全局优先」（用户装的就在全局目录）。
+ *
  * 都没有 → undefined（调用方按「这个插件不存在」处理）。
  */
 export async function resolvePluginDir(roots: PluginRoots, id: string): Promise<string | undefined> {
   if (id.startsWith('.') || id.startsWith('_') || id.includes('/') || id.includes('\\')) return undefined
-  for (const root of [roots.global, roots.packaged]) {
-    if (!root) continue
-    const dir = path.join(root, id)
-    if (await isDir(dir)) return dir
+  const globalDir = roots.global ? path.join(roots.global, id) : undefined
+  const packagedDir = roots.packaged ? path.join(roots.packaged, id) : undefined
+  const globalExists = globalDir ? await isDir(globalDir) : false
+  const packagedExists = packagedDir ? await isDir(packagedDir) : false
+
+  if (BUILTIN_BY_DIR.has(id)) {
+    if (globalExists && globalDir && (await isNpmInstalledDir(globalDir))) return globalDir
+    if (packagedExists) return packagedDir
+    if (globalExists) return globalDir
+    return undefined
   }
+  if (globalExists) return globalDir
+  if (packagedExists) return packagedDir
   return undefined
 }
 
@@ -99,7 +127,12 @@ export async function resolvePluginDirWithServer(
   id: string,
 ): Promise<string | undefined> {
   if (id.startsWith('.') || id.startsWith('_') || id.includes('/') || id.includes('\\')) return undefined
-  for (const root of [roots.global, roots.packaged]) {
+  const globalDir = roots.global ? path.join(roots.global, id) : undefined
+  const globalNpm = globalDir && (await isDir(globalDir)) ? await isNpmInstalledDir(globalDir) : false
+  const rootsInOrder = BUILTIN_BY_DIR.has(id) && !globalNpm
+    ? [roots.packaged, roots.global]
+    : [roots.global, roots.packaged]
+  for (const root of rootsInOrder) {
     if (!root) continue
     const dir = path.join(root, id)
     if (!(await isDir(dir))) continue
