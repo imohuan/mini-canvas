@@ -51,6 +51,21 @@ export const HOST_GLOBALS: Record<string, string> = {
 /** 一律 external 的依赖（键即模块名） */
 export const HOST_EXTERNALS: string[] = Object.keys(HOST_GLOBALS)
 
+/**
+ * 编译期常量替换（所有插件产物都要带这一份）。
+ *
+ * 为什么必须加（2026-11-12 用户实测「生成历史」弹框崩）：vue 的 lib 模式默认会把
+ * `process.env.NODE_ENV` 换成 "production"，但**第三方库的依赖**（reka-ui 的 Dialog、
+ * @vuelor/picker）是**内联进来的**，它们自己的 `process.env.NODE_ENV` 没人替换，
+ * 原样留在产物里。浏览器没有 `process` → 组件 setup 一跑就
+ * `ReferenceError: process is not defined`，界面直接白/黑一片。
+ *
+ * 这里显式替换成 "production"：dev 专用告警分支按定义就不该出现在发布产物里。
+ */
+export const PLUGIN_DEFINE: Record<string, string> = {
+  'process.env.NODE_ENV': '"production"',
+}
+
 export interface PluginLibOptions {
   /** UMD 的全局名（如 PlumePluginMiniMap）；加载器按它取插件对象 */
   name: string
@@ -69,6 +84,7 @@ export interface PluginLibOptions {
 export function pluginLibBuild(importMetaUrl: string, opts: PluginLibOptions) {
   const pkgDir = basename(dirname(fileURLToPath(importMetaUrl)))
   return {
+    define: PLUGIN_DEFINE,
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', importMetaUrl)),
       name: opts.name,

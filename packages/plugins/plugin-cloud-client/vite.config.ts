@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import { fileURLToPath } from 'node:url'
+import { PLUGIN_DEFINE } from '../vite-plugin-lib'
 
 // plugin-cloud-client —— 打成自包含 ESM（单文件、零 import）。
 //
@@ -11,6 +12,8 @@ import { fileURLToPath } from 'node:url'
 // 好在它一行界面都不画（底栏的皮由 plugin-bottom-bar 提供、历史弹窗由 ui 提供），
 // 所以真的不需要 Vue。
 export default defineConfig({
+  // 内联的第三方库可能自带 process.env.NODE_ENV；浏览器没有 process，不替换会 ReferenceError。
+  define: PLUGIN_DEFINE,
   build: {
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
