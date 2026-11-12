@@ -2,9 +2,12 @@
   "name": "@plume-canvas/ui-kit",
   "type": "module",
   "version": "0.0.0",
-  "private": true,
+  "private": false,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./src/index.ts",
@@ -31,10 +34,33 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build",
+    "build": "vite build --mode lib && vue-tsc -p tsconfig.build.json",
+    "build:preview": "vite build",
+    "prepack": "pnpm build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
-    "test": "pnpm -C ../ui exec vitest run --root ../ui-kit-shadcn --passWithNoTests src/__tests__"
+    "test": "vitest run"
+  },
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./styles.css": "./dist/styles.css",
+      "./theme/fonts": {
+        "types": "./dist/theme/fonts.d.ts",
+        "import": "./dist/theme/fonts.js"
+      },
+      "./componentConfig": {
+        "types": "./dist/componentConfig.d.ts",
+        "import": "./dist/componentConfig.js"
+      },
+      "./*": "./dist/*"
+    }
   },
   "peerDependencies": {
     "vue": "^3.5.34"
@@ -51,6 +77,8 @@
     "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
+    "vitest": "^3.0.0",
+    "happy-dom": "^21.0.4",
     "@tailwindcss/vite": "^4.0.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "tailwindcss": "^4.0.0",

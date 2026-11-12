@@ -86,7 +86,10 @@ function editIntoComposer(text: string, images: string[] | undefined): void {
   if (!editorRef.value) prompt.value = text
   attached.value = [...(images ?? [])]
   // 输入框获得焦点，用户直接改就行
-  void nextTick(() => editorRef.value?.$el?.querySelector?.('.ProseMirror')?.focus?.())
+  void nextTick(() => {
+    const el = editorRef.value?.$el?.querySelector?.('.ProseMirror') as HTMLElement | null | undefined
+    el?.focus?.()
+  })
 }
 
 /** 点「编辑」：回填 + 进入「正在编辑」状态（消息高亮、输入框出联动标记） */

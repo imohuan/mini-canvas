@@ -18,7 +18,7 @@ const popupSrc = readFileSync(
   'utf-8',
 )
 const shellSrc = readFileSync(
-  new URL('../../../ui/src/components/RowMenuShell.vue', import.meta.url),
+  new URL('../../../../../apps/web/src/components/RowMenuShell.vue', import.meta.url),
   'utf-8',
 )
 

@@ -189,7 +189,7 @@ function asText(value: unknown): string {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent class="w-52">
-            <DropdownMenuRadioGroup :model-value="config.baseColor" @update:model-value="(v) => patch({ baseColor: v as BaseColor })">
+            <DropdownMenuRadioGroup :model-value="config.baseColor" @update:model-value="(v: string) => patch({ baseColor: v as BaseColor })">
               <DropdownMenuRadioItem v-for="o in baseOptions" :key="o.value" :value="o.value">
                 <span class="flex min-w-0 flex-1 items-center gap-2">
                   <span
@@ -218,7 +218,7 @@ function asText(value: unknown): string {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent class="w-52">
-            <DropdownMenuRadioGroup :model-value="config.theme" @update:model-value="(v) => patch({ theme: v as ThemeColor })">
+            <DropdownMenuRadioGroup :model-value="config.theme" @update:model-value="(v: string) => patch({ theme: v as ThemeColor })">
               <DropdownMenuRadioItem v-for="o in themeOptions" :key="o.value" :value="o.value">
                 <span class="flex min-w-0 flex-1 items-center gap-2">
                   <!-- 每个选项都画它自己的颜色，选之前就知道会变成什么样 -->
@@ -260,7 +260,7 @@ function asText(value: unknown): string {
         <RadioGroup
           :model-value="config.radius"
           class="flex flex-wrap gap-1"
-          @update:model-value="(v) => patch({ radius: asText(v) })"
+          @update:model-value="(v: unknown) => patch({ radius: asText(v) })"
         >
           <Button
             v-for="o in radiusOptions"
@@ -299,7 +299,7 @@ function asText(value: unknown): string {
         <RadioGroup
           :model-value="config.size"
           class="flex flex-wrap gap-1.5"
-          @update:model-value="(v) => patch({ size: asText(v) as PreviewThemeConfig['size'] })"
+          @update:model-value="(v: unknown) => patch({ size: asText(v) as PreviewThemeConfig['size'] })"
         >
           <Button
             v-for="o in sizeOptions"

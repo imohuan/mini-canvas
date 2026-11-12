@@ -4,7 +4,27 @@ import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import { uiKitDebugLocPlugin } from './src/vite-plugin-debug-loc'
 
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => ({
+  // lib 模式：给 npm 发布产出库；其它模式仍保留组件库预览页。
+  ...(mode === 'lib'
+    ? {
+        build: {
+          lib: {
+            entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
+            name: 'PlumeUiKit',
+            formats: ['es'] as const,
+            fileName: () => 'index.js',
+          },
+          outDir: 'dist',
+          emptyOutDir: true,
+          cssCodeSplit: false,
+          rollupOptions: {
+            external: ['vue', 'reka-ui', '@vueuse/core', 'vue-sonner'],
+            output: { assetFileNames: 'styles.css' },
+          },
+        },
+      }
+    : {}),
   plugins: [
     // 组件库自己的预览页也可以用同一套调试标记（仅 dev）。
     ...(command === 'serve' ? [uiKitDebugLocPlugin({ root: fileURLToPath(new URL('../..', import.meta.url)) })] : []),

@@ -7,8 +7,17 @@
     "declarationMap": true,
     "outDir": "dist",
     "rootDir": "src",
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["./src/*"] },
+    "skipLibCheck": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],
-  "exclude": ["src/**/__tests__/**", "src/**/*.test.ts"]
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/previewKit.ts",
+    "src/theme/**",
+    "src/previewTheme*.ts",
+    "src/App.vue",
+    "src/main.ts"
+  ]
 }
