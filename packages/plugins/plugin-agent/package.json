@@ -10,7 +10,8 @@
     "builtin": true,
     "serverBuiltin": true,
     "web": { "entry": "dist/web.js" },
-    "server": { "entry": "dist/server.js" }
+    "server": { "entry": "dist/server.js" },
+    "assets": ["dist/vendor-plugins"]
   },
   "files": [
     "dist",

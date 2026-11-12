@@ -56,4 +56,19 @@ describe('自带后台半随构建部署', () => {
     // 不该再出现往 server-plugins 写文件的代码
     expect(src).not.toMatch(/serverPluginsDir\s*=\s*path\.join\(DATA_ROOT/)
   })
+
+  it('★ 插件声明 plume.assets 的附加目录要跟着发（否则 goal hook 静默缺席）', () => {
+    // 真实现象（2026-11-12）：plugin-agent 的 vendor-plugins/ 没被收进 assets，
+    // 启动日志是「goal hook 未安装：插件库里没有 goal」，目标功能静默缺失。
+    const shared = readFileSync(path.join(REPO, 'packages/cloud-server/scripts/plugin-assets.mjs'), 'utf8')
+    expect(shared).toMatch(/plume\.assets|plume\?\.assets/)
+    expect(shared).toMatch(/copyDeclaredAssets/)
+
+    const agentPkg = JSON.parse(
+      readFileSync(path.join(REPO, 'packages/plugins/plugin-agent/package.json'), 'utf8'),
+    ) as { plume?: { assets?: unknown } }
+    const assets = agentPkg.plume?.assets
+    expect(Array.isArray(assets), 'plugin-agent 要在 plume.assets 里声明 vendor-plugins').toBe(true)
+    expect(assets).toContain('dist/vendor-plugins')
+  })
 })

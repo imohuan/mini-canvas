@@ -19,6 +19,9 @@
  * 端口缺失时**直接报错**，不静默退化：那种「装上了但少一半能力」最难查。
  */
 import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { assembleAgentServices, type AgentServices } from './agent/assembleAgent.js'
 import { agentPlugins, AGENT_SERVICES } from './routes/plugin.js'
 import type { AgentHostPorts } from './ports.js'
@@ -54,6 +57,18 @@ function readPorts(ctx: PluginScope): HostBridgePorts {
 export function apply(ctx: PluginScope): void {
   const ports = readPorts(ctx)
   /**
+   * 先告诉 Agent 后台「vendor 资产在哪」（goal hook 的 .mjs）。
+   *
+   * 本产物是 `<插件目录>/dist/server.js`，打包时 `vendor-plugins/` 就放在**它旁边**；
+   * 加载器现在用真实文件路径 import（`import.meta.url` 是 file URL），所以这里能直接算出
+   * 同目录那份 —— 不依赖宿主额外传参。
+   *
+   * 为什么必须显式告知（用户实测 2026-11-12）：不告知时它会去算别的回退路径，
+   * 发布包对不上，启动日志就是「goal hook 未安装：插件库里没有 goal」，目标功能静默缺失。
+   */
+  const selfVendorDir = vendorDirBesideArtifact()
+  if (selfVendorDir) ports.vendorPluginsDir = selfVendorDir
+  /**
    * 装配是异步的（要读磁盘、建 goal hook），而内核的 apply 必须同步返回。
    * 所以这里**立刻登记一个异步装配任务**：
    *   · 失败时记一条响亮的错误（不静默：装上了却少一半能力最难查）；
@@ -62,6 +77,20 @@ export function apply(ctx: PluginScope): void {
   const ready = assemble(ctx, ports)
   // 让宿主能等装配完成（测试与启动流程用得到）；拿不到就算了
   ctx.inject('agentReady', ready)
+}
+
+/**
+ * 产物旁边那份 vendor-plugins（`<插件目录>/dist/vendor-plugins`）。
+ * 找不到 / `import.meta.url` 不是文件路径（走 data: URL 退化加载）时返回 undefined。
+ */
+function vendorDirBesideArtifact(): string | undefined {
+  try {
+    const here = fileURLToPath(import.meta.url)
+    const dir = path.join(path.dirname(here), 'vendor-plugins')
+    return existsSync(dir) ? dir : undefined
+  } catch {
+    return undefined
+  }
 }
 
 async function assemble(ctx: PluginScope, ports: HostBridgePorts): Promise<AgentServices> {

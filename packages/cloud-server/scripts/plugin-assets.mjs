@@ -111,6 +111,14 @@ export async function copyPluginDir({ name, dir, pkg }, targetDir) {
   await copyKeepingDirs(webEntry, path.join(targetDir, "dist", "web.js"))
   if (serverEntry) await copyKeepingDirs(serverEntry, path.join(targetDir, "dist", "server.js"))
 
+  // 附加资产目录（如 plugin-agent 的 vendor-plugins/）：插件自己在 package.json 的
+  // `plume.assets` 里声明「哪个目录要跟着发」。不声明就不带。
+  //
+  // 为什么必须支持（2026-11-12 用户实测）：goal hook 的 .mjs 是**独立文件**，没法内联进
+  // server.js；漏发它们后启动日志就是「goal hook 未安装：插件库里没有 goal」，
+  // 功能静默缺失。所以把它当产物的一部分，跟着插件目录一起发。
+  const assets = await copyDeclaredAssets(dir, pkg, targetDir)
+
   const outPkg = {
     ...pkg,
     plume: {
@@ -120,7 +128,32 @@ export async function copyPluginDir({ name, dir, pkg }, targetDir) {
     },
   }
   await writeFile(path.join(targetDir, "package.json"), JSON.stringify(outPkg, null, 2) + "\n", "utf8")
-  return { name, web: webEntry, ...(serverEntry ? { server: serverEntry } : {}) }
+  return { name, web: webEntry, ...(serverEntry ? { server: serverEntry } : {}), assets }
+}
+
+/**
+ * 复制 `plume.assets` 声明的附加目录（相对插件根）。
+ *
+ * 每个条目是目录名（如 `vendor-plugins`）；整目录原样复制到插件产物目录下。
+ * 不存在的条目直接报错 —— 静默跳过就会重演「文件没发出去、功能静默缺失」。
+ * @returns 复制过去的目录名列表
+ */
+async function copyDeclaredAssets(dir, pkg, targetDir) {
+  const raw = pkg?.plume?.assets
+  if (!Array.isArray(raw)) return []
+  const copied = []
+  for (const item of raw) {
+    if (typeof item !== "string" || !item.trim()) continue
+    const rel = item.trim().replace(/\\/g, "/")
+    if (path.isAbsolute(rel) || rel.split("/").includes("..")) {
+      throw new Error("plume.assets 必须是包内相对路径：" + item)
+    }
+    const from = path.join(dir, rel)
+    if (!(await exists(from))) throw new Error("plume.assets 声明的目录不存在：" + rel + "（插件 " + path.basename(dir) + "）")
+    await cp(from, path.join(targetDir, rel), { recursive: true })
+    copied.push(rel)
+  }
+  return copied
 }
 
 /** 复制文件并自动建好目标目录 */
