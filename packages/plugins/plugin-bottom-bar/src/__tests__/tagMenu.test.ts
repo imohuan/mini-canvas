@@ -66,7 +66,7 @@ describe('naturalCompare', () => {
 
 describe('标签菜单 DOM 契约（编辑器的两半分流）', () => {
   it('编辑器把点击位置分成「左侧图标」与「右侧文字」两条路', () => {
-    const src = readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8')
+    const src = readFileSync(fileURLToPath(new URL('../../../../libs/editor/src/useEditor.ts', import.meta.url)), 'utf8')
     expect(src).toContain('onIconClick')
     expect(src).toContain('clickInsideChipIcon')
     // 点图标优先：命中图标就交给调用方，不再走默认的「延迟落光标」
@@ -99,12 +99,12 @@ describe('标签的两半点击（用户 2026-10-29 定稿）', () => {
   // chipIconRect / clickInsideChipIcon 随拆分搬到 editor/chipDom.ts；两处一起读，
   // 断言仍是「源码里有没有这段实现」，不依赖具体文件位置。
   const EDITOR = [
-    readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8'),
-    readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/editor/chipDom.ts', import.meta.url)), 'utf8'),
+    readFileSync(fileURLToPath(new URL('../../../../libs/editor/src/useEditor.ts', import.meta.url)), 'utf8'),
+    readFileSync(fileURLToPath(new URL('../../../../libs/editor/src/editor/chipDom.ts', import.meta.url)), 'utf8'),
   ].join('\n')
   /** 常量定义随拆分搬到了 editor/chipRegistry.ts；拼进来只为让「定义 + 使用」都能查到 */
   const CHIP_REGISTRY = readFileSync(
-    fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/editor/chipRegistry.ts', import.meta.url)),
+    fileURLToPath(new URL('../../../../libs/editor/src/editor/chipRegistry.ts', import.meta.url)),
     'utf8',
   )
 

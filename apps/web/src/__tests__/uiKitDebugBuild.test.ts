@@ -18,7 +18,7 @@ const APP = readFileSync(new URL('../App.vue', import.meta.url), 'utf-8')
 const APP_CODE = APP.replace(/\/\*[\s\S]*?\*\//g, '')
 const PLUGIN = readFileSync(
   new URL(
-    '../../../ui-kit-shadcn/src/vite-plugin-debug-loc.ts',
+    '../../../../packages/libs/ui-kit/src/vite-plugin-debug-loc.ts',
     import.meta.url,
   ),
   'utf-8',

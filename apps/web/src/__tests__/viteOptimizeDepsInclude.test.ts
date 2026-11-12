@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const REPO = path.resolve(HERE, '../../../..')
-const UI = path.join(REPO, 'packages/ui')
+const UI = path.join(REPO, 'apps/web')
 
 const config = readFileSync(path.join(UI, 'vite.config.ts'), 'utf8')
 

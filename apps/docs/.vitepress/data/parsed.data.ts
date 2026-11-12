@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /**
- * 「插件解析」索引数据：构建期扫 packages/docs/plugins/parsed 下的每个插件目录。
+ * 「插件解析」索引数据：构建期扫 apps/docs/plugins/parsed 下的每个插件目录。
  *
  * 为什么自动扫：解析页有 30+ 个插件、每个插件一页总览 + 若干子页。
  * 手写清单 = 每加一个插件就要改一次，且必然写漏。扫目录：加一个目录 = 索引自动多一行。

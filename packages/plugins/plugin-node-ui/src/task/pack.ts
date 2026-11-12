@@ -28,7 +28,7 @@ export const PACK_FORMAT = 1
  * 三处要用到它：后台打包时拼文件名、cloud-server 的 mime 白名单（决定存进资产库后
  * 有没有后缀）、前端拼下载与预填的文件名。各写一份的话漂了不会报错 ——
  * 只会表现成"拖进去没反应"（2026-10-13 审查指出三处各写了一份）。
- * 前端那份在 packages/ui（跨包 import 会把 node 侧逻辑拖进浏览器包），
+ * 前端那份在 apps/web（跨包 import 会把 node 侧逻辑拖进浏览器包），
  * 所以那边留一个同名常量，并由一条测试盯着两边一致。
  */
 export const PACK_EXT = '.plumenode'

@@ -12,11 +12,11 @@ import { readBottomBarCss } from './readBottomBarCss'
 const CSS = readBottomBarCss()
 const MENU_TS = readFileSync(fileURLToPath(new URL('../node-bottom-bar/useBottomBarTagMenu.ts', import.meta.url)), 'utf8')
 const CHIP_DOM = readFileSync(
-  fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/editor/chipDom.ts', import.meta.url)),
+  fileURLToPath(new URL('../../../../libs/editor/src/editor/chipDom.ts', import.meta.url)),
   'utf8',
 )
 const EDITOR = readFileSync(
-  fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)),
+  fileURLToPath(new URL('../../../../libs/editor/src/useEditor.ts', import.meta.url)),
   'utf8',
 )
 

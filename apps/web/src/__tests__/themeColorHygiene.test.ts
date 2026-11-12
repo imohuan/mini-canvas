@@ -22,7 +22,7 @@ import path from 'node:path'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
 /** 扫描范围：插件库 + 渲染层 + 成品应用壳（这三处才是"界面配色"的所在地） */
-const SCAN_DIRS = ['packages/plugins', 'packages/canvas-render', 'packages/ui'].map((p) =>
+const SCAN_DIRS = ['packages/plugins', 'packages/engine/canvas-render', 'apps/web'].map((p) =>
   path.join(REPO_ROOT, ...p.split('/')),
 )
 /** 主题定义真源：这里**就是**色板本身，出现颜色字面量是它的职责。

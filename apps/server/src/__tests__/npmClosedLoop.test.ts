@@ -22,8 +22,8 @@ import { createServerFramework } from '../serverFramework/index.js'
 import { loadServerPluginsFromPluginDirs } from '../serverFramework/pluginLoader.js'
 
 const run = promisify(execFile)
-const REPO_ROOT = path.resolve(__dirname, '../../..')
-const SHOWCASE_DIR = path.join(REPO_ROOT, 'plugins', 'plugin-showcase')
+const REPO_ROOT = path.resolve(__dirname, '../../../..')
+const SHOWCASE_DIR = path.join(REPO_ROOT, 'packages/plugins/plugin-showcase')
 
 /** 跑 npm pack，拿到真实产物 tgz 路径 */
 async function npmPackReal(): Promise<string> {

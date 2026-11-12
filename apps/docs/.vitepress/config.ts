@@ -130,8 +130,8 @@ const examplesSidebar = [
  * 这里扫目录生成：加一个插件目录 = 侧边栏自动多一组。
  *
  * 契约（各解析页必须遵守，见 plugins/parsed/index.md）：
- *   packages/docs/plugins/parsed/<插件目录>/index.md   ← 该插件的总览页（组名取它的 H1）
- *   packages/docs/plugins/parsed/<插件目录>/<子页>.md   ← 各类能力一页（子页名取该页 H1）
+ *   apps/docs/plugins/parsed/<插件目录>/index.md   ← 该插件的总览页（组名取它的 H1）
+ *   apps/docs/plugins/parsed/<插件目录>/<子页>.md   ← 各类能力一页（子页名取该页 H1）
  * 页面 H1 就是侧边栏显示名 —— 改标题只改页面，不用动这里。
  */
 function readParsedSidebar(): Array<{ text: string; collapsed: boolean; items: Array<{ text: string; link: string }> }> {

@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const themeCss = readFileSync(
-  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../canvas-render/src/styles/ui-theme.css'),
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../packages/engine/canvas-render/src/styles/ui-theme.css'),
   'utf-8',
 )
 

@@ -105,7 +105,7 @@ describe('PluginSettingsContent 左导航：第 0 级分类 + 图标菜单', () 
     // 取不到图标时也必须落一个兜底，不能留空位
     expect(NAV_STATE).toMatch(/\?\?\s*Circle/)
     // 图标模块导出的兜底常量仍可用（场域没登记图标时不吃空）
-    expect(read('../navIcon.ts')).toMatch(/SETTINGS_NAV_ICON_FALLBACK/)
+    expect(read('../navIconTable.ts')).toMatch(/SETTINGS_NAV_ICON_FALLBACK/)
   })
 
   it('图标注册表声明在 navEntries 之前（否则 immediate watch 撞暂时性死区）', () => {
@@ -188,7 +188,7 @@ describe('PluginSettingsContent 右内容：二级小标题 + 卡片 + 分割线
    * 暗色下没人覆盖，就一路掉到浅色兜底。这里钉住亮 / 暗两套都必须有值。
    */
   it('行分隔线用的 --ui-line-faint 在亮 / 暗两套主题里都有定义', () => {
-    const THEME = read('../../../../../../canvas-render/src/styles/ui-theme.css')
+    const THEME = read('../../../../../../engine/canvas-render/src/styles/ui-theme.css')
     const light = /:root \{([\s\S]*?)\n\}/.exec(THEME)?.[1] ?? ''
     const dark = /html\.dark \{([\s\S]*?)\n\}/.exec(THEME)?.[1] ?? ''
     expect(light).toMatch(/--ui-line-faint:\s*#/)

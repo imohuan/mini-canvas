@@ -40,6 +40,8 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
    * 地址不变而内容会变；记住之后就会一直用旧尺寸。写回本身幂等，多量一次没有副作用。
    */
   let inflight: { url: string; task: Promise<{ width: number; height: number } | null> } | null = null
+  /** 上一次量过（成功）的地址：同一地址不重复解码 */
+  let measuredUrl = ''
 
   function syncCardSize(patch: CardSizePatch | null): void {
     if (!patch) return
@@ -64,6 +66,10 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
 
   watch(sourceKey, () => {
     onSourceChanged()
+    measuredUrl = ''
+    // 换源后必须重新量一次：旧实现只在「同一地址」时去重，换源后地址不同自然会量；
+    // 但直接把 inflight 留空更明确，避免先前的失败任务挡住新一轮。
+    inflight = null
     syncCardSize(followedVideoCardSizePatch(data(), ops.fitLimits?.()))
   })
 
@@ -75,13 +81,22 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
    */
   async function measure(url: string): Promise<void> {
     if (!url) return
+    // 已经量过同一地址（成功过）就不再解码：loadedmetadata 与 URL 监听会重复触发。
+    if (url === measuredUrl) return
+    measuredUrl = url
     const task = inflight?.url === url
       ? inflight.task
       : readVideoMeta(url).then((m) => (m ? { width: m.width, height: m.height } : null)).catch(() => null)
     inflight = { url, task }
     const meta = await task
     if (inflight?.task === task) inflight = null
-    if (!meta || !(meta.width > 0) || !(meta.height > 0)) return
+    // 量的时候地址又换了 → 这次结果作废（新地址那一次自己会量）
+    if (url !== measuredUrl) return
+    if (!meta || !(meta.width > 0) || !(meta.height > 0)) {
+      // 失败不记住：下次地址再变 / 再挂载还能重试
+      measuredUrl = ''
+      return
+    }
     flushMeta(meta.width, meta.height)
   }
 

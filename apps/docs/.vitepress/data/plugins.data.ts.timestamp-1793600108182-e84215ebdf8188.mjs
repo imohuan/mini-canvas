@@ -3,7 +3,7 @@ import { defineLoader } from "file:///D:/Code/Git/mini-canvas/node_modules/.pnpm
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-var __vite_injected_original_import_meta_url = "file:///D:/Code/Git/mini-canvas/packages/docs/.vitepress/data/plugins.data.ts";
+var __vite_injected_original_import_meta_url = "file:///D:/Code/Git/mini-canvas/apps/docs/.vitepress/data/plugins.data.ts";
 var HERE = path.dirname(fileURLToPath(__vite_injected_original_import_meta_url));
 var PLUGINS_DIR = path.resolve(HERE, "../../../..", "packages/plugins");
 var plugins_data_default = defineLoader({

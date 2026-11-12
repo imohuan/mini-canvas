@@ -12,9 +12,14 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const PLUGINS_DIR = path.resolve(HERE, '../../../plugins')
+const PLUGINS_DIR = path.resolve(HERE, '../../../../packages/plugins')
 
 const EXEMPT_DIRS = new Set(['plugin-demo-kit'])
+/**
+ * 名字带 plugin- 但不是业务插件的库：plugin-sdk 是作者入口（只有类型与纯函数），
+ * 谁都允许依赖它。判据仍是「插件之间不能互相 import」。
+ */
+const LIB_PACKAGES = new Set(['@plume-canvas/plugin-sdk'])
 /**
  * 过渡例外表：plugin-node-video ← plugin-theme-canvas（2026-11-09 9771a198）。
  *
@@ -27,7 +32,12 @@ const EXEMPT_EDGES: Array<[from: string, to: string]> = [
 ]
 
 function isExemptEdge(fromDir: string, spec: string): boolean {
+  if (LIB_PACKAGES.has(spec)) return false
   return EXEMPT_EDGES.some(([from, to]) => from === fromDir && spec.startsWith(to))
+}
+
+function isLibrary(spec: string): boolean {
+  return LIB_PACKAGES.has(spec)
 }
 
 function walk(dir: string): string[] {
@@ -59,6 +69,7 @@ describe('业务插件零引用', () => {
           ...text.matchAll(/^\s*(?:import|export)[^\n]*?from\s+['"](@plume-canvas\/plugin-[^'"]+)['"]/gm),
         ]
         for (const m of imports) {
+          if (isLibrary(m[1])) continue
           if (isExemptEdge(dir, m[1])) continue
           expect(m[1], path.relative(PLUGINS_DIR, file)).toBe(self)
         }
@@ -78,6 +89,7 @@ describe('业务插件零引用', () => {
       }
       for (const dep of Object.keys(pkg.dependencies ?? {})) {
         if (!dep.startsWith('@plume-canvas/plugin-')) continue
+        if (isLibrary(dep)) continue
         if (isExemptEdge(dir, dep)) continue
         expect(dep, dir + ' 的 dependencies 引用了另一个业务插件').toBe(pkg.name)
       }

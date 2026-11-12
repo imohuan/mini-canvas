@@ -14,7 +14,7 @@ const root = readFileSync(fileURLToPath(new URL('../Root.vue', import.meta.url))
 const provider = readFileSync(fileURLToPath(new URL('../AppProvider.vue', import.meta.url)), 'utf8')
 /** Provider 本体住在 vue-render；这里校验启动门控仍在真实实现里。 */
 const renderProvider = readFileSync(
-  fileURLToPath(new URL('../../../vue-render/src/RenderProvider.vue', import.meta.url)),
+  fileURLToPath(new URL('../../../../packages/engine/vue-render/src/RenderProvider.vue', import.meta.url)),
   'utf8',
 )
 

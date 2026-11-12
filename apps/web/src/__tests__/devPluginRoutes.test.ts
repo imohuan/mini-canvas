@@ -23,7 +23,7 @@ interface ManifestEntry {
 }
 
 const here = dirname(fileURLToPath(import.meta.url))
-const PLUGINS_DIR = resolve(here, '../../../plugins')
+const PLUGINS_DIR = resolve(here, '../../../../packages/plugins')
 
 /** 起一个只收中间件的假 dev server，返回"请求 → 响应"的探针 */
 function probe(pluginsDir: string) {
@@ -50,7 +50,7 @@ function probe(pluginsDir: string) {
   }
 }
 
-describe('dev 插件路由（packages/ui 的 catalogPlugin）', () => {
+describe('dev 插件路由（apps/web 的 catalogPlugin）', () => {
   it('清单只收非自带、且是 ESM 的产物（与 cloud-server 的 buildManifest 同口径）', async () => {
     const entries = (await buildManifest(PLUGINS_DIR)) as ManifestEntry[]
     const ids = entries.map((e) => e.id)

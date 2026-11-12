@@ -15,7 +15,7 @@ import path from 'node:path'
 import { compileStyle } from 'vue/compiler-sfc'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
-const SCAN_DIRS = ['packages/plugins', 'packages/canvas-render', 'packages/ui'].map((p) =>
+const SCAN_DIRS = ['packages/plugins', 'packages/engine/canvas-render', 'apps/web'].map((p) =>
   path.join(REPO_ROOT, ...p.split('/')),
 )
 

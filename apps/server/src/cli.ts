@@ -251,7 +251,7 @@ async function main(): Promise<void> {
   const realDir = await realPathOf(srv.paths.data)
   console.log(`  数据   ${realDir}`)
   console.log('         画布 canvases/ · 设置 kv/ · 平台 providers/ · 插件 plugins/')
-  console.log(`  界面   ${srv.paths.ui ?? '未找到 apps/web/dist —— 先执行 cd packages/ui && pnpm build'}`)
+  console.log(`  界面   ${srv.paths.ui ?? '未找到 apps/web/dist —— 先执行 cd apps/web && pnpm build'}`)
   const realPlugins = await realPathOf(srv.paths.plugins)
   console.log(
     `  插件   ${realPlugins ?? '(未找到插件目录)'} · 识别到 ${catalog.plugins.length} 个，` +

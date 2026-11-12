@@ -107,7 +107,7 @@ function toggleTokenUnit(): void {
 }
 /**
  * 目标默认预算：读全局设置（KV `config/agentGoalDefaults`，由设置弹窗那一路维护；
- * 与 packages/ui 的 agentSettings 同一个键 —— 别自创路径）。
+ * 与 apps/web 的 agentSettings 同一个键 —— 别自创路径）。
  *
  * 为什么经**批量口**而不是单项 GET：这个键用户没改过时从未保存过，单项 GET 必然回 404
  * （控制台里多一条“加载资源失败”，而用户什么都没做错）。批量口一次拿回整个 config 域，

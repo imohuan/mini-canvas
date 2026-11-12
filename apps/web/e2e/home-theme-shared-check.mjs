@@ -22,7 +22,7 @@ const EXE =
   'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1243/chrome-win64/chrome.exe'
 
 if (!existsSync(join(DIST, 'index.html'))) {
-  console.error('dist 不存在，先 pnpm -C packages/ui build')
+  console.error('dist 不存在，先 pnpm -C apps/web build')
   process.exit(2)
 }
 if (!existsSync(EXE)) {

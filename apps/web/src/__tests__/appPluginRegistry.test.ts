@@ -11,7 +11,7 @@ import path from 'node:path'
 import { DEV_APP_PLUGINS, DEV_CANVAS_PLUGINS, DEV_PLUGIN_REGISTRY } from '../dev-plugins'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const PLUGINS_DIR = path.resolve(HERE, '../../../plugins')
+const PLUGINS_DIR = path.resolve(HERE, '../../../../packages/plugins')
 
 interface Pkg {
   name?: string

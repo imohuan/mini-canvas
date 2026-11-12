@@ -2,11 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 // 文档站全量审计脚本（保留在仓库里，改完文档跑一遍即可）：
-//   node packages/docs/.vitepress/audit.mjs
+//   node apps/docs/.vitepress/audit.mjs
 // 核查：①内链不死链 ②侧边栏覆盖所有页面（无孤儿页） ③占位清零 ④示例文件头路径真实
 
 const root = process.cwd()
-const docsRoot = path.join(root, 'packages/docs')
+const docsRoot = path.join(root, 'apps/docs')
 const bs = String.fromCharCode(92)
 let problems = 0
 
@@ -29,8 +29,8 @@ const sidebarSet = new Set(sidebarLinks)
 
 // md 文件 → 站内 URL（index.md → 目录 URL）
 function urlOf(p) {
-  // 关键：docsRoot 经 path.join 是正斜杠混合形态（packages/docs），而 p 的分隔符是系统分隔符。
-  // 统一成系统分隔符前缀再做截取，否则 "packages/docs\canvas-render" 不以 "packages\docs" 开头，
+  // 关键：docsRoot 经 path.join 是正斜杠混合形态（apps/docs），而 p 的分隔符是系统分隔符。
+  // 统一成系统分隔符前缀再做截取，否则 "apps/docs\canvas-render" 不以 "packages\docs" 开头，
   // substring 截取错位 → z-index 这类名字含 index 的文件被咬成 z-（实测坑）。
   const prefix = docsRoot.split(bs).join('/')
   const rel = p.split(bs).join('/').substring(prefix.length + 1)
@@ -146,7 +146,7 @@ for (const p of pages) {
     const cut = [decl.indexOf('（'), decl.indexOf('('), decl.indexOf('——'), decl.indexOf(' 里')].filter((x) => x > 0)
     if (cut.length) decl = decl.slice(0, Math.min(...cut)).trim()
     const rel = decl.split('\\').join('/')
-    if (!rel.startsWith('packages/docs/public/examples/')) continue
+    if (!rel.startsWith('apps/docs/public/examples/')) continue
     if (!fs.existsSync(path.join(root, rel))) badExHeader.push(p.substring(docsRoot.length + 1).split(bs).join('/') + ' :: ' + rel)
   }
 }

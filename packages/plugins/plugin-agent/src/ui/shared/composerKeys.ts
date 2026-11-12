@@ -79,7 +79,7 @@ export function shouldDeferEnterToMenu(
 }
 
 /**
- * 从 config 桶里读「发送键」设置（与 packages/ui 的 agentSettings.ts 同一个键）。
+ * 从 config 桶里读「发送键」设置（与 apps/web 的 agentSettings.ts 同一个键）。
  * 缺 / 坏 → 默认 Ctrl+回车；不抛（后台没起时首屏照常可用）。
  */
 export const COMPOSER_PREFS_KEY = 'agentComposerPrefs'

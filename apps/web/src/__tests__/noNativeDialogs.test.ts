@@ -1,5 +1,6 @@
 /**
- * 全局红线（用户口径 2026-11-06）：packages 下禁止再用浏览器原生 confirm / alert / prompt。
+ * 全局红线（用户口径 2026-11-06）：仓库源码（apps/ + packages/）禁止再用浏览器原生
+ * confirm / alert / prompt。
  *
  * 为什么做成全仓扫描而不是逐组件单测：这类回退往往是「临时加一行 window.confirm」引入的，
  * 逐组件测很难覆盖到新文件；扫一遍源码最直接。测试、注释、backup 与依赖目录跳过。
@@ -14,15 +15,16 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
-const packagesRoot = path.join(repoRoot, 'packages')
+/** 代码根：apps 与 packages 都是产品源码；docs/backup 不在其中。 */
+const codeRoots = [path.join(repoRoot, 'apps'), path.join(repoRoot, 'packages')]
 const SOURCE_EXT = new Set(['.ts', '.tsx', '.vue', '.js', '.mjs'])
 
-/** 明确允许出现的文件（相对 packages/ 的路径，统一用 / 分隔） */
+/** 明确允许出现的文件（相对仓库根、统一用 / 分隔） */
 const EXCEPTIONS = new Set([
   // 统一服务的定义处：这里的 confirm / prompt / alert 是服务方法名
-  'vue-render/src/contracts/feedback.ts',
+  'packages/engine/vue-render/src/contracts/feedback.ts',
   // 调试窗口的纯逻辑接口：deps.alert 由调用方注入，不是浏览器全局
-  'plugins/plugin-node-ui/src/debugWindow.ts',
+  'packages/plugins/plugin-node-ui/src/debugWindow.ts',
 ])
 
 function walk(dir: string, out: string[] = []): string[] {
@@ -63,7 +65,7 @@ const PATTERNS: Array<{ name: string; re: RegExp }> = [
 ]
 
 describe('全仓禁止浏览器原生弹窗', () => {
-  const files = walk(packagesRoot)
+  const files = codeRoots.flatMap((root) => walk(root))
 
   it('扫描到了真实源码（防止路径写错导致空扫描白白通过）', () => {
     expect(files.length).toBeGreaterThan(200)
@@ -72,7 +74,7 @@ describe('全仓禁止浏览器原生弹窗', () => {
   it('没有 window/globalThis 上的 confirm / alert / prompt', () => {
     const hits: string[] = []
     for (const file of files) {
-      const rel = path.relative(packagesRoot, file).split(path.sep).join('/')
+      const rel = path.relative(repoRoot, file).split(path.sep).join('/')
       if (EXCEPTIONS.has(rel)) continue
       const code = stripComments(readFileSync(file, 'utf-8'))
       for (const { name, re } of PATTERNS.slice(0, 6)) {
@@ -85,7 +87,7 @@ describe('全仓禁止浏览器原生弹窗', () => {
   it('没有裸 confirm() / alert() / prompt() 调用', () => {
     const hits: string[] = []
     for (const file of files) {
-      const rel = path.relative(packagesRoot, file).split(path.sep).join('/')
+      const rel = path.relative(repoRoot, file).split(path.sep).join('/')
       if (EXCEPTIONS.has(rel)) continue
       const code = stripComments(readFileSync(file, 'utf-8'))
       for (const { name, re } of PATTERNS.slice(6)) {

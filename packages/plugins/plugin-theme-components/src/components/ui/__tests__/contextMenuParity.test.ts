@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-const THEME_CSS = readFileSync(new URL('../../../../../../canvas-render/src/styles/ui-theme.css', import.meta.url), 'utf-8')
+const THEME_CSS = readFileSync(new URL('../../../../../../engine/canvas-render/src/styles/ui-theme.css', import.meta.url), 'utf-8')
 const TOOL_RATIO = readFileSync(new URL('../ToolRatioGrid.vue', import.meta.url), 'utf-8')
 const TOOL_OPTION = readFileSync(new URL('../ToolOptionGrid.vue', import.meta.url), 'utf-8')
 const TOOL_SLIDER = readFileSync(new URL('../ToolParamSlider.vue', import.meta.url), 'utf-8')
@@ -100,6 +100,7 @@ describe('不用主题色（黑白两套主题即可）', () => {
 
   it('取色浮层走 shadcn Popover，不再自己画下拉外壳', () => {
     expect(COLOR_FIELD).toMatch(/PopoverContent/)
-    expect(COLOR_FIELD).not.toMatch(/@plume-canvas\/ui-kit['"]/)
+    // 旧包名 ui-kit-shadcn 已并入 ui-kit；这条只防「自己手画下拉外壳」。
+    expect(COLOR_FIELD).not.toMatch(/<div[^>]*role="listbox"/)
   })
 })

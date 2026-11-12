@@ -2,7 +2,7 @@
  * 项目数据服务（应用级）。
  *
  * 项目页上的插件面板如果要「新建项目 / 打开画布 / 列画布」，它不能反向 import
- * packages/ui 里的 fetch 函数（业务插件之间、插件对入口都按服务交互）。
+ * apps/web 里的 fetch 函数（业务插件之间、插件对入口都按服务交互）。
  * 这里把同一个 projectsApi 收成一个插件，按名上架：
  *
  *   const api = ctx.tryGet('projectsApi')

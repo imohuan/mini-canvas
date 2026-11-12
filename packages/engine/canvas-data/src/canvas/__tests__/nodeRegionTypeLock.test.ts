@@ -1,7 +1,7 @@
 /**
  * 步骤 9 的**类型锁**：老段名（content / top-toolbar / bottom-toolbar / overlay）不再是合法入参。
  *
- * 为什么这些 `@ts-expect-error` 注释本身就是守卫：`pnpm -C packages/canvas-data typecheck`
+ * 为什么这些 `@ts-expect-error` 注释本身就是守卫：`pnpm -C packages/engine/canvas-data typecheck`
  * （tsc --noEmit，涵盖本目录）会逐条核对每条指令**真的压住了一个类型错误**。
  * 老词哪天若又变合法（有人把垫片加回来），指令立刻变成 unused directive 而报错 ——
  * 于是"老词是编译期错误"这条退役目标被自动钉住，不靠人记得复查。

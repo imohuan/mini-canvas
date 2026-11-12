@@ -25,7 +25,7 @@ beforeEach(async () => {
   )
   // 拷**真实构建产物**（不是测试替身）—— 产物坏了这里立刻炸
   await fs.copyFile(
-    path.resolve(__dirname, '../../..', 'plugins', 'plugin-showcase', 'dist', 'server.js'),
+    path.resolve(__dirname, '../../../../packages/plugins/plugin-showcase/dist/server.js'),
     path.join(pluginsDir, 'plugin-showcase', 'dist', 'server.js'),
   )
 })

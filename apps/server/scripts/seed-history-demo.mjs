@@ -5,7 +5,7 @@
  * 详情弹窗只能显示"没有保存" —— 看不到真实效果。这里按真实形状写 3 条
  * （图片 / 视频 / 音频），引用的资源都**确实存在于该画布**，可以直接预览。
  *
- * 用法：pnpm -C packages/cloud-server exec tsx scripts/seed-history-demo.mjs <画布id>
+ * 用法：pnpm -C apps/server exec tsx scripts/seed-history-demo.mjs <画布id>
  * 安全：只追加，不覆盖已有记录；产物文件按内容哈希去重存，可重复运行。
  */
 import { promises as fs } from 'node:fs'

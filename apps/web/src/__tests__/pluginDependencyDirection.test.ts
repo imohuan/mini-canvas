@@ -15,8 +15,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 
 const here = dirname(fileURLToPath(import.meta.url))
-// src/__tests__ → src → ui → packages
-const packagesDir = resolve(here, '../../..')
+// src/__tests__ → src → apps/web → repo root
+const repoRoot = resolve(here, '../../../..')
+const packagesDir = join(repoRoot, 'packages')
 const pluginsDir = join(packagesDir, 'plugins')
 
 /**
@@ -120,7 +121,7 @@ describe('T08 · 业务插件不依赖默认主题当组件库', () => {
 
 describe('T08 · canvas-base 保持纯作者入口', () => {
   it('不引入 Vue / VueFlow / 具体 UI 第三方库', () => {
-    const baseDir = join(packagesDir, 'canvas-base')
+    const baseDir = join(packagesDir, 'libs/plugin-sdk')
     const pkg = readPkg(baseDir)
     const all = {
       ...(pkg.dependencies ?? {}),

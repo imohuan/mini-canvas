@@ -101,7 +101,7 @@ describe('ChoicePicker 多账号二级菜单', () => {
   })
 
   /**
-   * 结构与 packages/ui 左上角画布菜单一致（用户 2026-11-10：
+   * 结构与 apps/web 左上角画布菜单一致（用户 2026-11-10：
    * 「参考一下我的 Package UI 里面左上角的这个画布菜单，它是如何实现嵌套的」）。
    *
    * 要点：整行本身就是 DropdownMenuSubTrigger —— 悬停整行即展开，两级菜单之间的

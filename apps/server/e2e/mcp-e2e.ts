@@ -10,8 +10,8 @@
  *   4. 反向再来一遍：浏览器里建节点，MCP 读得到；
  *   5. 重启服务，确认 AI 改的东西还在（落盘了）。
  *
- * 跑法：cd packages/cloud-server && pnpm e2e:mcp
- * （需要先构建 ui：cd packages/ui && pnpm build）
+ * 跑法：cd apps/server && pnpm e2e:mcp
+ * （需要先构建 ui：cd apps/web && pnpm build）
  */
 import { readFileSync, statSync } from 'node:fs'
 import { promises as fs, writeFileSync } from 'node:fs'
@@ -42,7 +42,7 @@ function parseToolResult(r: unknown): any {
 
 async function main(): Promise<void> {
   if (!path.isAbsolute(UI_DIST) || !exists(UI_DIST)) {
-    console.error(`✗ 没找到画布构建产物：${UI_DIST}\n  请先执行：cd packages/ui && pnpm build`)
+    console.error(`✗ 没找到画布构建产物：${UI_DIST}\n  请先执行：cd apps/web && pnpm build`)
     process.exit(2)
   }
 

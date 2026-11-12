@@ -124,7 +124,7 @@ describe('parseNotifyPrefs', () => {
   it('护栏：插件的缺省值必须与设置弹窗的 DEFAULT_AGENT_NOTIFY 逐字一致（防再次漂移）', () => {
     // 两处默认值分散在两个包（依赖方向 plugins → ui 走不通，没法共享常量），
     // 只能靠这条测试当桥：谁改了 ui 那份、没改插件这份，这里立刻红。
-    const uiSrc = read('../../../../ui/src/composables/agentSettings.ts')
+    const uiSrc = read('../../../../../apps/web/src/composables/agentSettings.ts')
     const m = uiSrc.match(/DEFAULT_AGENT_NOTIFY[^=]*=\s*\{\s*browser:\s*(true|false),\s*sound:\s*(true|false)\s*\}/)
     expect(m, '在 ui 的 agentSettings.ts 里没找到 DEFAULT_AGENT_NOTIFY 的布尔字面量（口径变了？请同步本条测试）').toBeTruthy()
     const uiDefault = { notify: m![1] === 'true', sound: m![2] === 'true' }

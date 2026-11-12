@@ -5,7 +5,7 @@
  * 供入口与子组件共享同一份状态。不要在这里改行为。
  */
 /**
- * AgentConversation —— 对话**内容**（消息流 + 输入区）。外壳在 packages/ui。
+ * AgentConversation —— 对话**内容**（消息流 + 输入区）。外壳在 apps/web。
  *
  * 分工：外壳管位置/尺寸/拖拽/停靠，本组件只管红框里那一块。
  * 布局与数值逐项对齐 LiBTV（Chrome MCP 实测）：

@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
-const SCAN_DIRS = ['packages/plugins', 'packages/canvas-render', 'packages/ui', 'packages/ui-kit-shadcn'].map((p) =>
+const SCAN_DIRS = ['packages/plugins', 'packages/engine/canvas-render', 'apps/web', 'packages/libs/ui-kit'].map((p) =>
   path.join(REPO_ROOT, ...p.split('/')),
 )
 

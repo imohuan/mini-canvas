@@ -4,7 +4,7 @@
  *
  * 纯拆分：原逻辑、事件、class、文案和样式数值原样保留，只把块搬进
  * agent-conversation/；行为仍由 useAgentConversation 这一份控制器驱动。
- * 外壳在 packages/ui：外壳管位置/尺寸/拖拽/停靠，本组件只管红框里那一块。
+ * 外壳在 apps/web：外壳管位置/尺寸/拖拽/停靠，本组件只管红框里那一块。
  */
 import { provide } from 'vue'
 import { Sparkles } from 'lucide-vue-next'

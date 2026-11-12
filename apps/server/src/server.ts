@@ -6,7 +6,7 @@
  *   1b. /api/canvases/:id          画布数据 —— 一个画布一个文件夹（本体 / 视口 / 资源）
  *   2. /api/kv/events              SSE 实时通道
  *   3. /plugin-manifest.json + /plugins/*  外部插件清单与产物
- *   4. /                           托管 packages/ui 的构建产物（真画布）
+ *   4. /                           托管 apps/web 的构建产物（真画布）
  *
  * 前 3 项是纯接口，第 4 项是"打开就能看画布"的那一步。
  */

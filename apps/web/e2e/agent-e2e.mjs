@@ -3,7 +3,7 @@
  * agent-e2e —— Agent 插件的端到端 UI 自动化（真实浏览器 + 真实后台 + 真实模型）。
  *
  * 跑法：
- *   1) 起画布应用：pnpm -C packages/ui dev            （:5411）
+ *   1) 起画布应用：pnpm -C apps/web dev            （:5411）
  *   2) 起后台：     node apps/server/dist/cli.js serve --port 8890 --open
  *      （cloud-server 自己托管 ui 的构建产物，所以其实一步就够：serve 之后直接开那个地址）
  *   3) 跑本脚本：   node apps/web/e2e/agent-e2e.mjs

@@ -5,7 +5,7 @@
  * 用户报的问题：标题条显示英文 type（text/image）、@ 菜单显示文本首行或图片文件名、
  * 左侧树又各显示一套 —— 三处不一致。现统一为 data.label（建节点时按类型模板生成）。
  *
- * 跑法：先 pnpm -C packages/ui dev（:5288），再 node apps/web/e2e/node-name-probe.mjs。
+ * 跑法：先 pnpm -C apps/web dev（:5288），再 node apps/web/e2e/node-name-probe.mjs。
  */
 import { chromium } from 'playwright-core'
 

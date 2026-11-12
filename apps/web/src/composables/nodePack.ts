@@ -1,10 +1,10 @@
 /**
  * nodePack —— 成品应用这一侧用到的「把节点打成包」的共用逻辑（零 Vue、可单测）。
  *
- * ## 为什么住在 packages/ui 而不是插件里
+ * ## 为什么住在 apps/web 而不是插件里
  *
  * 「收藏到资产库」要开**上传弹窗**，而上传弹窗 / 资产清单都是成品应用的东西
- * （只有 packages/ui 拿得到 assets 服务）—— 这正是 uiAssetUploadPlugin 当初住在 ui 的同一条理由。
+ * （只有 apps/web 拿得到 assets 服务）—— 这正是 uiAssetUploadPlugin 当初住在 ui 的同一条理由。
  *
  * ## 两条路，一个入口
  *

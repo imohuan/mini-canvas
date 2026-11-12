@@ -27,13 +27,14 @@ import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const uiPkg = resolve(here, '../..') // packages/ui
-const packagesDir = resolve(uiPkg, '..') // packages
-const repoRoot = resolve(packagesDir, '..')
+const uiPkg = resolve(here, '../..') // apps/web
+const repoRoot = resolve(uiPkg, '../..')
+const packagesDir = resolve(repoRoot, 'packages')
+const appsDir = resolve(repoRoot, 'apps')
 
 /** 受保护前缀直接从后台那份清单读 —— 两边各写一份迟早漂 */
 function protectedPrefixes(): string[] {
-  const src = readFileSync(join(packagesDir, 'cloud-server/src/adminAuth.ts'), 'utf8')
+  const src = readFileSync(join(appsDir, 'server/src/adminAuth.ts'), 'utf8')
   const block = /ADMIN_WRITE_PREFIXES\s*=\s*\[([\s\S]*?)\]\s*as const/.exec(src)
   const postOnly = /ADMIN_POST_ONLY_PREFIXES\s*=\s*\[([\s\S]*?)\]\s*as const/.exec(src)
   const grab = (text: string | undefined): string[] =>

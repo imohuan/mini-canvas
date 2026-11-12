@@ -6,10 +6,10 @@
  *
  * 与节点右键「加入资产库」同一件事（都把图**贴进上传弹窗**），这里一次贴选中节点的每一张。
  *
- * 为什么这段内容住在 packages/ui 而不是多选插件里（用户明确要求）：
+ * 为什么这段内容住在 apps/web 而不是多选插件里（用户明确要求）：
  *   「不要修改你的多选插件。它顶部悬浮操作栏有一个注册函数，你直接在自己的插件里面进行注册就行」。
  *   所以本组件跟 SelectionGroupToolbar（打组按钮）一样，是**一条区域条目** ——
- *   由 packages/ui 的 uiAssetUploadPlugin 经 ctx.selectionRegion.attach 挂上，
+ *   由 apps/web 的 uiAssetUploadPlugin 经 ctx.selectionRegion.attach 挂上，
  *   多选插件一行都不用改。
  *
  * 它是什么：一段普通流式内容（自己不写 position/居中/反缩放），定位由 SelectionFrame 负责；

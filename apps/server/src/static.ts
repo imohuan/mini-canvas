@@ -1,5 +1,5 @@
 /**
- * static —— 托管 `packages/ui` 的构建产物 + 外部插件清单。
+ * static —— 托管 `apps/web` 的构建产物 + 外部插件清单。
  *
  * 两个目标：
  * 1. 浏览器打开 `http://localhost:<port>/` 就是**真画布**（ui/dist 的静态产物，无 SSR）；
@@ -349,7 +349,7 @@ const NO_UI_PAGE = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8
 code{background:#f3f4f6;padding:2px 6px;border-radius:4px}</style></head><body>
 <h1>还没构建画布界面</h1>
 <p>服务已经在跑了，但没找到 <code>apps/web/dist</code>。先构建一次：</p>
-<pre><code>cd packages/ui
+<pre><code>cd apps/web
 pnpm build</code></pre>
 <p>然后刷新这个页面。数据接口（<code>/api/kv/*</code>、<code>/api/files</code>）现在就是可用的。</p>
 </body></html>`

@@ -5,7 +5,7 @@
 // 而这依赖 ①内联变量、②<html class="dark">、③ui-theme.css 的 :root/html.dark 分支
 // 三者真实协作。Node 单测只能验纯逻辑与变量名，验不到"切主题真的换了颜色"。
 //
-// 跑法：先 pnpm -C packages/ui dev（:5288），再 node apps/web/e2e/theme-palette-check.mjs
+// 跑法：先 pnpm -C apps/web dev（:5288），再 node apps/web/e2e/theme-palette-check.mjs
 import { chromium } from 'playwright-core';
 import { existsSync } from 'node:fs';
 

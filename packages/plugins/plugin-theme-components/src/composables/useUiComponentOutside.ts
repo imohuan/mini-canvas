@@ -1,7 +1,7 @@
 /**
  * 设置面板在**画布树外**按名取 ui 组件（设置面板挂在外壳槽里，没有 useCanvasRender 的 provide）。
  *
- * 取件路径与 packages/ui 的同名工具一致：
+ * 取件路径与 apps/web 的同名工具一致：
  *   宿主目录（ctx.registryOf('ui')，主题插件登记的那一份）
  *   → 主题在 Provider 外发布的静态目录（setStaticUiCatalog，见本包 index.ts）
  *   → 调用方给的 fallback。

@@ -154,7 +154,7 @@ export function uiNames(ctx: Context | undefined): string[] {
  * 本函数走**宿主单例**（ui.ts 的 readyHost 在 @ready 时把 ctx 存进来）—— 树里树外都能取，
  * 但它是**一次性取值**（非响应式）。全屏预览这类“打开时取一次就渲染”的场景用它正合适。
  *
- * 为什么住这里而不住 packages/ui：MediaViewer（plugin-theme-components）要在树外取注册件，
+ * 为什么住这里而不住 apps/web：MediaViewer（plugin-theme-components）要在树外取注册件，
  * 而主题包**不能反向依赖** ui 包（依赖方向 kernel ← canvas-data ← canvas-render ← plugins ← ui）；
  * readyHost 的写入点在 ui 侧，但读取只需要一个“能拿到 ctx”的弱引用 —— 这里提供函数，
  * ui 侧在 @ready 时把 ctx 塞进来（见下方 setUiCatalogHost）。

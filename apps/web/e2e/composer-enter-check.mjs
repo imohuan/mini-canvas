@@ -6,7 +6,7 @@
 // 而菜单选中后已把自己关掉 —— 判定被时序骗过。修法是捕获阶段判定。
 //
 // 跑法：
-//   1) 起后台：pnpm -C packages/cloud-server serve   （:8865，托管 ui/dist）
+//   1) 起后台：pnpm -C apps/server serve   （:8865，托管 ui/dist）
 //   2) node apps/web/e2e/composer-enter-check.mjs
 import { chromium } from 'playwright-core'
 import { existsSync } from 'node:fs'

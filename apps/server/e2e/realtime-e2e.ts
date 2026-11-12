@@ -13,9 +13,9 @@
  *   5. 顺带验「本地正在做的事不被冲掉」与「全程零报错」。
  *
  * 跑法（先构建 ui 与插件）：
- *   cd packages/ui && pnpm build
+ *   cd apps/web && pnpm build
  *   cd packages/plugins/plugin-cloud-client && pnpm build
- *   cd packages/cloud-server && pnpm e2e:realtime
+ *   cd apps/server && pnpm e2e:realtime
  */
 import { existsSync } from 'node:fs'
 import { promises as fs } from 'node:fs'
@@ -56,7 +56,7 @@ const PROBE = `(() => {
 
 async function main(): Promise<void> {
   if (!existsSync(UI_DIST)) {
-    console.error('✗ 没找到画布构建产物：' + UI_DIST + '\n  请先执行：cd packages/ui && pnpm build')
+    console.error('✗ 没找到画布构建产物：' + UI_DIST + '\n  请先执行：cd apps/web && pnpm build')
     process.exit(2)
   }
   const bundle = path.join(PLUGINS_DIR, 'plugin-cloud-client/dist/plugin-cloud-client.js')

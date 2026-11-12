@@ -23,7 +23,7 @@ await mkdir(ASSETS, { recursive: true })
 const uiDist = path.join(REPO_ROOT, "apps/web/dist")
 await cp(uiDist, path.join(ASSETS, "ui"), { recursive: true }).catch(() => {
   console.error(`✗ 没有画布界面的构建产物：${uiDist}`)
-  console.error("  请先执行：cd packages/ui && pnpm build")
+  console.error("  请先执行：cd apps/web && pnpm build")
   process.exit(1)
 })
 console.log("✓ 画布界面 → assets/ui")

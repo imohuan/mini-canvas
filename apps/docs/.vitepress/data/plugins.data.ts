@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
  * 由后台接口下发，见 /plugins/runtime-capabilities 页面与 RuntimeCapabilities 组件。
  */
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-/** 从 packages/docs/.vitepress/data 往上 4 层到仓库根，再进 packages/plugins */
+/** 从 apps/docs/.vitepress/data 往上 4 层到仓库根，再进 packages/plugins */
 const PLUGINS_DIR = path.resolve(HERE, '../../../..', 'packages/plugins')
 
 export interface PluginDocEntry {

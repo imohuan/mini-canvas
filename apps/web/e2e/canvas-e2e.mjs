@@ -2,14 +2,14 @@
 // canvas-e2e —— 画布端到端 UI 自动化测试（真实浏览器，非无头桩）。
 //
 // 跑法：
-//   1) 起服务：pnpm -C packages/ui dev          （:5288）
+//   1) 起服务：pnpm -C apps/web dev          （:5288）
 //   2) 跑测试：node apps/web/e2e/canvas-e2e.mjs
 //
 // 依赖：playwright-core + 本机已下载的 Chromium（见下方 CHROME 常量，可用环境变量覆盖）。
 // 这条流水线覆盖「注册场改造」的对外可观察行为：宿主装配、doc 门面、core 不可卸、
 // 注册场运行时放/取/回收 + source、区域渲染、拖动/建节点/撤销重做/刷新恢复/设置面板。
 // UI 自动化测试：注册场改造后的画布端到端验证（真实浏览器）。
-// 跑法：node .tmp-ui-e2e/canvas-e2e.mjs  （需 packages/ui dev 已在 :5288 运行）
+// 跑法：node .tmp-ui-e2e/canvas-e2e.mjs  （需 apps/web dev 已在 :5288 运行）
 import { chromium } from 'playwright-core';
 import { existsSync } from 'node:fs';
 

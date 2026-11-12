@@ -1,7 +1,7 @@
 /**
  * `agent.setGoalImages` 必须真的存在 —— 回归测试。
  *
- * 真 bug（代码审查 + packages/ui typecheck 抓到的）：编辑运行中的目标时，组件调
+ * 真 bug（代码审查 + apps/web typecheck 抓到的）：编辑运行中的目标时，组件调
  * `agent.setGoalImages(pics)`（AgentConversation.vue:465），但 AgentService 上
  * **从来没暴露过这个方法** —— 运行时抛「agent.setGoalImages is not a function」，
  * 参考图静默不落盘（界面显示新图，刷新后又没了）。

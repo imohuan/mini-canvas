@@ -8,7 +8,7 @@
  *   3. 插入节点标签后，输入框文本是标记 `@[node:名字](画布#id)`；
  *   4. 模式下拉读的是后台提示词清单。
  *
- * 跑法：先 `pnpm -C packages/ui dev`（:5288），再 `node apps/web/e2e/reference-probe.mjs`。
+ * 跑法：先 `pnpm -C apps/web dev`（:5288），再 `node apps/web/e2e/reference-probe.mjs`。
  */
 import { chromium } from 'playwright-core'
 

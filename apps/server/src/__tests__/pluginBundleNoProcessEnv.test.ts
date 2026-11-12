@@ -46,7 +46,7 @@ describe('插件产物不依赖浏览器里不存在的 process', () => {
 
   it('★ 已构建的前端产物里没有 process.env.NODE_ENV', () => {
     const bundles = builtPluginBundles()
-    expect(bundles.length, '一个插件产物都没有，先跑 pnpm -C packages/cloud-server build:assets').toBeGreaterThan(0)
+    expect(bundles.length, '一个插件产物都没有，先跑 pnpm -C apps/server build:assets').toBeGreaterThan(0)
     const offenders = bundles
       .filter((file) => readFileSync(file, 'utf8').includes('process.env.NODE_ENV'))
       .map((file) => path.relative(REPO, file))

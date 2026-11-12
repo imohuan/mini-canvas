@@ -11,9 +11,9 @@
  *   6. 全程控制台零报错、零 4xx
  *
  * 跑法（先构建 ui 与插件）：
- *   cd packages/ui && pnpm build
+ *   cd apps/web && pnpm build
  *   cd packages/plugins/plugin-cloud-client && pnpm build
- *   cd packages/cloud-server && pnpm e2e
+ *   cd apps/server && pnpm e2e
  *
  * 服务由本脚本自己起（随机端口 + 临时数据目录），跑完自动清理，不污染你的工作区。
  */
@@ -41,7 +41,7 @@ const SEED_NODES = 2
 
 async function main(): Promise<void> {
   if (!exists(UI_DIST)) {
-    console.error(`✗ 没找到画布构建产物：${UI_DIST}\n  请先执行：cd packages/ui && pnpm build`)
+    console.error(`✗ 没找到画布构建产物：${UI_DIST}\n  请先执行：cd apps/web && pnpm build`)
     process.exit(2)
   }
   const pluginBundle = path.join(PLUGINS_DIR, 'plugin-cloud-client/dist/plugin-cloud-client.js')

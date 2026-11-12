@@ -6,7 +6,7 @@
  * 能回退、不能留空白。这里用 window.PlumeUI 的 ctx.slots 直接登记测试组件，
  * 抓的是真实 DOM 位置与 aria 状态，不碰源码字符串。
  *
- * 跑法（需 packages/ui dev 已在 :5288 运行）：
+ * 跑法（需 apps/web dev 已在 :5288 运行）：
  *   node apps/web/e2e/shell-slots-check.mjs
  */
 import { chromium } from 'playwright-core'

@@ -44,7 +44,7 @@ describe('ColorField', () => {
 
     // ColorPicker 属于组件库，不在本包测试根的扫描范围内，按相对路径读源码。
     const picker = readFileSync(
-      here + '../../../../../../ui-kit-shadcn/src/components/color-picker/ColorPicker.vue',
+      here + '../../../../../../libs/ui-kit/src/components/color-picker/ColorPicker.vue',
       'utf8',
     )
     // Vuelor 根节点自带的是 Tailwind 的 w-60 / p-4，必须经 ui.picker.root 注入类名才能覆盖。
@@ -97,7 +97,7 @@ describe('ColorField', () => {
     }
 
     // 组件库的宿主样式必须回落到项目 token，而不是 revert-layer
-    const host = readFileSync(here + '../../../../../../ui-kit-shadcn/src/styles/host.css', 'utf8')
+    const host = readFileSync(here + '../../../../../../libs/ui-kit/src/styles/host.css', 'utf8')
     expect(host).not.toMatch(/border-radius:\s*var\(--plume-radius,\s*revert-layer\)/)
     expect(host).toMatch(/\[data-slot='select-trigger'\][\s\S]{0,200}var\(--radius-control/)
   })
@@ -109,7 +109,7 @@ describe('ColorField', () => {
    */
   it('SelectContent 与其它菜单容器一样带 6px 内边距', () => {
     const here = fileURLToPath(new URL('.', import.meta.url))
-    const kit = here + '../../../../../../ui-kit-shadcn/src/components/ui/'
+    const kit = here + '../../../../../../libs/ui-kit/src/components/ui/'
     const read = (rel: string): string => readFileSync(kit + rel, 'utf8')
 
     const select = read('select/SelectContent.vue')

@@ -12,11 +12,11 @@ export type {
   ApprovalPolicyView,
 } from './service/agentService.js'
 export { useAgent } from './plugin/useAgent.js'
-// 「引用标签被点了」这条系统事件的**唯一一份**名字与载荷定义（应用层按名监听，见 packages/ui 的
+// 「引用标签被点了」这条系统事件的**唯一一份**名字与载荷定义（应用层按名监听，见 apps/web 的
 // useAssetRefOpen）。放这里是因为发事件的是本插件；消费方只取类型与常量，不 import 任何组件。
 export { REF_CLICK_EVENT, refClickPayloadOf } from './plugin/refClickEvents.js'
 export type { RefClickPayload, RefClickSource } from './plugin/refClickEvents.js'
-// 输入框「提交键」的三种可选值 + 归一化：设置页（packages/ui）要用了这份判定，
+// 输入框「提交键」的三种可选值 + 归一化：设置页（apps/web）要用了这份判定，
 // 两边若各写一份枚举，改一处就会静默漂移（设置页写着 enter、面板只认 ctrl-enter）。
 // 这是纯常量/纯函数，不 import 任何组件，导出安全。
 export { SUBMIT_KEY_MODES, DEFAULT_SUBMIT_KEY_MODE, normalizeSubmitKeyMode } from './ui/shared/composerKeys.js'

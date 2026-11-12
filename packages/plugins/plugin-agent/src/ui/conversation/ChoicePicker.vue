@@ -325,7 +325,7 @@ function pickAccount(item: ChoiceItem, accountId: string): void {
 /*
  * 多账号：**整行就是二级菜单的触发器**（用户 2026-11-10）。
  *
- * 结构与 packages/ui 左上角画布菜单完全一致：
+ * 结构与 apps/web 左上角画布菜单完全一致：
  *   DropdownMenuSub → DropdownMenuSubTrigger（整行）+ DropdownMenuSubContent（账号）
  * 悬停展开、两级菜单的间距、以及「指针从行滑到菜单」的宽限，全部由主题组件实现，
  * 不再自己算坐标、自己管开合（那样两级菜单之间没有留白，还会被外层菜单抢关）。
@@ -395,7 +395,7 @@ defineExpose({ refreshLayout })
           body-class="ac-panel-scroll-body ac-model-scroll-body">
           <div v-if="filtered.length" class="ac-model-grid">
             <!--
-              多账号：整行就是 DropdownMenuSubTrigger（照 packages/ui 画布菜单）。
+              多账号：整行就是 DropdownMenuSubTrigger（照 apps/web 画布菜单）。
               悬停整行展开账号菜单，两级菜单的间距由主题组件给。
               点模型名仍然选模型；没有账号时退回普通按钮。
             -->

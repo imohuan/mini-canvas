@@ -20,7 +20,7 @@ import path from 'node:path'
 import { DEV_APP_PLUGINS, DEV_CANVAS_PLUGINS } from '../dev-plugins'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
-const PLUGINS_DIR = path.resolve(HERE, '../../../plugins')
+const PLUGINS_DIR = path.resolve(HERE, '../../../../packages/plugins')
 
 /** 目录名 → 该插件在画布里的运行名（= 源码 export 的 name = package.json 的 pluginName） */
 const BUILTIN_INTERACTIVE = {

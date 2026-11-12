@@ -7,7 +7,7 @@
  * - **服务**持状态：ctx.inject('agent', 服务)，宿主读它做布局、也用它调动作；
  * - **命令**给键盘：agent:toggle，键位由渲染层统一分发（插件不自己绑 window）。
  *
- * **外壳不在本插件里**（浮动框 / 停靠 / 拖宽 / 头部按钮归 packages/ui）：
+ * **外壳不在本插件里**（浮动框 / 停靠 / 拖宽 / 头部按钮归 apps/web）：
  * 插件只提供「消息流 + 输入区」这一块内容，与设置内容「插件给内容、渲染层给外壳」同构。
  * 理由之一是技术上的：停靠要把画布挤窄，用的是 CanvasShell 的 right-width，插件够不到那个绑定。
  */
@@ -70,7 +70,7 @@ export function apply(ctx: Context, config?: AgentPluginConfig): void {
     page: markRaw(AgentSettingsPage),
   })
 
-  // ① 内容槽：消息流 + 输入区（外壳由 packages/ui 提供）
+  // ① 内容槽：消息流 + 输入区（外壳由 apps/web 提供）
   ctx.slots.register('agent-conversation', {
     id: 'agent/conversation',
     order: 60,

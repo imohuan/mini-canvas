@@ -2,7 +2,7 @@
 // canvas-chip-menu-check —— 画布下拉的行尾菜单（勾 ⇄ 三个点 + 四项操作）真机验证。
 //
 // 跑法：
-//   1) 起后台：pnpm -C packages/cloud-server serve   （:8865，页面由它托管）
+//   1) 起后台：pnpm -C apps/server serve   （:8865，页面由它托管）
 //   2) 跑本脚本：node apps/web/e2e/canvas-chip-menu-check.mjs
 //
 // 验的是用户口径（2026-10-09，附效果图）这条链：

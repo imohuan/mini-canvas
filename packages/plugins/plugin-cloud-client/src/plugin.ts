@@ -8,7 +8,7 @@
 //
 // 零 Vue、零工作区 import：它一行界面都不画 ——
 // 底栏的皮由 plugin-bottom-bar 提供（它自己订阅了 node/bar 场，一广播就重画），
-// 历史弹窗由 packages/ui 提供（读这里挂的服务）。
+// 历史弹窗由 apps/web 提供（读这里挂的服务）。
 import type { Context, PluginModule } from './shims.js'
 import { CloudApi } from './api.js'
 import { toBarAction, diffActions, staleActionIds, type BarActionLike } from './actions.js'

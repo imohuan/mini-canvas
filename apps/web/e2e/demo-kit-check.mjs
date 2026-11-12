@@ -5,7 +5,7 @@
  * 合并前它们各有一条 e2e（shell-slots-demo-check / ui-demo-check）。合并后装一次 demo-kit，
  * 至少要能证明：**四套演示都还在，且装/卸是一次性的**。
  *
- * 跑法（packages/ui dev 或 cloud-server 已在运行）：
+ * 跑法（apps/web dev 或 cloud-server 已在运行）：
  *   node apps/web/e2e/demo-kit-check.mjs
  */
 import { chromium } from 'playwright-core'

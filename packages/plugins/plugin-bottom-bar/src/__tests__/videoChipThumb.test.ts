@@ -10,8 +10,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const CHIP = readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/editor/chipRegistry.ts', import.meta.url)), 'utf8')
-const EDITOR = readFileSync(fileURLToPath(new URL('../../../../prosemirror-editor-bundle/src/useEditor.ts', import.meta.url)), 'utf8')
+const CHIP = readFileSync(fileURLToPath(new URL('../../../../libs/editor/src/editor/chipRegistry.ts', import.meta.url)), 'utf8')
+const EDITOR = readFileSync(fileURLToPath(new URL('../../../../libs/editor/src/useEditor.ts', import.meta.url)), 'utf8')
 const CARDS = readFileSync(fileURLToPath(new URL('../node-bottom-bar/useBottomBarCards.ts', import.meta.url)), 'utf8')
 const SOURCE = readFileSync(fileURLToPath(new URL('../panelSource.ts', import.meta.url)), 'utf8')
 

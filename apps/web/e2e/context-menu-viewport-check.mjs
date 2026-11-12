@@ -7,7 +7,7 @@
  *      并且整个面板必须待在可视区域内、与边缘保持距离；
  *   ② 二级菜单直接弹到屏幕外（主栏右侧没空间时不翻转）。
  *
- * 跑法（需 packages/ui dev 已在 :5288 运行）：
+ * 跑法（需 apps/web dev 已在 :5288 运行）：
  *   node apps/web/e2e/context-menu-viewport-check.mjs
  *
  * 断言的是**真实渲染几何**：每一个 .ctx-menu 面板的四条边都要落在视口内，
