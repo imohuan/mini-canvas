@@ -5,7 +5,7 @@
 ## 看效果
 
 ```bash
-pnpm -C packages/ui-kit-shadcn dev
+pnpm -C packages/libs/ui-kit dev
 ```
 
 打开 http://localhost:5295/ 。页面顶部是「组件配置」，一屏能改完这几项：
@@ -77,6 +77,6 @@ resetComponentConfig() // 主题卸载时复位，避免幽灵配置挡住下一
 ## 检查
 
 ```bash
-pnpm -C packages/ui-kit-shadcn typecheck
-pnpm -C packages/ui-kit-shadcn build
+pnpm -C packages/libs/ui-kit typecheck
+pnpm -C packages/libs/ui-kit build
 ```

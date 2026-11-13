@@ -25,7 +25,7 @@
 
 ```bash
 # 仓库里开发态
-pnpm -C packages/cloud-server serve        # 起服务（等价 npx plume-canvas serve）
+pnpm -C apps/server serve                 # 起服务（等价 npx plume-canvas serve）
 
 # 或装成 npm 包用
 npx plume-canvas serve --port 8865    # 起在 8865

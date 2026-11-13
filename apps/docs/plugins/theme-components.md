@@ -161,7 +161,7 @@ const MovingHandle = useUiComponent('movingHandle')
    只装业务插件、不装主题插件，目录就是空的。成品应用一定两件都装了
    （`apps/web/src/assembly.ts` 的 `APP_PLUGIN_REGISTRY`）。
 4. **设置面板只有一份**：`settingsPanel` 由本主题包注册（`PluginSettingsContent`），
-   成品应用那套界面已并入本包（2026-11-04），`packages/ui` 不再注册换皮插件。
+   成品应用那套界面已并入本包（2026-11-04），`apps/web` 不再注册换皮插件。
 5. **`edgeDefaultType` 存的是字符串不是组件**：它是"默认边类型"这个取值
    （`ctx.theme.register('edgeDefaultType', 'custom')`），不是渲染件。
 

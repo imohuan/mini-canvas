@@ -293,7 +293,7 @@ export const alwaysTopPlugin: PluginModule = { name, inject, apply }
 ```bash
 pnpm -C packages/canvas-render test     # ① 单测：层级断言在 host/__tests__/canvasHostCore.test.ts
 pnpm -C packages/canvas-render typecheck
-pnpm -C packages/ui dev                 # ② 起画布看画面（:5288）：把两个节点叠一起，确认「选中的在上面」
+pnpm -C apps/web dev                    # ② 起画布看画面（:5288）：把两个节点叠一起，确认「选中的在上面」
 ```
 
 改的是节点内部（`BaseNode` / `MovingHandle`）时，额外读 `docs/tmp/canvas-core-v2-survey/core-node-contract.md` 的层级表 —— 那两件是红线核心件，改完要跑契约测试。

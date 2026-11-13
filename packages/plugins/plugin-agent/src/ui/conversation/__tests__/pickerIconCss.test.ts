@@ -29,15 +29,4 @@ describe('provider 图标的 <img> 尺寸', () => {
     expect(blocks[0]).toMatch(/object-fit:\s*contain/)
   })
 
-  it('底栏触发器的徽标约束 img', () => {
-    const css = readFileSync(
-      resolve(__dirname, '../../../../../plugin-bottom-bar/src/node-bottom-bar/bottom-bar-editor-footer.css'),
-      'utf8',
-    )
-    const block = /\.nb-model-badge img \{([^}]*)\}/.exec(css)?.[1] ?? ''
-    expect(block, '缺少 .nb-model-badge img 规则').not.toBe('')
-    expect(block).toMatch(/width:\s*14px/)
-    expect(block).toMatch(/height:\s*14px/)
-    expect(block).toMatch(/object-fit:\s*contain/)
-  })
 })

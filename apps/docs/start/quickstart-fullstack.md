@@ -16,7 +16,7 @@
 
 ```bash
 pnpm install                                  # 第一次需要
-pnpm -C packages/cloud-server serve           # 起后台（:8865，含画布界面）
+pnpm -C apps/server serve                     # 起后台（:8865，含画布界面）
 ```
 
 浏览器自动打开 `http://127.0.0.1:8865/` 就是画布。云服务托管界面时，前端插件和后台接口**同源**，
@@ -178,7 +178,7 @@ export const APP_PLUGINS = [
 ```
 
 同时在 `apps/web/package.json` 的 dependencies 里加 `"@my/plugin-stamp": "workspace:*"`。
-重启 `pnpm -C packages/cloud-server serve`，画布左侧「新建节点」就多一项**留言卡**。
+重启 `pnpm -C apps/server serve`，画布左侧「新建节点」就多一项**留言卡**。
 
 ### 这一节用到的 API（点击直达）
 

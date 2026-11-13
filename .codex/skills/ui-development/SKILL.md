@@ -1,13 +1,13 @@
 ---
 name: ui-development
-description: 在 plume-canvas 里开发 UI、补 shadcn-vue 组件、把组件注册进默认主题、从插件上下文取件，以及统一使用 ScrollArea / Dialog / notify 的完整流程。适用于 packages/ui 和 packages/plugins 下的界面改动。
+description: 在 plume-canvas 里开发 UI、补 shadcn-vue 组件、把组件注册进默认主题、从插件上下文取件，以及统一使用 ScrollArea / Dialog / notify 的完整流程。适用于 apps/web 和 packages/plugins 下的界面改动。
 ---
 
 # plume-canvas UI 开发
 
 这个项目所有界面都使用同一套 shadcn-vue 组件。组件只有一个来源：
-`packages/ui-kit-shadcn`。组件只在一个地方登记：默认主题插件
-`packages/plugins/plugin-theme-default/src/index.ts` 的 `registryOf('ui')`。
+`packages/libs/ui-kit`。组件只在一个地方登记：默认主题插件
+`packages/plugins/plugin-theme-components/src/index.ts` 的 `registryOf('ui')`。
 业务代码只从插件上下文取组件，不直接 import 组件库。
 
 **写界面前先读 [`ui-rules.md`](./ui-rules.md)**：那份文件讲「怎么写」（选哪个浮层、
@@ -17,21 +17,20 @@ description: 在 plume-canvas 里开发 UI、补 shadcn-vue 组件、把组件�
 
 要用的组件已经存在 → 直接 `useUiComponent()` 解构，模板里写组件名。
 
-组件不存在 → 补进 `packages/ui-kit-shadcn`，再确认登记表自动带上它，然后用。
+组件不存在 → 补进 `packages/libs/ui-kit`，再确认登记表自动带上它，然后用。
 
 想弹通知 → 用上下文里的 `notify`，不要 import `vue-sonner`，也不要自己挂 Toaster。
 
 要确认 / 要输入 / 要告知 → 用应用级 `feedback` 服务，**禁止** `window.confirm` / `alert` / `prompt`。
 
-容器会滚动 → 用组件库的 `ScrollArea`（`packages/ui` 里统一用现成的 `ScrollPane`）。
+- 容器会滚动 → 用组件库的 `ScrollArea`（列表、设置页、抽屉、弹窗正文都用它）。
 
 ## 组件在哪、怎么流转
 
 ```mermaid
 flowchart LR
-  A["shadcn-vue 组件\npackages/ui-kit-shadcn"] --> B["导出清单\nSHADCN_COMPONENTS"]
   B --> C["默认主题登记\nregistryOf('ui') 名字 = 导出名"]
-  C --> D["插件 / packages/ui\nuseUiComponent() 解构"]
+  C --> D["插件 / apps/web\nuseUiComponent() 解构"]
   D --> E["模板 <Button /> <DialogContent />"]
 ```
 
@@ -39,13 +38,13 @@ flowchart LR
 
 | 层 | 位置 | 职责 |
 | --- | --- | --- |
-| 组件源 | `packages/ui-kit-shadcn/src/components/ui/` | 原样的 shadcn-vue 组件，不加适配层 |
-| 导出清单 | `packages/ui-kit-shadcn/src/registry.ts` | 收集组件、生成 `SHADCN_COMPONENTS` |
-| 登记 | `packages/plugins/plugin-theme-default/src/index.ts` | 全部登记到 `ui` 注册表，名字用导出名 |
-| 消费 | `packages/ui`、`packages/plugins/*` | `useUiComponent()` 取件，主题换了自动跟着换 |
+| 组件源 | `packages/libs/ui-kit/src/components/ui/` | 原样的 shadcn-vue 组件，不加适配层 |
+| 导出清单 | `packages/libs/ui-kit/src/registry.ts` | 收集组件、生成 `SHADCN_COMPONENTS` |
+| 登记 | `packages/plugins/plugin-theme-components/src/index.ts` | 全部登记到 `ui` 注册表，名字用导出名 |
+| 消费 | `apps/web`、`packages/plugins/*` | `useUiComponent()` 取件，主题换了自动跟着换 |
 
 依赖方向不能反：`kernel ← canvas-data ← canvas-render ← plugins ← ui`。
-主题插件可以 import 组件库；业务插件和 `packages/ui` 不 import 组件库的裸组件。
+主题插件可以 import 组件库；业务插件和 `apps/web` 不 import 组件库的裸组件。
 
 ## 用法：一个组件、多个子组件都这样取
 
@@ -56,7 +55,7 @@ flowchart LR
 <script setup lang="ts">
 import { useCanvasContext, useUiComponent } from '@plume-canvas/canvas-render'
 import { ref } from 'vue'
-import type { NotifyContract } from '@plume-canvas/canvas-base'
+import type { NotifyContract } from '@plume-canvas/canvas-data'
 
 // 解构：名字与 shadcn-vue 的 import 完全一致，不带 shadcn 前缀。
 const {
@@ -121,7 +120,7 @@ const Button = useUiComponent('Button')
 在 `setup` 的 render 函数或 JS 里要写 `Button.value`。主题热替换时它们原地更新。
 不要写 `const { Button } = useUiComponent('Button')`：单个名字直接取，解构的是返回值本身，不是组件。
 
-应用最外层是 `packages/ui/src/Root.vue`，它在 `CanvasProvider` 外面，不能注入上下文，
+应用最外层是 `apps/web/src/Root.vue`，它在 `CanvasProvider` 外面，不能注入上下文，
 所以那里用 `useUiComponentOutside('Toaster')`（`App.vue` 才是 Provider 的宿主）。
 普通子组件不要模仿；只有项目页、树外浮层这类
 确实在 Provider 外的地方才用 Outside 版本。
@@ -130,10 +129,10 @@ const Button = useUiComponent('Button')
 
 ### 1. 把 shadcn-vue 组件放进组件库
 
-在 `packages/ui-kit-shadcn` 里按 shadcn-vue 的原样放组件文件，例如：
+在 `packages/libs/ui-kit` 里按 shadcn-vue 的原样放组件文件，例如：
 
 ```text
-packages/ui-kit-shadcn/src/components/ui/accordion/
+packages/libs/ui-kit/src/components/ui/accordion/
   Accordion.vue
   AccordionContent.vue
   AccordionItem.vue
@@ -144,7 +143,7 @@ packages/ui-kit-shadcn/src/components/ui/accordion/
 `index.ts` 只做原样导出：
 
 ```ts
-// 文件：packages/ui-kit-shadcn/src/components/ui/accordion/index.ts
+// 文件：packages/libs/ui-kit/src/components/ui/accordion/index.ts
 export { default as Accordion } from './Accordion.vue'
 export { default as AccordionContent } from './AccordionContent.vue'
 export { default as AccordionItem } from './AccordionItem.vue'
@@ -154,7 +153,7 @@ export { default as AccordionTrigger } from './AccordionTrigger.vue'
 然后在组件库总入口加一行：
 
 ```ts
-// 文件：packages/ui-kit-shadcn/src/index.ts
+// 文件：packages/libs/ui-kit/src/index.ts
 export * from './components/ui/accordion'
 ```
 
@@ -164,7 +163,7 @@ export * from './components/ui/accordion'
 （`Accordion`、`AccordionItem`…），就会自动进入清单。
 
 ```ts
-// 文件：packages/ui-kit-shadcn/src/registry.ts
+// 文件：packages/libs/ui-kit/src/registry.ts
 import * as AccordionModule from './components/ui/accordion'
 
 const FAMILIES: Record<string, Record<string, unknown>> = {
@@ -176,7 +175,7 @@ const FAMILIES: Record<string, Record<string, unknown>> = {
 同时把家族名加进唯一名单：
 
 ```ts
-// 文件：packages/ui-kit-shadcn/src/shadcnFamilies.ts
+// 文件：packages/libs/ui-kit/src/shadcnFamilies.ts
 export const SHADCN_FAMILY_NAMES = [
   // …已有的名字…
   'Accordion',
@@ -189,10 +188,10 @@ export const SHADCN_FAMILY_NAMES = [
 
 ### 3. 默认主题自动登记，不用逐个写名字
 
-`plugin-theme-default` 遍历 `SHADCN_COMPONENTS`，把每个组件按导出名登记：
+`plugin-theme-components` 遍历 `SHADCN_COMPONENTS`，把每个组件按导出名登记：
 
 ```ts
-// 文件：packages/plugins/plugin-theme-default/src/index.ts
+// 文件：packages/plugins/plugin-theme-components/src/index.ts
 const ui = ctx.registryOf<unknown>('ui')
 for (const [uiName, component] of Object.entries(SHADCN_COMPONENTS)) {
   // 只包一层透明调试标记；props / slots / 事件不变
@@ -205,10 +204,10 @@ for (const [uiName, component] of Object.entries(SHADCN_COMPONENTS)) {
 ### 4. 先验证再提交
 
 ```bash
-pnpm -C packages/ui-kit-shadcn typecheck
-pnpm -C packages/plugins/plugin-theme-default typecheck
-pnpm -C packages/plugins/plugin-theme-default test
-pnpm -C packages/ui typecheck
+pnpm -C packages/libs/ui-kit typecheck
+pnpm -C packages/plugins/plugin-theme-components typecheck
+pnpm -C packages/plugins/plugin-theme-components test
+pnpm -C apps/web typecheck
 ```
 
 再用 @Chrome 打开实际页面点一遍。不要去写只检查字符串的假测试代替目验。
@@ -264,7 +263,7 @@ pnpm -C packages/ui typecheck
 reka 的 `sideOffset` 是从**触发行边框**量起的，触发行又缩在父面板内边距里，
 所以手写 `sideOffset=8` 实际只有 2px，画布下拉里甚至是 **-8px（子菜单压在父菜单上，2026-11-03 实测）**。
 
-现在 `packages/ui-kit-shadcn/src/popup/useSubMenuGap.ts` 会在挂载后按真实矩形补偏移，
+现在 `packages/libs/ui-kit/src/theme/popup/useSubMenuGap.ts` 会在挂载后按真实矩形补偏移，
 `DropdownMenuSubContent` 直接用它。**调用点不要再写 `side-offset`**；
 设置里的「子菜单间距」是目标可见距离，不是这个补偿值。
 测量别依赖 `requestAnimationFrame`：后台标签页会暂停 rAF，永远量不出来。
@@ -273,31 +272,30 @@ reka 的 `sideOffset` 是从**触发行边框**量起的，触发行又缩在父
 
 任何可能超出容器的列表、设置页、抽屉、弹窗正文，都用 `ScrollArea`，不要写 `overflow-y: auto` 的普通 div。
 
-`ScrollArea` 实际滚动的是内部 viewport，不是根节点。
-需要读 `scrollTop` 或监听滚动时，用 `packages/ui/src/components/ScrollPane.vue`：它已经接好滚动层，
-并转发了原生 `scroll` 事件。
+`ScrollArea` 实际滚动的是内部 viewport，不是根节点；读 `scrollTop` 或监听滚动时要拿到那一层。
 
 ```vue
-<!-- 文件：packages/ui/src/components/MyPanel.vue -->
+<!-- 文件：apps/web/src/components/MyPanel.vue -->
 <script setup lang="ts">
-import ScrollPane from './ScrollPane.vue'
+const ScrollArea = useUiComponent('ScrollArea')
 </script>
 
 <template>
   <div class="flex h-64 min-h-0 flex-col">
-    <ScrollPane body-class="space-y-1 p-2" @scroll="onScroll">
+    <ScrollArea class="h-64" type="always">
       <div v-for="item in items" :key="item.id">{{ item.label }}</div>
-    </ScrollPane>
+    </ScrollArea>
   </div>
 </template>
 ```
 
 父容器必须有确定高度并允许收缩（`min-h-0` / `flex-1`），否则 ScrollArea 不会滚。
-横向滚动记得把 `direction` 设为 `x` 或 `both`，它会补一条横向滚动条。
+需要读 `scrollTop` / 监听滚动时，监听内部 viewport（选择器 `[data-slot='scroll-area-viewport']`），
+不要监听 ScrollArea 根节点 —— 真正滚动的是它里面那一层。
 
 ### Dialog
 
-普通弹窗用 `packages/ui/src/components/AppDialog.vue`，它已经把遮罩、Esc、焦点、无遮罩形态接好。
+普通弹窗用 `apps/web/src/components/AppDialog.vue`，它已经把遮罩、Esc、焦点、无遮罩形态接好。
 不要每次都手工拼一遍 `Dialog + DialogOverlay + DialogContent`。
 
 ```vue
@@ -307,7 +305,7 @@ import ScrollPane from './ScrollPane.vue'
 </AppDialog>
 ```
 
-弹窗内容长到会滚动时，正文用 `ScrollPane`，不要给面板加裸滚动。
+弹窗内容长到会滚动时，正文用 `ScrollArea`，不要给面板加裸滚动。
 
 ## 确认 / 输入 / 告知：一律用 feedback 服务
 
@@ -322,21 +320,21 @@ import ScrollPane from './ScrollPane.vue'
 
 | 层 | 位置 | 职责 |
 | --- | --- | --- |
-| 服务 | `packages/vue-render/src/contracts/feedback.ts` | 排队、Promise、`current` 响应式状态；不 import 组件 |
+| 服务 | `packages/engine/vue-render/src/contracts/feedback.ts` | 排队、Promise、`current` 响应式状态；不 import 组件 |
 | 渲染 | 默认主题里的 `FeedbackHost.vue` | 用 `AlertDialog`（确认 / 告知）与 `Dialog`（输入）画面板 |
 | 调用 | 业务组件 / 插件 | `ctx.get('feedback')`，不自己拼弹窗 |
 
 分支 `codex/app-shell-layering` 上，渲染件住在
 `packages/plugins/plugin-theme-components/src/components/ui/FeedbackHost.vue`，
 由主题插件 `ctx.provide('feedback', createFeedbackService())` 并登记 `ui.add('feedbackHost', …)`，
-再在 `packages/ui/src/Root.vue` 挂一次。
+再在 `apps/web/src/Root.vue` 挂一次。
 
 ### 怎么调用
 
 组件里（树内、树外都行，走 ctx）：
 
 ```ts
-// 文件：packages/ui/src/components/ProjectsPage.vue
+// 文件：apps/web/src/components/ProjectsPage.vue
 import { useCanvasContextOrRender, type FeedbackService } from '@plume-canvas/canvas-render'
 
 const { ctx } = useCanvasContextOrRender()
@@ -395,8 +393,8 @@ await feedback.alert({ title: '导入失败', description: 'JSON 格式无效，
 
 ### 已有回归测试
 
-- `packages/ui/src/__tests__/noNativeDialogs.test.ts`：全仓扫描原生弹窗，测试 / 注释 / 构建产物跳过。
-- `packages/vue-render/src/__tests__/feedback.test.ts`：排队、取消返回 false / null、`current` 响应式。
+- `apps/web/src/__tests__/noNativeDialogs.test.ts`：全仓扫描原生弹窗，测试 / 注释 / 构建产物跳过。
+- `packages/engine/vue-render/src/__tests__/feedback.test.ts`：排队、取消返回 false / null、`current` 响应式。
 
 新增页面或插件时，如果确实需要新的交互类型（例如多选确认），先补到 feedback 服务与宿主，
 不要在调用点另起一套。
@@ -406,7 +404,7 @@ await feedback.alert({ title: '导入失败', description: 'JSON 格式无效，
 ### 同屏只开一个浮层
 
 任何下拉 / 选择 / 弹出面板打开时，别的必须自动收起。这条由组件库根组件统一执行
-（`packages/ui-kit-shadcn/src/popup/exclusive.ts`），`DropdownMenu` / `Select` / `Popover` /
+（`packages/libs/ui-kit/src/theme/popup/exclusive.ts`），`DropdownMenu` / `Select` / `Popover` /
 `Combobox` 都已接入。业务侧**不要**再写第二套互斥表。
 
 父子豁免：父面板里再打开的子浮层不关父面板；二级菜单不参与互斥。
@@ -419,7 +417,8 @@ await feedback.alert({ title: '导入失败', description: 'JSON 格式无效，
 
 ```ts
 // 文件：packages/plugins/my-plugin/src/run.ts
-import type { Context, NotifyContract } from '@plume-canvas/canvas-base'
+import type { Context } from '@plume-canvas/plugin-sdk'
+import type { NotifyContract } from '@plume-canvas/canvas-data'
 
 export function runGeneration(ctx: Context): void {
   const notify = ctx.get<NotifyContract>('notify')
@@ -457,7 +456,7 @@ const notify = ctx.tryGet<NotifyContract>('notify')
 notify?.success('已保存')
 ```
 
-`packages/ui` 的 `showToast()` 已经接到这个服务上，外壳旧代码可以继续用；新代码直接写 `ctx.get('notify')`。
+`apps/web` 的 `showToast()` 已经接到这个服务上，外壳旧代码可以继续用；新代码直接写 `ctx.get('notify')`。
 
 ## 样式规矩
 
@@ -471,28 +470,28 @@ notify?.success('已保存')
 1. 用 codegraph 查你改过的组件，确认取件名仍是源码导出名（`Button`、`DropdownMenuContent`），
    没有新写出 `shadcnButton` 这类前缀名。
 2. 渲染业务代码没有 import `@plume-canvas/ui-kit-shadcn`；只有默认主题、组件库自己和
-   `packages/ui/src/sharedGlobals.ts`（给 UMD 插件暴露全局，属基础设施）可以 import。
-3. 滚动容器是 `ScrollArea` / `ScrollPane`。
+   `apps/web/src/sharedGlobals.ts`（给 UMD 插件暴露全局，属基础设施）可以 import。
+3. 滚动容器是 `ScrollArea`。
 4. 通知走 `notify`，页面里没有第二个 Toaster。
 5. 页面里没有 `window.confirm` / `alert` / `prompt`，也没有裸 `confirm()` / `alert()` / `prompt()`；
    删除、卸载、新建、改名、发布新增都先走 `feedback`。
-6. 运行：`pnpm -C packages/ui typecheck`、相关插件 test、组件库 typecheck；
-   有原生弹窗改动时再跑 `pnpm -C packages/ui exec vitest run src/__tests__/noNativeDialogs.test.ts`。
+6. 运行：`pnpm -C apps/web typecheck`、相关插件 test、组件库 typecheck；
+   有原生弹窗改动时再跑 `pnpm -C apps/web exec vitest run src/__tests__/noNativeDialogs.test.ts`。
 7. 用 @Chrome 实测页面，确认亮色 / 暗色、窄容器、空数据都正常；
    确认框至少实测「取消不执行」与「确认真的执行」两条。
 8. 浮层的可见间距符合规范：默认子菜单与父菜单相距 8px，箭头尖端到触发器相距 8px；如果改了全局浮层配置，以设置值为准。翻转后重新量一次，不能只检查默认方向。
 
 ## 去哪里对照源码
 
-- 组件清单：`packages/ui-kit-shadcn/src/registry.ts`
-- 登记位置：`packages/plugins/plugin-theme-default/src/index.ts`
-- 取件实现：`packages/canvas-render/src/contracts/uiCatalog.ts`
-- 现成滚动容器：`packages/ui/src/components/ScrollPane.vue`
-- 现成弹窗：`packages/ui/src/components/AppDialog.vue`
-- 统一确认 / 输入 / 告知：`packages/vue-render/src/contracts/feedback.ts`
+- 组件清单：`packages/libs/ui-kit/src/registry.ts`
+- 登记位置：`packages/plugins/plugin-theme-components/src/index.ts`
+- 取件实现：`packages/engine/vue-render/src/contracts/uiCatalog.ts`
+- 滚动容器：`packages/libs/ui-kit/src/components/ui/scroll-area/`
+- 现成弹窗：`apps/web/src/components/AppDialog.vue`
+- 统一确认 / 输入 / 告知：`packages/engine/vue-render/src/contracts/feedback.ts`
 - 反馈面板宿主：`packages/plugins/plugin-theme-components/src/components/ui/FeedbackHost.vue`
-  （主工作区 `main` 上对应主题包名是 `plugin-theme-default`，以实际分支为准）
-- 原生弹窗扫描：`packages/ui/src/__tests__/noNativeDialogs.test.ts`
- - 浮层箭头与默认偏移：`packages/ui-kit-shadcn/src/components/ui/dropdown-menu/DropdownMenuArrow.vue`、`DropdownMenuContent.vue`、`DropdownMenuSubContent.vue`
-- 通知服务：`packages/plugins/plugin-theme-default/src/notifyService.ts`
+  （主题拆成了两半：组件/设置在半边，节点壳/边在 `plugin-theme-canvas`）
+- 原生弹窗扫描：`apps/web/src/__tests__/noNativeDialogs.test.ts`
+ - 浮层箭头与默认偏移：`packages/libs/ui-kit/src/components/ui/dropdown-menu/DropdownMenuArrow.vue`、`DropdownMenuContent.vue`、`DropdownMenuSubContent.vue`
+- 通知服务：`packages/plugins/plugin-theme-components/src/notifyService.ts`
 - 真实插件示例：`packages/plugins/plugin-manager/src/components/settings/PluginManagerPage.vue`

@@ -1,7 +1,7 @@
 # UI 开发：从组件库到插件上下文
 
-**一句话**：所有界面件都来自 `packages/ui-kit-shadcn`，由默认主题登记进插件系统，
-`packages/ui` 和所有插件通过 `useUiComponent()` 取用。
+**一句话**：所有界面件都来自 `packages/libs/ui-kit`，由默认主题登记进插件系统，
+`apps/web` 和所有插件通过 `useUiComponent()` 取用。
 
 这页讲清三件事：组件从哪里来、缺组件怎么补、界面里怎么写。
 
@@ -9,9 +9,9 @@
 
 ```mermaid
 flowchart LR
-  A["packages/ui-kit-shadcn"] --> B["SHADCN_COMPONENTS"]
+  A["packages/libs/ui-kit"] --> B["SHADCN_COMPONENTS"]
   B --> C["默认主题 registryOf('ui')"]
-  C --> D["插件 / packages/ui"]
+  C --> D["插件 / apps/web"]
   D --> E["模板里的 Button / Dialog"]
 ```
 
@@ -20,7 +20,7 @@ flowchart LR
 | 组件源 | `packages/libs/ui-kit/src/components/ui/` | 原样的 shadcn-vue 组件 |
 | 清单 | `packages/libs/ui-kit/src/registry.ts` | 生成 `SHADCN_COMPONENTS` |
 | 登记 | `packages/plugins/plugin-theme-components/src/index.ts` | 以导出名登记到 `ui` 注册场（端口/临时线由 `plugin-theme-canvas` 登记） |
-| 消费 | `packages/ui`、`packages/plugins/*` | `useUiComponent()` 按名取 |
+| 消费 | `apps/web`、`packages/plugins/*` | `useUiComponent()` 按名取 |
 
 注册名就是源码导出名：`Button`、`Input`、`DialogContent`、`DropdownMenuTrigger`。
 不再使用 `shadcn` 前缀。
@@ -144,10 +144,10 @@ notify.success('生成完成', { id })
 ## 检查
 
 ```bash
-pnpm -C packages/ui-kit-shadcn typecheck
+pnpm -C packages/libs/ui-kit typecheck
 pnpm -C packages/plugins/plugin-theme-components typecheck
 pnpm -C packages/plugins/plugin-theme-canvas typecheck
-pnpm -C packages/ui typecheck
+pnpm -C apps/web typecheck
 ```
 
 改完用 Chrome 实测：按钮、下拉、弹窗、滚动、通知都要点到。

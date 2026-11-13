@@ -139,4 +139,30 @@ describe('业务插件零引用', () => {
     }
     expect(offenders, '测试里跨插件 import（会让 workspace 成环）：\n' + offenders.join('\n')).toEqual([])
   })
+
+  /**
+   * 用相对路径绕过包名同样算跨插件引用。
+   *
+   * 典型写法：从 plugin-bottom-bar 的测试里 `import '../../../plugin-auto-layout/src/x'`。
+   * 它不会让 pnpm 成环（没有包依赖），但会让 A 插件的测试去读 B 插件的**源码实现**：
+   * B 一改文件名或实现，A 的测试就红，且报错指向 A。这类耦合最难查。
+   */
+  it('不用相对路径去读另一个插件的源码', () => {
+    const offenders: string[] = []
+    // 相对路径里出现 /plugin-<名字>/ 即视为跨插件；自己目录下的同名片段不会命中。
+    const pattern = /(?:from|import|resolve|join|readFileSync)[^\n]*?['"`(][^'"`)]*[\\/](plugin-[a-z0-9-]+)[\\/]src[\\/]/g
+    for (const dir of readdirSync(PLUGINS_DIR)) {
+      if (EXEMPT_DIRS.has(dir)) continue
+      const root = path.join(PLUGINS_DIR, dir)
+      if (!statSync(root).isDirectory()) continue
+      for (const file of walkAll(root)) {
+        const text = readFileSync(file, 'utf-8')
+        for (const m of text.matchAll(pattern)) {
+          if (m[1] === dir) continue
+          offenders.push(path.relative(PLUGINS_DIR, file) + ' :: ' + m[1])
+        }
+      }
+    }
+    expect(offenders, '用相对路径读了别的插件的源码：\n' + offenders.join('\n')).toEqual([])
+  })
 })

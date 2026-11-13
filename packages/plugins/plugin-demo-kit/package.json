@@ -30,8 +30,7 @@
   "dependencies": {
     "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/ui-kit": "workspace:*",
-    "lucide-vue-next": "^1.0.0"
+    "@plume-canvas/ui-kit": "workspace:*"
   },
   "peerDependencies": {
     "@vue-flow/core": "^1.48.2",

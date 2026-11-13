@@ -122,10 +122,10 @@ x-admin-token: <64 位 hex>
 为什么 `Origin: null` 不能放行：不透明源永远报 `cross-site`，而且任何网页都能自己造一个
 同样的 sandbox iframe。给它开例外等于对所有网页开例外。
 
-dev 模式（`pnpm -C packages/ui dev`）要显式放行：
+dev 模式（`pnpm -C apps/web dev`）要显式放行：
 
 ```bash
-pnpm -C packages/cloud-server serve \
+pnpm -C apps/server serve \
   --trusted-host localhost:8865 \
   --trusted-origin http://localhost:5288
 ```
@@ -249,7 +249,7 @@ node apps/server/dist/cli.js audit-verify -d .plume
 ## 六、关闭鉴权
 
 ```bash
-PLUME_ALLOW_INSECURE=1 pnpm -C packages/cloud-server serve --no-admin-auth
+PLUME_ALLOW_INSECURE=1 pnpm -C apps/server serve --no-admin-auth
 ```
 
 必须同时给这个环境变量，单写 `--no-admin-auth` 会直接报错退出。关掉之后任何网页都能装插件、

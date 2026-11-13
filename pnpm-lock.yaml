@@ -802,9 +802,6 @@ importers:
       '@plume-canvas/plugin-sdk':
         specifier: workspace:*
         version: link:../../libs/plugin-sdk
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
       '@plume-canvas/canvas-data':
         specifier: workspace:*
@@ -916,9 +913,6 @@ importers:
       '@plume-canvas/ui-kit':
         specifier: workspace:*
         version: link:../../libs/ui-kit
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
       '@plume-canvas/kernel':
         specifier: workspace:*
@@ -1675,9 +1669,6 @@ importers:
       '@plume-canvas/ui-kit':
         specifier: workspace:*
         version: link:../../libs/ui-kit
-      lucide-vue-next:
-        specifier: ^1.0.0
-        version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
       '@vitejs/plugin-vue':
         specifier: ^6.0.6

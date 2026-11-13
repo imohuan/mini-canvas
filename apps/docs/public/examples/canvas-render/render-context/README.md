@@ -6,4 +6,4 @@
 - `src/NoteContent.vue`：content 组件 —— 壳注入的 `{ id, data }` props、`useCanvasRender().nodeWrite` 写回、
   双击进编辑、编辑态 `nowheel` 拦画布滚轮。
 
-装配到任何宿主（例如 `packages/ui` 的 `APP_PLUGINS`）即可在画布上加便签节点。
+装配到任何宿主（例如 `apps/web` 的 `APP_PLUGINS`）即可在画布上加便签节点。

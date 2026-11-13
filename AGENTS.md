@@ -91,20 +91,20 @@ Plume（羽画，命令行与包名 `plume-canvas`）是一个可扩展的画布
 每个包各自跑测试；根目录没有统一 test 脚本。
 
 ```bash
-pnpm -C packages/kernel test
-pnpm -C packages/canvas-data test
-pnpm -C packages/canvas-render test
-pnpm -C packages/ui test
+pnpm -C packages/engine/kernel test
+pnpm -C packages/engine/canvas-data test
+pnpm -C packages/engine/canvas-render test
+pnpm -C apps/web test
 pnpm -C packages/plugins/<插件名> test
 
-pnpm -C packages/canvas-render typecheck
-pnpm -C packages/ui typecheck
+pnpm -C packages/engine/canvas-render typecheck
+pnpm -C apps/web typecheck
 ```
 
 测试数量和“当前阶段”会变，不要照抄旧数字；以实际输出为准。
 全绿才继续。Chrome 实测通过后再考虑补 e2e。
 
-## 六、写文档规范（packages/docs）
+## 六、写文档规范（apps/docs）
 
 文档分两种，不要混：
 
@@ -114,8 +114,8 @@ pnpm -C packages/ui typecheck
 | 开发过程文档 | 历史归档在 `backup/docs-2026-11-03/`；新问题整理放 `docs/问题整理/` | 计划、调研、方案比较、排障记录、迁移说明、临时笔记和历史记录。只给开发者查，不挂进 VitePress。 |
 
 正式文档讲「现在怎么用」，开发过程文档讲「当时怎么想、怎么做的」。
-功能改了，先更新 `packages/docs` 里的正式文档；需要留过程记录，再写到 `docs/`。
-不要把临时计划写进 `packages/docs`，也不要只把新功能写在历史文档里却不更新正式文档。
+功能改了，先更新 `apps/docs` 里的正式文档；需要留过程记录，再写到 `docs/`。
+不要把临时计划写进 `apps/docs`，也不要只把新功能写在历史文档里却不更新正式文档。
 
 写正式文档前，先读一篇同类文档（案例看 `examples/`，组件看 `plugins/theme-components/`），照着它的结构和口吻写。
 
@@ -157,7 +157,7 @@ pnpm -C packages/ui typecheck
 
 ### 写完必须做
 
-1. `pnpm -C packages/docs dev` 起文档站（端口被占就 `--port 529x` 换一个），
+1. `pnpm -C apps/docs dev` 起文档站（端口被占就 `--port 529x` 换一个），
    用 @Chrome 打开新页面：H1、代码块、mermaid、锚点、侧边栏入口逐项看一遍；
 2. 速查表（`recipe-map.md`）加一行，让「我想做 X」能查到这篇；
 3. 与本页相关的其它文档有交叉引用的，检查链接没断。
@@ -186,8 +186,8 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\8060-pl
 多个 Agent 同时开发时，**每个 Agent 必须自己占一组端口**，不要共用：
 
 - 后台用 `-Port 886x` 或 `-Port 806x`，例如 8865 / 8866 / 8867。
-- 前端 dev 用 `pnpm -C packages/ui dev -- --port 528x`，例如 5288 / 5289 / 5290。
-- 文档站用 `pnpm -C packages/docs dev -- --port 529x`。
+- 前端 dev 用 `pnpm -C apps/web dev -- --port 528x`，例如 5288 / 5289 / 5290。
+- 文档站用 `pnpm -C apps/docs dev -- --port 529x`。
 - 插件 watch 用 `PLUME_BACKEND=http://127.0.0.1:<你的端口>` 指向自己的后台，
   不要指向别人的 8865。
 

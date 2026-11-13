@@ -60,7 +60,7 @@ description: 把用户陆续提出的零散问题、截图、抱怨或整改要�
 - 验收标准、不能动的内容、风险和验证命令；
 - 执行状态、负责人和完成标记。
 
-路径写仓库相对路径，例如 `packages/ui/src/components/ProjectCluster.vue`；
+路径写仓库相对路径，例如 `apps/web/src/components/ProjectCluster.vue`；
 图片写相对于该文档的路径，例如 `images/01-画布列表行尾-现状.png`。
 没有参考代码或图片时，明确写「无」，不要留空。
 
@@ -212,7 +212,7 @@ Plan 阶段仍需要更新文档；创建和修改这些文档只用 `apply_patc
 ## 范围与位置
 
 - 页面：示例设置页
-- 参考代码：`packages/ui/src/components/ExampleButton.vue:12`
+- 参考代码：`apps/web/src/components/ExampleButton.vue:12`
 - 相关资源：`images/01-按钮-现状.png`
 - 关联问题：无
 

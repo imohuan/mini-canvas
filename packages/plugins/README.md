@@ -3,7 +3,7 @@
 > 本指南讲"新增一个节点插件"怎么走。它证明了一条已跑通的架构链路：
 > **插件 = 一个独立 workspace 包（放在 `packages/plugins/`），UI(.vue 区域组件) 和逻辑(apply) 放一起，
 > 宿主按清单加载、零硬编码。**
-> 样板：`packages/plugins/plugin-node-text`、`plugin-node-image`（`packages/ui` 里直接可见、可拖可连可删可编辑、刷新不丢）。
+> 样板：`packages/plugins/plugin-node-text`、`plugin-node-image`（`apps/web` 里直接可见、可拖可连可删可编辑、刷新不丢）。
 
 ## 一、插件包的骨架长什么样
 
@@ -83,7 +83,7 @@ import { APP_PLUGINS } from './assembly'
 4. 宿主 `apps/web/src/assembly.ts` 的 `APP_PLUGINS` 数组里加它（若想在成品应用里看到）。
 5. `pnpm install` 认到新包；`pnpm -C packages/plugins/<你的包> typecheck` 干净。
 6. `pnpm -C packages/plugins/<你的包> test` 全绿；
-   起 `pnpm -C packages/ui dev` 目验能看到、能操作。
+   起 `pnpm -C apps/web dev` 目验能看到、能操作。
 
 ## 五、红线 / 契约
 - 不碰 `src/`(老版宿主)；不把 M6 复杂件(裁剪/蒙版/backend)带进当前节点。

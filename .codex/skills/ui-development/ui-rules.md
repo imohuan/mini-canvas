@@ -28,7 +28,7 @@
 
 **规则**：任何下拉 / 选择 / 弹出面板打开时，其它已经开着的浮层必须自动收起。
 
-这条由组件库的根组件统一执行（`packages/ui-kit-shadcn/src/popup/exclusive.ts`），
+这条由组件库的根组件统一执行（`packages/libs/ui-kit/src/popup/exclusive.ts`），
 `DropdownMenu`、`Select`、`Popover`、`Combobox` 都已接入。业务代码**不要再自己写一套互斥表**，
 写了两套反而会打架。
 
@@ -70,7 +70,7 @@
 因此     sideOffset = 可见间距目标 + (父面板可见边缘到触发行边框的距离)
 ```
 
-组件库已把这件事收在 `packages/ui-kit-shadcn/src/popup/useSubMenuGap.ts`，
+组件库已把这件事收在 `packages/libs/ui-kit/src/popup/useSubMenuGap.ts`，
 `DropdownMenuSubContent` 直接用，**调用点不要再手写 `side-offset`**。
 设置里的「子菜单间距」改的是目标值，不是这个补偿值。
 

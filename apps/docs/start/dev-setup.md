@@ -13,7 +13,7 @@
 
 ```bash
 pnpm install                                  # 仓库根目录执行一次
-pnpm -C packages/cloud-server serve --trusted-origin http://localhost:5288
+pnpm -C apps/server serve --trusted-origin http://localhost:5288
 ```
 
 看到「plume-canvas 已启动」就起来了。后台同时托管画布界面，手动打开
@@ -48,7 +48,7 @@ CLI 会**自动往后找**下一个可用端口（8866、8867…），以启动�
 后台托管的是**打好的** ui 产物。要边改边看，另开一个终端：
 
 ```bash
-pnpm -C packages/ui dev                       # :5288，画布界面热更新
+pnpm -C apps/web dev                          # :5288，画布界面热更新
 ```
 
 注意 :5288 与后台不同源；仓库已在 `apps/web/vite.config.ts` 配好 `/api` 代理指向 :8865。
@@ -58,11 +58,11 @@ pnpm -C packages/ui dev                       # :5288，画布界面热更新
 
 | 命令 | 干什么 |
 | --- | --- |
-| `pnpm -C packages/cloud-server serve --trusted-origin http://localhost:5288` | 起后台 + 画布，并放行开发页（**日常就用这个**） |
-| `pnpm -C packages/ui dev` | 前端热更新（改 ui 时用） |
+| `pnpm -C apps/server serve --trusted-origin http://localhost:5288` | 起后台 + 画布，并放行开发页（**日常就用这个**） |
+| `pnpm -C apps/web dev` | 前端热更新（改画布界面时用，:5288） |
 | `npx plume-canvas list-tools` | 列出 MCP 暴露的工具 |
-| `pnpm -C packages/cloud-server test` | 后台测试 |
-| `pnpm -C packages/ui test` | 前端应用测试 |
+| `pnpm -C apps/server test` | 后台测试 |
+| `pnpm -C apps/web test` | 前端应用测试 |
 
 ## 下一步
 

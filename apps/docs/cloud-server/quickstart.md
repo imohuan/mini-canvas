@@ -17,7 +17,7 @@
 在仓库根目录执行（PowerShell）：
 
 ```bash
-pnpm -C packages/cloud-server serve        # ① 仓库里开发用这条
+pnpm -C apps/server serve                  # ① 仓库里开发用这条
 ```
 
 如果你不是在仓库里，而是把工具装成了 npm 包，等价命令是：
@@ -149,7 +149,7 @@ npx plume-canvas list-tools
 ## 常见坑
 
 1. **端口 8865 被占用**：默认会自动往后找 10 个（8866、8867…），启动日志里有「已自动改用 xxxx」一行；你写了 `-p 8865` 就只试这一个，失败直接报错。想避开自动寻端，就换 `-p`。
-2. **页面打不开画布**：cloud-server 托管的是 `packages/ui` 的**构建产物**。没构建过时页面会提示，先跑 `cd packages/ui && pnpm build` 再重启服务。
+2. **页面打不开画布**：cloud-server 托管的是 `apps/web` 的**构建产物**。没构建过时页面会提示，先跑 `pnpm -C apps/web build`（或直接 `pnpm start`，它会连资源一起构建）再重启服务。
 3. **curl 打插件路由返回 404**：插件还没装（或只装了前端半）。它不是内置路由 —— 装上后台半后立刻能用（热装即时生效，不用重启）。
 4. **Windows 下 curl 报错**：PowerShell 里用 `curl.exe` 指真实 curl（PowerShell 的 `curl` 是 `Invoke-WebRequest` 的别名，参数不兼容）。
 5. **`--no-open` 加不加**：默认启动会自动开浏览器；写脚本 / CI 时加它，避免多开一个窗口。
