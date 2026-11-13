@@ -66,16 +66,42 @@ export function isSafeResourceName(name) {
   return HASH_NAME_RE.test(name) || SLOT_NAME_RE.test(name)
 }
 
-/** 从节点存的同源 URL 里取资源名；非画布资源地址返回 undefined */
-export function parseResourceName(url, canvasId) {
+/**
+ * 从节点存的同源地址里拆出「资源属于哪张画布 + 资源名」。
+ *
+ * 为什么不校验等于请求里的 canvasId（2026-11-13 用户实测报障）：
+ * 节点里的引用可能指向**别的画布** —— 最典型的是跨画布粘贴：资源引用（`<画布id>/<哈希>`）
+ * 原样带过去，画面在浏览器里照样能播（`/api/canvases/<别的id>/resources/...` 是可请求地址），
+ * 一点「裁剪」却被这里判成「源视频不是画布资源」。用户看到的是「视频明明在那儿，却说不是资源」。
+ *
+ * 两个画布 id 都走同一套白名单；读盘仍由 canvasResources.read 再校验一次，
+ * 所以放宽的是「允许读哪张画布」，不是「允许读任意路径」。
+ * 产物一律写回**请求里的 canvasId**（用户正在画的这张）。
+ *
+ * @returns { canvasId, name } —— 不是画布资源地址 → undefined
+ */
+export function parseResourceRef(url, canvasId) {
   if (typeof url !== 'string') return undefined
-  for (const marker of ['/api/canvases/' + canvasId + '/resources/', '/canvases/' + canvasId + '/resources/']) {
-    const i = url.indexOf(marker)
-    if (i < 0) continue
-    const name = url.slice(i + marker.length).split('?')[0].split('#')[0]
-    if (isSafeResourceName(name)) return name
+  // 先按请求的画布匹配（绝大多数情况）；不中再按 URL 里自带的那张画布匹配。
+  const candidates = [canvasId]
+  const m = /\/api\/canvases\/([A-Za-z0-9_-]{1,64})\/resources\//.exec(url) ||
+    /\/canvases\/([A-Za-z0-9_-]{1,64})\/resources\//.exec(url)
+  if (m && m[1] !== canvasId) candidates.push(m[1])
+  for (const id of candidates) {
+    if (typeof id !== 'string' || !CANVAS_ID_RE.test(id)) continue
+    for (const marker of ['/api/canvases/' + id + '/resources/', '/canvases/' + id + '/resources/']) {
+      const i = url.indexOf(marker)
+      if (i < 0) continue
+      const name = url.slice(i + marker.length).split('?')[0].split('#')[0]
+      if (isSafeResourceName(name)) return { canvasId: id, name }
+    }
   }
   return undefined
+}
+
+/** 兼容旧签名：只关心资源名时用这个 */
+export function parseResourceName(url, canvasId) {
+  return parseResourceRef(url, canvasId)?.name
 }
 
 /** 偶数对齐（yuv420p 的宽高与色度偏移都要偶数；最多丢 1px） */
@@ -102,8 +128,9 @@ export function apply(ctx) {
     if (typeof canvasId !== 'string' || !CANVAS_ID_RE.test(canvasId)) return c.json({ ok: false, error: '非法画布 id' }, 400)
     if (typeof nodeId !== 'string' || !NODE_ID_RE.test(nodeId)) return c.json({ ok: false, error: '非法节点 id' }, 400)
     if (running.has(nodeId)) return c.json({ ok: false, error: 'busy', message: '该节点已有裁剪任务在跑' }, 409)
-    const name = parseResourceName(srcUrl, canvasId)
-    if (!name) return c.json({ ok: false, error: '源视频不是画布资源（本地/外链地址暂不支持真裁剪）' }, 400)
+    const ref = parseResourceRef(srcUrl, canvasId)
+    if (!ref) return c.json({ ok: false, error: '源视频不是画布资源（本地/外链地址暂不支持真裁剪）' }, 400)
+    const name = ref.name
     const r = rect && typeof rect === 'object' ? rect : {}
     const x = even(r.x)
     const y = even(r.y)
@@ -111,7 +138,8 @@ export function apply(ctx) {
     const height = even(r.height)
     if (width <= 0 || height <= 0) return c.json({ ok: false, error: '裁剪框无效' }, 400)
 
-    const src = await resources.read(canvasId, name)
+    // 源可以在**别的画布**里（跨画布粘贴的引用）；产物一律写回当前画布。
+    const src = await resources.read(ref.canvasId, name)
     if (!src) return c.json({ ok: false, error: '源视频不存在' }, 404)
 
     const promise = runFfmpegCrop(Buffer.from(src), { x, y, width, height })
@@ -150,10 +178,12 @@ export function apply(ctx) {
     if (typeof canvasId !== 'string' || !CANVAS_ID_RE.test(canvasId)) return c.json({ ok: false, error: '非法画布 id' }, 400)
     if (typeof nodeId !== 'string' || !NODE_ID_RE.test(nodeId)) return c.json({ ok: false, error: '非法节点 id' }, 400)
     if (running.has(nodeId)) return c.json({ ok: false, error: 'busy', message: '该节点已有视频任务在跑' }, 409)
-    const name = parseResourceName(srcUrl, canvasId)
-    if (!name) return c.json({ ok: false, error: '源视频不是画布资源（本地/外链地址暂不支持转音频）' }, 400)
+    const ref = parseResourceRef(srcUrl, canvasId)
+    if (!ref) return c.json({ ok: false, error: '源视频不是画布资源（本地/外链地址暂不支持转音频）' }, 400)
+    const name = ref.name
 
-    const src = await resources.read(canvasId, name)
+    // 源可以在别的画布（跨画布粘贴的引用）；产物写回当前画布
+    const src = await resources.read(ref.canvasId, name)
     if (!src) return c.json({ ok: false, error: '源视频不存在' }, 404)
 
     const promise = runFfmpegAudio(Buffer.from(src))
@@ -199,10 +229,12 @@ export function apply(ctx) {
     // 至少 0.1 秒（与前端 MIN_CLIP_DURATION 同一口径）：再短 ffmpeg 出不了可用视频
     if (length < 0.1) return c.json({ ok: false, error: '剪辑范围太短（至少 0.1 秒）' }, 400)
     if (running.has(nodeId)) return c.json({ ok: false, error: 'busy', message: '该节点已有视频任务在跑' }, 409)
-    const name = parseResourceName(srcUrl, canvasId)
-    if (!name) return c.json({ ok: false, error: '源视频不是画布资源（本地/外链地址暂不支持真剪辑）' }, 400)
+    const ref = parseResourceRef(srcUrl, canvasId)
+    if (!ref) return c.json({ ok: false, error: '源视频不是画布资源（本地/外链地址暂不支持真剪辑）' }, 400)
+    const name = ref.name
 
-    const src = await resources.read(canvasId, name)
+    // 源可以在别的画布（跨画布粘贴的引用）；产物写回当前画布
+    const src = await resources.read(ref.canvasId, name)
     if (!src) return c.json({ ok: false, error: '源视频不存在' }, 404)
 
     const promise = runFfmpegCut(Buffer.from(src), start, length)
