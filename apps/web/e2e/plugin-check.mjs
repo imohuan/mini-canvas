@@ -15,6 +15,19 @@
  *
  * 退出码：全部通过 0；有失败 1（可直接接进 CI 或 pre-push）。
  *
+ * 加一个插件检查：在下方 `suites` 里写一个 suite 即可，不用再抄启动代码 ——
+ *
+ *   suite('my-plugin', true, async (t) => {
+ *     const s = await t.snapshot()          // 插件清单 / 节点 / 选中 / 服务
+ *     await t.select([s.nodes[0].id])       // 选中节点（会等界面响应）
+ *     await t.setting('someKey', 42)        // 写设置（未声明的键会跳过并返回 {skipped}）
+ *     await t.runCommand('my-plugin:run')   // 跑命令
+ *     truthy('说明', 条件, '失败时看到的细节')
+ *     await t.shot('my-plugin')             // 截图到 --shots 目录
+ *   })
+ *
+ * 断言工具：check / eq / truthy。任何 suite 抛异常只记一条失败，不影响其它 suite。
+ *
  * 约定：
  * - 每个 suite 自带 setup/断言，**不共享**可变状态；
  * - 断言失败不中断其它 suite（一次跑完能看全貌）；
