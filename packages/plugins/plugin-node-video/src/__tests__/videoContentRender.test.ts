@@ -18,11 +18,8 @@ import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { RegistryImpl } from '@plume-canvas/kernel'
-// 只导入主题**插件**（走注册流程）：SSR 要断言播放/截图按钮的可达性，
-// 必须给 ui 目录装上真实主题组件；不直接 import 组件实现（与顶部操作条同一口径）。
-import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
-// 加载态由画布外观那一半登记；业务插件只按名取件，所以两半都要装。
-import { themeCanvasPlugin } from '@plume-canvas/plugin-theme-canvas'
+// ui 目录用测试替身（业务插件之间零引用，不装主题插件）。
+import { registerTestUi } from '@plume-canvas/test-ui-stub'
 import VideoContent from '../VideoContent.vue'
 import { beginOverlay, endOverlay } from '../videoSession'
 import { framingStyle } from '../videoCrop'
@@ -33,9 +30,7 @@ let uiFieldShared: { top(name: string): { value: unknown } | undefined }
 beforeAll(async () => {
   const { Context } = await import('@plume-canvas/canvas-data')
   const ctx = new Context()
-  ctx.plugin(themeComponentsPlugin)
-  // 画布外观半边声明 inject: ['doc']；这里只要它的 ui 登记，直接跑 apply。
-  ctx.plugin({ name: 'test-theme-canvas', apply: (c) => themeCanvasPlugin.apply(c as never) })
+  registerTestUi(ctx.registryOf('ui'))
   await ctx.start()
   uiFieldShared = ctx.registryOf('ui')
 })

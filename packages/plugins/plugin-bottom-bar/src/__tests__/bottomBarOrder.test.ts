@@ -15,7 +15,7 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { RegistryImpl } from '@plume-canvas/kernel'
 import { Context } from '@plume-canvas/canvas-data'
-import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { registerTestUi } from '@plume-canvas/test-ui-stub'
 import NodeBottomBar from '../NodeBottomBar.vue'
 import type { BarAction } from '../barTypes'
 
@@ -30,7 +30,7 @@ const ACTION: BarAction = {
 let uiField: { top(name: string): { value: unknown } | undefined; subscribe(fn: () => void): { dispose(): void } }
 beforeAll(async () => {
   const ctx = new Context()
-  ctx.plugin(themeComponentsPlugin)
+  registerTestUi(ctx.registryOf('ui'))
   await ctx.start()
   uiField = ctx.registryOf('ui') as typeof uiField
 })

@@ -11,7 +11,7 @@
  * 覆盖：内核+插件装配、持久化(刷新恢复)、image/text 节点、命令(create/delete/undo/redo)、热装热卸。
  */
 import { describe, it, expect } from 'vitest'
-import { createPlumeHost } from '../createPlumeHost'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
 import { type PluginModule } from '@plume-canvas/kernel'
 import { MemoryStorageAdapter, type CanvasNode, NodeStore, type CanvasEdge, GRAPH_EDGES_KEY } from '@plume-canvas/canvas-data'
 import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'

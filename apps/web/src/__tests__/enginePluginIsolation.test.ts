@@ -53,13 +53,23 @@ describe('引擎层不反向依赖插件', () => {
   it('package.json 的依赖里没有插件包', () => {
     for (const pkg of readdirSync(ENGINE_DIR)) {
       const file = path.join(ENGINE_DIR, pkg, 'package.json')
-      let json: { name?: string; dependencies?: Record<string, string>; peerDependencies?: Record<string, string> }
+      let json: {
+        name?: string
+        dependencies?: Record<string, string>
+        peerDependencies?: Record<string, string>
+        devDependencies?: Record<string, string>
+      }
       try {
         json = JSON.parse(readFileSync(file, 'utf8')) as typeof json
       } catch {
         continue
       }
-      const deps = { ...(json.dependencies ?? {}), ...(json.peerDependencies ?? {}) }
+      // 开发依赖也算：它照样会让 pnpm 建出 workspace 循环，还会让引擎测试反向依赖插件。
+      const deps = {
+        ...(json.dependencies ?? {}),
+        ...(json.peerDependencies ?? {}),
+        ...(json.devDependencies ?? {}),
+      }
       for (const dep of Object.keys(deps)) {
         expect(dep.startsWith('@plume-canvas/plugin-'), json.name + ' 依赖了插件 ' + dep).toBe(false)
       }

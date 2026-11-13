@@ -47,6 +47,24 @@ function walk(dir: string): string[] {
   return out
 }
 
+/** 递归收集全部源码（含 __tests__），用于"测试也不许跨插件"这条守卫 */
+function walkAll(dir: string): string[] {
+  const out: string[] = []
+  for (const name of readdirSync(dir)) {
+    const full = path.join(dir, name)
+    const st = statSync(full)
+    if (st.isDirectory()) {
+      if (name === 'node_modules' || name === 'dist') continue
+      out.push(...walkAll(full))
+    } else if (/\.(ts|vue)$/.test(name)) {
+      out.push(full)
+    }
+  }
+  return out
+}
+
+
+
 describe('业务插件零引用', () => {
   it('源码不 import 另一个 @plume-canvas/plugin-*', () => {
     for (const dir of readdirSync(PLUGINS_DIR)) {
@@ -69,22 +87,56 @@ describe('业务插件零引用', () => {
     }
   })
 
-  it('package.json 的 dependencies 不含另一个业务插件', () => {
+  it('package.json 的依赖（含 devDependencies）不含另一个业务插件', () => {
     for (const dir of readdirSync(PLUGINS_DIR)) {
       if (EXEMPT_DIRS.has(dir)) continue
       const pkgFile = path.join(PLUGINS_DIR, dir, 'package.json')
-      let pkg: { dependencies?: Record<string, string>; name?: string }
+      let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string>; name?: string }
       try {
         pkg = JSON.parse(readFileSync(pkgFile, 'utf-8')) as typeof pkg
       } catch {
         continue
       }
-      for (const dep of Object.keys(pkg.dependencies ?? {})) {
-        if (!dep.startsWith('@plume-canvas/plugin-')) continue
-        if (isLibrary(dep)) continue
-        if (isExemptEdge(dir, dep)) continue
-        expect(dep, dir + ' 的 dependencies 引用了另一个业务插件').toBe(pkg.name)
+      // 开发依赖也要拦：测试里 import 别的插件同样会让 workspace 建出循环依赖。
+      for (const field of ['dependencies', 'devDependencies'] as const) {
+        for (const dep of Object.keys(pkg[field] ?? {})) {
+          if (!dep.startsWith('@plume-canvas/plugin-')) continue
+          if (isLibrary(dep)) continue
+          if (isExemptEdge(dir, dep)) continue
+          expect(dep, dir + ' 的 ' + field + ' 引用了另一个业务插件').toBe(pkg.name)
+        }
       }
     }
+  })
+
+  /**
+   * 测试代码也要拦。
+   *
+   * 理由不是洁癖：测试 import 另一个插件同样会让 pnpm 在 workspace 里建出循环依赖
+   * （实测 canvas-render ⇄ plugin-multi-select），而且那种循环只在安装时才出声。
+   * 需要「真实主题组件长什么样」的断言，去主题包自己的测试里验；宿主侧用
+   * @plume-canvas/test-ui-stub 的替身锁调用形态。
+   */
+  it('测试代码也不 import 另一个 @plume-canvas/plugin-*', () => {
+    const offenders: string[] = []
+    for (const dir of readdirSync(PLUGINS_DIR)) {
+      if (EXEMPT_DIRS.has(dir)) continue
+      const root = path.join(PLUGINS_DIR, dir)
+      if (!statSync(root).isDirectory()) continue
+      const self = '@plume-canvas/' + dir
+      for (const file of walkAll(root)) {
+        const text = readFileSync(file, 'utf-8')
+        const imports = [
+          ...text.matchAll(/^\s*(?:import|export)[^\n]*?from\s+['"](@plume-canvas\/plugin-[^'"]+)['"]/gm),
+        ]
+        for (const m of imports) {
+          if (isLibrary(m[1])) continue
+          if (isExemptEdge(dir, m[1])) continue
+          if (m[1] === self) continue
+          offenders.push(path.relative(PLUGINS_DIR, file) + ' :: ' + m[1])
+        }
+      }
+    }
+    expect(offenders, '测试里跨插件 import（会让 workspace 成环）：\n' + offenders.join('\n')).toEqual([])
   })
 })

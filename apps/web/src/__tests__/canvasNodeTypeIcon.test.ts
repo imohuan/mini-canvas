@@ -6,12 +6,12 @@
  * 单点判定（字符串/组件/none）由 canvas-data 的 iconKind.test.ts 负责，此处不重复。
  */
 import { describe, it, expect } from 'vitest'
-import { createPlumeHost } from '../createPlumeHost'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
 import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 import { iconRenderMode } from '@plume-canvas/kernel'
 // 菜单聚合实现已"合回"它唯一的消费者 plugin-context-menu（设计文档 §十一 决策 10：menu 服务删除）。
 // 这里用相对路径直接取那个纯逻辑函数 —— 测试专用，不给 canvas-render 增包依赖（避免 render ⇄ plugin 成环）。
-import { buildMenuItems } from '../../../../../plugins/plugin-context-menu/src/menuBuilder'
+import { buildMenuItems } from '@plume-canvas/plugin-context-menu'
 import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
 

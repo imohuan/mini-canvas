@@ -47,9 +47,6 @@
     "@plume-canvas/vue-render": "workspace:*"
   },
   "devDependencies": {
-    "@plume-canvas/plugin-multi-select": "workspace:*",
-    "@plume-canvas/plugin-node-image": "workspace:*",
-    "@plume-canvas/plugin-node-text": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue-flow/core": "^1.48.2",
     "typescript": "~6.0.2",

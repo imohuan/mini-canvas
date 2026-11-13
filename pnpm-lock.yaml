@@ -313,15 +313,6 @@ importers:
         specifier: workspace:*
         version: link:../vue-render
     devDependencies:
-      '@plume-canvas/plugin-multi-select':
-        specifier: workspace:*
-        version: link:../../plugins/plugin-multi-select
-      '@plume-canvas/plugin-node-image':
-        specifier: workspace:*
-        version: link:../../plugins/plugin-node-image
-      '@plume-canvas/plugin-node-text':
-        specifier: workspace:*
-        version: link:../../plugins/plugin-node-text
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -445,6 +436,12 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+
+  packages/libs/test-ui-stub:
+    dependencies:
+      vue:
+        specifier: ^3.5.34
+        version: 3.5.38(typescript@6.0.3)
 
   packages/libs/ui-kit:
     dependencies:
@@ -713,9 +710,9 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1(@types/sortablejs@1.15.9)
     devDependencies:
-      '@plume-canvas/plugin-theme-components':
+      '@plume-canvas/test-ui-stub':
         specifier: workspace:*
-        version: link:../plugin-theme-components
+        version: link:../../libs/test-ui-stub
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1229,9 +1226,9 @@ importers:
         specifier: ^3.5.0
         version: 3.5.38(typescript@6.0.3)
     devDependencies:
-      '@plume-canvas/plugin-theme-canvas':
+      '@plume-canvas/test-ui-stub':
         specifier: workspace:*
-        version: link:../plugin-theme-canvas
+        version: link:../../libs/test-ui-stub
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1269,9 +1266,9 @@ importers:
         specifier: ^0.184.0
         version: 0.184.0
     devDependencies:
-      '@plume-canvas/plugin-theme-components':
+      '@plume-canvas/test-ui-stub':
         specifier: workspace:*
-        version: link:../plugin-theme-components
+        version: link:../../libs/test-ui-stub
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1306,9 +1303,9 @@ importers:
         specifier: workspace:*
         version: link:../../libs/plugin-sdk
     devDependencies:
-      '@plume-canvas/plugin-theme-components':
+      '@plume-canvas/test-ui-stub':
         specifier: workspace:*
-        version: link:../plugin-theme-components
+        version: link:../../libs/test-ui-stub
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1380,9 +1377,9 @@ importers:
         specifier: workspace:*
         version: link:../../libs/plugin-sdk
     devDependencies:
-      '@plume-canvas/plugin-theme-components':
+      '@plume-canvas/test-ui-stub':
         specifier: workspace:*
-        version: link:../plugin-theme-components
+        version: link:../../libs/test-ui-stub
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1571,9 +1568,9 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
     devDependencies:
-      '@plume-canvas/plugin-theme-components':
+      '@plume-canvas/test-ui-stub':
         specifier: workspace:*
-        version: link:../plugin-theme-components
+        version: link:../../libs/test-ui-stub
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1758,9 +1755,6 @@ importers:
         specifier: ^2.0.9
         version: 2.0.9
     devDependencies:
-      '@plume-canvas/plugin-shortcut-manager':
-        specifier: workspace:*
-        version: link:../plugin-shortcut-manager
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))

@@ -36,6 +36,6 @@
     "vite": "^8.0.12",
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
-    "@plume-canvas/plugin-theme-canvas": "workspace:*"
+    "@plume-canvas/test-ui-stub": "workspace:*"
   }
 }

@@ -12,9 +12,9 @@ import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
-// T06：多选已改为从 UI 目录按名取端口/拖线件。测试注入**真实主题实现**（devDependency），
-// 这样"与节点端口同款"的类名断言仍验的是真件，而不是自造的假桩。
-import { MovingHandle, ConnectionLine } from '@plume-canvas/plugin-theme-canvas'
+// 多选从 UI 目录按名取端口/拖线件；测试用替身包（业务插件之间零引用）。
+// 替身保留了与主题同名的锚点/按钮/跟随区标记，用来锁「调的是同一个名字」。
+import { TEST_UI_COMPONENTS } from '@plume-canvas/test-ui-stub'
 import SelectionFrame from '../SelectionFrame.vue'
 import { MULTI_SELECT_FRAME_KEYS, MULTI_SELECT_COLOR_KEYS, DEFAULT_MULTI_SELECT_FRAME } from '../multiSelectConfig'
 
@@ -37,8 +37,8 @@ function selectionRegionField(entries: SelectionRegionEntry[] = []): SelectionRe
 /** UI 目录桩：按名给出组件（多选只取 movingHandle / connectionLine 两个名字） */
 function uiCatalogField(): { top(name: string): { id: string; value: unknown } | undefined; subscribe(): { dispose(): void } } {
   const byName: Record<string, unknown> = {
-    movingHandle: MovingHandle,
-    connectionLine: ConnectionLine,
+    movingHandle: TEST_UI_COMPONENTS.movingHandle,
+    connectionLine: TEST_UI_COMPONENTS.connectionLine,
   }
   return {
     top: (name: string) => (name in byName ? { id: 'default', value: byName[name] } : undefined),
@@ -410,7 +410,7 @@ describe('整组拖动起手（回归：拖动状态 ref 漏声明导致 Referen
 })
 
 describe('群组框总开关', () => {
-  it('多选框上挂的是主题的 MovingHandle（不是手绘按钮）——保证与节点端口同款', async () => {
+  it('多选框按名取 movingHandle（不是手绘按钮）——与节点端口共用同一个组件', async () => {
     const html = await render()
     // 复用 MovingHandle 的既有类名 = 外观/跟随/显隐全由同一个组件负责，不会各画一套
     expect(html).toContain('moving-handle-anchor')

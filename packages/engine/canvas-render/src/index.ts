@@ -401,8 +401,9 @@ export {
   DEFAULT_EDGE_VISUAL,
   DEFAULT_HANDLE_VISUAL,
   DEFAULT_DEBUG_VISUAL,
+  splitNodeWritePatch,
 } from './host/canvasHostCore'
-export type { FlowNode, FlowEdge, ThemeAssembly } from './host/canvasHostCore'
+export type { FlowNode, FlowEdge, ThemeAssembly, NodeWriteSplit } from './host/canvasHostCore'
 // 默认主题的启动默认值 + 设置键表：宿主在装插件前就要用，两个主题插件也共享同一份。
 export {
   DEFAULT_THEME_EDGE,

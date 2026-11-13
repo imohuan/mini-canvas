@@ -4,7 +4,7 @@
  * 环境：node（无 DOM），故 window keydown 绑定跳过；快捷键语义经 handleMultiSelectKey 纯函数直测。
  */
 import { describe, it, expect } from 'vitest'
-import { createPlumeHost } from '../createPlumeHost'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
 import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 import type { MultiSelectService } from '@plume-canvas/plugin-multi-select'
 import { multiSelectPlugin, handleMultiSelectKey } from '@plume-canvas/plugin-multi-select'

@@ -10,14 +10,26 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, it, expect } from 'vitest'
-import { createPlumeHost } from '../createPlumeHost'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
+import path from 'node:path'
+import { existsSync } from 'node:fs'
 import { MemoryStorageAdapter, CANVAS_BASE_PLUGIN_NAME } from '@plume-canvas/canvas-data'
 import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 import type { PluginModule } from '@plume-canvas/kernel'
 
 describe('步骤 4 完成标准① —— 宿主只注入渲染层服务', () => {
   it('createPlumeHost.ts 只剩 view / canvas / nodeToolbar', () => {
-    const src = readFileSync(fileURLToPath(new URL('../createPlumeHost.ts', import.meta.url)), 'utf8')
+    // 源码在本仓库的引擎包里；测试跟着插件搬到了应用侧。
+    // 从当前文件向上找仓库根（有 pnpm-workspace.yaml 的那一级），不写死相对层级。
+    let dir = path.dirname(fileURLToPath(import.meta.url))
+    let repoRoot = ''
+    for (let i = 0; i < 8; i++) {
+      if (existsSync(path.join(dir, 'pnpm-workspace.yaml'))) { repoRoot = dir; break }
+      dir = path.dirname(dir)
+    }
+    expect(repoRoot, '找不到仓库根（pnpm-workspace.yaml）').not.toBe('')
+    const hostSrc = path.join(repoRoot, 'packages/engine/canvas-render/src/host/createPlumeHost.ts')
+    const src = readFileSync(hostSrc, 'utf8')
     // 只看代码行（注释里的说明文字不算"装配点"）
     const code = src
       .split('\n')

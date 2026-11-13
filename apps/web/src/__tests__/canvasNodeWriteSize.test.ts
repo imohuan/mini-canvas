@@ -9,11 +9,11 @@
  *   一次 resize → 只报 size → node.size 与 data 镜像都更新 → 只记一条历史 → 落盘后刷新仍在。
  */
 import { describe, it, expect } from 'vitest'
-import { createPlumeHost } from '../createPlumeHost'
+import { createPlumeHost } from '@plume-canvas/canvas-render'
 import { MemoryStorageAdapter, nodeSizePatch, type CanvasNode } from '@plume-canvas/canvas-data'
 import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 import { nodeImagePlugin } from '@plume-canvas/plugin-node-image'
-import { splitNodeWritePatch } from '../canvasHostCore'
+import { splitNodeWritePatch } from '@plume-canvas/canvas-render'
 
 async function boot(adapter = new MemoryStorageAdapter()) {
   const { host } = await createPlumeHost({

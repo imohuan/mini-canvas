@@ -33,7 +33,6 @@
   },
   "devDependencies": {
     "@plume-canvas/plugin-sdk": "workspace:*",
-    "@plume-canvas/plugin-shortcut-manager": "workspace:*",
     "@plume-canvas/ui-kit": "workspace:*",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/server-renderer": "3.5.38",

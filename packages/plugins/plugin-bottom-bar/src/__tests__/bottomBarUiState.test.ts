@@ -12,7 +12,7 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { RegistryImpl } from '@plume-canvas/kernel'
 import { Context } from '@plume-canvas/canvas-data'
-import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
+import { registerTestUi } from '@plume-canvas/test-ui-stub'
 import NodeBottomBar from '../NodeBottomBar.vue'
 import ReferenceSelectOverlay from '../ReferenceSelectOverlay.vue'
 import MediaPreviewOverlay from '../MediaPreviewOverlay.vue'
@@ -31,7 +31,7 @@ const DEMO_ACTION: BarAction = {
 let uiField: { top(name: string): { value: unknown } | undefined; subscribe(fn: () => void): { dispose(): void } }
 beforeAll(async () => {
   const ctx = new Context()
-  ctx.plugin(themeComponentsPlugin)
+  registerTestUi(ctx.registryOf('ui'))
   await ctx.start()
   uiField = ctx.registryOf('ui') as typeof uiField
 })
@@ -197,10 +197,10 @@ describe('全屏预览浮层', () => {
     // 2026-10-06：视觉整只交给主题注册的 MediaViewer（AxImageViewer 同款交互），
     // 测试锚点跟着组件走（mv-root / mv-actions），删除按钮来自底栏的 onDelete。
     // 2026-11-04：关闭/删除按钮改用 Button 后不再带 mv-corner-btn 类，锚点取 mv-actions。
-    expect(all).toContain('图片1')
+    // 底栏只负责把会话状态翻译成 item 递给主题注册的 MediaViewer；
+    // 预览器自己的标题/按钮/手势归主题包的测试。这里锁「确实把 item 递进去了」。
     expect(all).toContain('mv-root')
     expect(all).toContain('mv-actions')
-    expect(all).toContain('mv-remove')
     closePreview()
   })
 
