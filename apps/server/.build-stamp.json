@@ -1,7 +1,7 @@
 {
   "version": 3,
   "tasks": {
-    "@plume-canvas/ui": "0978e05d3eba1eeed5c04ecf30f835dd6b3baf59",
+    "@plume-canvas/ui": "88644fca98690d113f02fb9001ba1f0cbf43c3c3",
     "@plume-canvas/plugin-align-arrange": "d08ddf53f636e878b32d4f8d28f0b27082f415b9",
     "@plume-canvas/plugin-align-guide": "93f61f1147453854375cb10768c5a41521310b6f",
     "@plume-canvas/plugin-auto-layout": "1ed79b1a719b3823a29165bf7c832d0594ea076d",

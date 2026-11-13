@@ -3,13 +3,17 @@
  *
  * 使用方在自己的 Tailwind 入口里引入一次：
  *   @import "@plume-canvas/ui-kit/styles.css";
- *   @source "../../ui-kit-shadcn/src";
+ * 本文件自带一条 @source（指向组件库自己的 src），所以使用方不用再手写扫描路径。
  *
  * 颜色直接映射到项目现有的 `--ui-*` 变量，所以亮暗主题跟着 `<html class="dark">` 走，
  * 不需要再写第二套色板。`dark` 变体由宿主 Tailwind 入口声明（本项目在 app.css）。
  */
 @import "shadcn-vue/tailwind.css";
 @import "@vuelor/picker/tailwind.css";
+
+/* 组件库自己的源码：不显式登记，Tailwind v4 不会扫描 workspace 包，
+   组件里的 bg-primary / text-muted-foreground 等类名会整批缺失。 */
+@source "../";
 
 /*
  * 边框默认色（shadcn 标准基础规则，本仓宿主入口此前漏了这条）。
