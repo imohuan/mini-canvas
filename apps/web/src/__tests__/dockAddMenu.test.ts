@@ -81,4 +81,9 @@ describe('底栏「添加节点」菜单：隐藏预留项 + 上传真可用（2
     // 「上传」不碰资产库上传 API
     expect(dock).not.toContain('uploadAssetsTo')
   })
+
+  it('⑥ 菜单建出来的节点要选中：底栏/顶栏挂在选中节点上，不选等于什么都没加', () => {
+    // 2026-11-13 实测：四个类型都能建出来，但 selection 是空的，用户看不到操作栏。
+    expect(ui).toMatch(/selectNewNode\(host\.command\.execute\('command:create-node'/) 
+  })
 })

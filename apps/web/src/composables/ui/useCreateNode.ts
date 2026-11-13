@@ -30,10 +30,16 @@ export function createCreateNodeScope(
       // 兜底：从 window key 拿（与 e2e 同源）
       const w = window as unknown as { PlumeUI?: { getHost(): FullHost } }
       const fallback = w.PlumeUI?.getHost()
-      if (fallback) { fallback.command.execute('command:create-node', buildPayload(type, fallback)); return }
+      if (fallback) {
+        selectNewNode(fallback.command.execute('command:create-node', buildPayload(type, fallback)))
+        return
+      }
       return
     }
-    host.command.execute('command:create-node', buildPayload(type, host))
+    // 「添加节点」菜单建完必须**选中**：底栏 / 顶栏挂在选中的节点上，不选的话
+    // 用户看到的是「点了菜单、画布上冒出一个节点，但没有任何操作栏」——
+    // e2e 实测（2026-11-13）四个类型建完 selection 都是空的。
+    selectNewNode(host.command.execute('command:create-node', buildPayload(type, host)))
   }
   function buildPayload(type: 'text' | 'image' | 'video' | 'audio', host: HostApi): { type: string; position: { x: number; y: number }; imageUrl?: string } {
     const count = host.nodeStore?.getNodes().length ?? 0
