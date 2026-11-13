@@ -1,14 +1,14 @@
 # 节点加载态 NodeLoadingState
 
 **一句话**：节点卡片、视频画面、状态栏里“正在处理”的那块统一长这样 —— 流光底色 + 超大进度 + 一行阶段文案。
-从 `@plume-canvas/plugin-theme-canvas` 直接导入使用（节点壳与视频插件都是这么用的）。
+插件里用 `useUiComponent('nodeLoadingState')` 按名取（主题登记的那一份），**不要**从主题包 import。
 
 源码：`packages/plugins/plugin-theme-canvas/src/components/node/NodeLoadingState.vue`。
 
-> **它住在哪**：跟着节点壳一起在「画布外观」主题包里。加载 / 失败覆盖层由 `NodeCardShell`
-> 直接画在节点自己的状态层（区域词 `state:overlay`）上，所以图片、视频、文本、可视化所有节点类型
-> 都自带加载态，**不依赖底部状态栏插件**。从 `@plume-canvas/plugin-theme-canvas` 的入口导出，
-> 视频节点那几处复用的就是同一份实现。
+> **它住在哪**：跟着节点壳一起在「画布外观」主题包里，由主题登记到 `ui` 目录的名字 `nodeLoadingState`。
+> 加载 / 失败覆盖层由 `NodeCardShell` 直接画在节点自己的状态层（区域词 `state:overlay`）上，
+> 所以图片、视频、文本、可视化所有节点类型都自带加载态，**不依赖底部状态栏插件**。
+> 业务插件只按名取件，插件之间不互相 import（视频节点就是这么改的）。
 
 ## 这个组件能做到什么
 
@@ -129,8 +129,9 @@ ctx.nodes.attach('*', { region: 'state:overlay', component: MyStateOverlay, id: 
 <!-- 文件：packages/my-plugin/src/MyContent.vue -->
 <script setup lang="ts">
 import { ref } from 'vue'
-import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 const loading = ref(false)
 const percent = ref(0)
 </script>

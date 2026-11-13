@@ -2,26 +2,16 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import cssInjectedByJs from 'vite-plugin-css-injected-by-js'
 import { pluginLibBuild } from '../vite-plugin-lib'
-import { shikiStubPlugin } from './shikiStubPlugin'
 
 // plugin-demo-kit —— 四套开发演示合并后的**唯一**产物（UMD），供「插件管理」按需安装。
-// 另带一个独立的主题工作台预览页（`pnpm -C packages/plugins/plugin-demo-kit dev` → /theme-lab.html）：
-// dev 时才挂到 vite 的 root/服务配置上，build 走共享的 UMD 配置，两边互不影响。
 //
 // external / globals 走共享表（../vite-plugin-lib）——唯一事实源，与其它可装卸插件同一份。
-//
-// 特别说明 @plume-canvas/plugin-theme-components 为什么**不** external（与 node-image 那几件不同）：
-// 共享表里 external 的判据是「宿主只允许一份，多一份就出事」。本插件用到的主题模块不是这样 ——
-// 它在 GalleryCanvasStage 里只被喂给**一块嵌在展厅里的独立小画布**（自己的 Context、自己的内存
-// 存储、不进主画布的注册表）。所以它根本不参与主画布的任何注册，打进本产物不会造出「两份节点壳
-// 抢同一个槽」那种问题。反过来，若 external 掉它，宿主必须额外把 PlumePluginThemeDefault
-// 全局挂到 window 才装得上 —— 而宿主其实把主题当**源码**冷启动装配（apps/web/src/assembly.ts），
-// 并不存在这个全局，装上去只会「找不到依赖」直接炸。
-// vue / @vue-flow/core / 内核那批仍然 external：它们是块内小画布与展厅共享的真运行时。
+// 本插件不 import 任何其它插件：展厅里的小画布直接用宿主已装的主题注册表
+// （CanvasProvider 的 theme-registry 入参），所以这里不需要任何 theme 包的特例。
 export default defineConfig(({ command }) => {
   if (command === 'serve') {
     return {
-      plugins: [vue(), shikiStubPlugin()],
+      plugins: [vue()],
       server: { port: 5318, strictPort: true, open: false },
       optimizeDeps: {
         exclude: [
@@ -30,11 +20,6 @@ export default defineConfig(({ command }) => {
           '@plume-canvas/plugin-sdk',
           '@plume-canvas/kernel',
           '@plume-canvas/ui-kit',
-          '@plume-canvas/plugin-theme-components',
-          '@plume-canvas/plugin-theme-canvas',
-          '@plume-canvas/plugin-multi-select',
-          '@plume-canvas/plugin-align-guide',
-          '@plume-canvas/plugin-edge-cutting',
         ],
       },
     }

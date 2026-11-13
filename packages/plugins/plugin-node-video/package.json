@@ -31,7 +31,6 @@
     "@plume-canvas/canvas-data": "workspace:*",
     "@plume-canvas/canvas-render": "workspace:*",
     "@plume-canvas/kernel": "workspace:*",
-    "@plume-canvas/plugin-theme-canvas": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   },
   "peerDependencies": {

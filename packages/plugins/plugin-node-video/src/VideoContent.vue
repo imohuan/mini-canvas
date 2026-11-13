@@ -17,8 +17,6 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RenderEvents, useCanvasRender, useSoleNodeSelected, useUiComponent } from '@plume-canvas/canvas-render'
-// 加载态视觉已随节点壳搬进 plugin-theme-canvas（同一份实现直接复用，不再走 ui 目录）
-import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
 import { framingStyle, isCroppedRect, type Rect } from './videoCrop'
 import { readClipRange } from './videoClip'
 import VideoPlayerBar from './VideoPlayerBar.vue'
@@ -51,6 +49,8 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 /** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
 const Button = useUiComponent('Button')
+/** 节点加载态走 ui 目录按名取（主题提供实现，换主题时一起换） */
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 
 const { ctx, flow, interaction } = useCanvasRender()
 

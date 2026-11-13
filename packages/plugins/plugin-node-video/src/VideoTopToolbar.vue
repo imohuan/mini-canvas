@@ -18,7 +18,6 @@ import { computed, ref } from 'vue'
 import { beginOverlay, endOverlay, isCropPending, isCropping, isClipping, overlayDraft, setOverlayDraft } from './videoSession'
 import { CROP_RATIO_OPTIONS, DEFAULT_CROP_RATIO_VALUE } from '@plume-canvas/canvas-render'
 import { useCanvasRender, useSoleNodeSelected, useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
-import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
 import { createVideoOps, uploadVideo } from './videoOps'
 import { readVideoSourceFields } from './videoRefs'
 import type { Rect } from './videoCrop'
@@ -27,6 +26,8 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx } = useCanvasRender()
 const Button = useUiComponent('Button')
+/** 加载态按名从 ui 目录取（主题登记，换皮时一起换） */
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuItem = useUiComponent('DropdownMenuItem')

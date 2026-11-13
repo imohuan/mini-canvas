@@ -9,6 +9,7 @@
  * 一个不负责启动的组件，错误只能在运行时才暴露。
  */
 import type { CanvasNode, StorageAdapter } from '@plume-canvas/canvas-data'
+import type { ThemeRegistry } from '@plume-canvas/canvas-data'
 import type { PluginClassLike, PluginModule } from '@plume-canvas/kernel'
 import type { CanvasHostHandle } from './createPlumeHost'
 import type { PluginManifest } from './pluginManager'
@@ -30,6 +31,8 @@ export interface CanvasHostBootProps {
   seed?: () => CanvasNode[]
   /** 开发态开关，落到 ctx.isDev。 */
   dev?: boolean
+  /** 复用外部主题注册表（例如展厅里的小画布借用宿主已装的主题）；缺省新建一份。 */
+  themeRegistry?: ThemeRegistry
   /** 挂到 window 的调试 key；传空则不挂。 */
   windowKey?: string
 }

@@ -922,24 +922,9 @@ importers:
       '@plume-canvas/canvas-render':
         specifier: workspace:*
         version: link:../../engine/canvas-render
-      '@plume-canvas/plugin-align-guide':
-        specifier: workspace:*
-        version: link:../plugin-align-guide
-      '@plume-canvas/plugin-edge-cutting':
-        specifier: workspace:*
-        version: link:../plugin-edge-cutting
-      '@plume-canvas/plugin-multi-select':
-        specifier: workspace:*
-        version: link:../plugin-multi-select
       '@plume-canvas/plugin-sdk':
         specifier: workspace:*
         version: link:../../libs/plugin-sdk
-      '@plume-canvas/plugin-theme-canvas':
-        specifier: workspace:*
-        version: link:../plugin-theme-canvas
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
       '@plume-canvas/ui-kit':
         specifier: workspace:*
         version: link:../../libs/ui-kit
@@ -1435,9 +1420,6 @@ importers:
         specifier: workspace:*
         version: link:../../libs/plugin-sdk
     devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1509,9 +1491,6 @@ importers:
         specifier: workspace:*
         version: link:../../libs/plugin-sdk
     devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1549,9 +1528,6 @@ importers:
         specifier: workspace:*
         version: link:../../libs/plugin-sdk
     devDependencies:
-      '@plume-canvas/plugin-theme-components':
-        specifier: workspace:*
-        version: link:../plugin-theme-components
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
@@ -1591,9 +1567,6 @@ importers:
       '@plume-canvas/plugin-sdk':
         specifier: workspace:*
         version: link:../../libs/plugin-sdk
-      '@plume-canvas/plugin-theme-canvas':
-        specifier: workspace:*
-        version: link:../plugin-theme-canvas
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))

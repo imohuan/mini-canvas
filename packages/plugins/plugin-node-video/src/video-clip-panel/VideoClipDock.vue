@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useUiComponent, ToolbarIcon } from '@plume-canvas/canvas-render'
-import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
 import { ICON_CLOSE, ICON_CONFIRM, ICON_KEYBOARD, ICON_LOOP, ICON_MAGNET } from './icons'
 
 defineProps<{
@@ -17,7 +16,8 @@ const emit = defineEmits<{
 }>()
 
 const Button = useUiComponent('Button')
-/** 默认主题的统一加载态（紧凑形态：剪辑处理中占住「确认」那一格） */
+/** 默认主题的统一加载态（紧凑形态：剪辑处理中占住「确认」那一格），按名从 ui 目录取 */
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 const Popover = useUiComponent('Popover')
 const PopoverContent = useUiComponent('PopoverContent')
 const PopoverTrigger = useUiComponent('PopoverTrigger')

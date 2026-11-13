@@ -20,6 +20,7 @@ import ConnectionLine from "./components/edge/ConnectionLine.vue"
 import MovingHandle from "./components/node/MovingHandle.vue"
 import NodeModeTopBar from "./components/node/NodeModeTopBar.vue"
 import NodeModeBottomBar from "./components/node/NodeModeBottomBar.vue"
+import NodeLoadingState from "./components/node/NodeLoadingState.vue"
 
 export const name = "theme-canvas"
 export const inject = ['doc'] as string[]
@@ -48,6 +49,8 @@ export function apply(ctx: PluginScope, config?: ThemeCanvasConfig) {
   ui.add("connectionLine", ConnectionLine, { id: "default" })
   ui.add("nodeModeTopBar", NodeModeTopBar, { id: "default" })
   ui.add("nodeModeBottomBar", NodeModeBottomBar, { id: "default" })
+  // 节点加载态：所有节点类型共用的一只件。业务插件按名从 ui 目录取，不跨插件 import。
+  ui.add("nodeLoadingState", NodeLoadingState, { id: "default" })
 }
 
 export const themeCanvasPlugin: PluginModule = { name, inject, Config, apply }
@@ -70,10 +73,10 @@ export { default as NodeModeBottomBar } from "./components/node/NodeModeBottomBa
  */
 export { default as MovingHandle } from "./components/node/MovingHandle.vue"
 /**
- * 节点加载态视觉件（随节点壳一起住在本包）。
+ * 节点加载态视觉件（随节点壳一起住在本包，并登记到 ui 目录的名字 `nodeLoadingState`）。
  *
- * 视频内容 / 预览 / 状态栏直接 import 本入口复用同一份实现；
- * 节点壳自己也在用，所以它属于「画布外观」而不是某个业务插件。
+ * 节点壳直接渲染它；业务插件一律 `useUiComponent('nodeLoadingState')` 按名取，
+ * 不从本包 import —— 插件之间零引用是死规则，这里保留导出只为历史调用方与类型引用。
  */
 export { default as NodeLoadingState } from "./components/node/NodeLoadingState.vue"
 export { default as ConnectionLine } from "./components/edge/ConnectionLine.vue"

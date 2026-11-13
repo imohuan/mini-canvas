@@ -14,22 +14,14 @@ import path from 'node:path'
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PLUGINS_DIR = path.resolve(HERE, '../../../../packages/plugins')
 
-const EXEMPT_DIRS = new Set(['plugin-demo-kit'])
+const EXEMPT_DIRS = new Set<string>()
 /**
  * 名字带 plugin- 但不是业务插件的库：plugin-sdk 是作者入口（只有类型与纯函数），
  * 谁都允许依赖它。判据仍是「插件之间不能互相 import」。
  */
 const LIB_PACKAGES = new Set(['@plume-canvas/plugin-sdk'])
-/**
- * 过渡例外表：plugin-node-video ← plugin-theme-canvas（2026-11-09 9771a198）。
- *
- * 加载态组件随节点壳搬进 theme-canvas 后，视频节点四处直接 import 同一份实现
- * （提交 9771a198 的口径：「同一份实现直接复用」）。这是节点壳作者与节点插件之间
- * 的受控共享，不是"业务插件当组件库用"；等它像 bar-contract 一样抽成独立包时删掉。
- */
-const EXEMPT_EDGES: Array<[from: string, to: string]> = [
-  ['plugin-node-video', '@plume-canvas/plugin-theme-canvas'],
-]
+/** 例外表保持为空：插件之间零引用是死规则，不靠白名单放行。 */
+const EXEMPT_EDGES: Array<[from: string, to: string]> = []
 
 function isExemptEdge(fromDir: string, spec: string): boolean {
   if (LIB_PACKAGES.has(spec)) return false

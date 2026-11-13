@@ -4,7 +4,8 @@
  *
  * 为什么不能把它们直接塞进浮层：节点壳（BaseNode）是 VueFlow 渲染每个节点时套上去的壳，
  * 连线是 SVG 里画的边，背景要读视口 —— 它们都必须住在 <CanvasHost> 的渲染子树里。
- * 所以这里挂一块真的小画布，装默认主题 + 本插件的示例节点类型。
+ * 所以这里挂一块真的小画布，只装本插件的示例节点类型；节点壳 / 连线 / 背景的组件
+ * 复用外层应用已装好的主题注册表（不 import 任何主题插件）。
  *
  * 安全性：存储用内存适配器（刷新即丢），绝不碰用户数据；persistViewport 关掉。
  *
@@ -14,13 +15,16 @@
  * （等于白写，还留一条控制台告警）。画布宿主本来就只在浏览器里跑，不需要这层 SSR 兜底。
  */
 import { CanvasHost, CanvasProvider } from '@plume-canvas/canvas-render'
+import { useCanvasContext } from '@plume-canvas/canvas-render'
 import { MemoryStorageAdapter, GRAPH_KEY, GRAPH_EDGES_KEY, scopedKey, type CanvasNode, type CanvasEdge } from '@plume-canvas/canvas-data'
-import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
 import { galleryDemoNodesPlugin } from './demoNodes'
 
 withDefaults(defineProps<{ height?: number }>(), { height: 300 })
 
-const plugins = [themeComponentsPlugin, galleryDemoNodesPlugin]
+/** 主题由外层应用装好；展厅只借同一份注册表，不 import 主题插件。 */
+const { host } = useCanvasContext()
+const themeRegistry = host.themeRegistry
+const plugins = [galleryDemoNodesPlugin]
 
 // 两块示例卡 + 一条连线：节点壳 / 端口 / 连线 / 背景一次看全
 const NODES: CanvasNode[] = [
@@ -48,7 +52,7 @@ const adapter = makeAdapter()
 
 <template>
   <div class="gcs-stage" :style="{ height: (height ?? 300) + 'px' }">
-    <CanvasProvider :plugins="plugins" :adapter="adapter">
+    <CanvasProvider :plugins="plugins" :adapter="adapter" :theme-registry="themeRegistry">
       <CanvasHost :persist-viewport="false" />
     </CanvasProvider>
   </div>

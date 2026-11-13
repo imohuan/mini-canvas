@@ -22,9 +22,10 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useUiComponent } from '@plume-canvas/canvas-render'
-import { NodeLoadingState } from '@plume-canvas/plugin-theme-canvas'
 
 const Button = useUiComponent('Button')
+/** 节点加载态按名从 ui 目录取，不跨插件 import */
+const NodeLoadingState = useUiComponent('nodeLoadingState')
 import VideoPlayerBar from "./VideoPlayerBar.vue"
 import { fitPreviewBox } from "./videoPreviewFit"
 

@@ -66,6 +66,7 @@ onMounted(async () => {
       coldPlugins: props.plugins,
       seedDefault: props.seed,
       dev: props.dev,
+      themeRegistry: props.themeRegistry,
     })
     // 启动期间组件可能已被卸载：此时不能把宿主挂进已销毁的上下文，必须就地停掉。
     if (disposed) {
