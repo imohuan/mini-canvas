@@ -1,1 +1,0 @@
-export { ClipboardPlugin } from './ClipboardPlugin'

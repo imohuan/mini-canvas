@@ -1,5 +1,8 @@
-﻿# Logs
-logs
+# 通用规则：跨包相同的部分放这里；各包自己的产物写在包内 .gitignore。
+
+# 依赖与日志
+node_modules/
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,111 +10,57 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-.chrome-v1
-.chrome-ctx
-.chrome-cmds
-
-.codex-tmp
-node_modules
-dist
-dist-ssr
-*.local
-deepseek-harness
-
-# Editor directories and files
+# 编辑器 / 系统文件
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
+.cursor/
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-.cursor
-.npm-cache
-# Worktrees
-.worktrees/
-# MCP 服务工作目录（画布 JSON 落盘，不入库）
-workspace
-packages/mcp-server/workspace
+*.local
 
-# cloud-server 的数据目录（画布数据 + 上传资源，运行时生成，不入库）
-# 注：dist/ 与 *.tgz 已在上面被忽略，这里不重复列
+# 构建缓存与临时打包产物（包内另有同名规则，这里兜底根目录）
+dist/
+dist-ssr/
+coverage/
+*.tsbuildinfo
+*.tgz
 
-# 真机检查脚本的临时截图 / 临时探针（e2e 的正式脚本仍然入库）
-packages/ui/e2e/_*.png
-packages/ui/e2e/_tmp-*.mjs
-.plume/
-# cloud-server 数据目录的备份（手动/脚本备份出来的运行时快照，可能几百 MB，不入库）
-.plume-backup-*/
-# 本机运行数据快照（画布 / 插件 / 令牌 / 日志，可能上百 MB，不入库）
-backup/plume-*/
+# 本地临时目录（探针、截图、一次性脚本）
+.tmp/
+.scratch/
+_snap_tmp/
+**/.tmp-verify/
+**/e2e/out/
+**/e2e/_shots/
 
-# cloud-server 打包时收集的随包产物（由 scripts/bundle-assets.mjs 生成，不入库）
-packages/cloud-server/assets/
-# cloud-server 资源构建的源码指纹（由 scripts/build-assets-parallel.mjs 生成，机器本地缓存、不入库）
-packages/cloud-server/.build-stamp.json
-# cloud-server 声明合并的中间目录（构建时生成，用完即删）
-packages/cloud-server/.dts-tmp/
-
-# 由插件 pnpm build 生成后复制到此，供 plugin-load demo 加载（勿手改）
-packages/canvas-core-v2/demo-web/plugins/
-
-# 经「插件管理 → NPM 市场」安装的插件副本（安装路由落盘，运行时产物，不入库）。
-# 仓库内源码插件目录一律叫 plugin-<名字>；而 NPM 装的用发布包名 @plume-canvas/plugin-<名字>，
-# 两者命名不重叠，所以这条不会误伤源码包。
-packages/plugins/plume-canvas-plugin-*
-# scope 包的落盘目录名是「去 @、/ 换 __」：@plume-canvas/plugin-x → plume-canvas__plugin-x
-packages/plugins/plume-canvas__plugin-*
-
-# 分析 VueFlow 源码用(浅克隆, 不入库); 用 codegraph 索引查询
+# 本地分析用的浅克隆（用 codegraph 索引查询）
 vendor/
 
-# 调试残留：截图 / 探针脚本 / 临时快照目录，都不是源码，不入库
-.tmp-probe/
-_snap_tmp/
-packages/ui/_snap_tmp/
-.scratch/
-# 各包自己的 .scratch（截图 / 探针脚本 / 一次性的验证脚本）也不入库
-**/.scratch/
-**/.tmp-verify/
-.penguin-patch-tmp/
-cdp-*.txt
-packages/ui/e2e/_shots/
-packages/ui/e2e/_probe-*.mjs
-# e2e 探针截图输出（临时产物，不进仓库）
-packages/ui/e2e/out/
-packages/plugins/plugin-node-ui/scripts/cdp-*.txt
-docs/tmp/_scan/
-/_*.png
+# 本机 worktree
+.worktrees/
 
-# cloud-server 本地复现环境（机器本地，不入库）
-packages/cloud-server/.repro/
+# 运行数据根：画布 / 插件 / 令牌 / 日志，运行时生成，不入库
+.plume/
+.plume-*/
+workspace/
+**/.mini-canvas-legacy/
 
-# 多代理协调：说明文档入库，测试日志与快照留在本地
+# 历史归档（v1 源码、旧文档、旧运行快照）已移出仓库，不再跟踪
+backup/
+
+# 开发过程文档里的临时扫描与截图（正式文档在 apps/docs）
+docs/tmp/
 docs/tmp/agent-coordination/*.log
 docs/tmp/agent-coordination/*.json
-
-# 本轮协调的临时扫描脚本与 vitest JSON 输出
 docs/tmp/scan-*.cjs
-packages/ui/ui-test.json
-*.tsbuildinfo
 
-# vitepress 缓存：参数被误当成目录名时生成（只在本地）
-packages/docs/--port/
+# 根级调试残留
+/_*.png
+cdp-*.txt
 
-packages/docs/.vitepress/data/plugins.data.ts.timestamp-*.mjs
-packages/docs/.vitepress/data/parsed.data.ts.timestamp-*.mjs
-
-# cloud-server 运行时数据目录（本地调试用，含令牌与画布资源，不入库）
-.plume-test/
-.plume-e2e/
-# 启动验证用的临时数据根（本机核对，不入库）
-.plume-goal*/
-.plume-verify*/
-# 首启铺入验证用的临时数据根（本地核对用，不入库）
-.plume-seed-check*/
-# 改名前的旧数据根（保留在本机备查，不入库）
-**/.mini-canvas-legacy/
-.tmp/

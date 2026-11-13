@@ -1,28 +1,9 @@
-﻿# Logs
-logs
+# 本包产物（构建 / 测试 / 本地调试生成，不入库）
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.scratch/
+.tmp-verify/
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-.cursor
-.npm-cache
-# Worktrees
-.worktrees/

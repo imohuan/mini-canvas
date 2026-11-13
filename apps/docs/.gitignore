@@ -2,3 +2,6 @@
 .vitepress/cache
 .vitepress/data/*.timestamp-*.mjs
 node_modules
+# 参数被误当成目录名时 VitePress 生成的缓存
+--port/
+

@@ -1,0 +1,18 @@
+# 本包产物（构建 / 测试 / 本地调试生成，不入库）
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.scratch/
+.tmp-verify/
+*.log
+
+# 构建时收进来的前端与插件产物（pnpm build:assets 重新生成）
+assets/
+.build-stamp.json
+.dts-tmp/
+.repro/
+
+# 本地数据目录（目录联接，指向用户目录）
+.plume/
+
