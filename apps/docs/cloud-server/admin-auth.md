@@ -68,7 +68,7 @@ x-admin-token: <64 位 hex>
 /api/agent/system-prompt  /api/agent/template/  /api/agent/prompts  /api/agent/policy
 /api/agent/title-model  /api/agent/models  /api/agent/chat/completion
 /api/task/  /api/node-packages/  /api/node-ui/debug-
-/api/style-library/  /api/effect-library/  /api/showcase/
+/api/style-library/  /api/effect-library/
 /api/agent/canvases/
 /api/jobs
 ```

@@ -82,7 +82,6 @@ export const ADMIN_WRITE_PREFIXES = [
   '/api/node-ui/debug-',
   '/api/style-library/',
   '/api/effect-library/',
-  '/api/showcase/',
   '/api/agent/canvases/',
   '/api/jobs',
 ] as const

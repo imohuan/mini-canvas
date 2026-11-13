@@ -37,7 +37,7 @@ export function apply(ctx) {
 
 - **③ 参数为什么是简表**：外挂插件是 data: URL 装载的**单文件**，引不了 zod 依赖（data: URL 没有相对解析）。所以框架收一个「参数名 → 类型」的朴素简表（只支持 `string` / `number` / `boolean` 三种），再由宿主翻译成 MCP SDK 认识的 zod schema。绝大多数工具够用；复杂 schema 走宿主内置工具。
 - **② description 是写给 AI 看的**：AI 靠这句话决定什么时候调你的工具。写「做什么、什么时候用、参数含义」，别写「强大灵活」。
-- **① 工具名建议带插件前缀**：注册场（`server/mcp-tool`）按 name 为 key，撞名会互相覆盖。统一 `插件名.动作` 形式（showcase.add、demo.add）。
+- **① 工具名建议带插件前缀**：注册场（`server/mcp-tool`）按 name 为 key，撞名会互相覆盖。统一 `插件名.动作` 形式，如 `demo.add`。
 - **⑤ 卸载即摘**：工具登记进注册场、条目归注册方插件；MCP server 是**每请求新建**的（stateless），每次建时现读注册场 —— 所以卸载插件后，AI 客户端下一次请求就拿不到这个工具了。
 
 ## 源码出处

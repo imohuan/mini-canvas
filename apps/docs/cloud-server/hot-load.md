@@ -30,7 +30,7 @@
 
 ### 用 curl 走一遍热装循环
 
-前提：目录里已有插件文件（比如 showcase 的 `dist/server.js`，id 是 `@plume-canvas/plugin-showcase`）且 `/plugin-catalog.json` 清单里登记了它。
+前提：目录里已有插件文件（比如 `demo-plugin/dist/server.js`，插件目录名 `demo-plugin`）且 `/plugin-catalog.json` 清单里登记了它。
 
 ```bash
 # ① 查已装清单（看 id 与 loaded 状态）
@@ -39,18 +39,18 @@ curl http://127.0.0.1:8865/api/server-plugins
 # ② 热装：code 是插件 JS 的完整文本；confirm 与 sha256 都必填
 curl -X POST http://127.0.0.1:8865/api/server-plugins/install ^
   -H "Content-Type: application/json" ^
-  -d "{"id":"@plume-canvas/plugin-showcase","code":"<JS文本>","sha256":"<清单里那份>","confirm":true}"
+  -d "{"id":"demo-plugin","code":"<JS文本>","sha256":"<清单里那份>","confirm":true}"
 
 # ③ 验证：装完立刻可用（不用重启）
-curl http://127.0.0.1:8865/api/showcase/hello
+curl http://127.0.0.1:8865/api/demo/hello
 
 # ④ 热卸：按 id 摘
 curl -X POST http://127.0.0.1:8865/api/server-plugins/uninstall ^
   -H "Content-Type: application/json" ^
-  -d "{"id":"@plume-canvas/plugin-showcase"}"
+  -d "{"id":"demo-plugin"}"
 
 # ⑤ 验证：路由立刻 404
-curl http://127.0.0.1:8865/api/showcase/hello
+curl http://127.0.0.1:8865/api/demo/hello
 ```
 
 - ① `plugins` 数组是**目录实况**（文件名 + 大小 + permissions 声明），`loaded` 是**内核里活着的插件名**（启动登记 + 运行期热装都在内）。
@@ -62,7 +62,7 @@ curl http://127.0.0.1:8865/api/showcase/hello
 ```bash
 curl -X POST http://127.0.0.1:8865/api/npm-plugins/install ^
   -H "Content-Type: application/json" ^
-  -d "{"package":"@plume-canvas/plugin-showcase","confirm":true}"
+  -d "{"package":"@your-scope/plugin-demo","confirm":true}"
 ```
 
 服务端按顺序做这些事（`routes/npmPlugins.ts` 的 `doInstall`）：
@@ -70,7 +70,7 @@ curl -X POST http://127.0.0.1:8865/api/npm-plugins/install ^
 1. **包名形状 + 前缀白名单**：默认只允许 `plume-canvas-` / `@plume-canvas/` 开头的包（可用环境变量 `PLUME_NPM_SCOPES` 放开），防止「npm 上任意包」被装进来；
 2. **查 packument** 定版本（缺省 `dist-tags.latest`），并校验包的 `plume` 段结构（`pluginName` + web/server 入口）——不是插件就拒装；
 3. **下载 tarball**（`npmClient.ts`，默认 30 秒超时）并解包到临时目录；
-4. **拆两半落盘**：前端半 `dist/*.js` → 插件目录 `<包名>/dist/`（catalog 收录、强制补 `installable: true` + `npmInstalled: true` 标记）；后台半 `dist/server.js` → `<数据根>/server-plugins/<包名>.js`，并**服务端自己算 sha256** 记进来源记录（`.npm-installed.json`）；
+4. **拆两半落盘**：前端半 `plume.web.entry` → 插件目录 `<包名去 scope>/`（catalog 收录、强制补 `installable: true` + `npmInstalled: true` 标记）；后台半 `plume.server.entry` 落在同一目录，并**服务端自己算 sha256** 记进来源记录（`.npm-installed.json`）；
 5. **热装钩子**：后台半落盘后立刻 `hotInstall(id)` 装进内核 —— 装完即时可用；
 6. 前端半**刷新页面**即可见（catalog 动态收录），后台半如上即时生效。
 
@@ -78,8 +78,8 @@ curl -X POST http://127.0.0.1:8865/api/npm-plugins/install ^
 
 ### id 与插件名：为什么可能不同
 
-- **id** = 落盘文件名（去 `.js`），比如 `@plume-canvas/plugin-showcase`；
-- **插件名** = 模块里 `export const name`，比如 `showcase`。
+- **id** = 插件目录名，比如 NPM 包 `@scope/plugin-demo` 落盘成 `scope__plugin-demo`；
+- **插件名** = 模块里 `export const name`，比如 `demo`。
 
 两者可以不同。卸载时按 id 精确摘：`hotLoad.ts` 装载时记下 `id → 真名` 映射；**重启后**那份映射丢了，就按候选序列现推（先真名，再逐步剥离 `plume-canvas-` / `-plugin-` 前缀，最后用 id 本身），逐个试，摘到就停 —— 不然重启后卸载会留下「列表里还在、内核里没有」的幽灵项。
 
@@ -87,7 +87,7 @@ curl -X POST http://127.0.0.1:8865/api/npm-plugins/install ^
 
 - **路由必须在 apply 里同步注册**：Hono 首次请求后路由表冻结，启动装载的路由靠「start 时一次性把注册场里已有的 path 翻成代理」命中；运行期热装的靠 catch-all 兜底命中。但两条路都只认**注册场里已经有的条目** —— 如果你在 `apply` 里 `setTimeout` 之后再注册路由，注册场里暂时没有这条，请求就打不到。
 - **卸载/重装即时生效**：注册场是活的表。重装（同名插件再次 `installPlugin`）替换注册场里的条目；卸载（`uninstallPlugin`）让条目连同路由、定时器、私有存储一起消失。
-- **`serverPluginsLoaded` 快照怎么保持「活着」**：启动登记的外挂插件名存进一个共享数组，`bindHotLoadedTracking(sink)` 把它绑到热装/热卸上 —— 热装时把名字推进去、热卸时摘掉，而绑定那一刻已在数组里的启动名单**永不摘除**。这样 `GET /api/server-plugins` 的 `loaded` 与插件自省（如 showcase 的 `hello.plugins`）看到的始终是最新集合。
+- **`serverPluginsLoaded` 快照怎么保持「活着」**：启动登记的外挂插件名存进一个共享数组，`bindHotLoadedTracking(sink)` 把它绑到热装/热卸上 —— 热装时把名字推进去、热卸时摘掉，而绑定那一刻已在数组里的启动名单**永不摘除**。这样 `GET /api/server-plugins` 的 `loaded` 与插件自省（`ctx.tryGet('serverPluginsLoaded')`）看到的始终是最新集合。
 - **install 路由的安全关**（`serverPlugins.ts` 文件头，一条都不能省）：
   1. `confirm: true` 必填 —— 界面必须让用户看到「以服务端权限运行」并显式确认；
   2. `sha256` 必须与**服务端自己的清单**（扫插件目录算出的那份）一致 —— 比对调用方现算的哈希等于没校验；
@@ -116,5 +116,5 @@ curl -X POST http://127.0.0.1:8865/api/npm-plugins/install ^
 2. **服务端没配可信哈希来源时 install 直接 400**：这是刻意设计 ——「宁可不装，也不要假装校验过」。开发态走仓库默认配置（自带 catalog），不会遇到。
 3. **卸载后 `loaded` 里还有它**：先查 id 是否拼对（按 id 摘，不是按插件名）。重启后 id→真名映射靠前缀剥离现推，如果 id 的形态特殊（推不出真名），会留下幽灵项 —— 这时直接重启服务最干净。
 4. **NPM 装完前端列表里没有**：catalog 靠落盘的 `package.json` 判定。安装路由会强制补 `installable: true`；如果你手工改过那份 package.json 把它关了，列表就不收录 —— 别手工动 NPM 副本的清单。
-5. **在 apply 里 setTimeout 再注册路由**：注册场里那条会晚于热装动作出现，catch-all 兜底虽然每请求现查，但查不到就 404。路由注册必须同步完成（这也是 showcase 精读篇反复强调的一条）。
+5. **在 apply 里 setTimeout 再注册路由**：注册场里那条会晚于热装动作出现，catch-all 兜底虽然每请求现查，但查不到就 404。路由注册必须同步完成。
 6. **以为装 NPM 包只影响前端**：只要包里有 `dist/server.js`，后台半就会以服务端权限运行 —— 所以 `confirm: true` 必填、前缀白名单默认收紧，都是同一件事的两面。

@@ -14,7 +14,13 @@ import path from 'node:path'
 import { createServerFramework } from '../serverFramework/index.js'
 import { hotInstallServerPlugin, hotUninstallServerPlugin } from '../serverFramework/hotLoad.js'
 
-const SHOWCASE_SERVER = path.resolve(__dirname, '../../../../packages/plugins/plugin-showcase/dist/server.js')
+/** 种子插件：热装只认目录布局与产物，不依赖仓库里任何一个真实插件 */
+const SEED_PLUGIN = [
+  'export const name = "seed"',
+  'export function apply(ctx) {',
+  '  ctx.routes.get("/api/seed/meta", (c) => c.json({ name: "seed" }))',
+  '}',
+].join('\n')
 
 let dir: string
 let serverDir: string
@@ -31,31 +37,31 @@ describe('后台插件热装/热卸（不重启）', () => {
   it('装完立刻可调、卸完立刻失效', async () => {
     const host = createServerFramework({ root: dir, hotFallback: true })
     await host.start()
-    expect((await host.app.fetch(new Request('http://x/api/showcase/meta'))).status).toBe(404)
+    expect((await host.app.fetch(new Request('http://x/api/seed/meta'))).status).toBe(404)
     // 新布局：<插件根>/<目录名>/dist/server.js
-    await fs.mkdir(path.join(serverDir, 'plugin-showcase', 'dist'), { recursive: true })
-    await fs.copyFile(SHOWCASE_SERVER, path.join(serverDir, 'plugin-showcase', 'dist', 'server.js'))
+    await fs.mkdir(path.join(serverDir, 'seed-plugin', 'dist'), { recursive: true })
+    await fs.writeFile(path.join(serverDir, 'seed-plugin', 'dist', 'server.js'), SEED_PLUGIN, 'utf8')
     // id = 插件目录名（热装按该目录找 dist/server.js）
-    const inst = await hotInstallServerPlugin(host.ctx, serverDir, 'plugin-showcase')
+    const inst = await hotInstallServerPlugin(host.ctx, serverDir, 'seed-plugin')
     expect(inst.ok, inst.error).toBe(true)
-    const meta = await host.app.fetch(new Request('http://x/api/showcase/meta'))
+    const meta = await host.app.fetch(new Request('http://x/api/seed/meta'))
     expect(meta.status).toBe(200)
-    expect(((await meta.json()) as { name: string }).name).toBe('showcase')
-    const un = hotUninstallServerPlugin(host.ctx, 'plugin-showcase')
+    expect(((await meta.json()) as { name: string }).name).toBe('seed')
+    const un = hotUninstallServerPlugin(host.ctx, 'seed-plugin')
     expect(un.ok, un.error).toBe(true)
-    expect((await host.app.fetch(new Request('http://x/api/showcase/meta'))).status).toBe(404)
+    expect((await host.app.fetch(new Request('http://x/api/seed/meta'))).status).toBe(404)
     host.stop()
   }, 30_000)
 
   it('启动装载的插件（非热装）也能按 id 推出真名并卸掉', async () => {
     // 场景：服务启动时从目录扫进来（hotLoaded 里没有它），卸载只能从 id 现推真名。
-    // 落盘 id 是 plume-canvas__plugin-showcase、真名是 showcase —— 不推就摘不掉（实测：卸完后台还在跑）。
+    // 落盘 id 是 plume-canvas__plugin-seed、真名是 seed —— 不推就摘不掉（实测：卸完后台还在跑）。
     const host = createServerFramework({ root: dir, hotFallback: true })
     await host.start()
     // 模拟"启动装载"：直接登记（不走 hotInstallServerPlugin，故 hotLoaded 为空）
-    host.ctx.installPlugin({ name: 'showcase', apply: () => {} } as never)
-    // 卸：靠 id 推名（plume-canvas__plugin-showcase → showcase）摘掉
-    const un = hotUninstallServerPlugin(host.ctx, 'plume-canvas__plugin-showcase')
+    host.ctx.installPlugin({ name: 'seed', apply: () => {} } as never)
+    // 卸：靠 id 推名（plume-canvas__plugin-seed → seed）摘掉
+    const un = hotUninstallServerPlugin(host.ctx, 'plume-canvas__plugin-seed')
     expect(un.ok, '应能从包名推出真名并卸载').toBe(true)
     host.stop()
   }, 30_000)

@@ -36,7 +36,6 @@ import { pluginBottomBar } from '@plume-canvas/plugin-bottom-bar'
 import { pluginManagerPlugin } from '@plume-canvas/plugin-manager'
 import { agentPlugin } from '@plume-canvas/plugin-agent'
 import { hotReloadPlugin } from '@plume-canvas/plugin-hot-reload'
-import { showcasePlugin } from '../../../../packages/plugins/plugin-showcase/src/index'
 import { demoKitPlugin } from '@plume-canvas/plugin-demo-kit'
 import { shortcutManagerPlugin } from '@plume-canvas/plugin-shortcut-manager'
 import { clipboardPlugin } from '@plume-canvas/plugin-clipboard'
@@ -73,7 +72,6 @@ const ALL_PLUGINS = [
   pluginManagerPlugin,
   agentPlugin,
   hotReloadPlugin,
-  showcasePlugin,
   demoKitPlugin,
   shortcutManagerPlugin,
   // cloud-client 会把存档后端换成云端（单测没有后台会直接抛错），

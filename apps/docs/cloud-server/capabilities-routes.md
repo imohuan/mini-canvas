@@ -21,7 +21,7 @@ export function apply(ctx) {
   // ① 最简单的查询路由
   ctx.routes.get('/api/demo/todos', (c) => c.json({ ok: true, todos: [] }));
 
-  // ② 带校验的创建路由（照抄 showcase 的写法）
+  // ② 带校验的创建路由
   ctx.routes.post('/api/demo/todos', async (c) => {
     const body = await c.req.json().catch(() => undefined);
     if (typeof body?.title !== 'string' || !body.title.trim()) {

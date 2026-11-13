@@ -79,26 +79,34 @@ curl http://127.0.0.1:8865/api/actions
 
 - `ok: true` 表示请求成功；`actions` 是当前所有可用「动作」的清单（前端菜单的数据源就是它）。请求走的是内置路由 `GET /api/actions`，实现在 `apps/server/src/routes/actions.ts`。
 
-再试一条需要先装插件的（见第 4 步，如果你已经装了 showcase 插件）：
-
-```bash
-curl http://127.0.0.1:8865/api/showcase/hello
-```
-
 ### 第 4 步（可选）· 让第一个「插件路由」跑起来
 
-仓库自带的样板插件 plugin-showcase 装上后，会多出一条 `GET /api/showcase/hello`。装法二选一：
+先写一个最小的后台插件，放进数据根下的插件目录即可（规则见 [后台插件系统](/cloud-server/server-plugins)）：
 
-1. **浏览器里点**：打开画布网页 → 插件管理 → 找到「插件展示」→ 安装（后台半需要你确认一次「以服务端权限运行」——这是安全设计，不是卡你）；
-2. **NPM 装**：同样在插件管理里，搜 `@plume-canvas/plugin-showcase` 装上。
-
-装完立刻再发一次 curl（不用重启服务，路由热装即时生效）：
-
-```bash
-curl http://127.0.0.1:8865/api/showcase/hello
+```js
+// 文件：<数据根>/plugins/demo-plugin/dist/server.js
+export const name = 'demo'
+export function apply(ctx) {
+  ctx.routes.get('/api/demo/hello', (c) => c.json({ ok: true }))
+}
 ```
 
-收到 `{ "ok": true, "message": "你好，这是 showcase 插件的第一个路由", ... }` 就说明后台插件系统的全链路你已经打通了。
+在同目录的 `package.json` 里声明入口：
+
+```json
+{
+  "name": "@your-scope/plugin-demo",
+  "plume": { "pluginName": "demo", "web": { "entry": "dist/web.js" }, "server": { "entry": "dist/server.js" } }
+}
+```
+
+然后重启服务，或按 [热装热卸](/cloud-server/hot-load) 走一遍即时装载，再发：
+
+```bash
+curl http://127.0.0.1:8865/api/demo/hello
+```
+
+收到 `{ "ok": true }` 就说明后台插件系统的全链路你已经打通了。
 
 ### 第 5 步（可选）· 看 MCP 暴露了什么工具
 
@@ -136,12 +144,12 @@ npx plume-canvas list-tools
 | `list-tools` 子命令 | `cli.ts` `parseArgs()` | 不启服务，直接 `listTools()` 打印 MCP 工具名与描述后退出 |
 | `GET /api/actions` | `apps/server/src/routes/actions.ts` | 返回 `{ ok, version, changed, actions }`，`actions` 来自 ProviderRegistry |
 | `GET /health` | `apps/server/src/plugins/builtin/health.ts` | 内置插件注册的最简路由，固定 `{ ok: true }` |
-| showcase 的 `/api/showcase/hello` | `packages/plugins/plugin-showcase/src/server.ts` | 插件在 `apply` 里 `ctx.routes.get(...)` 注册，见 showcase 精读篇 |
+| 插件的 `/api/demo/hello` | 你自己写的 `dist/server.js` | 插件在 `apply` 里 `ctx.routes.get(...)` 注册，见 [routes 接口](/cloud-server/capabilities-routes) |
 
 ## 常见坑
 
 1. **端口 8865 被占用**：默认会自动往后找 10 个（8866、8867…），启动日志里有「已自动改用 xxxx」一行；你写了 `-p 8865` 就只试这一个，失败直接报错。想避开自动寻端，就换 `-p`。
 2. **页面打不开画布**：cloud-server 托管的是 `packages/ui` 的**构建产物**。没构建过时页面会提示，先跑 `cd packages/ui && pnpm build` 再重启服务。
-3. **curl 打 `/api/showcase/hello` 返回 404**：showcase 还没装（或只装了前端半）。它不是内置路由 —— 装上后台半后立刻能用（热装即时生效，不用重启）。
+3. **curl 打插件路由返回 404**：插件还没装（或只装了前端半）。它不是内置路由 —— 装上后台半后立刻能用（热装即时生效，不用重启）。
 4. **Windows 下 curl 报错**：PowerShell 里用 `curl.exe` 指真实 curl（PowerShell 的 `curl` 是 `Invoke-WebRequest` 的别名，参数不兼容）。
 5. **`--no-open` 加不加**：默认启动会自动开浏览器；写脚本 / CI 时加它，避免多开一个窗口。

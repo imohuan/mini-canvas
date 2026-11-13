@@ -8,7 +8,7 @@
  * 漏一处的表现是「某个功能点下去就 403」，而且报错常常只说「请求失败」。
  *
  * 真实踩到的三次：复制画布（projectsApi 裸 fetch）、导出节点包（nodePack 裸 fetch）、
- * showcase 测试台（整段没令牌）。都是这里能提前抓到的。
+ * showcase 测试台（整段没令牌，已随该插件移除）。都是这里能提前抓到的。
  *
  * ## 怎么判
  *
@@ -57,7 +57,7 @@ function collect(dir: string, out: string[] = []): string[] {
 /**
  * 找「包装函数」：定义体里真的调用了 withAdminToken 的那些函数名。
  *
- * 为什么不能只看名字：`showcaseHeaders` 若被改成 `return extra`（不带令牌），
+ * 为什么不能只看名字：某个带令牌的包装函数若被改成 `return extra`（不带令牌），
  * 调用点看起来仍然像有包装，守卫就失效了。所以包装必须**可追溯到**真正的
  * withAdminToken 调用 —— 定义后 12 行内出现它才算数（包装函数都很短）。
  */
@@ -96,7 +96,7 @@ describe('管理令牌覆盖：受保护路径的调用都带令牌', () => {
     for (const file of files) {
       const src = readFileSync(file, 'utf8')
       const lines = src.split(/\r?\n/)
-      // 包装函数可能定义在别的文件（showcaseHeaders 在 apiBase.ts）——
+      // 包装函数可能定义在别的文件（例如某插件的 apiBase.ts）——
       // 所以把「所有源码里能追溯到 withAdminToken 的函数名」都算进来。
       const wrappers = allWrappers
       /** 这个行号落在哪个函数的定义体里（往上找最近的一个 function 声明） */

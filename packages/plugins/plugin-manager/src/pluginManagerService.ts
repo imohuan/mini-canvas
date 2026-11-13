@@ -527,7 +527,7 @@ export function createPluginManagerService(
 
     for (const row of state.rows) {
       if (!row.hasServer) continue
-      // 服务端目录里的 id 与清单 id 一致（都是文件名形如 imohuan__plugin-showcase）
+      // 服务端目录里的 id 与清单 id 一致（都是文件名形如 scope__plugin-name）
       const onServer = installedIds.has(row.entry.id) || (row.realName ? installedIds.has(row.realName) : false)
       row.serverInstalled = onServer
       // 已登记进内核 = 正在生效。

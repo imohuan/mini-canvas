@@ -97,7 +97,6 @@ const guideSidebar = [
       { text: '热装热卸', link: '/cloud-server/hot-load' },
       { text: '内置服务', link: '/cloud-server/builtin-services' },
       { text: '桥接总览', link: '/cloud-server/bridge-overview' },
-      { text: '样板精读', link: '/cloud-server/showcase-walkthrough' },
     ],
   },
 ]

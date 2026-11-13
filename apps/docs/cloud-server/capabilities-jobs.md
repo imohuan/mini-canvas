@@ -67,4 +67,4 @@ export function apply(ctx) {
 2. **把重启后要恢复的活儿写在 jobs 里**：进程重启任务蒸发。真正的业务任务走 `/api/jobs`（有落盘、有查单、有撤单）。
 3. **周期任务里抛异步错没人管**：框架会把 rejected promise 记成 warn，但业务错误还是要自己在回调里处理（写日志 / 落 store）。
 4. **intervalMs 传 0 或负数**：被抬到 50ms，不是报错 —— 想清楚你要的是 50ms 还是报错提醒。
-5. **定时器句柄丢了没法停**：every 的返回值就是句柄，自己存好（showcase 存在内存 state 里供 DELETE 接口调用）。
+5. **定时器句柄丢了没法停**：every 的返回值就是句柄，自己存好（通常放进插件自己的内存 state，供 DELETE 接口调用）。

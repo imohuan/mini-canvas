@@ -31,7 +31,7 @@ export function hotLoadedNames(): string[] { return [...hotLoaded.values()] }
  * 把一个共享数组接到热装/热卸上：装载时把插件名推进去，卸载时摘掉。
  *
  * 为什么需要：`serverPluginsLoaded` 是启动时算好的快照，热装的插件不在里面 ——
- * 插件自省（如 showcase 的 hello.plugins）与诊断都看不到它（实测）。这里让那份快照
+ * 插件自省（插件用 ctx.tryGet('serverPluginsLoaded') 读的那份）与诊断都看不到它（实测）。这里让那份快照
  * **活着**：热装推入、热卸移除，读它的人拿到的始终是最新集合。
  */
 export function bindHotLoadedTracking(sink: string[]): void {

@@ -221,7 +221,6 @@ const INSTALLABLE_PLUGIN_DIRS = [
   "plugin-multi-select",
   "plugin-node-find",
   "plugin-node-image-compare",
-  "plugin-showcase",
   "plugin-demo-kit",
 ]
 

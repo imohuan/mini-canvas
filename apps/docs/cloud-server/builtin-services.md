@@ -107,7 +107,7 @@ Agent 打开时（默认开）还有 7 个：`agentConfig`（全局配置）、`
 ├── server-plugins/                # 外挂后台插件目录（pluginLoader.ts 扫这里）
 │   └── .npm-installed.json        #   NPM 安装来源记录（pkg / version / sha256）
 └── plugin-data/                   # 插件私有存储（store.ts；<命名空间>.json）
-    └── notes.json                 #   例如 showcase 的 notes 命名空间
+    └── notes.json                 #   例如插件用 ctx.store.namespace('notes') 存的数据
 ```
 
 - 画布 id / 资产名都要过白名单（字母数字下划线连字符，点号不在表内），`..` 路径穿越天然被拒 —— 拼路径和查安全绑在同一层（`canvasPaths.ts`）。

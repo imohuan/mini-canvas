@@ -182,7 +182,6 @@ describe('isAdminPath', () => {
       '/api/node-ui/debug-': '/api/node-ui/debug-accept',
       '/api/style-library/': '/api/style-library/settings',
       '/api/effect-library/': '/api/effect-library/settings',
-      '/api/showcase/': '/api/showcase/echo',
       '/api/agent/canvases/': '/api/agent/canvases/x/sessions',
       '/api/jobs': '/api/jobs',
       '/api/providers/': '/api/providers/web2api-image.js/config',

@@ -81,7 +81,7 @@ defineProps<{
 | `overlay` | `plugin-align-guide`（对齐线）、`plugin-multi-select`（框选层 + 选择框）、`plugin-group`（分组控制栏）、`plugin-shortcut-manager`（快捷键面板）、`plugin-style-library`（样式库）、`plugin-cursor-effect`（光标特效）、`plugin-bottom-bar`（节点底栏浮层 + 预览浮层 + 任务浮层） | **`CanvasSurface.vue`** 里固定一行 `<SlotHost slot="overlay" item-class="csurface-overlay-item" />` |
 | `mini-map` | `plugin-mini-map` | 宿主自选：`apps/web/src/App.vue` 里 `<SlotHost slot="mini-map" />` |
 | `agent-conversation` | `plugin-agent`（消息流 + 输入区） | `apps/web/src/components/areas/AgentPanel.vue` |
-| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-showcase`、`plugin-manager`、`plugin-hot-reload`（兼容入口） | 设置面板：`theme-components` 的 `PluginSettingsContent.vue`（`settingsPanel` 唯一赢家，2026-11-04 起成品应用那套面板已并入本包）。新菜单优先 `ctx.settingsMenu`；这里只补 page / component / 图标，不再决定层级 |
+| `settings.nav` | `plugin-cursor-effect`、`plugin-agent`、`plugin-manager`、`plugin-hot-reload`（兼容入口） | 设置面板：`theme-components` 的 `PluginSettingsContent.vue`（`settingsPanel` 唯一赢家，2026-11-04 起成品应用那套面板已并入本包）。新菜单优先 `ctx.settingsMenu`；这里只补 page / component / 图标，不再决定层级 |
 | `settings.tab` | 当前生产代码里没有插件注册它（保留给「自定义二级页签」） | 默认设置皮按「一级名匹配 id 首段」归并渲染 |
 | `settingsGroup/<分组名>` | 同上那批插件（每条整页正文一条，如 `settingsGroup/集成/Agent`、`settingsGroup/光标`） | 设置面板按菜单 section 收拢的 group 读 `occupants('settingsGroup/' + groupKey)` |
 

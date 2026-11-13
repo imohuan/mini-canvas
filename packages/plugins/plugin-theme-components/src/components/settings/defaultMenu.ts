@@ -137,7 +137,7 @@ const sections: SettingsSectionDef[] = [
   s('canvas/tools', 'library', '风格库', '常规/风格库', 40),
   s('development/debug', 'debug', '调试', ['常规/调试', '调试/调试'], 10),
   s('development/debug', 'hot-reload', '热重载', ['调试/热重载', '调试插件'], 20),
-  s('development/demo', 'showcase', '展示台', ['演示/展示台', '插件展示'], 10),
+  // 「演示」下暂时没有内置展示台页：展示台由外部插件按「插件展示」分组接管。
   s('development/demo', 'gallery', '组件展厅', '演示/组件展厅', 20),
 ]
 
