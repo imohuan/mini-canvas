@@ -25,8 +25,13 @@ const MIN_GROUP_H = 150
 const DEFAULT_NODE_W = 200
 const DEFAULT_NODE_H = 100
 
-function nodeDim(n: LayoutNode): { w: number; h: number } {
-  return { w: n.size?.w ?? DEFAULT_NODE_W, h: n.size?.h ?? DEFAULT_NODE_H }
+/**
+ * 节点占位尺寸；`titleExtra` 非空时把标题条高度加进去（用户 2026-11-13 的开关）。
+ * 标题条浮在卡片外面，只按卡片排会让上下节点贴在一起。
+ */
+function nodeDim(n: LayoutNode, titleExtra?: { h: number }): { w: number; h: number } {
+  const base = { w: n.size?.w ?? DEFAULT_NODE_W, h: n.size?.h ?? DEFAULT_NODE_H }
+  return titleExtra ? { w: base.w, h: base.h + Math.max(0, titleExtra.h) } : base
 }
 
 /** 树节点：组节点（isGroup）带 children；叶子 = 普通节点 */
@@ -202,6 +207,11 @@ export function layoutHierarchy(
   const positions = new Map<string, { x: number; y: number }>()
   const groupFrames = new Map<string, GroupBounds>()
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
+  /**
+   * 标题条占位（用户 2026-11-13 的开关）：只在打开时把标题高度算进节点占位。
+   * 组内节点与顶层节点用同一个值，否则组内/组外两种排法会不一致。
+   */
+  const titleExtra = config.includeTitleHeight ? { h: config.titleHeight } : undefined
   /** 组 → 直接子节点（树） */
 
   /**
@@ -219,6 +229,11 @@ export function layoutHierarchy(
       const frame: GroupBounds = {
         x: t.node.position.x,
         y: t.node.position.y,
+        /**
+         * 组 frame 的 `PAD.top = 40` 已经给标题条留了位置（见 frameOf），
+         * 这里**不再叠加** titleExtra —— 否则组内已含标题、组外又加一次，组间距会虚增
+         * （独立复查抓到的重复计算）。
+         */
         w: nodeDim(t.node).w,
         h: nodeDim(t.node).h,
       }
@@ -237,7 +252,7 @@ export function layoutHierarchy(
     const items: Array<{ id: string; w: number; h: number }> = []
     const dims = new Map<string, { w: number; h: number }>()
     for (const c of directLeaves) {
-      const d = nodeDim(c.node)
+      const d = nodeDim(c.node, titleExtra)
       dims.set(c.id, d)
       items.push({ id: c.id, w: d.w, h: d.h })
     }
@@ -291,7 +306,7 @@ export function layoutHierarchy(
   }
   // 顶层自由节点（连接分量/孤立节点由 dagre 统一排）
   for (const id of topLeafIds) {
-    const d = nodeDim(nodeById.get(id)!)
+    const d = nodeDim(nodeById.get(id)!, titleExtra)
     topItems.push({ id, w: d.w, h: d.h, isGroup: false })
   }
   // 顶层边：两端都在顶层自由节点间；组占位的边 = 组内任一节点 ↔ 外部节点（提升为组 ↔ 外部）

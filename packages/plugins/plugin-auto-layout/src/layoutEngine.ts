@@ -26,11 +26,19 @@ const GROUP_PADDING_TOP = 10
 const DEFAULT_NODE_W = 200
 const DEFAULT_NODE_H = 100
 
-function getNodeDim(node: LayoutNode): { w: number; h: number } {
-  return {
+/**
+ * 节点在布局里占的尺寸。
+ *
+ * `withTitle` = 把标题条高度算进去（用户 2026-11-13 要求做成开关）：
+ * 标题条浮在卡片**上缘之外**，`node.size` 只包含卡片；只按卡片排时上下节点会贴在一起、
+ * 下面那个的标题被压住，看起来像“间距设置没生效”。算进去之后，层间距才是肉眼看到的间距。
+ */
+function getNodeDim(node: LayoutNode, withTitle?: { h: number }): { w: number; h: number } {
+  const base = {
     w: node.size?.w ?? DEFAULT_NODE_W,
     h: node.size?.h ?? DEFAULT_NODE_H,
   }
+  return withTitle ? { w: base.w, h: base.h + Math.max(0, withTitle.h) } : base
 }
 
 /**
@@ -220,8 +228,10 @@ function layoutWithDagre(
   g.setDefaultEdgeLabel(() => ({}))
 
   const nodeMap = new Map(nodes.map(n => [n.id, n]))
+  /** 标题条占位（开关打开时才非零）—— 尺寸计算与写回必须用同一个值 */
+  const titleExtra = config.includeTitleHeight ? { h: config.titleHeight } : undefined
   for (const n of nodes) {
-    const dim = getNodeDim(n)
+    const dim = getNodeDim(n, titleExtra)
     g.setNode(n.id, { width: dim.w, height: dim.h })
   }
   for (const e of edges) {
@@ -235,7 +245,8 @@ function layoutWithDagre(
   for (const n of nodes) {
     const dn = g.node(n.id)
     if (dn) {
-      n.position = { x: dn.x - getNodeDim(n).w / 2, y: dn.y - getNodeDim(n).h / 2 }
+      const dim = getNodeDim(n, titleExtra)
+      n.position = { x: dn.x - dim.w / 2, y: dn.y - dim.h / 2 }
     }
   }
 
@@ -254,7 +265,7 @@ export function layoutClusterRecursive(
   logs: string[],
 ): void {
   if (cluster.type === 'single') {
-    const dim = getNodeDim(cluster.nodes[0])
+    const dim = getNodeDim(cluster.nodes[0], config.includeTitleHeight ? { h: config.titleHeight } : undefined)
     cluster.nodes[0].position = { x: 0, y: 0 }
     cluster.bounds = { x: 0, y: 0, w: dim.w, h: dim.h }
     return

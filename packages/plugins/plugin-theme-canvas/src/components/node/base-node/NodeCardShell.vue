@@ -690,7 +690,17 @@ const {
   display: flex;
   align-items: center;
   gap: 4px;
-  white-space: nowrap;
+  /**
+   * 这里**不能**用 nowrap（用户 2026-11-13 报：底栏输入框出现横向滚动）。
+   *
+   * 原先写 nowrap 是为了让「一排按钮」不换行；但底栏插槽里装的是整个生成面板
+   * （含 ProseMirror 输入框），white-space 会**继承**进去 —— 一整段中文变成一行，
+   * 容器 630px、内容 715px，于是输入框出横向滚动条（实测 DOM 证据）。
+   * 按钮行的不换行由 flex + 各自 flex:none 保证，不靠这条继承属性。
+   */
+  white-space: normal;
+  /* 插槽自己仍是「一排」：允许内部（输入框）换行，但这一层不折行 */
+  flex-wrap: nowrap;
 }
 
 /* —— 卡片 —— */

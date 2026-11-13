@@ -80,6 +80,18 @@ export const Config = {
     type: 'number', default: 120, min: 40, max: 500, step: 10, label: '组间垂直间距（上下）', group: '布局/自动布局间距',
     description: '【Ctrl/Cmd+L 自动布局】不同分组（/集群）之间的上下间隙（px）。对应画布 Y 轴方向。',
   },
+  includeTitleHeight: {
+    type: 'boolean', default: true, label: '间距计入节点标题高度', group: '布局/自动布局间距',
+    description:
+      '【Ctrl/Cmd+L 自动布局】打开时，排布会把节点上方那条标题（名字/尺寸）的高度也算进占位，' +
+      '上下相邻的节点不会贴在一起、标题也不会被下一个节点压住；关闭时只按卡片本身排（更紧凑，可能出现标题互相压住）。',
+  },
+  titleHeight: {
+    type: 'number', default: 28, min: 0, max: 80, step: 1, label: '标题占位高度（px）', group: '布局/自动布局间距',
+    description:
+      '【Ctrl/Cmd+L 自动布局】标题条在排布里占多高。默认 24（13px 字 + 间距）；打开上面的开关后才生效。' +
+      '标题字号改过的话可以在这里对齐，排出来才和肉眼看到的一致。',
+  },
   // —— 布局 / 自动布局聚焦（F 键聚焦选中节点时的取景）——
   focusHeightRatio: {
     type: 'number', default: 0.5, min: 0.1, max: 0.9, step: 0.05, label: '聚焦高度占比', group: '布局/自动布局聚焦',
@@ -131,6 +143,8 @@ function toEngineConfig(c: AutoLayoutConfigFromSchema): AutoLayoutConfig {
     direction: c.direction as LayoutDirection,
     intraSpacing: { x: c.intraSpacingX, y: c.intraSpacingY },
     interSpacing: { x: c.interSpacingX, y: c.interSpacingY },
+    includeTitleHeight: c.includeTitleHeight !== false,
+    titleHeight: Math.max(0, Number(c.titleHeight) || 0),
     focusHeightRatio: c.focusHeightRatio,
     minZoom: c.autoLayoutMinZoom,
     maxZoom: c.autoLayoutMaxZoom,
@@ -165,6 +179,8 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
       intraSpacingY: read('intraSpacingY', effectiveConfig.intraSpacingY),
       interSpacingX: read('interSpacingX', effectiveConfig.interSpacingX),
       interSpacingY: read('interSpacingY', effectiveConfig.interSpacingY),
+      includeTitleHeight: read('includeTitleHeight', effectiveConfig.includeTitleHeight),
+      titleHeight: read('titleHeight', effectiveConfig.titleHeight),
       focusHeightRatio: read('focusHeightRatio', effectiveConfig.focusHeightRatio),
       autoLayoutMinZoom: read('autoLayoutMinZoom', effectiveConfig.autoLayoutMinZoom),
       autoLayoutMaxZoom: read('autoLayoutMaxZoom', effectiveConfig.autoLayoutMaxZoom),

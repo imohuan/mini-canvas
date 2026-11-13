@@ -21,7 +21,7 @@ import {
   type ArrangeRect,
   type DistributeAxis,
 } from './arrangeEngine'
-import { computeCompactArrange, type CompactDirection, type CompactSpacing } from './compactArrange'
+import { computeCompactArrange, type CompactDirection, type CompactRect, type CompactSpacing } from './compactArrange'
 
 export const name = 'align-arrange'
 export const inject = ['doc', 'selection'] as string[]
@@ -31,6 +31,14 @@ const FALLBACK_W = 200
 const FALLBACK_H = 100
 /** 紧凑排列间距兜底（老版 DEFAULT_CONFIG.gap = 20；面板改过则以面板值为准） */
 const DEFAULT_COMPACT_GAP = 20
+/**
+ * 标题条占位高度兜底。
+ *
+ * 13px 字号 + 约 15px 行高 ≈ 16px，再加 theme-canvas 的 titleOffset 12 ≈ 28。
+ * 取 24 会少算一截、标题仍可能贴住（独立复查指出），故与自动布局的默认值统一为 28。
+ * 面板可调；标题字号/偏移改过时在这里对齐即可。
+ */
+const DEFAULT_TITLE_HEIGHT = 28
 
 /**
  * Config schema（标量字段登记 ⚙ 设置面板；group 用 `一级/二级` 分层）。
@@ -67,6 +75,27 @@ export const Config = {
     group: '布局/自动布局方向',
     description: '【Ctrl+↑ / Ctrl+↓】上下推挤排列时，节点之间沿 Y 轴保留的间隙（px）。调大上下排开得更松。',
   },
+  alignArrangeTitleHeight: {
+    type: 'number',
+    default: DEFAULT_TITLE_HEIGHT,
+    min: 0,
+    max: 80,
+    step: 1,
+    label: '节点标题占位高度（上下排列）',
+    group: '布局/自动布局方向',
+    description:
+      '【Ctrl+↑ / Ctrl+↓】上下推挤时，把节点标题条的高度也算进占位，避免排完两张卡片的标题互相压住。' +
+      '0 = 只按卡片排（与旧行为一致）。',
+  },
+  alignArrangeIncludeTitle: {
+    type: 'boolean',
+    default: true,
+    label: '间距计入节点标题高度',
+    group: '布局/自动布局方向',
+    description:
+      '【Ctrl+↑ / Ctrl+↓】打开时上下排列会把节点标题的高度也算进去（两张卡片之间留出标题的位置，' +
+      '标题不会互相压住）；关闭时只按卡片排，与旧行为一致。',
+  },
   alignArrangeDebug: {
     type: 'boolean',
     default: false,
@@ -102,6 +131,19 @@ export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSc
   /** 当前诊断开关 */
   function debugOn(): boolean {
     return readSetting('alignArrangeDebug', rawConfig?.alignArrangeDebug ?? false)
+  }
+
+  /**
+   * 节点标题条占用的竖直高度（上下推挤时补进占位）。
+   *
+   * 开关关闭 → 0（只按卡片排，与旧行为一致）；打开 → 面板里的高度（默认 24：13px 标题 + 12px 偏移）。
+   * 与 theme-canvas 的 titleOffset 口径一致，标题字号/偏移改过时在这里对齐即可。
+   */
+  function titleOccupancy(): number {
+    const on = readSetting('alignArrangeIncludeTitle', rawConfig?.alignArrangeIncludeTitle ?? true)
+    if (on !== true) return 0
+    const v = readSetting('alignArrangeTitleHeight', DEFAULT_TITLE_HEIGHT)
+    return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0
   }
 
   /** 取节点矩形：位置用 node.position（相对坐标，与 updateNodes 写入一致）；尺寸走 nodeLayout 实测/声明/默认。 */
@@ -160,7 +202,26 @@ export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSc
   }
 
   function runCompact(direction: CompactDirection): void {
-    const rects = selectedRects()
+    const horizontal = direction === 'ArrowLeft' || direction === 'ArrowRight'
+    /**
+     * 竖直推挤时把**标题条高度**算进占位（用户 2026-11-13 报：Ctrl+方向键排列后节点还是挨在一起）。
+     *
+     * 标题条浮在卡片上缘之外，nodeLayout 只量卡片；只按卡片排，相邻两张卡片的标题会互相压住，
+     * 肉眼看就是「间距没生效」。算进占位后，卡片之间的空隙才是设置里那个值。
+     * 横向推挤不受影响（标题只在竖直方向占位），所以只在上下排列时加。
+     */
+    const titleH = horizontal ? 0 : titleOccupancy()
+    /**
+     * 标题条画在卡片**上缘之外**，所以占位矩形是「上边多出 titleH、下边与卡片齐平」：
+     * y 上移 titleH、h 加 titleH。两个方向都要成对做 —— 只加 h 不减 y 会让占位向下多出一截，
+     * 首节点又被算法原样保留，写回再减 titleH 就成了**每次上移 titleH 的持续漂移**
+     * （独立复查抓到的严重问题）。
+     */
+    const rects: CompactRect[] = selectedRects().map((r) => ({
+      ...r,
+      y: r.y - titleH,
+      h: r.h + titleH,
+    }))
     if (rects.length < 2) return
     const spacing = compactSpacing()
     const result = computeCompactArrange(rects, direction, spacing)
@@ -174,7 +235,10 @@ export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSc
         moved: [...result.entries()].map(([id, pos]) => ({ id, ...pos })),
       })
     }
-    applyResult(result)
+    /** 写回的是**卡片左上角**：占位顶边比卡片顶边高 titleH，所以 y 加回去（与上面的上移配对抵消）。 */
+    const positions = new Map<string, { x: number; y: number }>()
+    for (const [id, pos] of result) positions.set(id, { x: pos.x, y: pos.y + titleH })
+    applyResult(positions)
   }
 
   ctx.commands.register({

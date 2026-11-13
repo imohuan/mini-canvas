@@ -103,6 +103,20 @@
   color: var(--ui-ink, #18202b);
   word-break: break-word;
 }
+/*
+ * 输入框**只允许竖向滚动**（用户 2026-11-13 截图：长提示词出现横向滚动条）。
+ *
+ * 根因：某个外层把 white-space 设成了 nowrap，正文元素继承下来，一整段中文就成了一行
+ * （实测：容器 630px、内容 715px，于是出横向滚动条）。这里在正文元素上显式改回 pre-wrap
+ * ——它继承不到的东西（外层仍是 nowrap）也不会再影响正文；同时补 overflow-wrap 让长英文/URL
+ * 也能断行，而不是把宽度撑爆。
+ */
+.nb-editor .ProseMirror,
+.nb-editor .ProseMirror p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 /* bundle 的中间层（editorRef 容器）：转成纵向 flex 列，正文才能被 flex:1 撑到整块高度。 */
 .nb-editor .prose-mirror-editor > div:first-child {
   display: flex;
@@ -111,6 +125,9 @@
 .nb-editor .prose-mirror-editor {
   max-height: var(--nb-max, 220px);
   overflow-y: auto;
+  /* 横向一律不外溢：内容放不下就换行（见上面 .ProseMirror 的 white-space 说明）。
+     overflow-x:hidden 只是兜底 —— 真正负责换行的是 white-space: pre-wrap。 */
+  overflow-x: hidden;
   font-size: 13px;
   /**
    * 行高（用户 2026-10-29：两行标签的底部重合）：chip 高 20px，

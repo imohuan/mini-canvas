@@ -89,13 +89,19 @@ describe('align-arrange 配置改动实时生效', () => {
     expect(gapWide).toBe(80)
   })
 
-  it('改垂直间距后，Ctrl+上下键的推挤间隙跟着变', async () => {
+  it('改垂直间距后，Ctrl+上下键的推挤间隙跟着变（并计入标题占位）', async () => {
     const { ctx, nodeStore, selection, command } = makeCtx()
     const a = addNode(nodeStore, 0, 0, 100, 100)
     const b = addNode(nodeStore, 0, 0, 100, 100)
     selection.set([a, b])
     await ctx.start()
     const settings = ctx.get<SettingsLike>('settings')
+    /**
+     * 竖直推挤会把标题条高度（默认 24）一起算进占位（用户 2026-11-13：
+     * 给了间距节点还是挨在一起，因为标题浮在卡片外面没被算进去）。
+     * 这里把它显式关掉，单测只验证「间距设置本身生效」；标题占位另有专门用例。
+     */
+    settings.set('alignArrangeIncludeTitle', false)
 
     command.execute('align-arrange:compact-arrowdown')
     // 用两节点竖直间距的绝对值：ArrowDown 是"最下方的保持、其余往上收"，差值符号不稳定
@@ -107,6 +113,48 @@ describe('align-arrange 配置改动实时生效', () => {
     const gapWide = Math.abs(nodeStore.getNode(b)!.position.y - nodeStore.getNode(a)!.position.y) - 100
     expect(gapWide).toBeGreaterThan(gapDefault)
     expect(gapWide).toBe(70)
+  })
+
+  it('竖直推挤默认计入标题占位：开关打开比关闭多留出标题高度', async () => {
+    const { ctx, nodeStore, selection, command } = makeCtx()
+    const a = addNode(nodeStore, 0, 0, 100, 100)
+    const b = addNode(nodeStore, 0, 0, 100, 100)
+    selection.set([a, b])
+    await ctx.start()
+    const settings = ctx.get<SettingsLike>('settings')
+
+    settings.set('alignArrangeIncludeTitle', false)
+    settings.set('alignArrangeGapY', 40)
+    command.execute('align-arrange:compact-arrowdown')
+    const withoutTitle = Math.abs(nodeStore.getNode(b)!.position.y - nodeStore.getNode(a)!.position.y) - 100
+
+    settings.set('alignArrangeIncludeTitle', true)
+    command.execute('align-arrange:compact-arrowdown')
+    const withTitle = Math.abs(nodeStore.getNode(b)!.position.y - nodeStore.getNode(a)!.position.y) - 100
+
+    // 默认 28px（13px 字号 + 行高 + titleOffset 12）：打开后两卡之间正好多出这一截
+    expect(withTitle - withoutTitle).toBe(28)
+  })
+
+  /**
+   * 连按不能漂移（独立复查抓到的严重问题）。
+   *
+   * 形状：占位 = 卡片上方多出 titleH，所以输入侧要 y-titleH、写回侧 y+titleH 成对抵消。
+   * 只做一半时，首节点每按一次就整体上移 titleH —— 用户按几下节点就飘出屏幕。
+   */
+  it('连按两次竖直紧凑排列：位置稳定，不累计漂移', async () => {
+    const { ctx, nodeStore, selection, command } = makeCtx()
+    const a = addNode(nodeStore, 0, 0, 100, 100)
+    const b = addNode(nodeStore, 0, 0, 100, 100)
+    selection.set([a, b])
+    await ctx.start()
+
+    command.execute('align-arrange:compact-arrowdown')
+    const once = { a: { ...nodeStore.getNode(a)!.position }, b: { ...nodeStore.getNode(b)!.position } }
+    command.execute('align-arrange:compact-arrowdown')
+    const twice = { a: { ...nodeStore.getNode(a)!.position }, b: { ...nodeStore.getNode(b)!.position } }
+
+    expect(twice).toEqual(once)
   })
 
   it('X 与 Y 互不串：只改垂直间距，左右排列的间隙不变', async () => {

@@ -90,6 +90,10 @@ export function computeCompactArrange(
         case 'ArrowDown': newY = maxY - curr.h; break
       }
     }
+    /**
+     * 所有坐标都在「占位」坐标系里算（h 已含标题条）；调用方在写回前把
+     * **竖直方向**的标题高度减回去（标题在卡片上方，卡片左上角要往上挪）。
+     */
     result.set(curr.id, { x: newX, y: newY })
   }
   return result

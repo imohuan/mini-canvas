@@ -18,6 +18,15 @@ export interface AutoLayoutConfig {
   intraSpacing: Spacing
   /** 簇之间间距 */
   interSpacing: Spacing
+  /**
+   * 排布时是否把「节点标题条」的高度算进节点占位尺寸（用户 2026-11-13 要求做成开关）。
+   *
+   * 标题条浮在卡片**外面**（卡片上缘之上），node.size 只含卡片本身；只按卡片尺寸排布时，
+   * 上下相邻的节点会贴在一起、下面那个的标题被压住 —— 用户看到的是「间距设置没生效」。
+   */
+  includeTitleHeight: boolean
+  /** 标题条占位高度（px）：仅 includeTitleHeight 打开时参与布局 */
+  titleHeight: number
   /** F 聚焦时，选中内容高度占视图高度的比例 */
   focusHeightRatio: number
   /** F 聚焦最小缩放 */

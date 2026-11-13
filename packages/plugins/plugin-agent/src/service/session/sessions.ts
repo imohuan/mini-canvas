@@ -21,6 +21,11 @@ export function createSessionDomain(ctx: AgentServiceContext, deps: AgentService
   let streamSince = 0
   /** 帧级水位（原父闭包变量；send / 常驻流 / 压缩共用） */
   const lastAppliedSeq = ctx.seqRef
+  /**
+   * openSession 的发起序号：连点分页时会有多次切换同时在飞，
+   * 只让**最后一次**落地（旧请求后返回不许覆盖新会话）。
+   */
+  let sessionOpenSeq = 0
   function logStreamError(err: unknown): void {
     // 流断了不是"对话失败"：后台还在跑，界面下一轮刷新会拿回结果。
     // 用 error 提示但不清空内容（与 SSE 断线的既有口径一致）。
@@ -383,16 +388,36 @@ export function createSessionDomain(ctx: AgentServiceContext, deps: AgentService
   }
 
   async function openSession(id: string): Promise<void> {
+    /**
+     * 本次切换的序号（独立复查抓到的竞态）：
+     * 用户连点分页时会有多个 openSession 同时在飞，网络不保证按发起顺序返回。
+     * 每个 await 之后都核一次「我还是最新那次吗」，旧的那次直接放弃，
+     * 不许它把新会话的转录 / 分页器 / sessionId 覆盖回去。
+     */
+    const seq = ++sessionOpenSeq
+    const stale = (): boolean => seq !== sessionOpenSeq
     try {
+      /**
+       * 切换会话的**第一步**就把旧分页器清掉（用户 2026-11-13 报：点分页像慢一拍 / 页码不对）。
+       *
+       * 为什么必须放在第一个 await 之前：下面先 await cancelAllEdits、再 await sessionState
+       * 拉转录、最后 await refreshPagers。这中间界面已经渲染**新**转录，而 state.pagers 仍是
+       * **旧会话**那一份 —— 旧分页器按旧 userOrdinal 挂在新消息上、页码指着旧版本，
+       * 就是「点了像没动」/「显示的是上一个版本」。先清空 = 切换瞬间不画错位置，
+       * 拉到新数据后再画（宁缺一拍，不错一拍）。
+       */
+      if (state.sessionId && state.sessionId !== id) state.pagers = []
       // 切会话前把**上一条**会话遗留的编辑态清掉（见 cancelAllEdits 的说明）：
       // 不到这里清，服务端那条 editing 会永久阻塞它的队列。
       const leaving = state.sessionId
       if (leaving && leaving !== id) await deps.cancelAllEdits(leaving)
+      if (stale()) return
       // 用 sessionState（不是 getSession）：一次拿全转录 + 队列 + 目标 + 运行态 ——
       // 刷新后整个输入区（队列列表、暂停标记、目标状态）都靠这一条恢复（设计 §3.2/§3.3）。
       // 转录分页（用户口径 2026-10-15）：首屏只装最后 ~30 条 turn（约三四轮），
       // 更早的历史由顶部哨兵进可视区时经 loadEarlierTurns 续拉。
       const full = await api.sessionState(canvasId(), id, { turnsLimit: TURNS_PAGE })
+      if (stale()) return
       const rec = full.session
       model.load(Array.isArray(rec.turns) ? rec.turns : [])
       state.turnsTotal = full.turnsTotal ?? rec.turns.length
@@ -507,6 +532,16 @@ export function createSessionDomain(ctx: AgentServiceContext, deps: AgentService
       if (rec.provider && rec.modelId) state.model = { provider: rec.provider, modelId: rec.modelId }
       // 内联分页器随会话一起拉（跟随消息：每个在对应消息块后渲染）
       await refreshPagers()
+      if (stale()) return
+      /**
+       * 切完会话**立刻重接常驻流**（用户 2026-11-13 报：分页切换后更新不及时、像慢了一拍）。
+       *
+       * 上面 detachStream() 把旧会话的流断了；不在这里接回来的话，新会话的
+       * running / 工具进度 / 审批 / 标题 都要等下一次 openSession 或重新打开面板才动 ——
+       * 用户看到的就是「切过去了，但内容停在那儿不更新」。
+       * attachStream 本身幂等，重复调用不会多开连接。
+       */
+      attachStream(id)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }

@@ -16,6 +16,8 @@ const CFG: AutoLayoutConfig = {
   direction: 'LR',
   intraSpacing: { x: 60, y: 60 },
   interSpacing: { x: 120, y: 120 },
+  includeTitleHeight: false,
+  titleHeight: 0,
   focusHeightRatio: 0.5,
   minZoom: 0.1,
   maxZoom: 4,

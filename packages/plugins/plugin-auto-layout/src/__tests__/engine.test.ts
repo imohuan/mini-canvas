@@ -55,7 +55,17 @@ describe('layoutClusterRecursive + layoutGlobalClusters', () => {
   it('single 簇归一到 (0,0) 并给 bounds', () => {
     const nodes = [n('a', 500, 300)]
     const { clusters } = buildClusters(nodes, [], [])
-    layoutClusterRecursive(clusters[0], [], { direction: 'LR', intraSpacing: { x: 60, y: 80 }, interSpacing: { x: 120, y: 120 }, focusHeightRatio: 0.5, minZoom: 0.1, maxZoom: 4, debug: false }, [])
+    layoutClusterRecursive(clusters[0], [], {
+      direction: 'LR',
+      intraSpacing: { x: 60, y: 80 },
+      interSpacing: { x: 120, y: 120 },
+      includeTitleHeight: false,
+      titleHeight: 0,
+      focusHeightRatio: 0.5,
+      minZoom: 0.1,
+      maxZoom: 4,
+      debug: false,
+    }, [])
     expect(clusters[0].nodes[0].position).toEqual({ x: 0, y: 0 })
     expect(clusters[0].bounds!.w).toBe(100)
     expect(clusters[0].bounds!.h).toBe(80)
@@ -64,7 +74,17 @@ describe('layoutClusterRecursive + layoutGlobalClusters', () => {
   it('connected 簇内部 dagre 排布：节点不重叠且 bounds 覆盖全部', () => {
     const nodes = [n('a'), n('b'), n('c')]
     const edges = [e('e1', 'a', 'b'), e('e2', 'b', 'c')]
-    const config = { direction: 'LR' as const, intraSpacing: { x: 60, y: 80 }, interSpacing: { x: 120, y: 120 }, focusHeightRatio: 0.5, minZoom: 0.1, maxZoom: 4, debug: false }
+    const config = {
+      direction: 'LR' as const,
+      intraSpacing: { x: 60, y: 80 },
+      interSpacing: { x: 120, y: 120 },
+      includeTitleHeight: false,
+      titleHeight: 0,
+      focusHeightRatio: 0.5,
+      minZoom: 0.1,
+      maxZoom: 4,
+      debug: false,
+    }
     const { clusters } = buildClusters(nodes, edges, [])
     const conn = clusters.find((c) => c.type === 'connected')!
     layoutClusterRecursive(conn, edges, config, [])
@@ -80,7 +100,17 @@ describe('layoutClusterRecursive + layoutGlobalClusters', () => {
   it('单簇全局布局：整体平移到 margin(80) 附近', () => {
     const nodes = [n('a', 10, 10), n('b', 10, 10)]
     const edges = [e('e1', 'a', 'b')]
-    const config = { direction: 'TB' as const, intraSpacing: { x: 60, y: 80 }, interSpacing: { x: 120, y: 120 }, focusHeightRatio: 0.5, minZoom: 0.1, maxZoom: 4, debug: false }
+    const config = {
+      direction: 'TB' as const,
+      intraSpacing: { x: 60, y: 80 },
+      interSpacing: { x: 120, y: 120 },
+      includeTitleHeight: false,
+      titleHeight: 0,
+      focusHeightRatio: 0.5,
+      minZoom: 0.1,
+      maxZoom: 4,
+      debug: false,
+    }
     const { clusters } = buildClusters(nodes, edges, [])
     for (const cl of clusters) layoutClusterRecursive(cl, edges, config, [])
     layoutGlobalClusters(clusters, edges, config, [])
@@ -97,7 +127,17 @@ describe('runAutoLayout', () => {
   it('完整跑通：自由连通节点被重排且互不重叠', () => {
     const nodes = [n('a', 0, 0), n('b', 300, 200), n('c', 600, 50)]
     const edges = [e('e1', 'a', 'b')]
-    const config = { direction: 'LR' as const, intraSpacing: { x: 60, y: 80 }, interSpacing: { x: 120, y: 120 }, focusHeightRatio: 0.5, minZoom: 0.1, maxZoom: 4, debug: false }
+    const config = {
+      direction: 'LR' as const,
+      intraSpacing: { x: 60, y: 80 },
+      interSpacing: { x: 120, y: 120 },
+      includeTitleHeight: false,
+      titleHeight: 0,
+      focusHeightRatio: 0.5,
+      minZoom: 0.1,
+      maxZoom: 4,
+      debug: false,
+    }
     const result = runAutoLayout({ nodes, edges, groups: [], config })
     expect(result.nodes).toHaveLength(3)
     // 每个节点都有合法非负位置
