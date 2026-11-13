@@ -114,8 +114,8 @@ describe('业务插件零引用', () => {
    *
    * 理由不是洁癖：测试 import 另一个插件同样会让 pnpm 在 workspace 里建出循环依赖
    * （实测 canvas-render ⇄ plugin-multi-select），而且那种循环只在安装时才出声。
-   * 需要「真实主题组件长什么样」的断言，去主题包自己的测试里验；宿主侧用
-   * @plume-canvas/test-ui-stub 的替身锁调用形态。
+   * 需要「真实主题组件长什么样」的断言去主题包自己的测试里验；宿主侧在
+   * 本插件自己的 __tests__ 目录放最小替身，锁「取的是正确名字、传的是正确形态」。
    */
   it('测试代码也不 import 另一个 @plume-canvas/plugin-*', () => {
     const offenders: string[] = []

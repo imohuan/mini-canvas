@@ -35,7 +35,6 @@
     "typescript": "~6.0.2",
     "vite": "^8.0.12",
     "vite-plugin-css-injected-by-js": "^3.5.2",
-    "vitest": "^3.0.0",
-    "@plume-canvas/test-ui-stub": "workspace:*"
+    "vitest": "^3.0.0"
   }
 }

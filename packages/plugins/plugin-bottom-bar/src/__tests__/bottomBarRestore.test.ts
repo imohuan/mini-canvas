@@ -20,7 +20,7 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { RegistryImpl } from '@plume-canvas/kernel'
 import { Context } from '@plume-canvas/canvas-data'
-import { registerTestUi } from '@plume-canvas/test-ui-stub'
+import { registerUiStubs } from './uiStubs'
 import NodeBottomBar from '../NodeBottomBar.vue'
 import type { BarAction } from '../barTypes'
 
@@ -86,7 +86,7 @@ function stub(name: string): { render(): unknown } {
 let uiField: RegistryImpl<unknown>
 beforeAll(async () => {
   const ctx = new Context()
-  registerTestUi(ctx.registryOf('ui'))
+  registerUiStubs(ctx.registryOf('ui'))
   await ctx.start()
   uiField = ctx.registryOf('ui') as typeof uiField
 })

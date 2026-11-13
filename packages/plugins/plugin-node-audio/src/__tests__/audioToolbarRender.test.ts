@@ -17,7 +17,7 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canv
 import { RegistryImpl } from '@plume-canvas/kernel'
 import { Context } from '@plume-canvas/canvas-data'
 // ui 目录用测试替身（业务插件之间零引用，不装主题插件）。
-import { registerTestUi } from '@plume-canvas/test-ui-stub'
+import { registerUiStubs } from './uiStubs'
 import AudioTopToolbar from '../AudioTopToolbar.vue'
 
 const AUDIO = 'blob:mock-audio'
@@ -31,7 +31,7 @@ async function themeUiField(): Promise<{
   subscribe(fn: () => void): { dispose(): void }
 }> {
   const ctx = new Context()
-  registerTestUi(ctx.registryOf('ui'))
+  registerUiStubs(ctx.registryOf('ui'))
   await ctx.start()
   return ctx.registryOf('ui')
 }

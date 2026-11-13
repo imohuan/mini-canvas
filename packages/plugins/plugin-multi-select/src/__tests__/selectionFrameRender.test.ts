@@ -12,9 +12,8 @@ import { describe, it, expect } from 'vitest'
 import { createSSRApp, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
-// 多选从 UI 目录按名取端口/拖线件；测试用替身包（业务插件之间零引用）。
-// 替身保留了与主题同名的锚点/按钮/跟随区标记，用来锁「调的是同一个名字」。
-import { TEST_UI_COMPONENTS } from '@plume-canvas/test-ui-stub'
+// 多选从 UI 目录按名取端口/拖线件；替身放在本插件测试目录（业务插件之间零引用）。
+import { UI_STUBS } from './uiStubs'
 import SelectionFrame from '../SelectionFrame.vue'
 import { MULTI_SELECT_FRAME_KEYS, MULTI_SELECT_COLOR_KEYS, DEFAULT_MULTI_SELECT_FRAME } from '../multiSelectConfig'
 
@@ -37,8 +36,8 @@ function selectionRegionField(entries: SelectionRegionEntry[] = []): SelectionRe
 /** UI 目录桩：按名给出组件（多选只取 movingHandle / connectionLine 两个名字） */
 function uiCatalogField(): { top(name: string): { id: string; value: unknown } | undefined; subscribe(): { dispose(): void } } {
   const byName: Record<string, unknown> = {
-    movingHandle: TEST_UI_COMPONENTS.movingHandle,
-    connectionLine: TEST_UI_COMPONENTS.connectionLine,
+    movingHandle: UI_STUBS.movingHandle,
+    connectionLine: UI_STUBS.connectionLine,
   }
   return {
     top: (name: string) => (name in byName ? { id: 'default', value: byName[name] } : undefined),

@@ -17,7 +17,7 @@ import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canv
 import { Context } from '@plume-canvas/canvas-data'
 import { RegistryImpl } from '@plume-canvas/kernel'
 import type { Registry } from '@plume-canvas/kernel'
-import { registerTestUi } from '@plume-canvas/test-ui-stub'
+import { registerUiStubs } from './uiStubs'
 import PanoramaContent from '../PanoramaContent.vue'
 import { beginInteract, enterFullscreen, resetInteractSessions } from '../panoramaSession'
 
@@ -25,7 +25,7 @@ import { beginInteract, enterFullscreen, resetInteractSessions } from '../panora
 let uiField: Registry<unknown>
 beforeAll(async () => {
   const ctx = new Context()
-  registerTestUi(ctx.registryOf('ui'))
+  registerUiStubs(ctx.registryOf('ui'))
   await ctx.start()
   uiField = ctx.registryOf<unknown>('ui')
 })

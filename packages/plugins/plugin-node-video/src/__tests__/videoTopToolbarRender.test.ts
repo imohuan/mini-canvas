@@ -12,7 +12,7 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { RegistryImpl } from '@plume-canvas/kernel'
 // ui 目录用测试替身（业务插件之间零引用，不装主题插件）。
-import { registerTestUi } from '@plume-canvas/test-ui-stub'
+import { registerUiStubs } from './uiStubs'
 import VideoTopToolbar from '../VideoTopToolbar.vue'
 import VideoClipDock from '../video-clip-panel/VideoClipDock.vue'
 import { beginOverlay, endOverlay, setCropPending } from '../videoSession'
@@ -20,7 +20,7 @@ import { beginOverlay, endOverlay, setCropPending } from '../videoSession'
 async function themeUiField(): Promise<{ top(name: string): { value: unknown } | undefined }> {
   const { Context } = await import('@plume-canvas/canvas-data')
   const ctx = new Context()
-  registerTestUi(ctx.registryOf('ui'))
+  registerUiStubs(ctx.registryOf('ui'))
   await ctx.start()
   return ctx.registryOf('ui')
 }
