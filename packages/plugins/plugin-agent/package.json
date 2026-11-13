@@ -33,6 +33,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "build:web": "vite build",
     "build:server": "node scripts/build-server.mjs",
     "build": "vite build && node scripts/build-server.mjs"
   },

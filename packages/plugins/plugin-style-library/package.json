@@ -18,6 +18,8 @@
   },
   "scripts": {
     "build": "vite build && node scripts/build-server.mjs",
+    "build:web": "vite build",
+    "build:server": "node scripts/build-server.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:vue": "vue-tsc --noEmit",
     "test": "vitest run"
