@@ -18,6 +18,8 @@ import { nodeRotatePlugin } from '@plume-canvas/plugin-node-rotate'
 import { node3dPreviewPlugin } from '@plume-canvas/plugin-node-3d-preview'
 import { nodeVideoPlugin } from '@plume-canvas/plugin-node-video'
 import { nodeAudioPlugin } from '@plume-canvas/plugin-node-audio'
+import { miniMapPlugin } from '@plume-canvas/plugin-mini-map'
+import { autoLayoutPlugin } from '@plume-canvas/plugin-auto-layout'
 import { pluginBottomBar } from '@plume-canvas/plugin-bottom-bar'
 import { clipboardPlugin } from '@plume-canvas/plugin-clipboard'
 import { contextMenuPlugin } from '@plume-canvas/plugin-context-menu'
@@ -72,6 +74,11 @@ export const DEV_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
   { plugin: nodeRotatePlugin, kind: 'canvas', reason: '旋转与镜像' },
   { plugin: nodeVideoPlugin, kind: 'canvas', reason: '视频节点' },
   { plugin: nodeAudioPlugin, kind: 'canvas', reason: '音频节点' },
+  // 状态栏「切换小地图」与「整理画布」是外壳自己的按钮，点了要真的生效：
+  // 前者需要 mini-map 注册到 mini-map 槽并声明 miniMapVisible，后者需要 auto-layout 的
+  // `auto-layout:run`。做成可装卸件时发行版里根本没装，按钮就成了无声的空操作。
+  { plugin: miniMapPlugin, kind: 'canvas', reason: '状态栏小地图开关（外壳按钮依赖它的槽与设置项）' },
+  { plugin: autoLayoutPlugin, kind: 'canvas', reason: '整理画布 / 聚焦 / 适应视图命令（外壳与底栏依赖）' },
 ] as const
 
 /** 应用级插件（dev） */

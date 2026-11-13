@@ -27,7 +27,9 @@ const filtered = computed(() => filterSettingsShortcutGroups(groups.value, searc
 const total = computed(() => groups.value.reduce((n, g) => n + g.items.length, 0))
 const conflicts = computed(() => {
   void tick.value
-  return manager?.getConflicts() ?? []
+  // 只报真正未决的冲突：同键位但优先级不同 = 设计好的分层（如 3D 预览的 f/r 只在
+  // 选中 3D 节点时接管，否则让位给聚焦 / 适应视图），分发器按 order 先到先得。
+  return (manager?.getConflicts() ?? []).filter((c) => !c.resolved)
 })
 
 function refresh(): void {

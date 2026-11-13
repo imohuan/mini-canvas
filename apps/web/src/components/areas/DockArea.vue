@@ -146,7 +146,7 @@ function onUploadPick(e: Event): void {
             class="ml-auto rounded border border-line px-1.5 py-px text-[9px] not-italic text-ink-dim">SD 2.5</em>
         </DropdownMenuItem>
         -->
-              <DropdownMenuItem @select="ui.showToast('音频节点即将支持'); s.addMenuOpen = false">
+              <DropdownMenuItem @select="ui.createNode('audio'); s.addMenuOpen = false">
                 <AudioLines :size="15" /> 音频
               </DropdownMenuItem>
               <!-- 脚本（同样暂时隐藏）
@@ -231,17 +231,9 @@ function onUploadPick(e: Event): void {
             </DropdownMenuContent>
           </DropdownMenu>
         </SlotAnchor>
-        <SlotAnchor id="host/roles" :order="400">
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Button variant="ghost" size="icon-sm" class="size-8 rounded-lg" aria-label="角色造型室"
-                @click="ui.openDrawer('roles')">
-                <Shapes :size="16" class="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">角色造型室</TooltipContent>
-          </Tooltip>
-        </SlotAnchor>
+        <!-- 「角色造型室」原来只有按钮、没有面板：点开只改一个没人渲染的状态，属于死按钮。
+             功能还没做，先撤掉按钮；锚点保留，插件仍可用 before/after 指向 host/roles。 -->
+        <SlotAnchor id="host/roles" :order="400" />
         <SlotAnchor id="host/history" :order="500">
           <Tooltip>
             <TooltipTrigger as-child>

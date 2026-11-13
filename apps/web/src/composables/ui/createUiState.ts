@@ -28,7 +28,7 @@ export function createUiState() {
     // 弹窗开合（快捷键 / 生成历史独立，可与抽屉共存）
     shortcutsOpen: false,
     historyOpen: false,
-    drawer: null as 'left' | 'roles' | null,
+    drawer: null as 'left' | null,
     drawerWidth: 320,
     leftCollapsed: false,
     // 放开成 string：插件页签会追加第三个及之后的 id（canvas/assets 仍由内置页签占用）。
@@ -102,18 +102,6 @@ export function createUiState() {
     publishOpen: false,
     creditsOpen: false,
     memberOpen: false,
-    // 角色造型室
-    roleTab: 'mine' as 'mine' | 'official',
-    roleFilters: { gender: '全部', age: '全部', region: '全部' },
-    roleView: 'grid' as 'grid' | 'list',
-    roleList: [
-      { name: '正派长辈/母', tag: '女性 · 中老年 · 东方' },
-      { name: '冷酷少年', tag: '男性 · 青年 · 东方' },
-      { name: '未来战士', tag: '男性 · 青年 · 科幻' },
-      { name: '温柔学姐', tag: '女性 · 青年 · 东方' },
-      { name: '反派头目', tag: '男性 · 中老年 · 西方' },
-      { name: '精灵弓箭手', tag: '女性 · 青年 · 奇幻' },
-    ],
     // 生成历史
     histScopes: ['全部画布', '本画布'],
     histTypes: ['图片', '视频', '音频'],

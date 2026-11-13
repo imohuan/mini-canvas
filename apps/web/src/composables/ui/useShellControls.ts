@@ -19,7 +19,7 @@ export function createShellScope(
   const { showToast } = host
   const { loadAssets, loadAssetFolders } = assets
 
-  function openDrawer(which: 'left' | 'roles'): void {
+  function openDrawer(which: 'left'): void {
     state.drawer = state.drawer === which ? null : which
   }
   /** 打开左侧抽屉，保留当前页签（外壳命令用）。 */

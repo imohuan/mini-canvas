@@ -41,6 +41,8 @@ export const BUILTIN_PLUGINS: readonly BuiltinPluginEntry[] = [
   { dir: 'plugin-edge-cutting', reason: '连线切割' },
   { dir: 'plugin-style-library', reason: '风格库（含后台半）' },
   { dir: 'plugin-shortcut-manager', reason: '快捷键帮助面板与设置页的快捷键配置' },
+  { dir: 'plugin-mini-map', reason: '状态栏小地图开关：没有它只切图标，画布上什么都不出现' },
+  { dir: 'plugin-auto-layout', reason: '整理画布 / 聚焦选中 / 适应视图：状态栏与底栏直接调它的命令' },
   { dir: 'plugin-cloud-client', reason: '云端连接：后台能力入口，首启必须最先装上', first: true },
 ] as const
 

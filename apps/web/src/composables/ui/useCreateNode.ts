@@ -24,7 +24,7 @@ export function createCreateNodeScope(
   const { assetItems } = assets
   const { viewportSvc } = viewport
 
-  function createNode(type: 'text' | 'image' | 'video'): void {
+  function createNode(type: 'text' | 'image' | 'video' | 'audio'): void {
     const host = (hostEl.value?.host ?? hostEl.value) as FullHost | undefined
     if (!host?.command) {
       // 兜底：从 window key 拿（与 e2e 同源）
@@ -35,7 +35,7 @@ export function createCreateNodeScope(
     }
     host.command.execute('command:create-node', buildPayload(type, host))
   }
-  function buildPayload(type: 'text' | 'image' | 'video', host: HostApi): { type: string; position: { x: number; y: number }; imageUrl?: string } {
+  function buildPayload(type: 'text' | 'image' | 'video' | 'audio', host: HostApi): { type: string; position: { x: number; y: number }; imageUrl?: string } {
     const count = host.nodeStore?.getNodes().length ?? 0
     const payload: { type: string; position: { x: number; y: number }; imageUrl?: string } = {
       type,

@@ -7,7 +7,7 @@
     "title": "自动布局",
     "description": "Ctrl/Cmd+L 布局 / F 聚焦选中 / R 适应视图",
     "pluginName": "auto-layout",
-    "installable": true
+    "builtin": true
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

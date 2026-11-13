@@ -127,6 +127,13 @@ type HelpGroup = { group: V2ShortcutHelpItem['group']; items: V2ShortcutHelpItem
  */
 export function useShortcutHelpPanel() {
   const searchQuery = ref('')
+  /**
+   * 冲突 = 真正**未决**的同键位占用。
+   *
+   * 命中同键位但优先级不同（例如 3D 预览的 f/r 带 `when`，只在选中 3D 节点时接管；
+   * 否则让位给画布的「聚焦选中 / 适应视图」）是**设计好的分层**，分发器按 order 先到先得，
+   * 用户看到「2 个冲突」却没有第二个键位可改，只会被误导。所以只报 resolved === false 的。
+   */
   const conflicts = ref<V2ShortcutConflict[]>([])
   const helpList = ref<HelpGroup[]>([])
   /** 当前正在展开"重映射"面板的行 ID（null = 全部收起） */
@@ -134,7 +141,7 @@ export function useShortcutHelpPanel() {
 
   function syncFromManager(): void {
     const manager = managerNow()
-    conflicts.value = manager?.getConflicts() ?? []
+    conflicts.value = (manager?.getConflicts() ?? []).filter((c) => !c.resolved)
     helpList.value = manager?.getHelpList() ?? []
   }
 
