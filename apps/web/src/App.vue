@@ -91,6 +91,9 @@ onMounted(async () => {
       appBase: shell.appBase,
       seed: seedDefaultCanvas,
       dev: import.meta.env.DEV,
+      // 宿主的调试入口：插件热重载（window.PlumePlugin）与插件清单的 installed 判定
+      // 都读 window.PlumeUI；不挂的话两者在真实运行里全部静默失效。
+      windowKey: 'PlumeUI',
       // dev 用静态清单；build 的插件已由 AppProvider 从 cloud-server 装载，这里不再传冷启动件。
       plugins: await resolveCanvasPlugins(),
     })

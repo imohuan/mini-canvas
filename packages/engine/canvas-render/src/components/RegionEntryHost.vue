@@ -31,6 +31,11 @@ const props = defineProps<{
    * 于是同一层壳既能服务节点区域、也能服务选择集区域，不必再抄一份。
    */
   nodeId?: string
+  /**
+   * 节点类型。区域条目里常要按类型做裁决（例如底栏解析 nodeToolbar 的默认模式），
+   * 挂在这里比让每个宿主各自补一个 prop 更可靠 —— 区域渲染本来就知道自己挂在哪种节点上。
+   */
+  type?: string
   data?: Record<string, unknown>
   /** dev 开关（供能力缺失时的提示分 dev/prod；来自 ctx.isDev） */
   isDev?: boolean
@@ -41,5 +46,5 @@ provideCapabilityBag(props.cache, props.entry.needs, props.entry.id, { isDev: pr
 </script>
 
 <template>
-  <component :is="entry.component" :id="nodeId" :data="data" v-bind="entry.props" />
+  <component :is="entry.component" :id="nodeId" :type="type" :data="data" v-bind="entry.props" />
 </template>

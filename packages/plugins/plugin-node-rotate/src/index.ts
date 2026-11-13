@@ -50,10 +50,13 @@ export function apply(ctx: Context): void {
     return true
   }
   if (!registerMode()) {
-    // 主题还没装（装配顺序在后/热装）：等它上架再试一次
-    const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerMode()) off.dispose()
-    })
+    // nodeToolbar 由宿主注入，注入不走插件安装事件；补一次有限次数的退避重试。
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      if (registerMode() || attempts >= 18) clearInterval(timer)
+    }, 160)
+    ctx.effect(() => () => clearInterval(timer))
   }
 }
 

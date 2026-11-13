@@ -330,10 +330,44 @@ export function apply(ctx: Context) {
     if (offMode) ctx.effect(() => offMode)
     return true
   }
+  /**
+   * 等 nodeToolbar 就绪后再注册「默认底栏」。
+   *
+   * 为什么不能只写进 `inject`：nodeToolbar 由**宿主**注入，而本插件还要在项目页
+   * （没有画布会话、没有 nodeToolbar）启动并注册自己的设置分组；写成硬依赖会让它在项目页
+   * 永远 PENDING，设置里的「常规/底栏」整组消失（真实回归，被 bottomBarSettingsRender 抓到）。
+   *
+   * 为什么不能只监听 `ctx:plugin-installed`：宿主注入服务不走插件安装事件，那一枪永远不会响，
+   * 真实运行里表现成「选中节点后底栏整条不出现」。
+   *
+   * 所以按两个信号一起等，谁先到都行：
+   * - `ctx:plugin-installed`（主题插件先装好，服务随之出现）；
+   * - 有上限的退避重试（宿主可能在别处注入服务，没有任何事件）。
+   * 成功一次就全部撤掉，不留定时器；18 次仍等不到（约 3 秒）就放弃 ——
+   * 那时画布已经可用却没有 nodeToolbar，属于宿主装配缺件，继续等也不会好。
+   */
   if (!registerDefaultBar()) {
-    const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerDefaultBar()) off.dispose()
-    })
+    let offInstall: { dispose(): void } | undefined
+    let timer: ReturnType<typeof setInterval> | undefined
+    const stop = (): void => {
+      offInstall?.dispose()
+      offInstall = undefined
+      if (timer !== undefined) clearInterval(timer)
+      timer = undefined
+    }
+    let attempts = 0
+    const tryRegister = (): void => {
+      if (!registerDefaultBar()) return
+      stop()
+    }
+    offInstall = ctx.on('ctx:plugin-installed', tryRegister)
+    timer = setInterval(() => {
+      attempts += 1
+      tryRegister()
+      if (attempts >= 18) stop()
+    }, 160)
+    // 插件被卸载时一并收掉（ticker 不随 fiber 自动回收）。
+    ctx.effect(() => () => stop())
   }
 
   // 默认皮仍登记进 themeRegistry 的 bottomBar 槽：

@@ -135,9 +135,13 @@ export function apply(ctx: Context) {
     return true
   }
   if (!registerToolbar()) {
-    const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerToolbar()) off.dispose()
-    })
+    // nodeToolbar 由宿主注入，注入不走插件安装事件；补一次有限次数的退避重试。
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      if (registerToolbar() || attempts >= 18) clearInterval(timer)
+    }, 160)
+    ctx.effect(() => () => clearInterval(timer))
   }
 
   const service = new AudioService(ctx)

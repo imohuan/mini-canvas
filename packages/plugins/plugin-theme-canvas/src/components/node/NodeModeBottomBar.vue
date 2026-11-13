@@ -19,17 +19,26 @@ import { NodeToolbarService } from '@plume-canvas/canvas-render'
 const props = defineProps<{ id: string; data: Record<string, unknown>; type?: string }>()
 const { ctx } = useCanvasRender()
 
-const svc = ctx.tryGet<NodeToolbarService | undefined>('nodeToolbar')
-
-const bar = computed(() =>
-  svc ? svc.resolveBar(props.id, 'bottom', props.type) : ({ kind: 'inherit' } as const),
-)
+/**
+ * 每次求值都现取服务。
+ *
+ * 不能在 setup 里缓存：nodeToolbar 由宿主注入，而节点壳可能先于它挂载
+ * （进画布时先渲染节点、宿主稍后 inject）。缓存到 undefined 之后，
+ * 这个节点的下栏就永远解析成 inherit —— 真实运行里「选中节点后底栏整条不出现」。
+ */
+const bar = computed(() => {
+  const svc = ctx.tryGet<NodeToolbarService | undefined>('nodeToolbar')
+  // 读版本号建立依赖：模式可能在节点挂载之后才注册（插件装配顺序不定）。
+  svc?.revision()
+  return svc ? svc.resolveBar(props.id, 'bottom', props.type) : ({ kind: 'inherit' } as const)
+})
 const BarComponent = computed(() =>
   bar.value.kind === 'component' ? (bar.value.component as Component) : null,
 )
 
 /** 下栏只在「恰好选中这一个节点」时出现（与旧的画布级浮层同一条语义） */
 const soleSelected = useSoleNodeSelected(props.id)
+
 </script>
 
 <template>

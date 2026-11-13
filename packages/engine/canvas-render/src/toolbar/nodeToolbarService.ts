@@ -20,7 +20,7 @@
  *
  * 会话是纯 UI 状态：不写节点 data、不进撤销栈（与 cropSession 同一条规矩）。
  */
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue'
 
 /**
  * 一根状态栏的内容声明。三种取值，语义完全不同：
@@ -73,6 +73,20 @@ const MAX_REF_DEPTH = 8
 export class NodeToolbarService {
   /** 模式注册表：id → 该 id 下的多份注册（数组顺序 = 注册顺序，裁决时才看 order） */
   private readonly modes = new Map<string, NodeToolbarMode[]>()
+  /**
+   * 注册版本号（响应式）。
+   *
+   * 为什么需要：`resolveBar` 的结果被节点壳包在 computed 里，而 computed 只会跟着
+   * **它读到的响应式值**重算。模式表是普通 Map，注册发生在节点挂载之后（插件装配顺序不定），
+   * 没有这个版本号时 computed 永远不会重新求值 —— 真实运行里表现成
+   * 「底栏/顶栏注册了却一直不出现」，只有重新挂载节点才会好。
+   */
+  private readonly version = ref(0)
+
+  /** 读一次当前注册版本（供消费方 computed 建立依赖） */
+  revision(): number {
+    return this.version.value
+  }
   /** 当前会话（同一时刻只有一个节点处于某个模式：两根栏只有一套） */
   private readonly session = reactive<NodeToolbarSession>({ nodeId: '', modeId: '' })
 
@@ -99,6 +113,7 @@ export class NodeToolbarService {
     const list = this.modes.get(mode.id)
     if (list) list.push(mode)
     else this.modes.set(mode.id, [mode])
+    this.version.value += 1
 
     let active = true
     return () => {
@@ -110,6 +125,7 @@ export class NodeToolbarService {
       if (at === -1) return
       current.splice(at, 1)
       if (current.length === 0) this.modes.delete(mode.id)
+      this.version.value += 1
       // 会话还指着已经没人注册的模式：退回默认，别留一个永远解析不到的悬空 id。
       if (this.session.modeId === mode.id && !this.modes.has(mode.id)) this.exit(this.session.nodeId)
     }
@@ -118,6 +134,7 @@ export class NodeToolbarService {
   /** 移除某个 id 的全部注册（批量清理；单份注册优先用 registerMode 返回的函数） */
   unregisterMode(id: string): void {
     this.modes.delete(id)
+    this.version.value += 1
     if (this.session.modeId === id) this.exit(this.session.nodeId)
   }
 

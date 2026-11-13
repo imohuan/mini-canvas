@@ -259,10 +259,19 @@ export function apply(ctx: Context) {
     return true
   }
   if (!registerToolbar()) {
-    // 主题还没装（装配顺序在后/热装）：等它上架再注册一次
-    const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerToolbar()) off.dispose()
-    })
+    /**
+     * 等 nodeToolbar 就绪再注册。
+     *
+     * 不能只监听 `ctx:plugin-installed`：nodeToolbar 是**宿主注入**的服务，注入不走插件安装事件，
+     * 那一枪永远不响 —— 真实运行里表现成「图片节点的上栏（上传/裁剪/扩展）整条不出现」。
+     * 这里用一次有限次数的退避重试兜住「服务稍后到位」的情况，成功即停。
+     */
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      if (registerToolbar() || attempts >= 18) clearInterval(timer)
+    }, 160)
+    ctx.effect(() => () => clearInterval(timer))
   }
 
   // 1.7 编辑态 ↔ 状态栏模式自动同步（同一份会话，两处 UI 不会各说各话）：

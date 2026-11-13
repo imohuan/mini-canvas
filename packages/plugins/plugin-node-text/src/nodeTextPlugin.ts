@@ -140,10 +140,13 @@ export function apply(ctx: Context) {
     return true
   }
   if (!registerBar()) {
-    // bottom-bar 还没装（装配顺序在后/热装）：等它上架再注册一次
-    const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerBar()) off.dispose()
-    })
+    // bottom-bar 还没装（装配顺序在后/热装）：有限次数退避重试，成功即停。
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      if (registerBar() || attempts >= 18) clearInterval(timer)
+    }, 160)
+    ctx.effect(() => () => clearInterval(timer))
   }
 
   // 2. 注册节点类型：数据/尺寸 + content 组件 + create 委托服务（同一实现，避免散落两处建节点逻辑）

@@ -27,20 +27,28 @@ export interface NodeRegionsInput {
  * 缓存仍建在节点这一层，卸载时统一 dispose。
  */
 export function useNodeRegions(input: NodeRegionsInput) {
-  const regionField = (() => {
+  /**
+   * 每次都现取注册场。
+   *
+   * `ctx.registryOf(kind)` 返回的是**绑定了调用方身份的新视图**，不是一张长期稳定的表；
+   * 在 setup 里只取一次并缓存，节点壳就会一直读那份旧视图。表现是：节点先渲染、
+   * 区域条目后注册（主题/底栏插件启动更晚）时，上/下插槽永远是空的 ——
+   * 真实运行里底部动作栏整条消失，而单测里因为先注册再渲染，测不出来。
+   */
+  const regionField = () => {
     try {
       return input.ctx?.registryOf?.('node/region')
     } catch {
       return undefined
     }
-  })()
+  }
   const regionTick = ref(0)
-  const regionOff = regionField?.subscribe(() => void (regionTick.value += 1))
+  const regionOff = regionField()?.subscribe(() => void (regionTick.value += 1))
   onBeforeUnmount(() => regionOff?.dispose())
 
   const regionEntries = (region: string) =>
     (void regionTick.value,
-    nodeRegionStackEntries(input.registry, regionField as never, input.type, region))
+    nodeRegionStackEntries(input.registry, regionField() as never, input.type, region))
 
   const contentStack = computed(() => regionEntries('in'))
   const titleStack = computed(() => regionEntries('title'))

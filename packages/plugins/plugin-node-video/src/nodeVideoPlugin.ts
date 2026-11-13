@@ -300,9 +300,13 @@ export function apply(ctx: Context) {
     return true
   }
   if (!registerToolbar()) {
-    const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerToolbar()) off.dispose()
-    })
+    // nodeToolbar 由宿主注入，注入不走插件安装事件；补一次有限次数的退避重试。
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      if (registerToolbar() || attempts >= 18) clearInterval(timer)
+    }, 160)
+    ctx.effect(() => () => clearInterval(timer))
   }
 
   // 1.5 裁剪会话 ↔ 状态栏模式自动同步（与图片插件的 onEditModeChange 同一条写法）：
@@ -368,9 +372,13 @@ export function apply(ctx: Context) {
     return true
   }
   if (!registerBar()) {
-    const off = ctx.on('ctx:plugin-installed', () => {
-      if (registerBar()) off.dispose()
-    })
+    // nodeBar 随底栏插件出现，同样可能晚于本插件；补一次有限次数的退避重试。
+    let attempts = 0
+    const timer = setInterval(() => {
+      attempts += 1
+      if (registerBar() || attempts >= 18) clearInterval(timer)
+    }, 160)
+    ctx.effect(() => () => clearInterval(timer))
   }
 
   ctx.nodes.register({

@@ -18,12 +18,17 @@ import { NodeToolbarService } from '@plume-canvas/canvas-render'
 const props = defineProps<{ id: string; data: Record<string, unknown>; type?: string }>()
 const { ctx } = useCanvasRender()
 
-const svc = ctx.tryGet<NodeToolbarService | undefined>('nodeToolbar')
-
-/** 服务缺席（极简宿主/单测）→ 当作「没注册」，透传默认内容 */
-const bar = computed(() =>
-  svc ? svc.resolveBar(props.id, 'top', props.type) : ({ kind: 'inherit' } as const),
-)
+/**
+ * 每次求值都现取服务；理由与 NodeModeBottomBar 同：
+ * nodeToolbar 由宿主注入，节点壳可能先挂载、服务后到，setup 里缓存空值会让上栏永远失效。
+ * 服务缺席（极简宿主/单测）→ 当作「没注册」，透传默认内容。
+ */
+const bar = computed(() => {
+  const svc = ctx.tryGet<NodeToolbarService | undefined>('nodeToolbar')
+  // 读版本号建立依赖：模式可能在节点挂载之后才注册（插件装配顺序不定）。
+  svc?.revision()
+  return svc ? svc.resolveBar(props.id, 'top', props.type) : ({ kind: 'inherit' } as const)
+})
 const BarComponent = computed(() =>
   bar.value.kind === 'component' ? (bar.value.component as Component) : null,
 )
