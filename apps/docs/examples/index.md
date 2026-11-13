@@ -25,7 +25,7 @@ export function apply(ctx) { /* 在这里注册你的东西 */ }
 | 设置面板里出现你的配置 | 模块级 `Config` schema | `plugin-mini-map` |
 | 别的插件能调用你的能力 | `ctx.inject('名字', 实现)` | `plugin-file-drop` |
 | AI 能调你的生成能力 | `ctx.tools.register` | `plugin-tool-text-generation` |
-| 节点底部多一个按钮 | `registerBarAction` | `plugin-node-text` |
+| 节点底部多一个按钮 | `ctx.get('nodeBar').register(ctx, action)` | `plugin-node-text` |
 | 监听鼠标/键盘/粘贴 | `ctx.effect(() => …)` | `plugin-file-drop` |
 
 **3. 卸载不用你管。** 你在 `apply` 里注册的一切 —— 节点、UI、命令、服务、监听 ——

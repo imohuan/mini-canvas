@@ -2,17 +2,17 @@
 
 > 插件：底部状态栏 bottom-bar · [返回总览](/plugins/parsed/bottom-bar/)
 
-**一句话**：别的插件往底栏加东西，**只用这三条糖** —— 条目归你自己的插件，卸载自动摘除、同 id 替换。
+**一句话**：别的插件往底栏加东西，**只用 `nodeBar` 服务上的三个方法** —— 条目归你自己的插件，卸载自动摘除、同 id 替换。服务契约在引擎 `@plume-canvas/canvas-data`，**不要 import 底栏插件**。
 
-## 三条糖
+## 三个方法
 
-| 糖 | 签名 | 干什么 |
+| 方法 | 签名 | 干什么 |
 | --- | --- | --- |
-| `registerBarAction` | `(ctx, action: BarAction): void` | 注册一条底栏动作 |
-| `registerBarApplier` | `(ctx, kind: string, fn: BarApplier): void` | 注册某节点类型的结果写入器（**同 kind 重复抛错**） |
-| `publishToolActions` | `(ctx, { types, produces, needsPrompt, promptBinding?, ... }): () => void` | 把 `ctx.tools` 里某类工具**自动发布**成底栏动作 |
+| `register` | `(scope, action: BarAction): void` | 注册一条底栏动作 |
+| `registerApplier` | `(scope, kind: string, fn: BarApplier): void` | 注册某节点类型的结果写入器（**同 kind 重复抛错**） |
+| `publishTools` | `(scope, { types, produces, needsPrompt, promptBinding?, ... }): () => void` | 把 `ctx.tools` 里某类工具**自动发布**成底栏动作 |
 
-> 三条都是"**落场用调用方 ctx**" —— 条目归你，插件卸载时自动摘除。
+> 三个都是"**落场用调用方 ctx**" —— 条目归你，插件卸载时自动摘除。
 
 ## 一条注册场，两种键
 
@@ -44,12 +44,13 @@
 // 文件：packages/my-plugin/src/myPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：往底栏加一个自己的动作 + 一个写入器
-import { registerBarAction, registerBarApplier } from '@plume-canvas/plugin-bottom-bar'
+import type { NodeBarContract } from '@plume-canvas/canvas-data'
 
 // 取不到 nodeBar 说明 bottom-bar 还没装 → 等它上架再补注册（装配顺序无关）
 const registerBar = (): boolean => {
-  if (!ctx.tryGet('nodeBar')) return false
-  registerBarAction(ctx, {
+  const bar = ctx.tryGet<NodeBarContract>('nodeBar')
+  if (!bar) return false
+  bar.register(ctx, {
     id: 'my.image.brighten', types: ['image'], title: '提亮', apply: 'self', order: 92,
     description: '把图片调亮一点（可撤销）',
     needsPrompt: false,
@@ -59,7 +60,7 @@ const registerBar = (): boolean => {
     },
   })
   // 写入器：生成结果回来时怎么落到节点（一个 kind 只能注册一个）
-  registerBarApplier(ctx, 'image', (nodeId, result) => {
+  bar.registerApplier(ctx, 'image', (nodeId, result) => {
     const url = result.urls?.[0]
     if (!url) return
     // ① 先落资源库拿持久引用；② 节点只写 resourceId
@@ -80,9 +81,9 @@ if (!registerBar()) {
 
 ## 注意事项
 
-1. **写入器一个 kind 只能一个**：`registerBarApplier` 对同 kind 重复注册会**抛错**（防止两条路各写一半）。
+1. **写入器一个 kind 只能一个**：`registerApplier` 对同 kind 重复注册会**抛错**（防止两条路各写一半）。
 2. **同 id 重复注册 = 替换**：动作 id 是热更入口，不是追加。
-3. **`publishToolActions` 会跟着工具表自动增量同步**：装了新的工具插件，底栏自动多一个模型按钮 —— 这就是"加一个模型 = 装一个工具插件"的落地点。
+3. **`publishTools` 会跟着工具表自动增量同步**：装了新的工具插件，底栏自动多一个模型按钮 —— 这就是"加一个模型 = 装一个工具插件"的落地点。
 4. **写入器写数据要经 `doc`**：不要直接改 store（那样不进历史、不落盘）。
 5. **写入器只写 `resourceId`**：拿到的是外部生成的地址，先 `resources.put` 落成持久引用，再把 ID 写进节点；
    把地址一起写进 `imageUrl` 会让"刷新后地址失效"重新出现，也让下游多一套要兼容的字段。

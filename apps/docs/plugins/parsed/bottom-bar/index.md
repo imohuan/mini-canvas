@@ -12,9 +12,9 @@
 
 | 种类 | 键 / 名字 | 放的是什么 | 详情 |
 | --- | --- | --- | --- |
-| 服务 | `nodeBar` | `NodeBarService`：读动作 / 读写入器 / 读节点态；写走注册糖 | [服务](/plugins/parsed/bottom-bar/service) |
+| 服务 | `nodeBar` | `NodeBarService`：读动作 / 读写入器 / 读节点态；写走 `register` 等三个方法 | [服务](/plugins/parsed/bottom-bar/service) |
 | 服务 | `nodeTask` | `NodeTaskService`（插件内部）：跑任务 / 取消 / 刷新续查；外部走 `canvas.runBarAction` | 同上 |
-| 注册糖 | `registerBarAction` / `registerBarApplier` / `publishToolActions` | 别的插件的**作者入口** | [注册糖](/plugins/parsed/bottom-bar/registry) |
+| 服务方法 | `register` / `registerApplier` / `publishTools` | 别的插件的**作者入口**（契约在 canvas-data） | [注册糖](/plugins/parsed/bottom-bar/registry) |
 | 注册场 | `node/bar` | 动作表（`actions/*`）+ 写入器表（`appliers/*`） | 同上 |
 | UI 槽 | `overlay` × 3 | 底栏宿主 / 参考选择态 / 全屏媒体预览 | [UI 插槽](/plugins/parsed/bottom-bar/slots) |
 | 节点区域 | — | 任务进度覆盖层已并入节点壳（`state:overlay`），底栏不再注册 | 同上 |
@@ -36,8 +36,8 @@
 ## 注意事项
 
 1. **底栏挂在画布 UI 槽，不挂在节点里**：节点带 `transform` 必然成层叠上下文，底栏住在节点里就压不过外壳底部工具栏（`.shell-dock` z-index:30），输入区点击会被截走（实测复现）。
-2. **写一律走注册糖、条目归注册方**：服务是共享单实例（`this.ctx` 恒为 bottom-bar 的 scope），所以它的**写面**方法都要收一个"调用方的 scope"参数，别人的动作才挂在自己名下、卸载时摘得掉。
-3. **一个 kind 只能一个写入器**：`registerBarApplier` 对同 kind 重复注册会**抛错**。
+2. **写一律传调用方 scope、条目归注册方**：服务是共享单实例（`this.ctx` 恒为 bottom-bar 的 scope），所以它的**写面**方法都要收一个"调用方的 scope"参数，别人的动作才挂在自己名下、卸载时摘得掉。
+3. **一个 kind 只能一个写入器**：`registerApplier` 对同 kind 重复注册会**抛错**。
 
 ## 引用名怎么算
 

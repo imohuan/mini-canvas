@@ -2,7 +2,7 @@
 
 > 插件：文本节点 text · [返回总览](/plugins/parsed/node-text/)
 
-**一句话**：往节点底栏加按钮、并把生成结果写回节点 —— 都用插件 `bottom-bar` 提供的缝。
+**一句话**：往节点底栏加按钮、并把生成结果写回节点 —— 都用 `nodeBar` 服务；契约在引擎 `canvas-data`，不 import 底栏插件。
 
 ## 注册了哪些
 
@@ -12,17 +12,17 @@
 | --- | --- | --- | --- | --- | --- |
 | 动作 | `text.duplicate` | 复制 | `self` | 点底栏"复制" | 调 `duplicateTextNode` |
 | 动作 | `text.delete` | 删除 | `self` | 点底栏"删除" | 调 `doc.removeNodes` |
-| 动作 | `tool:<工具名>` | 工具 title | `applier` | 点底栏里某个模型 | 由 `publishToolActions` 从 `ctx.tools.list({ produces: 'text' })` 自动派生 |
+| 动作 | `tool:<工具名>` | 工具 title | `applier` | 点底栏里某个模型 | 由 `publishTools` 从 `ctx.tools.list({ produces: 'text' })` 自动派生 |
 | 写入器 | kind `'text'` | — | — | 生成成功回来时 | 把 `result.text` 写进 `data.text`（经 `doc.updateNode`，可撤销） |
 
 ## 注册函数的签名
 
-来自 `@plume-canvas/plugin-bottom-bar`：
+来自 `nodeBar` 服务（契约类型 `NodeBarContract` 在 `@plume-canvas/canvas-data`）：
 
 ```ts
-registerBarAction(ctx, action: BarAction): void
-registerBarApplier(ctx, kind: string, fn: (nodeId: string, result: ToolResult) => void): void
-publishToolActions(ctx, { types, produces, needsPrompt, promptBinding?, ... }): () => void
+register(ctx, action: BarAction): void
+registerApplier(ctx, kind: string, fn: (nodeId: string, result: ToolResult) => void): void
+publishTools(ctx, { types, produces, needsPrompt, promptBinding?, ... }): () => void
 ```
 
 `BarAction` 常用字段：`id`（唯一，同 id 重复注册 = 替换）、`types`（适用节点类型）、
@@ -35,11 +35,12 @@ publishToolActions(ctx, { types, produces, needsPrompt, promptBinding?, ... }): 
 // 文件：packages/my-plugin/src/myPlugin.ts
 // 格式：TypeScript 模块（插件入口）
 // 位置：往文本节点底栏加一个自己的动作
-import { registerBarAction } from '@plume-canvas/plugin-bottom-bar'
+import type { NodeBarContract } from '@plume-canvas/canvas-data'
 
 const registerBar = (): boolean => {
-  if (!ctx.tryGet('nodeBar')) return false          // bottom-bar 还没装
-  registerBarAction(ctx, {
+  const bar = ctx.tryGet<NodeBarContract>('nodeBar') // 契约在 canvas-data，不 import 底栏插件
+  if (!bar) return false                             // bottom-bar 还没装
+  bar.register(ctx, {
     id: 'my.text.say-hi', types: ['text'], title: '打个招呼', apply: 'self', order: 95,
     description: '在控制台打印这个节点的内容',
     run: (_input, runCtx) => {
@@ -60,5 +61,5 @@ if (!registerBar()) {
 ## 注意事项
 
 1. **`nodeBar` 是插件服务，不进 `inject`**：没装底栏插件的宿主也要能正常工作，所以走 `tryGet` 加事件补注册。
-2. **写入器一个 kind 只能一个**：`registerBarApplier` 对同 kind 重复注册会**抛错**。
+2. **写入器一个 kind 只能一个**：`registerApplier` 对同 kind 重复注册会**抛错**。
 

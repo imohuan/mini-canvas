@@ -37,8 +37,7 @@ my-archive-action/
   },
   "dependencies": {
     "@plume-canvas/plugin-sdk": "workspace:*",
-    "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/plugin-bottom-bar": "workspace:*"  // ① 只 import 它的注册函数（类型），不写进 inject
+    "@plume-canvas/canvas-data": "workspace:*"  // ① 底栏的服务契约就住在这里，不需要依赖底栏插件
   }
 }
 ```
@@ -46,8 +45,9 @@ my-archive-action/
 ```ts
 // 文件：my-archive-action/src/archivePlugin.ts
 import type { Context } from '@plume-canvas/plugin-sdk'
-// registerBarAction 是 bottom-bar 包导出的「注册糖」：一条函数调用，动作落进底栏的注册表。
-import { registerBarAction } from '@plume-canvas/plugin-bottom-bar'
+// 服务名与动作形状的契约住在引擎 canvas-data，不在底栏插件里。
+// 业务插件之间零引用：这里不 import @plume-canvas/plugin-bottom-bar。
+import type { NodeBarContract } from '@plume-canvas/canvas-data'
 
 export const name = 'archive-action'
 
@@ -55,7 +55,7 @@ export const name = 'archive-action'
  * ① 刻意不写 inject: ['nodeBar']。
  *    nodeBar 不是宿主必装的服务（有的宿主就不想要底栏）。硬依赖写进去，缺了它
  *    本插件就永远 PENDING 不启动 —— 但「归档」没底栏也能干活（这里给个命令兜底）。
- *    所以：注册函数照常 import（package.json 里加依赖），服务依赖留给 tryGet 探测。
+ *    所以：服务契约从 canvas-data 取，运行时用 tryGet 探测，缺了也照常启动。
  */
 export function apply(ctx: Context): void {
   // 归档的真正实现：把标题改成「已归档」——走 doc 的统一写口（进历史、可撤销）。
@@ -70,10 +70,11 @@ export function apply(ctx: Context): void {
   // ② 注册动作包成一个函数，方便「现在试一次 + 装好后再试一次」两处调用。
   //    返回 true = 注册成功（底栏在场）；false = 底栏还没装。
   const registerBar = (): boolean => {
-    if (!ctx.tryGet('nodeBar')) return false
+    const bar = ctx.tryGet<NodeBarContract>('nodeBar')
+    if (!bar) return false
     // ③ 注意第一个参数是 ctx —— 本插件自己的上下文。这样这条动作的「归属」
     //    记在本插件名下：本插件卸载时，动作跟着自动从底栏摘除，不留死条目。
-    registerBarAction(ctx, {
+    bar.register(ctx, {
       id: 'archive.node',           // 动作唯一名（重复注册 = 替换，可热更新）
       types: undefined,             // 不挑节点类型：所有节点都显示这个按钮
       title: '归档',
@@ -118,15 +119,15 @@ export function apply(ctx: Context): void {
 
 **① 为什么不硬依赖**：仓库把插件协作分成两种 —— `inject` 是硬依赖（缺了就不启动，用于「没它我没意义」），`tryGet` 是软探测（缺了返回 `undefined`，各自照常活着）。往底栏放按钮属于后者：bottom-bar 不装，你的节点功能一个不少。真实插件注释里专门写了这条规矩：「nodeBar 是插件服务，不是宿主恒在服务，故不进 inject」。
 
-**③ 为什么传自己的 ctx**：这是**归属规则**，是本案例最重要的一条。`registerBarAction(ctx, …)` 把条目落进调用方 ctx 的插件作用域。底栏的服务实例是共享的，如果你传了别人的 ctx（或图省事用全局 ctx），条目就挂在别人名下 —— 你卸载时**摘不掉自己的动作**，底栏上留一个点了就报错的死按钮。所以注册糖必须收一个 ctx 参数，而且你只能传自己的。
+**③ 为什么传自己的 ctx**：这是**归属规则**，是本案例最重要的一条。`bar.register(ctx, …)` 把条目落进调用方 ctx 的插件作用域。底栏的服务实例是共享的，如果你传了别人的 ctx（或图省事用全局 ctx），条目就挂在别人名下 —— 你卸载时**摘不掉自己的动作**，底栏上留一个点了就报错的死按钮。所以注册口必须收一个 ctx 参数，而且你只能传自己的。
 
 **「写入器」补充**：一个内容类型（text/image/…）只允许一个写入器，重复注册同一个 kind 会直接抛错 —— 这是防止两个插件抢着写同一种节点。你若做一个新内容类型的节点插件，记得配一个写入器；若只是给现成类型加按钮，就不用碰它。
 
-**④ apply: 'self' 与写入器**：动作有两种结局。生成类动作（调模型出图出文）走默认的 `'applier'`：结果交给「写入器」写回节点，每个内容类型一个写入器（`registerBarApplier(ctx, 'text', fn)`）；而「复制/删除/归档」这种即时动作，自己已经改完节点，声明 `apply: 'self'` 告诉底栏「别再写一遍」。真实插件两种都用：文本插件的「复制/删除」是 self，「AI 生成」走写入器。
+**④ apply: 'self' 与写入器**：动作有两种结局。生成类动作（调模型出图出文）走默认的 `'applier'`：结果交给「写入器」写回节点，每个内容类型一个写入器（`bar.registerApplier(ctx, 'text', fn)`）；而「复制/删除/归档」这种即时动作，自己已经改完节点，声明 `apply: 'self'` 告诉底栏「别再写一遍」。真实插件两种都用：文本插件的「复制/删除」是 self，「AI 生成」走写入器。
 
 **⑤ 等待模式为什么必要**：宿主按列表顺序装插件，顺序由宿主决定。如果 bottom-bar 排在你后面，你 `apply` 时 `tryGet('nodeBar')` 就是 `undefined`，动作没注册上，而且**不会有人回头通知你**。所以插件自己订阅 `ctx:plugin-installed`（每装好一个插件响一次），每次响都重试注册，成功就退订。注意：事件响了很多次也没关系，`registerBar` 里 `tryGet` 挡住了 —— 底栏不在就安静返回 false。
 
-**⑦ 动作里的输入框与参数**：动作还能声明 `needsPrompt: true`（底栏显示大输入框）和 `fields`（复用工具的 `ToolParamDef`，底栏自动画参数控件）。最省事的路径是 `publishToolActions(ctx, { types: ['text'], produces: 'text', … })` —— 把 `ctx.tools` 里匹配的工具**整批**发布成底栏按钮，工具增减时它自动同步。这条链路真实插件每天都在用（见出处表第一行）。
+**⑦ 动作里的输入框与参数**：动作还能声明 `needsPrompt: true`（底栏显示大输入框）和 `fields`（复用工具的 `ToolParamDef`，底栏自动画参数控件）。最省事的路径是 `bar.publishTools(ctx, { types: ['text'], produces: 'text', … })` —— 把 `ctx.tools` 里匹配的工具**整批**发布成底栏按钮，工具增减时它自动同步。这条链路真实插件每天都在用（见出处表第一行）。
 
 **⑧ 输入框交来的是分段提示词**：`needsPrompt: true` 时，`run(input)` 里的 `input.prompts` 不是字符串，
 而是 `[{ type: 'tag', value: '<资源 id>' }, { type: 'prompt', value: '文字' }]` —— 用户插入的素材标签单独成段，
@@ -143,21 +144,19 @@ function promptText(input: { prompts?: Array<{ type: string; value: string }>; r
 
 ### 省事进阶：把工具整批发布成底栏按钮
 
-如果你装了案例 6 那样的生成工具，`publishToolActions` 一条调用就能让它们全部出现在底栏上 —— 不用为每个模型手写动作。真实文本节点插件的完整用法（节选自 `nodeTextPlugin.ts`，可对照抄）：
+如果你装了案例 6 那样的生成工具，`bar.publishTools` 一条调用就能让它们全部出现在底栏上 —— 不用为每个模型手写动作。真实文本节点插件的完整用法（节选自 `nodeTextPlugin.ts`，可对照抄）：
 
 ```ts
 // 文件：my-archive-action/src/archivePlugin.ts（追加变体）
-import { publishToolActions, registerBarApplier } from '@plume-canvas/plugin-bottom-bar'
-
-// 放进上面 registerBar() 的 tryGet 之后、registerBarAction 之前即可：
-publishToolActions(ctx, {
+// 放进上面 registerBar() 的 tryGet 之后、bar.register 之前即可：
+bar.publishTools(ctx, {
   types: ['text'],          // 发布给哪种节点（底栏按节点类型筛动作）
   produces: 'text',         // 只发布产出 text 的工具（案例 6 的 echo.demo 就会被挑中）
   needsPrompt: true,        // 底栏显示大输入框
   promptBinding: 'text',    // 输入框 = data.text：编辑即写回节点，生成结果也写回它
 })
 // 工具生成的文本怎么落进节点？给 text 类型配一个「写入器」：
-registerBarApplier(ctx, 'text', (nodeId, result) => {
+bar.registerApplier(ctx, 'text', (nodeId, result) => {
   // result.text 就是工具 run 返回的 { ok, text }；走 doc.updateNode 写回，是作品、可撤销。
   ctx.doc.updateNode(nodeId, { data: { text: typeof result.text === 'string' ? result.text : '' } })
 })
@@ -165,7 +164,7 @@ registerBarApplier(ctx, 'text', (nodeId, result) => {
 
 发布糖在内部做的事（`toolActions.ts`）：扫一遍 `ctx.tools.list({ produces })`，把每个工具包成一条动作（`id = 'tool:' + 工具名`）注册进 `node/bar` 场；然后订阅 `ctx:plugin-installed` 和 `ctx:plugin-uninstalled` —— 有新工具装上就补一条，工具随插件卸载就摘掉对应动作。所以「加一个模型 = 装一个工具插件」，底栏自动跟上，谁也不用改代码。
 
-注意归属还是老规矩：`publishToolActions(ctx, …)` 的条目落**调用方** scope（上面传的是节点插件自己的 ctx），工具动作随节点插件卸载而摘除，不挂在 bottom-bar 名下。
+注意归属还是老规矩：`bar.publishTools(ctx, …)` 的条目落**调用方** scope（上面传的是节点插件自己的 ctx），工具动作随节点插件卸载而摘除，不挂在底栏插件名下。
 
 **⑧ order 与「卸载自动摘除」**：`order` 越小越靠前（没写的排最后）；同 id 再注册一次 = 替换（热更新就靠它）。归属规则保证每个动作都记在注册方名下，卸载时内核按 scope 清场 —— 你不写任何清理代码，这是整个系统的默认承诺。
 
@@ -177,14 +176,14 @@ registerBarApplier(ctx, 'text', (nodeId, result) => {
 
 | 这篇里的做法 | 真实文件 | 真实行为 |
 | --- | --- | --- |
-| tryGet 探测 + 等待事件 + registerBarAction 全链路 | `packages/plugins/plugin-node-text/src/nodeTextPlugin.ts`（`registerBar` 函数） | `if (!ctx.tryGet('nodeBar')) return false`；失败则 `ctx.on('ctx:plugin-installed', …)` 重试，成功后 `off.dispose()` |
-| publishToolActions 批量发布工具动作 | 同上 | `publishToolActions(ctx, { types: ['text'], produces: 'text', needsPrompt: true, promptBinding: 'text' })` |
+| tryGet 探测 + 等待事件 + 注册动作全链路 | `packages/plugins/plugin-node-text/src/nodeTextPlugin.ts`（`registerBar` 函数） | `ctx.tryGet<NodeBarContract>('nodeBar')`；拿不到就 `ctx.on('ctx:plugin-installed', …)` 重试，成功后 `off.dispose()` |
+| publishTools 批量发布工具动作 | 同上 | `bar.publishTools(ctx, { types: ['text'], produces: 'text', needsPrompt: true, promptBinding: 'text' })` |
 | 即时动作 apply: 'self' | 同上（`text.duplicate` / `text.delete` 两条动作） | 复制/删除动作直接调服务方法，`apply: 'self'`，order 90/100 |
-| 注册糖的实现（归属=调用方 scope） | `packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts`（底部「注册糖」一节） | `registerBarAction = (ctx, action) => ctx.registryOf<BarAction>(BAR_FIELD).add(action.id, action, { id: action.id })`；文件头注释写明「写走调用方作用域」 |
+| 注册口的实现（归属=调用方 scope） | `packages/engine/canvas-data/src/canvas/barContract.ts` + `packages/plugins/plugin-bottom-bar/src/nodeBarPlugin.ts`（底部「注册糖」一节） | `NodeBarContract.register(scope, action)` → `scope.registryOf<BarAction>(BAR_FIELD).add(…)`；文件头注释写明「写走调用方作用域」 |
 | 底栏读场渲染动作列表 | 同上 `NodeBarService.list(filter)` | 扫 `node/bar` 场、按 types 过滤、按 order 升序 |
-| 写入器（结果写回节点） | 同上 `registerBarApplier` + nodeTextPlugin 里的 applier | `registerBarApplier(ctx, 'text', fn)`：把 result.text 经 `ctx.doc.updateNode` 写回，同 kind 重复注册抛错 |
-| publishToolActions 的自动同步 | `packages/plugins/plugin-bottom-bar/src/toolActions.ts` | 把工具映射成动作注册，订阅 `ctx:plugin-installed/uninstalled` 增量增删 |
-| 动作类型（BarAction 全字段） | `packages/plugins/plugin-bottom-bar/src/barTypes.ts` | `id/types/title/order/needsPrompt/fields/apply/run` 等字段定义，与内核工具共用同一套词表 |
+| 写入器（结果写回节点） | 契约里 `NodeBarContract.registerApplier` + nodeTextPlugin 里的 applier | `bar.registerApplier(ctx, 'text', fn)`：把 result.text 经 `ctx.doc.updateNode` 写回，同 kind 重复注册抛错 |
+| publishTools 的自动同步 | `packages/plugins/plugin-bottom-bar/src/toolActions.ts` | 把工具映射成动作注册，订阅 `ctx:plugin-installed/uninstalled` 增量增删 |
+| 动作类型（BarAction 全字段） | `packages/engine/canvas-data/src/canvas/barContract.ts` | `id/types/title/order/needsPrompt/fields/apply/run` 等字段定义，与内核工具共用同一套词表 |
 
 ## 常见坑
 

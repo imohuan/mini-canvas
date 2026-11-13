@@ -280,7 +280,7 @@ export function apply(ctx: Context): void {
 
 ### 进阶 2 · 给便签节点加底栏按钮（预告）
 
-真实文本节点还往底栏注册了「复制 / 删除」按钮（`registerBarAction`）。那属于**跨插件协作** —— 怎么在 bottom-bar 没装时不挂掉、怎么等它装好再注册，是下一档难度。完整链路看 [案例 7](/examples/bottom-bar)，这里不展开。
+真实文本节点还往底栏注册了「复制 / 删除」按钮（`ctx.get('nodeBar').register(ctx, action)`）。那属于**跨插件协作** —— 怎么在底栏插件没装时不挂掉、怎么等它装好再注册，是下一档难度。完整链路看 [案例 7](/examples/bottom-bar)，这里不展开。
 
 ## 每一步在干什么
 

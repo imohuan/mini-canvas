@@ -30,7 +30,7 @@ FJ => FJ
 
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
-| `register` | `register(scope: PluginScope, action: BarAction): void` | 注册一条动作（等同 `registerBarAction`） |
+| `register` | `register(scope: PluginScope, action: BarAction): void` | 注册一条动作（业务插件的唯一注册口） |
 | `registerApplier` | `registerApplier(scope: PluginScope, kind: string, fn: BarApplier): void` | 注册结果写入器 |
 | `publishTools` | `publishTools(scope: PluginScope, opts: PublishToolActionsOptions): () => void` | 把 `ctx.tools` 里某类工具自动发布成底栏动作 |
 

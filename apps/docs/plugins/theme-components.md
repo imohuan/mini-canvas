@@ -108,21 +108,21 @@ function refresh() { /* ... */ }
 </template>
 ```
 
-## 六、它同时也走"具名导出"
+## 六、插件只按名取件
 
-这些组件还有第二种拿法：直接从包上 import。
+业务插件一律 `useUiComponent('名字')`，**不要 import 主题插件**（插件之间零引用是死规则）。
+主题插件自己的组件在包内直接引用，不需要经过 `ui` 目录。
 
 ```ts
 // 文件：packages/my-plugin/src/SomePanel.vue
 // 格式：Vue 单文件组件
-// 位置：插件包里的面板 —— 它明确就要默认主题的这一份具体实现
-import { PrecisionSlider, ToolParamField, ColorField, MediaViewer } from '@plume-canvas/plugin-theme-components'
-// 渲染件在画布那一半
-import { MovingHandle, ConnectionLine, CustomEdge } from '@plume-canvas/plugin-theme-canvas'
-```
+// 位置：插件包里的面板
+import { useUiComponent } from '@plume-canvas/canvas-render'
 
-**两种拿法怎么选**：想"换主题时它一起换" → **按名取**；只是同包内自己用、
-或者明确就要这一份具体实现 → **具名 import**。
+const PrecisionSlider = useUiComponent('slider')
+const MediaViewer = useUiComponent('mediaViewer')
+const MovingHandle = useUiComponent('movingHandle')
+```
 
 ## 七、这套目录的边界
 
