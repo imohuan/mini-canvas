@@ -7,7 +7,7 @@ settings:
 patchedDependencies:
   '@prismshadow/penguin-core@0.2.13':
     hash: 0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe
-    path: patches/@prismshadow__penguin-core@0.2.13.patch
+    path: packages/plugins/plugin-agent/patches/@prismshadow__penguin-core@0.2.13.patch
 
 importers:
 

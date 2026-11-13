@@ -8,4 +8,6 @@ allowBuilds:
   esbuild: true
   vue-demi: false
 patchedDependencies:
-  '@prismshadow/penguin-core@0.2.13': patches/@prismshadow__penguin-core@0.2.13.patch
+  # 补丁只服务 Agent 插件（流被中断时丢弃没有名字的工具调用残片）。
+  # 放在插件包内，谁的依赖谁维护；apps/server 通过 plugin-agent 间接使用。
+  '@prismshadow/penguin-core@0.2.13': packages/plugins/plugin-agent/patches/@prismshadow__penguin-core@0.2.13.patch
