@@ -76,7 +76,10 @@ const panelStyle = computed<Record<string, string>>(() => ({
  */
 const barEl = ref<HTMLElement | null>(null)
 const editorStyle = computed<Record<string, string>>(() => ({
-  '--nb-min': '20px',
+  // 最小高读设置面板（panelEditorMinHeight，默认 64）：这里原来写死 20px，
+  // 把面板里的配置整个盖掉了 —— 用户调了高度看不出任何变化（2026-11-14 报）。
+  '--nb-min': metrics.value.editorMinHeight + 'px',
+  '--nb-min-w': metrics.value.editorMinWidth + 'px',
   '--nb-max': metrics.value.editorMaxHeight + 'px',
 }))
 

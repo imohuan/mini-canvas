@@ -2,6 +2,13 @@
 .nb-editor {
   position: relative;
   min-height: 24px;
+  /*
+   * 最小宽：面板再窄也不窄过配置值，但**绝不超过面板本身**（min-width 会压过 max-width，
+   * 只写 min-width 会让窄面板溢出、把文字挤出去）。
+   * 两行写法：不支持 min() 的旧浏览器用第一条，支持的用第二条收窄到 100%。
+   */
+  min-width: var(--nb-min-w, 240px);
+  min-width: min(100%, var(--nb-min-w, 240px));
   padding: 0 2px;
   cursor: text;
   border-radius: 8px;
@@ -121,10 +128,25 @@
 .nb-editor .prose-mirror-editor > div:first-child {
   display: flex;
   flex-direction: column;
+  /*
+   * bundle 在这一层写死 min-height:120px，底栏的最小高设成 64 时**被它顶高**，
+   * 设置项看起来不生效（独立复查指出）。这里按配置覆盖：内容超过 max 时由外层滚动。
+   */
+  min-height: var(--nb-min, 64px) !important;
 }
 .nb-editor .prose-mirror-editor {
   max-height: var(--nb-max, 220px);
   overflow-y: auto;
+  /**
+   * 输入框的**最小宽 / 最小高**（用户 2026-11-14：这里要能配）。
+   *
+   * 宽：面板再窄也不窄过它；放不下的文字由 white-space: pre-wrap 换行（见上面 .ProseMirror），
+   * 所以不会出现“挤成一条、只能横向滚”的形态。
+   * 高：内容少时保持这个高度，不会扁成一行（此前写死 20px，设置项形同虚设）。
+   */
+  min-width: var(--nb-min-w, 240px);
+  min-width: min(100%, var(--nb-min-w, 240px));
+  min-height: var(--nb-min, 64px);
   /* 横向一律不外溢：内容放不下就换行（见上面 .ProseMirror 的 white-space 说明）。
      overflow-x:hidden 只是兜底 —— 真正负责换行的是 white-space: pre-wrap。 */
   overflow-x: hidden;

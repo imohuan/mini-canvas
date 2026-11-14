@@ -40,6 +40,8 @@ export interface GenPanelMetrics {
   imageWidth: number
   /** 文本节点生成面板宽度 */
   textWidth: number
+  /** 输入框最小宽度（面板再窄也不窄过它，放不下就换行而不是压成一条） */
+  editorMinWidth: number
   /** 文本输入框最小高度（内容少时不至于太扁） */
   editorMinHeight: number
   /** 文本输入框最大高度（内容多时内部滚动，面板不被撑爆） */
@@ -50,6 +52,7 @@ export interface GenPanelMetrics {
 export const DEFAULT_GEN_PANEL_METRICS: GenPanelMetrics = Object.freeze({
   imageWidth: 660,
   textWidth: 520,
+  editorMinWidth: 240,
   editorMinHeight: 64,
   editorMaxHeight: 220,
 })
@@ -104,6 +107,7 @@ export function resolveGenPanelMetrics(get: (key: string) => unknown): GenPanelM
   return {
     imageWidth: toPx(get('panelImageWidth'), DEFAULT_GEN_PANEL_METRICS.imageWidth),
     textWidth: toPx(get('panelTextWidth'), DEFAULT_GEN_PANEL_METRICS.textWidth),
+    editorMinWidth: toPx(get('panelEditorMinWidth'), DEFAULT_GEN_PANEL_METRICS.editorMinWidth),
     editorMinHeight: toPx(get('panelEditorMinHeight'), DEFAULT_GEN_PANEL_METRICS.editorMinHeight),
     editorMaxHeight: toPx(get('panelEditorMaxHeight'), DEFAULT_GEN_PANEL_METRICS.editorMaxHeight),
   }
@@ -120,6 +124,8 @@ export function applyGenPanelMetricChange(
       return { ...current, imageWidth: toPx(value, DEFAULT_GEN_PANEL_METRICS.imageWidth) }
     case 'panelTextWidth':
       return { ...current, textWidth: toPx(value, DEFAULT_GEN_PANEL_METRICS.textWidth) }
+    case 'panelEditorMinWidth':
+      return { ...current, editorMinWidth: toPx(value, DEFAULT_GEN_PANEL_METRICS.editorMinWidth) }
     case 'panelEditorMinHeight':
       return { ...current, editorMinHeight: toPx(value, DEFAULT_GEN_PANEL_METRICS.editorMinHeight) }
     case 'panelEditorMaxHeight':

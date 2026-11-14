@@ -160,9 +160,15 @@ describe('resolveGenPanelMetrics（生成控制栏尺寸，纯函数）', () => 
   it('读到配置就用配置值', () => {
     expect(
       resolveGenPanelMetrics(
-        cfg({ panelImageWidth: 700, panelTextWidth: 480, panelEditorMinHeight: 80, panelEditorMaxHeight: 300 }),
+        cfg({
+          panelImageWidth: 700,
+          panelTextWidth: 480,
+          panelEditorMinWidth: 300,
+          panelEditorMinHeight: 80,
+          panelEditorMaxHeight: 300,
+        }),
       ),
-    ).toEqual({ imageWidth: 700, textWidth: 480, editorMinHeight: 80, editorMaxHeight: 300 })
+    ).toEqual({ imageWidth: 700, textWidth: 480, editorMinWidth: 300, editorMinHeight: 80, editorMaxHeight: 300 })
   })
 
   it('没配置 → 回落默认（图片 660 / 文本 520 / 输入框 64~220）', () => {
@@ -193,6 +199,7 @@ describe('applyGenPanelMetricChange（改设置就生效）', () => {
     expect(applyGenPanelMetricChange(base, 'panelTextWidth', 400).textWidth).toBe(400)
     expect(applyGenPanelMetricChange(base, 'panelEditorMinHeight', 90).editorMinHeight).toBe(90)
     expect(applyGenPanelMetricChange(base, 'panelEditorMaxHeight', 360).editorMaxHeight).toBe(360)
+    expect(applyGenPanelMetricChange(base, 'panelEditorMinWidth', 320).editorMinWidth).toBe(320)
   })
 
   it('改一项不动其它项', () => {

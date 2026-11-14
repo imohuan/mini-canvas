@@ -170,7 +170,7 @@ function pagerTarget(p: PagerGroup, delta: number): string | null {
  * 分页器**跟随消息**的锚点（用户口径 2026-10-07）：
  * userOrdinal = 第几条用户消息（0 基）在当前位置被编辑过；
  * 分页器插在那条用户消息**整块回复**结束处（下一条用户消息之前 / 列表末尾）。
- * 返回 turnId -> PagerGroup（模板在对应回合后面渲染）。
+ * 返回 turnId -> PagerGroup[]（同一位置可能有多组，模板逐行渲染）。
  */
 const pagerByAnchor = computed(() => pagerAnchors(s.turns, s.pagers))
 

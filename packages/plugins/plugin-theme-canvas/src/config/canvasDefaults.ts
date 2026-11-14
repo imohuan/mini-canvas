@@ -98,6 +98,8 @@ export const DEFAULT_THEME_PANEL = {
   panelImageWidth: 660,
   panelTextWidth: 520,
   panelEditorMinHeight: 64,
+  /** 生成栏输入框最小宽度（px）：面板再窄也不窄过它，放不下就换行 */
+  panelEditorMinWidth: 240,
   panelEditorMaxHeight: 220,
 } as const;
 

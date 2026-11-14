@@ -123,12 +123,20 @@ export function inlinePagers(
   const byId = new Map(rows.map((s) => [s.id, s]))
   // parentId -> (N -> children[])：**不过滤已删**，否则删掉链中间一条会把组截断
   const forkMap = new Map<string, Map<number, string[]>>()
-  // N -> userOrdinal（同一 N 在任何父会话下都同值：它数的是「N 之前有几个用户消息」）
-  const ordinalOf = new Map<number, number>()
+  /**
+   * 「父会话 + 位置」→ userOrdinal。
+   *
+   * 不能只按 N 缓存（独立复查指出）：不同父会话的转录长短不同，同一个 turn:N 数出来的
+   * 用户消息序号可以不一样；只留第一份会让后面那组的锚点错位。
+   */
+  const ordinalOf = new Map<string, number>()
+  const ordinalKey = (parentId: string, n: number): string => parentId + '|' + n
   for (const pt of points) {
     const n = parseTurnPoint(pt.point)
     if (n === null) continue
-    if (pt.userOrdinal !== undefined && !ordinalOf.has(n)) ordinalOf.set(n, pt.userOrdinal)
+    if (pt.userOrdinal !== undefined && !ordinalOf.has(ordinalKey(pt.parentId, n))) {
+      ordinalOf.set(ordinalKey(pt.parentId, n), pt.userOrdinal)
+    }
     const inner = forkMap.get(pt.parentId) ?? new Map<number, string[]>()
     const list = inner.get(n) ?? []
     for (const c of pt.children) if (!list.includes(c)) list.push(c)
@@ -174,20 +182,38 @@ export function inlinePagers(
     return out
   }
 
-  // 全部组（按 链头|位置 去重）
-  const groups = new Map<string, { n: number; members: string[] }>()
+  // 全部组（按 链头|位置 去重）；owner = 链头被分出来的那个父会话（取 userOrdinal 用）
+  const groups = new Map<string, { n: number; members: string[]; owner: string }>()
   for (const [pid, inner] of forkMap) {
     for (const [n] of inner) {
       const head = chainHead(pid, n)
       const key = head + '|' + n
-      if (!groups.has(key)) groups.set(key, { n, members: collect(head, n) })
+      if (!groups.has(key)) {
+        const headParent = parentInfo.get(head)
+        groups.set(key, { n, members: collect(head, n), owner: headParent && headParent.n === n ? headParent.parentId : pid })
+      }
     }
   }
 
   const out: PagerGroup[] = []
-  for (const { n, members } of groups.values()) {
+  for (const { n, members, owner } of groups.values()) {
+    /**
+     * **只画当前版本自己确实在其中**的那一组。
+     *
+     * 曾经试过「沿祖先链放宽」（让下游版本也能看到上游那组），独立复查指出：那样 v3 会画出
+     * root→v2 那组，而 v3 并不在其中，页码只能钳成 1/2，点箭头会跳到**另一条分支**上 ——
+     * 页码与内容反而对不上，正是用户报的现象。所以范围回到“成员包含当前会话”。
+     *
+     * 链式分叉下每个版本看到的是**自己所在的那一组**；同一位置可能有多组（见 pagerAnchors），
+     * 界面按位置逐行渲染，不会互相覆盖。
+     */
     if (!members.includes(currentId)) continue
-    const userOrdinal = ordinalOf.get(n)
+    // 组的 userOrdinal 取「当前会话自己的父」那份（同一 N 在不同父下可能不同）
+    /**
+     * 序号按**这一组的父**取（同一 turn:N 在不同父会话下可能不同，只按 N 缓存会错位）。
+     * 取不到就丢弃（宁可不画，不画错位置）。
+     */
+    const userOrdinal = ordinalOf.get(ordinalKey(owner, n))
     if (userOrdinal === undefined) continue // 服务端没算出位置：宁可不画，不画错位置
     // 已删会话过滤掉（组的结构仍按全图算，删中间一条不会把组切两半）
     const alive = members.filter((id) => byId.has(id))
@@ -197,10 +223,18 @@ export function inlinePagers(
       label: id === currentId ? '\u5f53\u524d' : byId.get(id)!.title.trim().slice(0, 24) || '\u5206\u652f',
     }))
     const index = items.findIndex((x) => x.id === currentId)
-    const safe = index < 0 ? 0 : index
+    if (index < 0) continue
+    const safe = index
     out.push({ at: n, userOrdinal, items, index: safe, position: safe + 1, total: items.length })
   }
-  return out.sort((a, b) => a.userOrdinal - b.userOrdinal)
+  /**
+   * 多个分页器的先后：按**落在第几条用户消息之后**排（userOrdinal 小者在前），
+   * 同一位置再按转录下标兜底。
+   *
+   * 不要只按 at：at 是「父会话里的 turn 下标」，不同分叉点的父不同、量纲不一样
+   * （真实数据 root|turn:2 与 v2|turn:0 同时存在，按 at 会把后面的分页器画到前面）。
+   */
+  return out.sort((a, b) => a.userOrdinal - b.userOrdinal || a.at - b.at)
 }
 
 /**
@@ -208,10 +242,15 @@ export function inlinePagers(
  *
  * 锚点 = 该用户消息**整块回复**的最后一条 turn 的 id：
  * 分页器渲染在它之后（下一条用户消息之前 / 列表末尾）。
- * 返回 turnId -> PagerGroup；定位不出来的分页器跳过（宁可不画，不画错位置）。
+ * **同一位置可以有多组**（链式分叉的真实形态）。
+ *
+ * 为什么不能只返回一组（用户 2026-11-14 截图：页码 2/2、消息却已经是上一版）：
+ * 链式分叉时 root→v2（分叉点 turn:2）与 v2→v3（turn:0）落在同一个回复块之后，
+ * 用 Map<turnId, PagerGroup> 存，后写的把前一组覆盖掉 —— 界面于是只画得出其中一组，
+ * 页码与内容对不上，且必须再点一次才“跳”。改为按位置聚合数组：有几组就画几行。
  */
-export function pagerAnchors<T extends { id: string; kind: string }>(turns: T[], pagers: PagerGroup[]): Map<string, PagerGroup> {
-  const map = new Map<string, PagerGroup>()
+export function pagerAnchors<T extends { id: string; kind: string }>(turns: T[], pagers: PagerGroup[]): Map<string, PagerGroup[]> {
+  const map = new Map<string, PagerGroup[]>()
   if (!pagers.length) return map
   const userIdx: number[] = []
   turns.forEach((t, i) => { if (t.kind === 'user') userIdx.push(i) })
@@ -228,7 +267,10 @@ export function pagerAnchors<T extends { id: string; kind: string }>(turns: T[],
     if (k < 0 || k > userIdx.length) continue
     const end = k + 1 < userIdx.length ? userIdx[k + 1] - 1 : turns.length - 1
     const anchor = turns[end]?.id
-    if (anchor) map.set(anchor, p)
+    if (!anchor) continue
+    const list = map.get(anchor) ?? []
+    list.push(p)
+    map.set(anchor, list)
   }
   return map
 }

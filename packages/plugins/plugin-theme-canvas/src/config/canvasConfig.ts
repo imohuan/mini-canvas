@@ -279,6 +279,17 @@ export const CanvasConfig: ConfigSchema = {
     description:
       "生成控制栏里那个大输入框的最小高度（px）。内容少时也不至于扁成一条线。",
   },
+  panelEditorMinWidth: {
+    type: "number",
+    default: DEFAULT_THEME_PANEL.panelEditorMinWidth,
+    min: 120,
+    max: 800,
+    step: 10,
+    label: "生成栏输入框最小宽",
+    group: "布局/控制栏",
+    description:
+      "生成控制栏里那个大输入框的最小宽度（px）。面板再窄也不窄过它，放不下的文字自动换行。",
+  },
   panelEditorMaxHeight: {
     type: "number",
     default: DEFAULT_THEME_PANEL.panelEditorMaxHeight,

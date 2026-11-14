@@ -441,20 +441,27 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
             <!-- 内联分支分页器（用户口径 2026-10-07）：跟随消息 —— 渲染在这条消息的
              回复块结束处（下一条用户消息之前）。左右箭头切的是**这个位置**的其它版本，
              切过去后不含当前版本后来的消息。 -->
-            <div v-if="pagerByAnchor.get(t.id)" class="ac-branch-nav" role="navigation" aria-label="切换分支版本">
-              <Button variant="ghost" size="icon-sm" class="ac-branch-arrow" :disabled="pagerByAnchor.get(t.id)!.index <= 0" aria-label="上一个版本"
-                title="上一个版本"
-                @click="pagerTarget(pagerByAnchor.get(t.id)!, -1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, -1)!)">
+            <!--
+              同一位置可能有**多组**分页器（链式分叉：A→B 与 B→C 都落在这个回复块之后）。
+              旧模板用单组 Map，后写的覆盖前一组 —— 用户看到「页码 2/2、消息却已经是上一版」，
+              还得再点一次才跳（2026-11-14 截图）。现在按位置渲染数组：有几组画几行。
+            -->
+            <div v-for="(pg, pi) in pagerByAnchor.get(t.id) ?? []" :key="'pager-' + t.id + '-' + pi"
+              class="ac-branch-nav" role="navigation"
+              :aria-label="(pagerByAnchor.get(t.id) ?? []).length > 1 ? '切换分支版本 ' + (pi + 1) + '（第 ' + pg.userOrdinal + ' 条消息之后）' : '切换分支版本'">
+              <Button variant="ghost" size="icon-sm" class="ac-branch-arrow" :disabled="pg.index <= 0" aria-label="上一个版本"
+                :title="'上一个版本 · ' + pg.items.map((i) => i.label).join(' / ')"
+                @click="pagerTarget(pg, -1) !== null && agent.openSession(pagerTarget(pg, -1)!)">
                 <ChevronLeft :size="14" />
               </Button>
               <Badge variant="secondary" class="ac-branch-pos"
-                :title="pagerByAnchor.get(t.id)!.items[pagerByAnchor.get(t.id)!.index].label">
-                {{ pagerByAnchor.get(t.id)!.position }} / {{ pagerByAnchor.get(t.id)!.total }}
+                :title="pg.items[pg.index]?.label ?? ''">
+                {{ pg.position }} / {{ pg.total }}
               </Badge>
               <Button variant="ghost" size="icon-sm" class="ac-branch-arrow"
-                :disabled="pagerByAnchor.get(t.id)!.index >= pagerByAnchor.get(t.id)!.total - 1" aria-label="下一个版本"
-                title="下一个版本"
-                @click="pagerTarget(pagerByAnchor.get(t.id)!, 1) !== null && agent.openSession(pagerTarget(pagerByAnchor.get(t.id)!, 1)!)">
+                :disabled="pg.index >= pg.total - 1" aria-label="下一个版本"
+                :title="'下一个版本 · ' + pg.items.map((i) => i.label).join(' / ')"
+                @click="pagerTarget(pg, 1) !== null && agent.openSession(pagerTarget(pg, 1)!)">
                 <ChevronRight :size="14" />
               </Button>
             </div>
