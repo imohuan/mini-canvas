@@ -102,6 +102,25 @@ function parseTurnPoint(point: string): number | null {
  * 折叠之后 `root→v2(幽灵)→v3` 变成 `root→v3`，分组回到「一处一行」，
  * 而 v3 仍然可达（用户不会因为清理而丢掉真正的分支）。
  */
+/** 某个会话一路向上折到的**实体**版本（不是幽灵就是它自己）。 */
+export function foldGhostId(id: string, points: ForkPoint[]): string {
+  const ghosts = new Set<string>()
+  const parentOf = new Map<string, string>()
+  for (const p of points) {
+    for (const g of p.ghosts ?? []) ghosts.add(g)
+    for (const c of p.children) if (!parentOf.has(c)) parentOf.set(c, p.parentId)
+  }
+  let cur = id
+  const seen = new Set<string>([cur])
+  while (ghosts.has(cur)) {
+    const up = parentOf.get(cur)
+    if (!up || seen.has(up)) return cur
+    seen.add(up)
+    cur = up
+  }
+  return cur
+}
+
 export function contractGhosts(points: ForkPoint[]): ForkPoint[] {
   const ghosts = new Set<string>()
   for (const p of points) for (const g of p.ghosts ?? []) ghosts.add(g)
@@ -173,6 +192,13 @@ export function inlinePagers(
 ): PagerGroup[] {
   // 先把旧版留下的幽灵版本折回父会话，再算组（否则同一处会画出两三行一模一样的页码）
   const points = contractGhosts(pointsIn)
+  /**
+   * 当前这一屏可能**就是一条幽灵会话**（用户点历史列表或旧链接直接进来的）。
+   * 折叠后它已不在任何组里，但用户眼前确实是一份"和某一版一样"的内容 ——
+   * 直接不画分页器会让他回不去（2026-11-14 实测：切到幽灵版本后分页器整个消失）。
+   * 所以把"自己"当成它折进去的那个实体版本来认位置。
+   */
+  const self = foldGhostId(currentId, pointsIn)
   const byId = new Map(rows.map((s) => [s.id, s]))
   // parentId -> (N -> children[])：**不过滤已删**，否则删掉链中间一条会把组截断
   const forkMap = new Map<string, Map<number, string[]>>()
@@ -260,7 +286,8 @@ export function inlinePagers(
      * 链式分叉下每个版本看到的是**自己所在的那一组**；同一位置可能有多组（见 pagerAnchors），
      * 界面按位置逐行渲染，不会互相覆盖。
      */
-    if (!members.includes(currentId)) continue
+    const mine = members.includes(currentId) ? currentId : self
+    if (!members.includes(mine)) continue
     // 组的 userOrdinal 取「当前会话自己的父」那份（同一 N 在不同父下可能不同）
     /**
      * 序号按**这一组的父**取（同一 turn:N 在不同父会话下可能不同，只按 N 缓存会错位）。
@@ -270,14 +297,15 @@ export function inlinePagers(
     if (userOrdinal === undefined) continue // 服务端没算出位置：宁可不画，不画错位置
     // 已删会话过滤掉（组的结构仍按全图算，删中间一条不会把组切两半）
     const alive = members.filter((id) => byId.has(id))
-    if (!alive.includes(currentId)) continue
+    if (!alive.includes(mine)) continue
     // 只剩自己一个版本就别画了：`1 / 1` 两枚箭头全灰，纯占地方（删掉其它版本后会这样）
     if (alive.length < 2) continue
     const items: BranchNavItem[] = alive.map((id) => ({
       id,
-      label: id === currentId ? '\u5f53\u524d' : byId.get(id)!.title.trim().slice(0, 24) || '\u5206\u652f',
+      // 「当前」标在**实体版本**上；幽灵会话看到的也是那一条（内容一模一样）
+      label: id === mine ? '\u5f53\u524d' : byId.get(id)!.title.trim().slice(0, 24) || '\u5206\u652f',
     }))
-    const index = items.findIndex((x) => x.id === currentId)
+    const index = items.findIndex((x) => x.id === mine)
     if (index < 0) continue
     const safe = index
     out.push({ at: n, userOrdinal, items, index: safe, position: safe + 1, total: items.length })

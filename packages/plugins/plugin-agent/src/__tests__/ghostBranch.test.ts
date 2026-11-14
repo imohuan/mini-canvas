@@ -6,7 +6,7 @@
  * 现在的规则：子会话只要没有自己的新回合（回合数 ≤ 分叉点下标）就不算一个版本。
  */
 import { describe, expect, it } from 'vitest'
-import { contractGhosts, inlinePagers, type ForkPoint, type SessionRow } from '../model/branchNav'
+import { contractGhosts, foldGhostId, inlinePagers, type ForkPoint, type SessionRow } from '../model/branchNav'
 
 const rows: SessionRow[] = [
   { id: 'root', title: '原版', updatedAt: 1 },
@@ -43,5 +43,18 @@ describe('幽灵分支折叠', () => {
   it('只剩自己一个版本时不画分页器（两枚箭头全灰等于没有分支）', () => {
     const only: ForkPoint[] = [{ parentId: 'root', point: 'turn:0', children: ['ghost'], userOrdinal: 1, ghosts: ['ghost'] }]
     expect(inlinePagers('root', rows, only)).toHaveLength(0)
+  })
+
+  /**
+   * 用户可能直接停在幽灵会话上（历史列表 / 旧链接）。
+   * 那时分页器不能消失：内容与它折叠到的那个实体版本一字不差，页码要指出"你在哪一版"。
+   */
+  it('当前就停在幽灵会话上：分页器照常出现，并且认得出它在哪一版', () => {
+    expect(foldGhostId('ghost', points)).toBe('root')
+    const pagers = inlinePagers('ghost', rows, points)
+    expect(pagers).toHaveLength(1)
+    expect(pagers[0].items.map((i) => i.id)).toEqual(['root', 'real'])
+    expect(pagers[0].position).toBe(1)
+    expect(pagers[0].total).toBe(2)
   })
 })

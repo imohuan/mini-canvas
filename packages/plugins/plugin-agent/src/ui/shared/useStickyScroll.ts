@@ -276,13 +276,39 @@ export function useStickyScroll(opts: StickyScrollOptions) {
   /** 换会话 / 换分页：容器可能没换，但内容整份换了 —— 主动重判一次 */
   if (opts.resetKey) {
     watch(opts.resetKey, async () => {
+      /**
+       * 换会话 / 换分页版本 = 整份列表被替换。**换之前**先记下用户原来是不是贴着底部。
+       *
+       * 为什么不能等换完再量（用户 2026-11-14 实测）：换的一份是从头渲染的，
+       * 换完那一刻 scrollTop 通常还是 0、离底 115px —— 按"当前位置"重算只会得出
+       * "用户在看上面"，于是不贴底，画面停在顶部、最新那条回复看不见，
+       * 「回到底部」按钮还一直挂着。而正常心智是：本来就是跟着最新走的，换一份也该继续跟。
+       */
+      const wasStuck = stuck.value
       await nextTick()
-      // 换了一份内容：先按"用户在看最新"处理（openSession 装载完整历史时就是该到底）
-      stuck.value = true
-      scheduleScroll()
+      stuck.value = wasStuck
+      if (wasStuck) scheduleScroll()
       await nextTick()
-      syncStuck()
       syncButtonState()
+      if (!wasStuck) {
+        syncStuck()
+        return
+      }
+      /**
+       * 再补两轮：列表是**异步换的**（先清空、再装载、图片/工具卡片随后撑高），
+       * 上面那一帧量到的往往还是半截高度。等 rAF + 一帧后按真实高度再贴一次底。
+       */
+      const settle = (): void => {
+        const el = opts.target.value
+        if (!el || !stuck.value) return
+        el.scrollTop = el.scrollHeight
+        programmaticTop = el.scrollTop
+        syncButtonState()
+      }
+      window.requestAnimationFrame(() => {
+        settle()
+        window.setTimeout(settle, 120)
+      })
     })
   }
 
