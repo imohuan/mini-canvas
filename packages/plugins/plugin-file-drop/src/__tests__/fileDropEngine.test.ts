@@ -211,8 +211,9 @@ describe('buildAudioPayload', () => {
     expect(p.data.audioUrl).toBe('blob:aud1')
     expect(p.data.audioName).toBe('song.mp3')
     expect(p.data.audioSize).toBe(4096)
-    // 不给 size：音频卡片走类型默认尺寸（与在节点里上传音频一致）
-    expect(p.size).toBeUndefined()
+    // 统一尺寸：音频卡片没有内容比例可跟，固定用音频类型的默认卡片 320×120。
+    // 以前这里不给 size，结果拖进来的音频节点只有类型默认尺寸，布局框与卡片可能对不上。
+    expect(p.size).toEqual({ w: 320, h: 120 })
   })
 
   it('没有 size 的文件不写 audioSize（不编 0）', () => {

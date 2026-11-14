@@ -33,9 +33,10 @@ function createPendingAudioNode(ctx: Context, sourceId: string, label: string): 
   const doc = ctx.tryGet<{
     getNode(id: string): { id: string; type: string; position: { x: number; y: number }; size?: { w: number; h: number }; data: Record<string, unknown> } | undefined
     getNodes(): Array<{ id: string; type: string; position: { x: number; y: number }; size?: { w: number; h: number }; data: Record<string, unknown> }>
-    types: ReadonlyMap<string, unknown>
+    types: ReadonlyMap<string, { defaultSize?: { w: number; h: number } }>
     transaction<T>(reason: string, fn: (tx: {
       createNode(type: string, position: { x: number; y: number }, data?: Record<string, unknown>): string
+      updateNode(id: string, patch: { size: { w: number; h: number } }): void
       connectEdge(input: { source: string; target: string; sourceHandle?: string; targetHandle?: string }): { status: string }
       removeNodes(ids: string[]): number
     }) => T): T
@@ -68,9 +69,15 @@ function createPendingAudioNode(ctx: Context, sourceId: string, label: string): 
     audioName: label,
     runState: { status: 'running', label: '生成中', message: '后台提取音轨中…', startedAt: Date.now() },
   }
+  // 统一尺寸（用户 2026-11-14）：音频节点必须有自己的 size，布局/对齐/自动布局读的才是
+  // 卡片真实尺寸。取音频类型此刻的 defaultSize（设置面板可能改过），与音频插件自己建节点同一条链。
+  const audioSize = doc.types.get('audio')?.defaultSize
   try {
     return doc.transaction('video-to-audio-node', (tx) => {
       const created = tx.createNode('audio', position, data)
+      if (audioSize && audioSize.w > 0 && audioSize.h > 0) {
+        tx.updateNode(created, { size: { w: audioSize.w, h: audioSize.h } })
+      }
       const edge = tx.connectEdge({
         source: sourceId,
         target: created,

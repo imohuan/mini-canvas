@@ -519,7 +519,11 @@ export class NodeStore implements NodeStoreService {
    * 尺寸这一路有两条规则：
    * 1. patch 给了 size → size 是正身，写完顺手把镜像刷成同值；
    * 2. patch 只给了 data.cardWidth/cardHeight（老插件、后台、MCP 那些只写 data 的写法）→
-   *    把它们提升成 node.size，让 size 补上、不再恒空。
+   *    把它们提升成 node.size，让 size 补上、不再恒空。**已有 size 也要跟着更新**：
+   *    这类写入本身就是一次尺寸声明；只补“size 为空”的情况会让两者长期脱节 ——
+   *    卡片壳按 data 画得更大，而布局/对齐读的 size 还是旧值（用户 2026-11-14 报的
+   *    “布局算出来的框比节点小”就是这条）。镜像仍只在写 size 时生成，这里是把
+   *    data 里的显式尺寸当成正身的一次写入。
    *
    * @returns 是否首次建立了 size（供调用方落盘；老节点迁移完成的信号）
    */
@@ -537,7 +541,10 @@ export class NodeStore implements NodeStoreService {
     } else {
       // 只写 data 的旧路径：data 里的卡片尺寸提升为正式 size
       const promoted = nodeSizeOf(node.data)
-      if (promoted !== undefined && node.size === undefined) {
+      if (
+        promoted !== undefined &&
+        (node.size === undefined || promoted.w !== node.size.w || promoted.h !== node.size.h)
+      ) {
         node.size = { ...promoted }
       }
     }

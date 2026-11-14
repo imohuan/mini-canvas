@@ -84,6 +84,12 @@ describe('视频转音频：先建音频节点 + 连线，再回填', () => {
     // 视频 → 音频 一条连线
     expect(env.edgeStore.getEdges()).toHaveLength(1)
     expect(env.edgeStore.getEdges()[0]).toMatchObject({ source: id, target: created!.id })
+    /**
+     * 统一尺寸（用户 2026-11-14）：音频节点必须有 size，布局/对齐读的才是卡片真实尺寸。
+     * 取音频类型此刻的 defaultSize（设置面板可能改过），与菜单建的音频节点同一条链。
+     */
+    expect(created!.size).toEqual(env.nodeStore.types.get('audio')!.defaultSize)
+    expect(created!.data.cardWidth).toBe(created!.size!.w)
   })
 
   it('后台还在跑：音频节点已经出现并带 running 态，此时还没有音频地址', async () => {

@@ -56,17 +56,40 @@ export class AudioService extends Service implements AudioNodeService {
 
   addAudioNode(position: { x: number; y: number }, audioUrl = ''): string {
     const doc = this.ctx.get<DocService>('doc')
-    return doc.transaction('add-audio-node', (tx) =>
-      tx.createNode(AUDIO_NODE_TYPE, position, audioUrl ? { audioUrl } : {}),
-    )
+    return doc.transaction('add-audio-node', (tx) => {
+      const id = tx.createNode(AUDIO_NODE_TYPE, position, audioUrl ? { audioUrl } : {})
+      this.writeDefaultSize(doc, tx, id)
+      return id
+    })
   }
 
   /** 按持久引用建音频节点：节点里只有 resourceId（播放地址由内容组件 resolve） */
   addAudioNodeFromResource(position: { x: number; y: number }, resourceId: string): string {
     const doc = this.ctx.get<DocService>('doc')
-    return doc.transaction('add-audio-node', (tx) =>
-      tx.createNode(AUDIO_NODE_TYPE, position, resourceId ? { resourceId } : {}),
-    )
+    return doc.transaction('add-audio-node', (tx) => {
+      const id = tx.createNode(AUDIO_NODE_TYPE, position, resourceId ? { resourceId } : {})
+      this.writeDefaultSize(doc, tx, id)
+      return id
+    })
+  }
+
+  /**
+   * 给新节点写入统一尺寸字段 `size`（用户 2026-11-14：音频节点的实际大小比布局算出来的小）。
+   *
+   * 只靠类型默认尺寸不够：布局/对齐/自动布局统一读 `view.nodeSize()`，而它读的是
+   * 「实测 > node.size > 类型默认」。音频节点没自己的 size 时，只要尺寸链上任何一环
+   * （实测还没跑、设置面板改过默认值、旧存档没写）与卡片当前绘制值不同，算出来的框就会
+   * 比肉眼看到的小。建节点时把当时的类型尺寸落成 size，与图片/视频走同一条链。
+   * 与节点同一次事务：建节点 + 写尺寸只记一条撤销。
+   */
+  private writeDefaultSize(
+    doc: DocService,
+    tx: { updateNode(id: string, patch: { size: { w: number; h: number } }): void },
+    id: string,
+  ): void {
+    const def = doc.types.get(AUDIO_NODE_TYPE)?.defaultSize
+    if (!def || !(def.w > 0) || !(def.h > 0)) return
+    tx.updateNode(id, { size: { w: def.w, h: def.h } })
   }
 }
 
@@ -194,6 +217,10 @@ export function apply(ctx: Context) {
   // 默认尺寸接设置面板：改完**实时**生效（没 resize 过的音频节点立刻跟着变）
   bindTypeDefaultSize(ctx, 'audio', { w: 320, h: 120 }, { widthKey: 'audioDefaultWidth', heightKey: 'audioDefaultHeight' })
 
+  // 存量补齐：旧画布里的音频节点没有自己的 size（用户 2026-11-14 报的“布局框比节点小”）。
+  // 只补缺 size 的；已有 size 的保持原值（用户/其它插件写过的尺寸优先）。
+  repairLegacyAudioSizes(ctx)
+
   // —— 命令：界面按钮与命令走**同一批实现**（uploadAudio / downloadAudioNode / reanalyzeAudio）——
   //   按钮是"组件自己调实现"，命令是"外部（快捷键/右键菜单/MCP）按 id 调"，两条路不各写一遍。
   //   payload 约定：{ nodeId: string }（节点级操作）；上传额外给 file（不给则开系统选文件框）。
@@ -224,6 +251,43 @@ export function apply(ctx: Context) {
       return reanalyzeAudio(ops, nodeId)
     },
   })
+}
+
+/**
+ * 给存量音频节点补统一尺寸（`size` + 卡片镜像）。
+ *
+ * 为什么放在装载时、而不是等节点被选中/编辑：布局、对齐、自动布局随时可能读尺寸，
+ * 它们不会先“碰一下”节点。装载即补齐，之后所有读口看到的是同一个数。
+ * 只补 size 缺席的节点 —— 已经写过 size 的（用户改过、复制粘贴带过来的）不覆盖。
+ *
+ * **还要盯住画布恢复**：宿主先装插件、再 restore 画布数据（云端插件甚至会晚一步整包覆盖），
+ * 装载那一刻 doc 里可能一个旧节点都没有。所以订阅一次 doc 变化，在节点进来时补；
+ * 自己写入的 update 不会再命中（补完就有 size 了），不会来回写。
+ */
+function repairLegacyAudioSizes(ctx: Context): void {
+  const doc = ctx.tryGet<DocService>('doc')
+  if (!doc) return
+
+  const run = (): void => {
+    const def = doc.types.get(AUDIO_NODE_TYPE)?.defaultSize
+    if (!def || !(def.w > 0) || !(def.h > 0)) return
+    const entries = doc
+      .getNodes()
+      .filter((n) => n.type === AUDIO_NODE_TYPE && n.size === undefined)
+      .map((n) => ({ id: n.id, patch: { size: { w: def.w, h: def.h } } }))
+    if (entries.length === 0) return
+    try {
+      doc.updateNodes(entries)
+    } catch {
+      /* 节点在恢复/删除过程中变动：跳过，下一次变化还会再试 */
+    }
+  }
+
+  run()
+  const subscribe = doc.subscribe
+  if (typeof subscribe !== 'function') return
+  const off = subscribe.call(doc, () => run())
+  ctx.effect(() => () => off())
 }
 
 /** 插件模块出口（name='audio' 供 HMR reload） */

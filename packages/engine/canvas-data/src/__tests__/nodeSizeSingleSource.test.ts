@@ -94,6 +94,34 @@ describe('老数据迁移：只写 data 的尺寸被提升为 size', () => {
     expect(s.getNode('1')!.size).toEqual({ w: 500, h: 500 })
     expect(s.getNode('1')!.data.cardWidth).toBe(500)
   })
+
+  /**
+   * 用户 2026-11-14 报的 bug：布局按 `view.nodeSize()` 算出来的框比卡片小。
+   *
+   * 根因之一在这里：节点**已有 size** 时，后来只写 `data.cardWidth/cardHeight`
+   * （插件按内容改卡片尺寸的旧写法）不会同步回 size —— 卡片壳按 data 画得更大，
+   * 而布局/对齐/自动布局读的 size 还停在旧值，于是“算出来的位置压到别人身上”。
+   * data 镜像只能由 size 生成、不能反着改 size 这条不适用于“size 当时根本不知道的新值”：
+   * 那次写入本身就是一次尺寸声明。
+   */
+  it('已有 size 时只写 data.cardWidth/cardHeight → size 跟着更新（不脱节）', () => {
+    const s = makeStore()
+    const id = s.addNode('text', { x: 0, y: 0 })
+    s.updateNode(id, nodeSizePatch(300, 200))
+    s.updateNode(id, { data: { audioName: '新名字', cardWidth: 420, cardHeight: 260 } })
+    const n = s.getNode(id)!
+    expect(n.size).toEqual({ w: 420, h: 260 })
+    expect(n.data.cardWidth).toBe(420)
+    expect(n.data.cardHeight).toBe(260)
+  })
+
+  it('只改 data 的其它字段（没带尺寸）→ size 不动', () => {
+    const s = makeStore()
+    const id = s.addNode('text', { x: 0, y: 0 })
+    s.updateNode(id, nodeSizePatch(300, 200))
+    s.updateNode(id, { data: { label: '改名' } })
+    expect(s.getNode(id)!.size).toEqual({ w: 300, h: 200 })
+  })
 })
 
 describe('size 缺席 = 用类型默认尺寸（不凭空造尺寸）', () => {

@@ -137,8 +137,8 @@ describe('file-drop 插件集成（真实内核服务）', () => {
     expect(node.data.audioUrl).toBe('/api/canvases/c1/resources/abc.mp3')
     expect(node.data.audioName).toBe('song.mp3')
     expect(node.data.resourceId).toBe('res-audio-1')
-    // 音频卡片走类型默认尺寸（不在载荷里另写 size）
-    expect(node.size).toBeUndefined()
+    // 音频节点带统一尺寸（与菜单建的音频节点一致：320×120）
+    expect(node.size).toEqual({ w: 320, h: 120 })
   })
 
   /**

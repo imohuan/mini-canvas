@@ -52,6 +52,8 @@ import {
 export const DEFAULT_IMAGE_SIZE = { cardWidth: 420, cardHeight: 300 }
 /** video 节点没有真实尺寸时的默认卡片 */
 export const DEFAULT_VIDEO_SIZE = { cardWidth: 560, cardHeight: 360 }
+/** audio 节点固定卡片尺寸（与 plugin-node-audio 的类型默认尺寸一致；音频没有内容比例可跟） */
+export const DEFAULT_AUDIO_SIZE = { w: 320, h: 120 }
 
 const IMAGE_MIME = /^image\//
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i
@@ -139,7 +141,10 @@ export function buildAudioPayload(
 ): NodePayload {
   const data: Record<string, unknown> = { audioUrl: url, audioName: file.name }
   if (file.size !== undefined) data.audioSize = file.size
-  return { type: 'audio', position, data }
+  // 统一尺寸：音频卡片没有内容比例可跟，固定用音频类型的默认卡片。
+  // 以前这里不给 size，拖进来的音频节点只有类型默认尺寸 —— 与菜单建的节点不一致，
+  // 布局/对齐读到的尺寸也可能与卡片画出来的值分家（用户 2026-11-14 报的问题之一）。
+  return { type: 'audio', position, data, size: { ...DEFAULT_AUDIO_SIZE } }
 }
 
 /** 图片节点载荷（url 为 objectURL；dims 缺省则用默认卡片尺寸） */
