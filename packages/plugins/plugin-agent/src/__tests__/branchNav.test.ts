@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PAGER_TOP_KEY, groupConversations, inlinePagers, pagerAnchors, type ForkPoint } from '../model/branchNav.js'
+import { groupConversations, inlinePagers, pagerAnchors, type ForkPoint } from '../model/branchNav.js'
 
 const rows = [
   { id: 'A', title: '根会话', updatedAt: 100, createdAt: 10 },
@@ -103,8 +103,13 @@ describe('pagerAnchors（渲染定位）', () => {
     expect([...map.keys()]).toEqual(['a2'])
   })
 
-  it('分叉点在第一条消息之前：挂在列表最上面', () => {
-    expect([...pagerAnchors(turns, [pager(0)]).keys()]).toEqual([PAGER_TOP_KEY])
+  /**
+   * 分叉点在第一句之前（编辑第一句）时，分页器也属于**第一轮的 AI 回复**：
+   * 挂在 a0 之后。用户 2026-11-14 截图点名：跑到列表最上面，看起来跟对话无关。
+   */
+  it('分叉点在第一句之前：挂在第一轮回复 a0 之后', () => {
+    expect([...pagerAnchors(turns, [pager(0)]).keys()]).toEqual(['a0'])
+    expect(pagerAnchors(turns, [pager(0)]).size).toBe(1)
   })
 
   it('越界的 userOrdinal 跳过（不画错位置）', () => {

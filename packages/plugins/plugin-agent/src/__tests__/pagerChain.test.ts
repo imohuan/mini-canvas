@@ -11,7 +11,7 @@
  * root 那一组被漏掉 → 页码少一格。
  */
 import { describe, expect, it } from 'vitest'
-import { PAGER_TOP_KEY, inlinePagers, pagerAnchors, type ForkPoint, type SessionRow } from '../model/branchNav'
+import { inlinePagers, pagerAnchors, type ForkPoint, type SessionRow } from '../model/branchNav'
 
 const rows: SessionRow[] = [
   { id: 'root', title: '原版', updatedAt: 1 },
@@ -58,21 +58,18 @@ describe('链式分叉：每个版本都能看到完整分组', () => {
   })
 
   /**
-   * v2 的两组分别落在**不同位置**：turn:0 那组在第一句之前（列表最上面），
-   * turn:2 那组在第一轮回复之后（列表末尾）。两组都必须画出来，谁也不许吃掉谁。
+   * v2 的两组都要画出来，谁也不许吃掉谁。
    *
-   * 旧实现把 ordinal 当消息下标，两组都被顶到同一个锚点、后写的覆盖前一组 ——
-   * 界面于是只剩一行，页码跟内容对不上。
+   * 旧实现用 Map<turnId, PagerGroup> 存，同一个锚点后写的把前一组覆盖掉 ——
+   * 界面只剩一行、页码跟内容对不上。现在按锚点聚合数组：同一锚点有几组就画几行。
+   * 两组都挂在这一轮 AI 回复下面（分页器永远属于 AI 的回复，用户 2026-11-14 口径）。
    */
-  it('v2 的两组分页器分别落在各自的位置，都要画出来', () => {
+  it('v2 的两组分页器都要保留（同锚点聚合成数组，不互相覆盖）', () => {
     const pagers = inlinePagers('v2', rows, chain)
     expect(pagers).toHaveLength(2)
     const turns = [{ id: 'u0', kind: 'user' }, { id: 'a0', kind: 'assistant' }]
     const anchors = pagerAnchors(turns, pagers)
-    const all = [...anchors.values()].flat()
-    expect(all).toHaveLength(2)
-    // 第二组（分叉点在末尾）挂在最后一条回复下面；第一组（分叉点在第一句之前）挂在顶部键
-    expect(anchors.get('a0')).toHaveLength(1)
-    expect(anchors.get(PAGER_TOP_KEY)).toHaveLength(1)
+    expect([...anchors.values()].flat()).toHaveLength(2)
+    expect(anchors.get('a0')).toHaveLength(2)
   })
 })

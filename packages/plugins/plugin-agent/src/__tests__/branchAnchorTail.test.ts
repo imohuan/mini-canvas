@@ -6,7 +6,7 @@
  * （用户实测："返回 root 后分页不见了"）。修复后 k === userIdx.length 锚到列表末尾。
  */
 import { describe, expect, it } from 'vitest'
-import { PAGER_TOP_KEY, pagerAnchors, type PagerGroup } from '../model/branchNav'
+import { pagerAnchors, type PagerGroup } from '../model/branchNav'
 
 const turns = [
   { id: 'u1', kind: 'user' },
@@ -33,9 +33,9 @@ describe('切模型分页器的末尾锚定', () => {
     expect(map.get('a2')).toBeUndefined()
   })
 
-  it('ordinal = 0（编辑第一句）：挂在列表最上面，不占用任何一条消息的下方', () => {
+  it('ordinal = 0（编辑第一句）：挂在第一轮回复 a1 之后，不进列表顶部', () => {
     const map = pagerAnchors(turns, [pager(0)])
-    expect([...map.keys()]).toEqual([PAGER_TOP_KEY])
+    expect([...map.keys()]).toEqual(['a1'])
   })
 })
 

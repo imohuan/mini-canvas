@@ -10,7 +10,7 @@ import { useUiComponent } from '@plume-canvas/canvas-render'
 import AgentMarkdown from '../render/AgentMarkdown.vue'
 import ToolViewBody from '../render/ToolViewBody.vue'
 import AgentScrollArea from './AgentScrollArea.vue'
-import { PAGER_TOP_KEY, type PagerGroup } from '../../model/branchNav.js'
+import type { PagerGroup } from '../../model/branchNav.js'
 // AI Elements 本地件（vendored shadcn-vue）：只取消息轮次容器与内容格。
 // 为什么走相对路径：这是插件专属组件，不进全局注册表（见 ui/ai-elements/README）。
 import { Message as AiMessage, MessageContent, MessageFooter } from '../ai-elements/message'
@@ -155,26 +155,6 @@ const pagerMap = pagerByAnchor as unknown as ComputedRef<Map<string, PagerGroup[
                 <ChevronRight :size="14" class="ac-suggestion-arrow" />
               </Button>
             </div>
-          </div>
-
-          <!-- 分页器（分叉点在第一条用户消息之前＝编辑了第一句）：挂在列表最上面。
-               抽成同一段模板逻辑：位置对了才跟得住消息，用户 2026-11-14 报的
-               「一栏里上下叠着 2/2 和 1/4」就是位置算错后两组被顶到同一处。 -->
-          <div v-for="(pg, pi) in pagerMap.get(PAGER_TOP_KEY) ?? []" :key="'pager-top-' + pi"
-            class="ac-branch-nav" role="navigation" aria-label="切换分支版本">
-            <Button variant="ghost" size="icon-sm" class="ac-branch-arrow" :disabled="pg.index <= 0" aria-label="上一个版本"
-              :title="'上一个版本 · ' + pg.items.map((i) => i.label).join(' / ')"
-              @click="pagerTarget(pg, -1) !== null && agent.openSession(pagerTarget(pg, -1)!)">
-              <ChevronLeft :size="14" />
-            </Button>
-            <Badge variant="secondary" class="ac-branch-pos" :title="pg.items[pg.index]?.label ?? ''">
-              {{ pg.position }} / {{ pg.total }}
-            </Badge>
-            <Button variant="ghost" size="icon-sm" class="ac-branch-arrow" :disabled="pg.index >= pg.total - 1"
-              aria-label="下一个版本" :title="'下一个版本 · ' + pg.items.map((i) => i.label).join(' / ')"
-              @click="pagerTarget(pg, 1) !== null && agent.openSession(pagerTarget(pg, 1)!)">
-              <ChevronRight :size="14" />
-            </Button>
           </div>
 
           <template v-for="t in s.turns" :key="t.id">

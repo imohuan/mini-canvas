@@ -332,8 +332,6 @@ export function inlinePagers(
  * 用 Map<turnId, PagerGroup> 存，后写的把前一组覆盖掉 —— 界面于是只画得出其中一组，
  * 页码与内容对不上，且必须再点一次才“跳”。改为按位置聚合数组：有几组就画几行。
  */
-export const PAGER_TOP_KEY = '__top__'
-
 export function pagerAnchors<T extends { id: string; kind: string }>(turns: T[], pagers: PagerGroup[]): Map<string, PagerGroup[]> {
   const map = new Map<string, PagerGroup[]>()
   if (!pagers.length) return map
@@ -346,17 +344,20 @@ export function pagerAnchors<T extends { id: string; kind: string }>(turns: T[],
      * 早年这里把 k 当成「第几条用户消息的下标」，于是锚点整体往后错一轮：
      * 在 branch1 继续聊到第二轮之后，分页器还赖在列表最底下，看起来像"分支挂在最后一轮"。
      * 用户 2026-11-14 明确口径：第一轮有分支、第二轮没有 → 分页器应停在第一轮的回复下面。
-     *   ① k === 0：分叉点在**第一条用户消息之前**（编辑第一句）→ 挂在列表最上面；
+     *   ① k === 0：分叉点在**第一条用户消息之前**（编辑第一句）→ 挂在**第一轮回复之后**。
+     *      不能挂列表最上面（用户 2026-11-14 截图：分页跑到了用户消息上方，像与对话无关）；
+     *      分页器永远属于「某一轮 AI 回复」，第一轮的分支就画在第一轮回复下面。
      *   ② 0 < k < 用户消息数：挂在「第 k 条用户消息」之前 = 第 k 轮回复块的末尾；
      *   ③ k === 用户消息数：分叉点在末尾（切模型/末尾开分支）→ 挂在列表末尾；
      *   ④ k > 用户消息数：数据错位，丢弃（宁可不画，不画错位置）。
      */
     const k = p.userOrdinal
-    let anchor: string | undefined
-    if (k === 0) anchor = PAGER_TOP_KEY
-    else if (k < userIdx.length) anchor = turns[userIdx[k] - 1]?.id
-    else if (k === userIdx.length) anchor = turns[turns.length - 1]?.id
+    let endIdx: number
+    if (k === 0) endIdx = userIdx.length > 1 ? userIdx[1] - 1 : turns.length - 1
+    else if (k < userIdx.length) endIdx = userIdx[k] - 1
+    else if (k === userIdx.length) endIdx = turns.length - 1
     else continue
+    const anchor = turns[endIdx]?.id
     if (!anchor) continue
     const list = map.get(anchor) ?? []
     list.push(p)
