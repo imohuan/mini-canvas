@@ -1,60 +1,58 @@
 /**
- * 框内按下的归属（用户报的缺陷：「多选之后，在多选区域拖拽没有效果……拖拽多选框内部的空白区域就不行了」）。
+ * 框内按下的归属（用户 2026-11-14 口径）：
+ * 「多选时节点内部所有地方都只用来拖，按钮/进度条/缩放角/端口都不允许点；只保留加选、减选。」
  *
- * 根因：整组拖动的门写成了「落点是 pane 空白 + 不在任何节点矩形里」。
- * 多选框里大片"看起来是空白"的位置其实属于节点元素：
- *   - 卡片上方的标题条（位于节点矩形之外、外框之内）；
- *   - 选中卡片自己的透明覆盖层/装饰区。
- * 这些位置整组拖动全被跳过，最后落到节点自己的点选上 —— 多选当场收缩成单选，
- * 用户看到的就是"拖一下就取消了多选、好像穿透了一样"。
- *
- * 现在按「是否在框内 + 是否在选中节点上 + 是否是控件」来判断，这条测试锁住这张真值表。
+ * 这条测试锁三件事：
+ * 1. 框内（含节点里的控件、标题条）一律整组拖动，不再区分控件；
+ * 2. 框内 + Shift = 加选/减选这一下点到的节点；
+ * 3. 框外完全不接管（画布/节点照常工作）。
  */
 import { describe, it, expect } from 'vitest'
-import { resolveGroupDragHit, type GroupDragHitInput } from '../multiSelectEngine'
+import { resolveFramePress, nodeIdAtPoint, type MultiSelectRect } from '../multiSelectEngine'
 
-const base: GroupDragHitInput = {
-  insideFrame: true,
-  overNode: false,
-  nodeSelected: false,
-  interactive: false,
-  nativeDraggable: false,
-}
-
-describe('resolveGroupDragHit', () => {
-  it('框内空白 → 整组拖动', () => {
-    expect(resolveGroupDragHit(base)).toBe('group')
+describe('resolveFramePress', () => {
+  it('框内普通按下 → 整组拖动（节点里的按钮/滑杆也走这条）', () => {
+    expect(resolveFramePress({ insideFrame: true, shiftKey: false })).toBe('group')
   })
 
-  it('框内、落在**已选中**节点上（标题条/透明装饰区）→ 仍然整组拖动', () => {
-    // 这一条正是用户截图里红圈的位置：看着是空白，其实属于选中卡片。
-    expect(resolveGroupDragHit({ ...base, overNode: true, nodeSelected: true })).toBe('group')
+  it('框内 + Shift → 只做加选/减选', () => {
+    expect(resolveFramePress({ insideFrame: true, shiftKey: true })).toBe('toggle')
   })
 
-  it('框内、落在已选中节点本来就能拖的正文上 → 交给宿主（VueFlow 本来就会带整组动）', () => {
-    expect(
-      resolveGroupDragHit({ ...base, overNode: true, nodeSelected: true, nativeDraggable: true }),
-    ).toBe('native')
+  it('框外 → 不接管，画布与节点保持原有交互', () => {
+    expect(resolveFramePress({ insideFrame: false, shiftKey: false })).toBe('native')
+    expect(resolveFramePress({ insideFrame: false, shiftKey: true })).toBe('native')
+  })
+})
+
+describe('nodeIdAtPoint', () => {
+  const rects: MultiSelectRect[] = [
+    { id: 'a', x: 0, y: 0, w: 100, h: 80 },
+    { id: 'b', x: 200, y: 0, w: 100, h: 80 },
+  ]
+
+  it('命中矩形内部返回该节点 id', () => {
+    expect(nodeIdAtPoint(rects, { x: 50, y: 40 })).toBe('a')
+    expect(nodeIdAtPoint(rects, { x: 250, y: 40 })).toBe('b')
   })
 
-  it('框内、落在未选中节点上 → 交给节点自己（保持"点它 = 选中并拖它"）', () => {
-    expect(resolveGroupDragHit({ ...base, overNode: true, nodeSelected: false })).toBe('native')
-    expect(
-      resolveGroupDragHit({ ...base, overNode: true, nodeSelected: false, nativeDraggable: true }),
-    ).toBe('native')
+  it('边界点算命中（与框选"局部相交"不同：这里要点到卡片本身）', () => {
+    expect(nodeIdAtPoint(rects, { x: 100, y: 40 })).toBe('a')
   })
 
-  it('框外 → 不接管（画布照常平移/框选）', () => {
-    expect(resolveGroupDragHit({ ...base, insideFrame: false })).toBe('ignore')
-    expect(resolveGroupDragHit({ ...base, insideFrame: false, overNode: true, nodeSelected: true })).toBe('ignore')
+  it('落在空白处返回 null（Shift 点空白不改选中）', () => {
+    expect(nodeIdAtPoint(rects, { x: 150, y: 40 })).toBeNull()
   })
 
-  it('落在控件上（按钮/滑杆/缩放角/端口/浮层按钮）→ 不接管，控件保持自己的动作', () => {
-    expect(resolveGroupDragHit({ ...base, interactive: true })).toBe('ignore')
-    expect(resolveGroupDragHit({ ...base, interactive: true, overNode: true, nodeSelected: true })).toBe('ignore')
+  it('重叠时取更靠上（store 靠后）的那个', () => {
+    const overlapping: MultiSelectRect[] = [
+      { id: 'under', x: 0, y: 0, w: 100, h: 80 },
+      { id: 'over', x: 50, y: 0, w: 100, h: 80 },
+    ]
+    expect(nodeIdAtPoint(overlapping, { x: 60, y: 40 })).toBe('over')
   })
 
-  it('不在框内时控件判断不影响结论（先后顺序稳定）', () => {
-    expect(resolveGroupDragHit({ ...base, insideFrame: false, interactive: true })).toBe('ignore')
+  it('空集返回 null', () => {
+    expect(nodeIdAtPoint([], { x: 0, y: 0 })).toBeNull()
   })
 })

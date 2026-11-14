@@ -207,41 +207,33 @@ export function resolveBatchHandleVisible(input: BatchHandleVisibilityInput): bo
 }
 
 /**
- * 框内按下时该交给谁：整组拖动 / 交给节点自己 / 不接管。
+ * 多选框内按下的归属（用户 2026-11-14 口径）：
+ * 「多选时节点里所有地方都只用来拖，按钮/进度条/缩放角/端口都不允许点；只保留加选、减选。」
  *
- * 用户口径（2026-11-14）：「拖拽内部框的时候可以整组拖拽，不管你在内部框的哪一个位置。」
- *
- * 为什么要这条判定：多选框里"看起来是空白"的地方并不都落在 pane 上 ——
- * 卡片上方的标题条、节点之间的透明边距仍属于节点元素。以前只认"落点是 pane"，
- * 于是这些位置整组拖动被跳过，最后只剩节点自己的点击，把多选收成一个节点
- * （用户看到的就是"多选被取消"）。
- *
- * 规则：
- * - 不在框内，或落在要自己处理的控件上（按钮/滑杆/缩放角/端口…）→ 不接管（ignore）；
- * - 落在**未选中**的节点上 → 交给节点自己（native），保持"点它 = 选中并拖它"；
- * - 落在选中节点上、且那块本来就能拖动节点（卡片正文）→ 交给宿主（native）：
- *   VueFlow 自己就会带着整组选中一起动，不必重复实现；
- * - 其余（pane 空白、选中节点上的标题条/透明装饰层等"按下拖不动"的位置）→ 整组拖动（group）。
+ * - 框内 + Shift → toggle（加选 / 减选这一下点到的节点）
+ * - 框内其余情况 → group（整组拖动，控件不参与）
+ * - 框外 → native（画布/节点照常工作）
  */
-export interface GroupDragHitInput {
-  /** 落点是否在多选框（外框）内 */
+export type FramePressAction = 'group' | 'toggle' | 'native'
+
+export function resolveFramePress(input: {
   insideFrame: boolean
-  /** 落点是否在某个节点元素上 */
-  overNode: boolean
-  /** 该节点是否已经在选中集里 */
-  nodeSelected: boolean
-  /** 落点是否在需要自己处理的控件上（按钮/输入/滑杆/端口/缩放角…） */
-  interactive: boolean
-  /** 这块位置本来能不能拖节点（卡片正文 = 能；标题条/装饰层 = 不能） */
-  nativeDraggable: boolean
+  shiftKey: boolean
+}): FramePressAction {
+  if (!input.insideFrame) return 'native'
+  return input.shiftKey ? 'toggle' : 'group'
 }
 
-/** 框内按下的归属：group = 整组拖动；native = 交给节点自己；ignore = 不接管 */
-export type GroupDragHit = 'group' | 'native' | 'ignore'
-
-export function resolveGroupDragHit(input: GroupDragHitInput): GroupDragHit {
-  if (!input.insideFrame || input.interactive) return 'ignore'
-  if (input.overNode && !input.nodeSelected) return 'native'
-  if (input.overNode && input.nativeDraggable) return 'native'
-  return 'group'
+/** 点命中的最上层节点 id（给 Shift 加减选用；矩形按 store 顺序，后者视为更靠上） */
+export function nodeIdAtPoint(
+  rects: ReadonlyArray<MultiSelectRect>,
+  point: { x: number; y: number },
+): string | null {
+  for (let i = rects.length - 1; i >= 0; i--) {
+    const r = rects[i]
+    if (point.x >= r.x && point.x <= r.x + r.w && point.y >= r.y && point.y <= r.y + r.h) {
+      return r.id
+    }
+  }
+  return null
 }

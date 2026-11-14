@@ -6,7 +6,8 @@ import { isHitOwnBatchPort } from '../batchConnect'
 import {
   computeUnionBounds,
   draggableMembers,
-  resolveGroupDragHit,
+  nodeIdAtPoint,
+  resolveFramePress,
   type MultiSelectRect,
 } from '../multiSelectEngine'
 
@@ -15,7 +16,7 @@ type Point = { x: number; y: number }
 interface GroupDragDeps {
   ctx: CanvasRenderContext['ctx']
   viewport: CanvasRenderContext['flow']['viewport']
-  sel: () => { ids: ReadonlySet<string> }
+  sel: () => { ids: ReadonlySet<string>; set(ids: Iterable<string>): void }
   layout: () => CanvasRenderContext['ctx']['view'] | undefined
   nodeStore: () => {
     getNodes(): Array<{ id: string; parentId?: string }>
@@ -36,41 +37,21 @@ interface GroupDragDeps {
   screenToFlowPoint: (x: number, y: number) => Point
 }
 
-/**
- * 落点上"要自己处理的控件"清单：按在这些上面拖动不是整组平移，
- * 而是它自己的动作（播放/滑杆/缩放角/拖线端口/浮层按钮…）。
- *
- * 只认**交互件**，不认节点壳本身：卡片上方的标题条、节点之间的透明边距虽然也属于节点元素，
- * 但它们没有自己的拖动语义，应该走整组拖动（见 resolveGroupDragHit 的说明）。
- */
-const INTERACTIVE_SELECTOR = [
-  '.vue-flow__edge',
-  '.vue-flow__handle',
-  '.moving-handle-anchor',
-  '.drag-handle',
-  '.resize-handle',
-  '.v2-slot',
-  '.ntp-root',
-  '.csurface-overlay-item',
-  '.selection-frame-slot',
-  'button',
-  'a[href]',
-  'input',
-  'textarea',
-  'select',
-  '[contenteditable="true"]',
-  '[role="slider"]',
-  '[role="button"]',
-  '[data-no-group-drag]',
-].join(',')
-
 /** 两次单击之间允许的抖动（flow 像素）：小于它视为"没动"，不落盘、不当成拖动 */
 const DRAG_EPSILON = 0.5
 
-/** 框内空白拖动 = 整组平移；capture 监听与拖拽守卫也在这一层。 */
+/**
+ * 框内拖动 = 整组平移；框内按下一律由这里接管（capture 阶段），节点里的按钮/进度条/
+ * 缩放角/端口在当前多选手势里收不到事件 —— 用户 2026-11-14 口径：
+ * 「多选时节点内所有地方都只用来拖，只保留加选和减选。」
+ */
 export function useGroupDrag(input: GroupDragDeps) {
   const groupDragClickGuard = new BoxSelectClickGuard()
-  /** 刚结束一次真的整组拖动：紧随的那次 click（落在节点上也一样）要吞掉 */
+  /**
+   * 要吞掉紧随的那一次 click：
+   * - 整组拖动结束时（浏览器会补一次 click，落在节点上会把多选收缩成单选）；
+   * - 框内 Shift 加减选之后（宿主/节点还会再按一次普通点选走一遍）。
+   */
   let swallowNextClick = false
 
   function onOwnerCaptureClick(e: MouseEvent): void {
@@ -102,14 +83,14 @@ export function useGroupDrag(input: GroupDragDeps) {
     if (!g) return
     const target = e.target as HTMLElement | null
     if (!(target instanceof HTMLElement)) return
+
+    // 画布自己的控件、多选框的批量端口永远不接管（它们在框外，按几何也会被排除，
+    // 这里保留显式判断，避免框与控件重叠时误吞）。
     if (
       target.closest('.vue-flow__controls') ||
       target.closest('.vue-flow__minimap') ||
-      target.closest('.vue-flow__panel')
-    ) {
-      return
-    }
-    if (
+      target.closest('.vue-flow__panel') ||
+      target.closest('.selection-frame-slot') ||
       isHitOwnBatchPort({
         batchSlot: !!target.closest('.selection-frame-batch-slot'),
         movingHandle: !!target.closest('.moving-handle-anchor'),
@@ -117,28 +98,56 @@ export function useGroupDrag(input: GroupDragDeps) {
     ) {
       return
     }
+
     const p = input.screenToFlowPoint(e.clientX, e.clientY)
+    const insideFrame = input.pointInRect(p, g.outer)
+    const action = resolveFramePress({ insideFrame, shiftKey: e.shiftKey })
+    if (action === 'native') return
 
-    // 落点归属：框内 + 非控件 + 不是"能自己拖节点的位置" → 整组拖动。
-    // 这样框内任何位置（节点之间的空隙、卡片上方的标题条、选中卡片上的透明装饰层）
-    // 都能带起整组，而不会落到节点自己的点选上把多选收成单选（用户 2026-11-14 反馈）。
-    // "本来就能拖节点"直接用 VueFlow 自己的约定判断：落在 .nodrag 里就拖不动。
-    const nodeEl = target.closest('.vue-flow__node')
-    const overNode = !!nodeEl
-    const nodeId = nodeEl?.getAttribute('data-id') ?? ''
-    const interactive = !!target.closest(INTERACTIVE_SELECTOR)
-    const hit = resolveGroupDragHit({
-      insideFrame: input.pointInRect(p, g.outer),
-      overNode,
-      nodeSelected: overNode ? input.sel().ids.has(nodeId) : false,
-      interactive,
-      nativeDraggable: overNode && !target.closest('.nodrag'),
-    })
-    if (hit !== 'group') return
-
+    // 到这一步说明按在框内：节点内的按钮/滑杆/端口等一概收不到这一下。
     e.stopImmediatePropagation()
     e.preventDefault()
+
+    // mousedown 是 pointerdown 之后补发的同一 gesture：pointerdown 已经处理过，这里只负责挡。
+    if (e.type === 'mousedown') return
+
+    if (action === 'toggle') {
+      const nodeId = target.closest('.vue-flow__node')?.getAttribute('data-id') ?? ''
+      trackShiftPress(nodeId, e.clientX, e.clientY)
+      return
+    }
+
     startGroupDrag(e.clientX, e.clientY)
+  }
+
+/**
+   * 框内 Shift 手势：
+   * - 没移动 → 只做加选/减选（点到的节点在选中集里就移除，否则加入）；
+   * - 移动了 → 当整组拖动处理（框内任何位置都能拖，控件不参与）。
+   * 无论哪种，这一次 click 都吞掉，避免再落到节点自己的普通点选上。
+   */
+  function trackShiftPress(nodeId: string, clientX: number, clientY: number): void {
+    let started = false
+    const onMove = (mv: PointerEvent): void => {
+      if (started) return
+      if (Math.hypot(mv.clientX - clientX, mv.clientY - clientY) <= 4) return
+      started = true
+      window.removeEventListener('pointermove', onMove)
+      startGroupDrag(clientX, clientY)
+    }
+    const onUp = (): void => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      swallowNextClick = true
+      if (started) return
+      if (!nodeId) return
+      const next = new Set(input.sel().ids)
+      if (next.has(nodeId)) next.delete(nodeId)
+      else next.add(nodeId)
+      input.sel().set(next)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
   }
 
   function startGroupDrag(clientX: number, clientY: number): void {
