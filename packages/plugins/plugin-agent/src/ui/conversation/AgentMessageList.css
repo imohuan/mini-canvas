@@ -298,10 +298,19 @@
   min-width: 0;
 }
 
-/* 编辑态描边落在**气泡本体**上（用户口径 2026-11-05：描边曾错挂在整行 MessageContent 上，
-   视觉上像把容器撑开、内容跑到容器外）。 */
-.ac-user-bubble--editing {
-  box-shadow: 0 0 0 1.5px var(--ui-warn, #e3a25f);
+/*
+ * 编辑态描边：画在**真正有圆角的那一层**上。
+ *
+ * Bubble 是 flex 壳（border-radius: 0），圆角与 overflow:hidden 都在它内部的
+ * [data-slot=bubble-content] 上。以前 box-shadow 写在外壳：
+ *   ① 形状是矩形 —— 圆角消失；
+ *   ② 外壳不裁切、里层裁切，描边在四边被里层内容与面板边缘吃掉 ——
+ *      用户 2026-11-14 截图点名「顶部和右侧的边框也没了」。
+ * 改成里层的 inset 描边：形状跟着 12px 圆角走，也不会被 overflow 裁掉。
+ * 用 inset 而不是 outline：outline 不跟随 border-radius 的圆角内缘，且会压到相邻元素。
+ */
+.ac-user-bubble--editing [data-slot='bubble-content'] {
+  box-shadow: inset 0 0 0 1.5px var(--ui-warn, #e3a25f);
 }
 
 /* 已发送的标签：与输入框里那颗 chip 同款外观（图标 + 标题、圆角 6）。
