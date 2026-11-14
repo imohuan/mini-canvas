@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupConversations, inlinePagers, pagerAnchors, type ForkPoint } from '../model/branchNav.js'
+import { PAGER_TOP_KEY, groupConversations, inlinePagers, pagerAnchors, type ForkPoint } from '../model/branchNav.js'
 
 const rows = [
   { id: 'A', title: '根会话', updatedAt: 100, createdAt: 10 },
@@ -88,14 +88,23 @@ describe('pagerAnchors（渲染定位）', () => {
     at: 3, userOrdinal, items: [{ id: 'x', label: 'x' }], index: 0, position: 1, total: 2,
   })
 
-  it('锚在「该用户消息的回复块末尾」：u1 的分页器挂在 a1 之后（u2 之前）', () => {
+  /**
+   * userOrdinal = 「分叉点之前聊过几轮」，不是「第几条用户消息的下标」。
+   * 分叉点在第 1 轮末尾（ordinal=1）→ 挂在第 1 轮回复 a0 下面，不能跑到第 2 轮之后
+   * （用户 2026-11-14：第一轮有分支、第二轮没有，分页器却赖在列表最底下）。
+   */
+  it('分叉点在第 1 轮末尾：分页器挂在 a0 之后（u1 之前）', () => {
     const map = pagerAnchors(turns, [pager(1)])
-    expect([...map.keys()]).toEqual(['a1'])
+    expect([...map.keys()]).toEqual(['a0'])
   })
 
-  it('最后一条用户消息的分页器挂到列表末尾（该版本最后回复的下面）', () => {
-    const map = pagerAnchors(turns, [pager(2)])
+  it('分叉点在末尾（ordinal = 用户消息数）：挂到列表末尾', () => {
+    const map = pagerAnchors(turns, [pager(3)])
     expect([...map.keys()]).toEqual(['a2'])
+  })
+
+  it('分叉点在第一条消息之前：挂在列表最上面', () => {
+    expect([...pagerAnchors(turns, [pager(0)]).keys()]).toEqual([PAGER_TOP_KEY])
   })
 
   it('越界的 userOrdinal 跳过（不画错位置）', () => {

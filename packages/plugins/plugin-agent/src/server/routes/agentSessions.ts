@@ -670,7 +670,19 @@ export function agentSessionRoutes(
         const rec = parent ?? fallback
         if (!rec) return pt
         const userOrdinal = rec.turns.slice(0, n).filter((t) => t.role === 'user').length
-        return { ...pt, userOrdinal }
+        /**
+         * 幽灵分支：子会话里只有「分叉时拷过去的前缀」，一条自己的新回合都没有。
+         *
+         * 来源是旧版「点一下模型就 branchFromEnd」留下的记录（用户 2026-11-14 报的分支乱象）：
+         * 它和父会话内容完全一样，却占着一个版本位，分页器就变成两条一模一样的“版本”。
+         * 子会话只要真的聊过一句，回合数就会超过前缀长度 n，自动恢复成正常版本。
+         */
+        const ghosts: string[] = []
+        for (const childId of pt.children) {
+          const child = await store.get(p.canvasId, childId)
+          if (child && child.turns.length <= n) ghosts.push(childId)
+        }
+        return ghosts.length ? { ...pt, userOrdinal, ghosts } : { ...pt, userOrdinal }
       }),
     )
     return c.json({

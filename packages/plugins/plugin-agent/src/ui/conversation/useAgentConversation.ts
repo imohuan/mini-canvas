@@ -300,6 +300,9 @@ const { scrollToBottom: stickToBottom, showScrollToBottom, smoothScrollToBottom 
   target: scroller,
   signal: () => streamSignal.value,
   threshold: 48,
+  // 会话 / 分页版本换了 = 整份列表被替换：重判一次按钮与吸附（用户 2026-11-14：
+  // 刚进对话时「回到底部」按钮一直挂着，因为这一帧没人滚过、状态还是上一份的）
+  resetKey: () => s.sessionId ?? '',
 })
 let bubbleRO: ResizeObserver | undefined
 

@@ -96,6 +96,32 @@ export function createSendDomain(ctx: AgentServiceContext, deps: AgentServiceDep
       deps.cancelEdit()
     }
     if (!id) return
+    /**
+     * 切了模型、并且**现在真的发消息** → 这才是"换模型"的那一刻（用户 2026-11-14 口径）。
+     *
+     * 只在「选中的模型 ≠ 当前会话记录的模型」时切：换会话会把整段历史带过去、在末尾登记分叉点，
+     * 与编辑重发是同一套分支语义。选了模型没发消息的情况在上面 setModel 里已经不需要建任何东西。
+     * 编辑重发优先（上面已 fork 到新会话），这里不再重复切。
+     */
+    if (!state.editingId && state.model) {
+      const sid = state.sessionId
+      /**
+       * 当前会话"真正在用的模型"：以会话记录为准（sessions 列表可能还没刷新）。
+       * 读不到记录就当一致 —— 宁可少切一次，也不要因为列表没刷新就凭空长分支。
+       */
+      let recorded: { provider?: string; modelId?: string } | undefined = sid
+        ? state.sessions.find((x) => x.id === sid)
+        : undefined
+      if (sid && (!recorded || !recorded.provider)) {
+        recorded = await api.getSession(canvasId(), sid).catch(() => undefined)
+      }
+      const drift = recorded && recorded.provider
+        && (recorded.provider !== state.model.provider || recorded.modelId !== state.model.modelId)
+      if (drift) {
+        const switched = await switchModelForSend(state.model.provider, state.model.modelId)
+        if (switched) id = switched
+      }
+    }
     lastText = value
     lastImages = pics.length ? pics : undefined
     // 界面与转录、发给模型的内容现在是**同一份**（用户口径 2026-10-08：标记改用 <ref …> XML，
@@ -183,30 +209,39 @@ export function createSendDomain(ctx: AgentServiceContext, deps: AgentServiceDep
   }
 
   /**
-   * 切换模型 = **换一条会话**（SDK 的模型钉在会话上，改不了）。
+   * 选模型 = **只记下选择**，不立刻开会话（用户 2026-11-14 口径）。
    *
-   * 做法与"编辑重发"出来的分支完全一样：后端 branchFromEnd 把整段历史拷进新会话、
-   * 在末尾登记分叉点，再补一条模型分段；界面这边按 openSession 重新装载
-   * （新会话的转录含全量历史，分页器也会认出这条新分支）。
+   * 为什么改（真机现象）：原来一点模型就 branchFromEnd 建一条新会话并登记成分支，
+   * 用户只是"挑了一下"并没有说话，历史里就多出一条分支 —— 同一栏里冒出两个分页器，
+   * 对话记录被切得七零八落。用户的要求是：**切了模型并且真的发消息**，才算换了一条分支。
    *
-   * 三条边界：
-   *   · 没有会话（还没说过话）：只改本地选择，下一句建会话时自然带上新模型；
-   *   · 选的就是当前模型：后端返回 unchanged，什么也不做（否则每点一次长一条会话）；
-   *   · 这一轮在跑：后端拒绝（409），如实告诉用户等它跑完。
+   * 现在的做法：这里只写 state.model（输入区/标题立刻显示新模型），真正建分支挪到 send() ——
+   * 发送前若发现"当前会话的模型 ≠ 选中的模型"，先切会话再发（见 switchModelForSend）。
+   * 好处：选了不用的模型不会留下任何痕迹；连切几次也只在最后发的那次建一条分支。
    */
   async function setModel(provider: string, modelId: string): Promise<void> {
     state.model = { provider, modelId }
+  }
+
+  /**
+   * 发送前的"真正切换模型"：把当前会话整段接到新会话上（分支语义与编辑重发一致）。
+   *
+   * @returns 切换后应该继续发送的会话 id；不需要切 / 切换失败 → null（调用方按原会话发）。
+   */
+  async function switchModelForSend(provider: string, modelId: string): Promise<string | null> {
     const sid = state.sessionId
-    if (!sid) return
+    if (!sid) return null
     try {
       const r = await api.switchModel(canvasId(), sid, provider, modelId)
-      if (r.unchanged || !r.sessionId) return
+      if (r.unchanged || !r.sessionId) return null
       // 装载新会话：转录（全量历史 + 新分段）、id、标题、分页器一次到位。
       await deps.openSession(r.sessionId)
+      return r.sessionId
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       ctx.setError(message)
       state.lastError = '切换模型失败：' + message
+      return null
     }
   }
 

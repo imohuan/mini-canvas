@@ -80,6 +80,63 @@ export interface ForkPoint {
   children: string[]
   /** 该位置是当前会话里的第几个用户消息（0 基）；缺省 = 服务端没算出来，不渲染 */
   userOrdinal?: number
+  /**
+   * 这些子会话只有「分叉时拷走的前缀」、没有一条自己的新回合 —— 旧版「点模型就建分支」
+   * 留下的幽灵版本（用户 2026-11-14：同一栏里叠出两个分页器）。
+   * 由服务端按转录长度判定（子会话回合数 ≤ 分叉点下标）。
+   */
+  ghosts?: string[]
+}
+
+/** 'turn:3' -> 3；解析不出返回 null（老数据 / 未来格式） */
+function parseTurnPoint(point: string): number | null {
+  const m = /^turn:(\d+)$/.exec(point)
+  return m ? Number(m[1]) : null
+}
+
+/**
+ * 折叠幽灵版本：把 ghost 子会话的分叉点搬到它的上级会话上，并把 ghost 从版本组里摘掉。
+ *
+ * 为什么可以原地搬（不做任何内容改写）：幽灵会话的转录就是父会话的前缀拷贝，
+ * 所以「在 ghost 的第 m 条之前分叉」与「在父会话的第 m 条之前分叉」是同一个位置。
+ * 折叠之后 `root→v2(幽灵)→v3` 变成 `root→v3`，分组回到「一处一行」，
+ * 而 v3 仍然可达（用户不会因为清理而丢掉真正的分支）。
+ */
+export function contractGhosts(points: ForkPoint[]): ForkPoint[] {
+  const ghosts = new Set<string>()
+  for (const p of points) for (const g of p.ghosts ?? []) ghosts.add(g)
+  if (!ghosts.size) return points
+  /** ghost -> 它的父会话（取第一条记录，与 parentMap 同一口径） */
+  const parentOf = new Map<string, string>()
+  for (const p of points) for (const c of p.children) if (ghosts.has(c) && !parentOf.has(c)) parentOf.set(c, p.parentId)
+  /** 一路向上找到第一个不是 ghost 的祖先（模型连切几次会串成一条 ghost 链） */
+  const solidOf = (id: string): string => {
+    let cur = id
+    const seen = new Set<string>([cur])
+    while (ghosts.has(cur)) {
+      const up = parentOf.get(cur)
+      if (!up || seen.has(up)) return cur
+      seen.add(up)
+      cur = up
+    }
+    return cur
+  }
+  /** 同一 (父, 位置) 合并成一条，children 去重合并 */
+  const merged = new Map<string, ForkPoint>()
+  for (const p of points) {
+    const parentId = solidOf(p.parentId)
+    const children = p.children.filter((c) => !ghosts.has(c))
+    if (!children.length) continue
+    const key = parentId + '|' + p.point
+    const prev = merged.get(key)
+    if (prev) {
+      for (const c of children) if (!prev.children.includes(c)) prev.children.push(c)
+      if (prev.userOrdinal === undefined && p.userOrdinal !== undefined) prev.userOrdinal = p.userOrdinal
+      continue
+    }
+    merged.set(key, { ...p, parentId, children: [...children], ghosts: undefined })
+  }
+  return [...merged.values()]
 }
 
 /**
@@ -101,12 +158,6 @@ export interface PagerGroup {
   total: number
 }
 
-/** 'turn:3' -> 3；解析不出返回 null（老数据 / 未来格式） */
-function parseTurnPoint(point: string): number | null {
-  const m = /^turn:(\d+)$/.exec(point)
-  return m ? Number(m[1]) : null
-}
-
 /**
  * 当前会话的全部内联分页器（跟随消息）。
  *
@@ -118,8 +169,10 @@ function parseTurnPoint(point: string): number | null {
 export function inlinePagers(
   currentId: string,
   rows: SessionRow[],
-  points: ForkPoint[],
+  pointsIn: ForkPoint[],
 ): PagerGroup[] {
+  // 先把旧版留下的幽灵版本折回父会话，再算组（否则同一处会画出两三行一模一样的页码）
+  const points = contractGhosts(pointsIn)
   const byId = new Map(rows.map((s) => [s.id, s]))
   // parentId -> (N -> children[])：**不过滤已删**，否则删掉链中间一条会把组截断
   const forkMap = new Map<string, Map<number, string[]>>()
@@ -218,6 +271,8 @@ export function inlinePagers(
     // 已删会话过滤掉（组的结构仍按全图算，删中间一条不会把组切两半）
     const alive = members.filter((id) => byId.has(id))
     if (!alive.includes(currentId)) continue
+    // 只剩自己一个版本就别画了：`1 / 1` 两枚箭头全灰，纯占地方（删掉其它版本后会这样）
+    if (alive.length < 2) continue
     const items: BranchNavItem[] = alive.map((id) => ({
       id,
       label: id === currentId ? '\u5f53\u524d' : byId.get(id)!.title.trim().slice(0, 24) || '\u5206\u652f',
@@ -249,24 +304,31 @@ export function inlinePagers(
  * 用 Map<turnId, PagerGroup> 存，后写的把前一组覆盖掉 —— 界面于是只画得出其中一组，
  * 页码与内容对不上，且必须再点一次才“跳”。改为按位置聚合数组：有几组就画几行。
  */
+export const PAGER_TOP_KEY = '__top__'
+
 export function pagerAnchors<T extends { id: string; kind: string }>(turns: T[], pagers: PagerGroup[]): Map<string, PagerGroup[]> {
   const map = new Map<string, PagerGroup[]>()
   if (!pagers.length) return map
   const userIdx: number[] = []
   turns.forEach((t, i) => { if (t.kind === 'user') userIdx.push(i) })
   for (const p of pagers) {
-    const k = p.userOrdinal
     /**
-     * k 越界不再一律丢弃（切模型分页消失的根因，2026-10-11）：
-     * 切模型的分叉点在**转录末尾** —— root 会话只有 1 条用户消息（userOrdinal=1），
-     * 旧判据 k >= userIdx.length 直接 continue，分页器整个消失（真机："返回后分页不见"）。
-     * k === userIdx.length 意为「分叉点在最后一条用户消息之后」＝切模型：
-     * 锚到最后一条 turn（对话末尾），分页器照样显示、可切回其它模型分支。
-     * k > userIdx.length 才是真越界（数据错位），丢弃。
+     * k = 「分叉点之前已经聊过几轮」（服务端按父转录数出来的用户消息条数）。
+     *
+     * 早年这里把 k 当成「第几条用户消息的下标」，于是锚点整体往后错一轮：
+     * 在 branch1 继续聊到第二轮之后，分页器还赖在列表最底下，看起来像"分支挂在最后一轮"。
+     * 用户 2026-11-14 明确口径：第一轮有分支、第二轮没有 → 分页器应停在第一轮的回复下面。
+     *   ① k === 0：分叉点在**第一条用户消息之前**（编辑第一句）→ 挂在列表最上面；
+     *   ② 0 < k < 用户消息数：挂在「第 k 条用户消息」之前 = 第 k 轮回复块的末尾；
+     *   ③ k === 用户消息数：分叉点在末尾（切模型/末尾开分支）→ 挂在列表末尾；
+     *   ④ k > 用户消息数：数据错位，丢弃（宁可不画，不画错位置）。
      */
-    if (k < 0 || k > userIdx.length) continue
-    const end = k + 1 < userIdx.length ? userIdx[k + 1] - 1 : turns.length - 1
-    const anchor = turns[end]?.id
+    const k = p.userOrdinal
+    let anchor: string | undefined
+    if (k === 0) anchor = PAGER_TOP_KEY
+    else if (k < userIdx.length) anchor = turns[userIdx[k] - 1]?.id
+    else if (k === userIdx.length) anchor = turns[turns.length - 1]?.id
+    else continue
     if (!anchor) continue
     const list = map.get(anchor) ?? []
     list.push(p)

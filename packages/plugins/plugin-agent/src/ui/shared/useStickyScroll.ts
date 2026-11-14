@@ -35,6 +35,12 @@ export interface StickyScrollOptions {
   signal: () => unknown
   /** 离底多少像素内算「贴着底部」（默认 48） */
   threshold?: number
+  /**
+   * 「换成另一份内容」的标识（会话 id / 分页版本）。
+   * 它变了 = 列表整体被替换（不是追加），必须**重判一次**按钮与吸附状态：
+   * 否则滚动容器还是同一个元素、bind 不会再跑，按钮会停在上一份列表的结论上。
+   */
+  resetKey?: () => unknown
 }
 
 export function useStickyScroll(opts: StickyScrollOptions) {
@@ -94,6 +100,10 @@ export function useStickyScroll(opts: StickyScrollOptions) {
     stuck.value = true
     el.scrollTop = el.scrollHeight
     programmaticTop = el.scrollTop
+    // 滚完之后立刻按新位置重算按钮：这里若不重算，按钮会停在"还没到底"的旧结论上，
+    // 而紧随其后的 scroll 事件又被 programmaticTop 判成"自己滚的"直接忽略 —— 
+    // 于是刚进对话就出现一个永远收不掉的「回到底部」按钮（用户 2026-11-14 实测）。
+    syncButtonState()
   }
 
   /** 合帧滚动：一次内容突变可能触发多次，只滚最后一帧 */
@@ -109,6 +119,8 @@ export function useStickyScroll(opts: StickyScrollOptions) {
       if (el) {
         el.scrollTop = el.scrollHeight
         programmaticTop = el.scrollTop
+        // 同上：自己滚到底之后要自己把按钮收掉，不能指望 scroll 事件。
+        syncButtonState()
       }
     })
   }
@@ -225,8 +237,22 @@ export function useStickyScroll(opts: StickyScrollOptions) {
     boundEl?.removeEventListener('scroll', onUserScroll)
     el.addEventListener('scroll', onUserScroll, { passive: true })
     boundEl = el
+    /**
+     * 新绑上（进入对话 / 切换会话 / 切换分页）时**主动判断一次**，而不是等用户滚一下。
+     *
+     * 用户 2026-11-14 报的现象：「回到底部」按钮在刚进对话时一直挂在那儿，
+     * 因为这一帧还没人滚动过，`showScrollToBottom` 还停在上一份列表的值上。
+     * 先按**当前真实位置**算一次（内容包括刚装载的历史），再决定按钮显不显示。
+     */
     syncStuck()
+    syncButtonState()
     observeInner()
+    // 内容可能是异步渲染（图片/工具卡片刚展开）：下一帧再核一次，避免首次量到空列表
+    void nextTick(() => {
+      syncStuck()
+      syncButtonState()
+      if (stuck.value) scheduleScroll()
+    })
   }
 
   onMounted(() => {
@@ -246,6 +272,19 @@ export function useStickyScroll(opts: StickyScrollOptions) {
 
   // 滚动容器出现/换掉（三态切换）时补绑，并顺手重新观察新的内容容器
   watch(opts.target, () => bind())
+
+  /** 换会话 / 换分页：容器可能没换，但内容整份换了 —— 主动重判一次 */
+  if (opts.resetKey) {
+    watch(opts.resetKey, async () => {
+      await nextTick()
+      // 换了一份内容：先按"用户在看最新"处理（openSession 装载完整历史时就是该到底）
+      stuck.value = true
+      scheduleScroll()
+      await nextTick()
+      syncStuck()
+      syncButtonState()
+    })
+  }
 
   onBeforeUnmount(() => {
     cancelAnimationFrame(raf)
