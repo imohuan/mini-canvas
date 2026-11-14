@@ -583,7 +583,7 @@ export class AgentApi {
   }
 
   /** 分支信息：本会话的分叉点 + 全画布分叉点全表（分页器用） */
-  branchInfo(canvasId: string, sessionId: string): Promise<{ parentSessionId?: string; point?: string; points: Array<{ parentId: string; point: string; children: string[]; userOrdinal?: number; ghosts?: string[] }> }> {
+  branchInfo(canvasId: string, sessionId: string): Promise<{ parentSessionId?: string; point?: string; points: Array<{ parentId: string; point: string; children: string[]; userOrdinal?: number; ghosts?: string[]; tail?: boolean }> }> {
     return this.json(this.sessionPath(canvasId, sessionId) + '/branch-info')
   }
 

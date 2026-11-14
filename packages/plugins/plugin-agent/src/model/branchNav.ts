@@ -86,6 +86,14 @@ export interface ForkPoint {
    * 由服务端按转录长度判定（子会话回合数 ≤ 分叉点下标）。
    */
   ghosts?: string[]
+  /**
+   * 分叉点落在父转录**末尾**（该位置没有用户消息）= 切模型留下的分支。
+   *
+   * 结构性判据（不靠猜）：编辑重发一定 fork 在**某条用户消息之前**（点 < 回合数），
+   * 只有换模型才在末尾开一条同样的会话。用户 2026-11-14 口径：这类分支要**覆盖**当前分支，
+   * 不该多出一个版本。由服务端按父转录长度判定。
+   */
+  tail?: boolean
 }
 
 /** 'turn:3' -> 3；解析不出返回 null（老数据 / 未来格式） */
@@ -103,12 +111,33 @@ function parseTurnPoint(point: string): number | null {
  * 而 v3 仍然可达（用户不会因为清理而丢掉真正的分支）。
  */
 /** 某个会话一路向上折到的**实体**版本（不是幽灵就是它自己）。 */
+/**
+ * 切模型留下的「末尾分叉」：子会话 -> 它接替的那条会话。
+ *
+ * 这类分叉不该算一个版本（末尾没有用户消息，画不出页码），但子会话本身是**当前内容**：
+ * 它要能继续看到自己所属的那一版，并在那一版上显示「当前」。所以它不是被删掉，
+ * 而是像幽灵一样**折进父会话**。
+ */
+export function tailFolds(points: ForkPoint[]): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const p of points) {
+    if (!p.tail) continue
+    for (const c of p.children) if (!map.has(c)) map.set(c, p.parentId)
+  }
+  return map
+}
+
 export function foldGhostId(id: string, points: ForkPoint[]): string {
   const ghosts = new Set<string>()
   const parentOf = new Map<string, string>()
   for (const p of points) {
     for (const g of p.ghosts ?? []) ghosts.add(g)
     for (const c of p.children) if (!parentOf.has(c)) parentOf.set(c, p.parentId)
+  }
+  // 切模型的末尾分叉同样是「我接替了它」：停在上面时按父版本认位置
+  for (const [child, parent] of tailFolds(points)) {
+    ghosts.add(child)
+    if (!parentOf.has(child)) parentOf.set(child, parent)
   }
   let cur = id
   const seen = new Set<string>([cur])
@@ -124,10 +153,18 @@ export function foldGhostId(id: string, points: ForkPoint[]): string {
 export function contractGhosts(points: ForkPoint[]): ForkPoint[] {
   const ghosts = new Set<string>()
   for (const p of points) for (const g of p.ghosts ?? []) ghosts.add(g)
+  /**
+   * 切模型留在末尾的那些子会话也一并折掉（用户 2026-11-14 口径：它该覆盖当前分支）。
+   *
+   * 折法与幽灵相同：它自己被摘出版本组，下游分叉点改挂到它接替的那条会话上。
+   */
+  const tails = tailFolds(points)
+  for (const child of tails.keys()) ghosts.add(child)
   if (!ghosts.size) return points
+  const folded = points
   /** ghost -> 它的父会话（取第一条记录，与 parentMap 同一口径） */
   const parentOf = new Map<string, string>()
-  for (const p of points) for (const c of p.children) if (ghosts.has(c) && !parentOf.has(c)) parentOf.set(c, p.parentId)
+  for (const p of folded) for (const c of p.children) if (ghosts.has(c) && !parentOf.has(c)) parentOf.set(c, p.parentId)
   /** 一路向上找到第一个不是 ghost 的祖先（模型连切几次会串成一条 ghost 链） */
   const solidOf = (id: string): string => {
     let cur = id
@@ -142,7 +179,7 @@ export function contractGhosts(points: ForkPoint[]): ForkPoint[] {
   }
   /** 同一 (父, 位置) 合并成一条，children 去重合并 */
   const merged = new Map<string, ForkPoint>()
-  for (const p of points) {
+  for (const p of folded) {
     const parentId = solidOf(p.parentId)
     const children = p.children.filter((c) => !ghosts.has(c))
     if (!children.length) continue

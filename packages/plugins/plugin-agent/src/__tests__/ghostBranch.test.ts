@@ -6,7 +6,7 @@
  * 现在的规则：子会话只要没有自己的新回合（回合数 ≤ 分叉点下标）就不算一个版本。
  */
 import { describe, expect, it } from 'vitest'
-import { contractGhosts, foldGhostId, inlinePagers, type ForkPoint, type SessionRow } from '../model/branchNav'
+import { contractGhosts, foldGhostId, inlinePagers, pagerAnchors, type ForkPoint, type SessionRow } from '../model/branchNav'
 
 const rows: SessionRow[] = [
   { id: 'root', title: '原版', updatedAt: 1 },
@@ -56,5 +56,37 @@ describe('幽灵分支折叠', () => {
     expect(pagers[0].items.map((i) => i.id)).toEqual(['root', 'real'])
     expect(pagers[0].position).toBe(1)
     expect(pagers[0].total).toBe(2)
+  })
+
+  /**
+   * 用户 2026-11-14 截图：一栏里上下叠着 `2/2` 和 `1/2`。
+   *
+   * 现场数据：一条对话先「编辑重发」分出两版（分叉点在某条用户消息之前），
+   * 之后又在这条对话上切了模型 —— 切模型在转录**末尾**登记了第二个分叉点，
+   * 于是两组版本各自画一行，看起来像两个不相干的分支挤在一起。
+   * 规则：末尾那种分叉（tail）是切模型，直接覆盖当前分支，不参与版本组。
+   */
+  it('编辑分支 + 切模型末尾分叉：只能剩一组分页器', () => {
+    const rows2: SessionRow[] = [
+      { id: 'root', title: '原版', updatedAt: 1 },
+      { id: 'v2', title: '编辑版', updatedAt: 2 },
+      { id: 'm2', title: '换过模型', updatedAt: 3 },
+    ]
+    const pts: ForkPoint[] = [
+      { parentId: 'root', point: 'turn:0', children: ['v2'], userOrdinal: 1 },
+      { parentId: 'v2', point: 'turn:4', children: ['m2'], userOrdinal: 1, tail: true },
+    ]
+    // 版本组里只剩编辑出来的那一组
+    for (const id of ['root', 'v2', 'm2']) {
+      const pagers = inlinePagers(id, rows2, pts)
+      expect(pagers.map((p) => p.items.map((i) => i.id).join(','))).toEqual(['root,v2'])
+    }
+    // 同一条消息下面也只画一行（不再出现两个区域）
+    const turns = [
+      { id: 'u0', kind: 'user' }, { id: 'a0', kind: 'assistant' },
+      { id: 'u1', kind: 'user' }, { id: 'a1', kind: 'assistant' },
+    ]
+    const anchors = pagerAnchors(turns, inlinePagers('v2', rows2, pts))
+    expect([...anchors.values()].flat()).toHaveLength(1)
   })
 })

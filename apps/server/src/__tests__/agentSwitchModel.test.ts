@@ -80,8 +80,18 @@ describe('切换模型', () => {
       { fromUser: 0, provider: 'deepseek', modelId: 'deepseek-v4-pro' },
       { fromUser: 2, provider: 'openrouter', modelId: 'anthropic/claude-opus-5' },
     ])
-    // 分支登记：新会话挂在父会话的末尾分叉点上（与"编辑重发"同一张表）
-    expect(await branchStore(root).pointOf('c1', newId)).toEqual({ parentSessionId: 's1', point: 'turn:3' })
+    /**
+     * 切模型**接管当前分支**，不新增版本（用户 2026-11-14 口径）。
+     * 没有编辑分支时，新会话是这条对话的延续：不该登记任何分叉点，
+     * 否则界面上会凭空多出一组分页器（与编辑分支叠在一起）。
+     */
+    expect(await branchStore(root).pointOf('c1', newId)).toBeNull()
+    expect(await branchStore(root).allPoints('c1')).toEqual([])
+    // 旧会话被顶替掉：历史里只剩新的一条，用户看到的是一条对话、一个模型
+    expect((await store.list('c1')).map((s) => s.id)).toEqual([newId])
+    expect(await store.get('c1', 's1')).toBeUndefined()
+    // 但它仍属于同一棵树（历史列表不会因此多出一行）
+    expect(await branchStore(root).parentMap('c1')).toEqual({ [newId]: 's1' })
   })
 
   /**
@@ -103,7 +113,6 @@ describe('切换模型', () => {
    */
   it('同一位置连切两次 ⇒ 同起点的旧分段被折掉，只留最后一次的选择', async () => {
     const r1 = await switchTo('openrouter', 'claude-opus-5')
-    const mid = await store.get('c1', String(r1.json.sessionId))
     // 在新会话上再切回原模型
     const app2 = app
     const res = await app2.request('/api/agent/canvases/c1/sessions/' + r1.json.sessionId + '/switch-model', {
@@ -111,13 +120,47 @@ describe('切换模型', () => {
       body: JSON.stringify({ provider: 'deepseek', modelId: 'deepseek-v4-pro' }),
     })
     expect(res.status).toBe(200)
-    const final = await store.get('c1', String(((await res.json()) as Record<string, unknown>).sessionId))
+    const finalId = String(((await res.json()) as Record<string, unknown>).sessionId)
+    const final = await store.get('c1', finalId)
     const starts = (final!.modelSegments ?? []).map((s) => s.fromUser)
     expect(new Set(starts).size).toBe(starts.length)
     // 最终那一段的模型 = 最后一次的选择（起点是这条新会话的转录末尾：2 条用户消息）
     expect(final!.modelSegments!.at(-1)).toEqual({ fromUser: 2, provider: 'deepseek', modelId: 'deepseek-v4-pro' })
-    // 中间那条会话自己的分段没被动过（分段随会话记录走，不是全局的）
-    expect(mid!.modelSegments!.at(-1)!.modelId).toBe('claude-opus-5')
+    // 连切两次也只留一条会话：第一次那条已被第二次顶替
+    expect((await store.list('c1')).map((s) => s.id)).toEqual([finalId])
+    expect(await store.get('c1', String(r1.json.sessionId))).toBeUndefined()
+  })
+
+  /**
+   * 用户 2026-11-14 的核心要求：切模型**直接覆盖当前分支**，不影响编辑出来的分支。
+   *
+   * 现场：一条对话先「编辑重发」分出两版（分页器 1/2、2/2），再在其中一版上切模型 ——
+   * 以前会在末尾再登记一个分叉点，于是同一栏里叠出两组分页器。
+   * 现在切模型顶替当前那一版：版本数量不变、页码不变、另一版仍然可达。
+   */
+  it('在编辑分支上切模型：原地顶替那一版，不新增版本', async () => {
+    // 先造一条编辑分支：s1 在「第二句」之前分出 v2
+    const bs = branchStore(root)
+    const fork = await store.forkFrom('c1', 's1', '第二句')
+    await bs.register('c1', 's1', fork.point, fork.sessionId)
+    const before = await bs.allPoints('c1')
+    expect(before).toHaveLength(1)
+    expect(before[0].children).toEqual([fork.sessionId])
+
+    // 在这条分支上切模型
+    const r = await switchTo('openrouter', 'claude-opus-5', fork.sessionId)
+    expect(r.status).toBe(200)
+    const newId = String(r.json.sessionId)
+    expect(newId).not.toBe(fork.sessionId)
+
+    const after = await bs.allPoints('c1')
+    // 仍然只有**一处**分叉点、一个版本位 —— 只是内容换成了新会话
+    expect(after).toHaveLength(1)
+    expect(after[0].parentId).toBe('s1')
+    expect(after[0].children).toEqual([newId])
+    // 旧分支会话被顶替（历史里不会同时出现两份内容相同的版本）
+    expect(await store.get('c1', fork.sessionId)).toBeUndefined()
+    expect(await bs.pointOf('c1', newId)).toEqual({ parentSessionId: 's1', point: fork.point })
   })
 
   it('已经是这个模型 ⇒ unchanged（不产生第二条会话）', async () => {

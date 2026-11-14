@@ -629,7 +629,27 @@ export function agentSessionRoutes(
           '切换模型的 Trace 种子写入失败（已回滚）: ' + (err instanceof Error ? err.message : String(err)),
         )
       }
-      await branches.register(p.canvasId, p.sessionId!, branched.point, branched.sessionId)
+      /**
+       * 切模型**接管当前分支**，不新增版本（用户 2026-11-14 口径）。
+       *
+       * 以前这里无条件 register：于是一条对话里既有点「编辑」留下的分支点、
+       * 又有每次切模型在末尾留下的分支点，两组分页器叠在同一栏（用户截图）。
+       * 现在的规则：新会话顶替当前会话在原分支里的位置 ——
+       *   · 当前会话是某个分叉位置的版本（编辑出来的分支）→ 原地替换那个位置；
+       *   · 当前会话自己就是链头 / 根（没有任何分叉点涉及它）→ 只留一条接力关系，
+       *     不登记分叉点，于是界面上根本不会多出分页器；
+       *   · 当前会话下面还有别人分出来的分叉点（它是父）→ 把那一条的父改成新会话，
+       *     旧会话随后删除（历史列表与分页器都只看到新的一条）。
+       */
+      const origin = await branches.pointOf(p.canvasId, p.sessionId!)
+      await branches.replaceSession(p.canvasId, p.sessionId!, branched.sessionId)
+      if (!origin) await branches.inherit(p.canvasId, branched.sessionId, p.sessionId!)
+      /**
+       * 旧会话删掉：它是被顶替的那一份内容（转录一模一样，只是模型不同）。
+       * 不删的话历史列表会同时出现「旧模型那一版」和新的一版，用户会以为多了一个分支。
+       * 失败不影响切模型本身（新会话已经能用了），只是留下一条旧记录。
+       */
+      await store.remove(p.canvasId, p.sessionId!).catch(() => undefined)
       const created = await store.get(p.canvasId, branched.sessionId)
       return c.json({
         ok: true,
@@ -671,6 +691,12 @@ export function agentSessionRoutes(
         if (!rec) return pt
         const userOrdinal = rec.turns.slice(0, n).filter((t) => t.role === 'user').length
         /**
+         * 切模型留下的分支：分叉点正好在父转录**末尾**（这个位置没有用户消息）。
+         * 编辑重发永远 fork 在某条用户消息之前，所以这条判据不会误伤真实分支。
+         * 交给前端折叠成"覆盖当前分支"（用户 2026-11-14：切模型不该多出一个版本）。
+         */
+        const tail = n >= rec.turns.length
+        /**
          * 幽灵分支：子会话里只有「分叉时拷过去的前缀」，一条自己的新回合都没有。
          *
          * 来源是旧版「点一下模型就 branchFromEnd」留下的记录（用户 2026-11-14 报的分支乱象）：
@@ -682,7 +708,7 @@ export function agentSessionRoutes(
           const child = await store.get(p.canvasId, childId)
           if (child && child.turns.length <= n) ghosts.push(childId)
         }
-        return ghosts.length ? { ...pt, userOrdinal, ghosts } : { ...pt, userOrdinal }
+        return { ...pt, userOrdinal, ...(ghosts.length ? { ghosts } : {}), ...(tail ? { tail: true } : {}) }
       }),
     )
     return c.json({
