@@ -10,7 +10,7 @@ import { useUiComponent } from '@plume-canvas/canvas-render'
 import AgentMarkdown from '../render/AgentMarkdown.vue'
 import ToolViewBody from '../render/ToolViewBody.vue'
 import AgentScrollArea from './AgentScrollArea.vue'
-import { PAGER_TOP_KEY } from '../../model/branchNav.js'
+import { PAGER_TOP_KEY, type PagerGroup } from '../../model/branchNav.js'
 // AI Elements 本地件（vendored shadcn-vue）：只取消息轮次容器与内容格。
 // 为什么走相对路径：这是插件专属组件，不进全局注册表（见 ui/ai-elements/README）。
 import { Message as AiMessage, MessageContent, MessageFooter } from '../ai-elements/message'
@@ -102,6 +102,18 @@ onMounted(() => {
   void nextTick(syncScroller)
 })
 watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
+
+/**
+ * 取某个锚点上的分页器（带类型版）。
+ *
+ * 控制器是 `Record<string, any>`（inject 出来的），模板里直接 `pagerByAnchor.get()`
+ * 拿到的全是 any，v-for 的 `pg` / `pi` 也跟着退化成 any，类型检查就会报隐式 any。
+ * 这里收一次口子，模板里只跟 `PagerGroup[]` 打交道。
+ */
+function pagersAt(anchor: string): PagerGroup[] {
+  const map = (c as { pagerByAnchor?: Map<string, PagerGroup[]> }).pagerByAnchor
+  return map?.get(anchor) ?? []
+}
 </script>
 
 <template>
@@ -151,7 +163,7 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
           <!-- 分页器（分叉点在第一条用户消息之前＝编辑了第一句）：挂在列表最上面。
                抽成同一段模板逻辑：位置对了才跟得住消息，用户 2026-11-14 报的
                「一栏里上下叠着 2/2 和 1/4」就是位置算错后两组被顶到同一处。 -->
-          <div v-for="(pg, pi) in pagerByAnchor.get(PAGER_TOP_KEY) ?? []" :key="'pager-top-' + pi"
+          <div v-for="(pg, pi) in pagersAt(PAGER_TOP_KEY)" :key="'pager-top-' + pi"
             class="ac-branch-nav" role="navigation" aria-label="切换分支版本">
             <Button variant="ghost" size="icon-sm" class="ac-branch-arrow" :disabled="pg.index <= 0" aria-label="上一个版本"
               :title="'上一个版本 · ' + pg.items.map((i) => i.label).join(' / ')"
@@ -464,9 +476,9 @@ watch(scrollRef, () => void nextTick(syncScroller), { flush: 'post' })
              切过去后不含当前版本后来的消息。 -->
             <!-- 同一位置理论上可以有多组（链式分叉），逐行渲染、不互相覆盖；
               正常情况下每组落在各自那一轮之后，不会两行叠在一处。 -->
-            <div v-for="(pg, pi) in pagerByAnchor.get(t.id) ?? []" :key="'pager-' + t.id + '-' + pi"
+            <div v-for="(pg, pi) in pagersAt(t.id)" :key="'pager-' + t.id + '-' + pi"
               class="ac-branch-nav" role="navigation"
-              :aria-label="(pagerByAnchor.get(t.id) ?? []).length > 1 ? '切换分支版本 ' + (pi + 1) + '（第 ' + pg.userOrdinal + ' 轮之后）' : '切换分支版本'">
+              :aria-label="pagersAt(t.id).length > 1 ? '切换分支版本 ' + (pi + 1) + '（第 ' + pg.userOrdinal + ' 轮之后）' : '切换分支版本'">
               <Button variant="ghost" size="icon-sm" class="ac-branch-arrow" :disabled="pg.index <= 0" aria-label="上一个版本"
                 :title="'上一个版本 · ' + pg.items.map((i) => i.label).join(' / ')"
                 @click="pagerTarget(pg, -1) !== null && agent.openSession(pagerTarget(pg, -1)!)">
