@@ -254,12 +254,6 @@ export function useSelectionFrame() {
     return p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h
   }
 
-  function hitsAnyNode(p: { x: number; y: number }): boolean {
-    const l = layout()
-    if (!l) return false
-    return l.getAllRects().some((r) => pointInRect(p, r))
-  }
-
   function stopFrameTracking(): void {
     for (const d of dragDisposers) d.dispose()
     unsubSel?.()
@@ -301,7 +295,6 @@ export function useSelectionFrame() {
     followFrameByDelta,
     screenToFlowPoint,
     pointInRect,
-    hitsAnyNode,
     stopFrameTracking,
   }
 }

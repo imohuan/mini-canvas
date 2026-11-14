@@ -49,7 +49,6 @@ const {
   refreshFrame,
   screenToFlowPoint,
   pointInRect,
-  hitsAnyNode,
   stopFrameTracking,
   handleParams,
   connectionState,
@@ -75,7 +74,6 @@ const dragController = useGroupDrag({
   dragFrameGeometry,
   refreshFrame,
   pointInRect,
-  hitsAnyNode,
   screenToFlowPoint,
 })
 
