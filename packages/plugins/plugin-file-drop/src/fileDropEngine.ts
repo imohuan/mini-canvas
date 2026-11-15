@@ -49,9 +49,9 @@ import {
 } from '@plume-canvas/plugin-sdk'
 
 /** image 节点没有真实尺寸时的默认卡片（与 type defaultSize 不同，这是"尺寸未知"的兜底） */
-export const DEFAULT_IMAGE_SIZE = { cardWidth: 420, cardHeight: 300 }
+export const DEFAULT_IMAGE_SIZE = { w: 420, h: 300 }
 /** video 节点没有真实尺寸时的默认卡片 */
-export const DEFAULT_VIDEO_SIZE = { cardWidth: 560, cardHeight: 360 }
+export const DEFAULT_VIDEO_SIZE = { w: 560, h: 360 }
 /** audio 节点固定卡片尺寸（与 plugin-node-audio 的类型默认尺寸一致；音频没有内容比例可跟） */
 export const DEFAULT_AUDIO_SIZE = { w: 320, h: 120 }
 
@@ -96,7 +96,7 @@ export function fitImageSize(
   limits: MediaCardLimits = DEFAULT_IMAGE_CARD_LIMITS,
 ): { w: number; h: number } {
   const fit = fitMediaCard(dims?.width, dims?.height, limits, DEFAULT_IMAGE_CARD_LIMITS)
-  return fit ? { w: fit.width, h: fit.height } : { w: DEFAULT_IMAGE_SIZE.cardWidth, h: DEFAULT_IMAGE_SIZE.cardHeight }
+  return fit ? { w: fit.width, h: fit.height } : { w: DEFAULT_IMAGE_SIZE.w, h: DEFAULT_IMAGE_SIZE.h }
 }
 
 /**
@@ -108,7 +108,7 @@ export function fitVideoSize(
   limits: MediaCardLimits = DEFAULT_VIDEO_CARD_LIMITS,
 ): { w: number; h: number } {
   const fit = fitMediaCard(dims?.width, dims?.height, limits, DEFAULT_VIDEO_CARD_LIMITS)
-  return fit ? { w: fit.width, h: fit.height } : { w: DEFAULT_VIDEO_SIZE.cardWidth, h: DEFAULT_VIDEO_SIZE.cardHeight }
+  return fit ? { w: fit.width, h: fit.height } : { w: DEFAULT_VIDEO_SIZE.w, h: DEFAULT_VIDEO_SIZE.h }
 }
 
 /** 多文件从中心点级联排布（老版：baseX = center - count*10，第 i 个 + i*40）。单文件即中心点。 */
@@ -155,7 +155,7 @@ export function buildImagePayload(
   dims: ImageDims | null,
   limits?: MediaCardLimits,
 ): NodePayload {
-  const size = dims ? fitImageSize(dims, limits) : { w: DEFAULT_IMAGE_SIZE.cardWidth, h: DEFAULT_IMAGE_SIZE.cardHeight }
+  const size = dims ? fitImageSize(dims, limits) : { w: DEFAULT_IMAGE_SIZE.w, h: DEFAULT_IMAGE_SIZE.h }
   const data: Record<string, unknown> = {
     imageUrl: url,
     imageName: file.name,
@@ -176,7 +176,7 @@ export function buildImagePayload(
  * videoDuration/videoSize）—— 拖进来的节点与在节点里上传的视频必须是同一形状，
  * 否则状态栏/裁剪/剪辑在"拖进来的"节点上会读不到值。
  *
- * 卡片尺寸只给 size（唯一正身）：data.cardWidth/cardHeight 由 nodeStore 自动镜像，不在这里手写。
+ * 卡片尺寸只给 size（唯一正身）：没有 data 镜像，node.size 就是画布上看到的宽高。
  */
 export function buildVideoPayload(
   file: FileLike,
@@ -185,7 +185,7 @@ export function buildVideoPayload(
   meta: { width: number; height: number; duration?: number } | null,
   limits?: MediaCardLimits,
 ): NodePayload {
-  const size = meta ? fitVideoSize({ width: meta.width, height: meta.height }, limits) : { w: DEFAULT_VIDEO_SIZE.cardWidth, h: DEFAULT_VIDEO_SIZE.cardHeight }
+  const size = meta ? fitVideoSize({ width: meta.width, height: meta.height }, limits) : { w: DEFAULT_VIDEO_SIZE.w, h: DEFAULT_VIDEO_SIZE.h }
   const data: Record<string, unknown> = {
     videoUrl: url,
     videoName: file.name,

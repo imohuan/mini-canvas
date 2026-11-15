@@ -35,12 +35,15 @@ function renderCtx(zoom: number): CanvasRenderContext {
   const services: Record<string, unknown> = {
     nodeStore: { getNode: () => undefined, getNodes: () => [] },
     graph: { updateNode: () => {} },
+    // 尺寸唯一来源：nodeGeometry → node.size
+    nodeGeometry: { get: () => ({ w: 480, h: 320 }) },
     command: { execute: () => undefined },
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
   }
   return {
     ctx: {
       get: (name: string) => services[name],
+      tryGet: (name: string) => services[name],
       on: () => ({ dispose: () => {} }),
       registryOf: () => new RegistryImpl(),
     },

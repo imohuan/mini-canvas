@@ -23,7 +23,7 @@ ctx.nodes.register({ type: 'text', /* ... */ })
 | `produces` | `{ text: { kind: 'text', valueField: 'text' } }`（对外产出一段文本） |
 | `inputs` | `[{ port: 'target', acceptsTypes: ['text'] }]` |
 | `outputs` | `[{ port: 'source', contentType: 'text' }]` |
-| `resizable` | `true`（右下拖柄；尺寸写回 `data.cardWidth/Height`） |
+| `resizable` | `true`（右下拖柄；尺寸写回 `node.size`） |
 | `in` | `TextContent.vue`（内容区组件） |
 | `create(position)` | 委托 `TextService.addTextNode`（单一实现） |
 

@@ -11,7 +11,7 @@
  *   - 写回：history.withRecord 一次原子 + nodeStore.updateNodes 批量。
  *   - 快捷键：命令 keys（mod+l / f / r），渲染层 CanvasHost 统一分发；不自绑 window。
  *   - 组收拢用本包纯函数（groupBounds.ts），不硬依赖 group 插件 —— 无 group 服务也能独立工作；
- *     仅"框尺寸样式同步"是通用声明（size + data.cardWidth/cardHeight），与 plugin-group 写同一套字段。
+ *     仅"框尺寸样式同步"是通用声明（只写 node.size），与 plugin-group 写同一套字段。
  *   - Config schema：模块级 Config，内核装配时校验 + 补默认 + 登记 settings 面板。
  *
  * 与老版差异（v2 语义）：
@@ -156,6 +156,14 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
   const doc = ctx.get('doc')
   const selection = ctx.get('selection')
   const view = ctx.get('view')
+  /**
+   * 节点几何唯一读写口（用户 2026-11-14）：尺寸只存 node.size，布局从服务读，
+   * 不再自己拼 200×100 之类的兜底值。没装该服务的极简宿主才退回 view。
+   */
+  const geometry = ctx.tryGet<{
+    get(id: string): { w: number; h: number } | null
+    getRect(id: string): { x: number; y: number; w: number; h: number } | null
+  }>('nodeGeometry')
   // 装配 config 缺省（冷启动没给配置）时用 schema 默认补齐——与内核 resolveConfig 行为一致
   const effectiveConfig = (rawConfig ?? resolveConfig(Config)) as AutoLayoutConfigFromSchema
 
@@ -214,6 +222,8 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
 
   /** 节点绝对矩形快照（nodeLayout 实测/绝对；无服务退化为声明数据兜底） */
   function absoluteRectOf(n: CanvasNode): { x: number; y: number; w: number; h: number } {
+    const rectFromService = geometry?.getRect(n.id)
+    if (rectFromService && rectFromService.w > 0 && rectFromService.h > 0) return rectFromService
     const rect = view.getNodeRect(n.id)
     if (rect && rect.w > 0 && rect.h > 0) return rect
     return {
@@ -298,7 +308,7 @@ export function apply(ctx: Context, rawConfig?: AutoLayoutConfigFromSchema) {
     const result = layoutHierarchy(hierarchyNodes, edges, runConfig)
 
     // 组装写回 entries：
-    //  - 组节点：frame（绝对 position + size；卡片镜像 data.cardWidth/cardHeight 由 nodeStore 自动补）
+    //  - 组节点：frame（绝对 position + size；卡片宽高直接读 node.size）
     //  - 组内子节点：相对父组坐标（result.positions 已按"相对父组左上"输出）
     //  - 顶层自由节点：绝对坐标
     const byId = new Map(doc.getNodes().map((n) => [n.id, n]))

@@ -174,8 +174,9 @@ function placeVideoNode(
     id: n.id,
     x: n.position.x,
     y: n.position.y,
-    w: n.size?.w ?? (Number(n.data?.cardWidth) || DEFAULT_NODE_WIDTH),
-    h: n.size?.h ?? (Number(n.data?.cardHeight) || 320),
+    // 尺寸只读 node.size（缺失才用类型默认兜底，不再读 data 镜像）。
+    w: n.size?.w ?? DEFAULT_NODE_WIDTH,
+    h: n.size?.h ?? 320,
   })
   const source = nodes.find((n) => n.id === sourceId)
   return placeAdjacent({
@@ -361,7 +362,7 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
       const rect = layout()?.getNodeRect(nodeId)
       if (rect && rect.w > 0) return rect.w
       const node = doc()?.getNode(nodeId)
-      const w = Number(node?.data?.cardWidth) || node?.size?.w || 0
+      const w = node?.size?.w || 0
       return w > 0 ? w : null
     },
     createNode: (type, position, data) => {
@@ -775,7 +776,7 @@ export function createPendingVideoNode(
     ...(opts.width > 0 && opts.height > 0 ? { videoWidth: opts.width, videoHeight: opts.height } : {}),
     ...(opts.cropRect ? { cropRect: opts.cropRect } : {}),
   }
-  // 卡片尺寸走正式字段 size（与换视频/裁剪同一条：只写 size，cardWidth/cardHeight 由 nodeStore 镜像）
+  // 卡片尺寸走唯一字段 size（与换视频/裁剪同一条）
   // 原视频是上游、占位节点是下游（与成品节点同方向：原节点 → 新节点）
   return ctx.createNodeWithEdge('video', position, data, opts.sourceId, 'targetToNew', sizes?.size)
 }
@@ -835,7 +836,7 @@ export function resetClip(ctx: VideoOpsContext, nodeId: string): boolean {
  * 能连给别的节点、能被生成模型吃进去 —— 与 v1 makeImageNodeFromFrame 的意图一致。
  *
  * 两处刻意的不做：
- * - **不写 cardWidth/cardHeight**：图片节点自己会在挂载时按图片比例补齐尺寸
+ * - **不写 data 里的尺寸**：图片节点自己会在挂载时按图片比例写 node.size
  *   （见 plugin-node-image 的 missingCardSizePatch）—— 在这里再算一遍必然与图片插件的规则漂移；
  * - **裁剪框存在时只截框内**（用户的直觉：我裁了就该拿到裁好的图）。
  *

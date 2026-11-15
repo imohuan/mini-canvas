@@ -18,6 +18,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RenderEvents, useCanvasRender, useSoleNodeSelected, useUiComponent } from '@plume-canvas/canvas-render'
 import { framingStyle, isCroppedRect, type Rect } from './videoCrop'
+import { resolveMediaFillMode } from './mediaFill'
 import { readClipRange } from './videoClip'
 import VideoPlayerBar from './VideoPlayerBar.vue'
 import { Maximize2 } from 'lucide-vue-next'
@@ -53,6 +54,9 @@ const Button = useUiComponent('Button')
 const NodeLoadingState = useUiComponent('nodeLoadingState')
 
 const { ctx, flow, interaction } = useCanvasRender()
+
+/** 画布缩放（判定「比例一致」时阈值要按屏幕像素反算，见 mediaFill） */
+const zoom = computed(() => Math.max((flow.viewport.value?.zoom ?? 1) || 1, 0.01))
 
 const videoRef = ref<HTMLVideoElement | null>(null)
 const stageRef = ref<HTMLElement | null>(null)
@@ -109,7 +113,7 @@ const playback = useVideoPlayback({
   videoRef,
   hovering,
   blocked: () => busy.value,
-  onMeta: (v) => onVideoMeta(v),
+  onMeta: (v) => recordVideoMeta(v),
 })
 const {
   playing, currentTime, duration, videoRequested, resumeTime, videoHasFrame,
@@ -167,6 +171,11 @@ const {
 
 /** 读写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
 const ops = createVideoOps(ctx)
+/** 节点尺寸唯一来源（nodeGeometry → node.size） */
+const nodeGeometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+function currentNodeSize(): { w: number; h: number } | null {
+  return nodeGeometry?.get(props.id) ?? null
+}
 
 /** 裁剪中显示完整画面；平时按裁框取景（这是"裁剪"在视觉上落地的唯一一处） */
 const videoStyle = computed<Record<string, string>>(() => {
@@ -174,11 +183,39 @@ const videoStyle = computed<Record<string, string>>(() => {
   // 卡片尺寸一起传：取景块按**裁框自己的宽高比**铺满卡片。
   // 只按「原宽÷框宽、原高÷框高」放大会在卡片比例与裁框不一致时把画面拉扁
   // （用户 2026-10-30 实测报的「缩略图没有裁剪」）。没有卡片尺寸时退回旧算法。
-  const cardW = positiveNum(props.data?.cardWidth) ?? 0
-  const cardH = positiveNum(props.data?.cardHeight) ?? 0
+  // 卡片尺寸只从 node.size 读（经 nodeGeometry 服务），不再读 data 镜像。
+  const cardSize = currentNodeSize()
+  const cardW = positiveNum(cardSize?.w) ?? 0
+  const cardH = positiveNum(cardSize?.h) ?? 0
   return framingStyle(cropRect.value, videoWidth.value, videoHeight.value, cardW, cardH)
 })
 const isFramed = computed(() => !cropping.value && Object.keys(videoStyle.value).length > 0)
+
+/**
+ * 画面该铺满还是完整可见（用户 2026-11-14：节点四周有一条黑线）。
+ *
+ * 黑线不是卡片边框 —— 边框是 BaseNode 画的 1px 浅灰，圆角也正常；露出来的是舞台的近黑底：
+ * 卡片尺寸取整后与画面比例差了不到 1px，`contain` 会把这点差值留成上下两条缝。
+ * 判定规则见 mediaFill（比例一致才铺满，真不一致时仍旧 contain，绝不裁画面）。
+ */
+const mediaFillMode = computed<'cover' | 'contain'>(() => {
+  if (isFramed.value || cropping.value) return 'contain'
+  const card = currentNodeSize()
+  if (!card) return 'contain'
+  const z = Math.max(zoom.value, 0.01)
+  return resolveMediaFillMode(
+    {
+      mediaWidth: videoWidth.value,
+      mediaHeight: videoHeight.value,
+      cardWidth: card.w,
+      cardHeight: card.h,
+      // 卡片边框已改成盒子外面的 ring（不再吃 border-box），画面可用区域 = 整个卡片尺寸
+      borderWidth: 0,
+    },
+    z,
+  )
+})
+const fillCover = computed(() => mediaFillMode.value === 'cover')
 
 /**
  * 预览图的显示方式。
@@ -192,10 +229,11 @@ const isFramed = computed(() => !cropping.value && Object.keys(videoStyle.value)
 const posterStyle = computed<Record<string, string>>(() => videoStyle.value)
 
 /** 卡片尺寸：视频地址一变就量一次，量到就按尺寸显示 */
-const { mountSize, onMeta: onVideoMeta, measure, measureSize } = useVideoCardSize({
+const { mountSize } = useVideoCardSize({
   nodeId: () => props.id,
   data: () => props.data,
   ops,
+  currentSize: currentNodeSize,
   sourceFields,
   onSourceChanged: () => { broken.value = false },
   // 拖动中先别改卡片尺寸：节点会在指针下跳一下（用户实测「拖不动、要平移缩放才恢复」）
@@ -209,32 +247,20 @@ onMounted(() => {
 })
 
 /**
- * 监听视频**显示地址**的变化：地址一变就先量尺寸，再按尺寸显示宽高。
+ * 尺寸只由明确动作改（换视频 / 裁剪 / 导入时写 node.size）。
  *
- * 卡片默认 480×320 是 4:3，16:9 视频就会被 contain 出上下黑边；
- * 地址到手就量一次，不用等悬停播放或平移缩放（用户 2026-11-11 口径）。
+ * 不再在“视频地址变化 / 帧图加载完 / 元数据到手”时自动回写尺寸 ——
+ * 否则用户或别的插件刚设好的 size 会被冲回默认比例（实测：外层 560×420 被改回 480×320）。
+ * 视频播放器的 loadedmetadata 只用于播放条，不改尺寸。
  */
-watch(videoUrl, (url) => { if (url) void measure(url) }, { immediate: true })
-
-/**
- * 缩略图加载完成：这是视频节点**平时真正显示的东西**（不悬停就不会挂 `<video>`）。
- *
- * 帧图是「整幅原片等比缩进档位框」的产物，**比例与原片一致**（档位框不匹配时按短边
- * 补足，仍然等比）；只有裁过的节点才不能拿它算比例 —— 那种情况用下面的已存宽高。
- * 这里只做一次核对，不额外请求、不解码视频。
- */
-function onPosterLoad(e: Event): void {
-  const el = e.target as HTMLImageElement | null
-  if (!el?.naturalWidth || !el?.naturalHeight) return
-  // 先按节点里记着的真实分辨率纠正（拖入/换源时写入，最准）；
-  // 没记过才用这张图的比例（同比例，量一次没有额外成本）
-  const w = positiveNum(props.data?.videoWidth)
-  const h = positiveNum(props.data?.videoHeight)
-  if (w !== null && h !== null && !cropRect.value) {
-    measureSize(w, h)
-    return
-  }
-  measureSize(el.naturalWidth, el.naturalHeight)
+function recordVideoMeta(v: { videoWidth: number; videoHeight: number }): void {
+  const w = positiveNum(v.videoWidth)
+  const h = positiveNum(v.videoHeight)
+  if (w === null || h === null) return
+  const current = ops.read(props.id) ?? props.data
+  const sameMeta = positiveNum(current.videoWidth) === w && positiveNum(current.videoHeight) === h
+  if (sameMeta) return
+  ops.writeMeasured?.(props.id, { ...current, videoWidth: w, videoHeight: h })
 }
 
 /**
@@ -327,8 +353,8 @@ watch(videoUrl, (prev) => {
              v-show 负责"盖不盖住视频"。鼠标移开时元素还在，只是重新显示出来 ——
              没有 blob 重建空窗，不会白屏一闪。 -->
         <img v-if="posterDisplaySrc" v-show="keepPosterOverVideo" class="video-media is-poster"
-          :class="{ 'is-cropping': cropping }" :style="posterStyle" :src="posterDisplaySrc"
-          alt="视频帧" draggable="false" @load="onPosterLoad" />
+          :class="{ 'is-cropping': cropping, 'is-fill-cover': fillCover }" :style="posterStyle" :src="posterDisplaySrc"
+          alt="视频帧" draggable="false" />
         <!--
           加载态（用户 2026-10-30 要求）：缩略图还没拿到时不能只留一块空底色 ——
           用户分不清"在加载"和"坏了"。统一用默认主题的加载件（流光 + 文字），
@@ -342,7 +368,7 @@ watch(videoUrl, (prev) => {
           message="加载预览…"
         />
         <!-- 独立 v-if：video 只看"请求播放"，与帧图在不在无关 -->
-        <video v-if="!showPoster" ref="videoRef" class="video-media" :class="{ 'has-frame': videoHasFrame }"
+        <video v-if="!showPoster" ref="videoRef" class="video-media" :class="{ 'has-frame': videoHasFrame, 'is-fill-cover': fillCover }"
           :style="videoStyle" :src="videoUrl"
           playsinline preload="metadata" @loadedmetadata="onLoadedMetadata" @timeupdate="onTimeUpdate"
           :muted="volumeEffectiveMuted" :volume="volume"
@@ -471,6 +497,15 @@ watch(videoUrl, (prev) => {
   /* 与 video 短暂共存时压在上面（hover 自动播放要等首帧解码完才撤帧图，防止闪黑） */
   z-index: 1;
   -webkit-user-drag: none;
+}
+
+/* 卡片内框与画面比例一致（只差取整的亚像素）→ 铺满，不留那一条黑缝。
+   用户 2026-11-14 截图里的「黑边框」就是 contain 留下的：卡片尺寸由 fitMediaCard
+   取整（420×576 → 408×560），比例差不到 1px，露出的是一条舞台近黑底。
+   判定在 mediaFill（resolveMediaFillMode）；只有确认比例一致才加这个类，
+   真不一致（手动拖过 / 4:3 卡片装 16:9）仍走 contain，画面一个像素都不裁。 */
+.video-media.is-fill-cover {
+  object-fit: cover;
 }
 
 /* 裁过的画面：由 framingStyle 给出放大比例与偏移，位置相对舞台左上角，

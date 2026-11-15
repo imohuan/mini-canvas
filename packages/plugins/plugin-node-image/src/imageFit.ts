@@ -101,9 +101,11 @@ export function cardSizePatch(
 export function missingCardSizePatch(
   data: Record<string, unknown> | undefined,
   limits?: Partial<ImageFitLimits> | null,
+  /** 当前 node.size（经 nodeGeometry 读）；有正数就代表“已经有尺寸”，不补 */
+  currentSize?: { w: number; h: number } | null,
 ): CardSizePatch | null {
   if (!data) return null
-  if (positive(data.cardWidth) !== null && positive(data.cardHeight) !== null) return null
+  if (positive(currentSize?.w) !== null && positive(currentSize?.h) !== null) return null
   return cardSizePatch(data.imageWidth, data.imageHeight, limits)
 }
 
@@ -119,11 +121,13 @@ export function missingCardSizePatch(
 export function followedCardSizePatch(
   data: Record<string, unknown> | undefined,
   limits?: Partial<ImageFitLimits> | null,
+  /** 当前 node.size（唯一尺寸来源） */
+  currentSize?: { w: number; h: number } | null,
 ): CardSizePatch | null {
   if (!data) return null
   const patch = cardSizePatch(data.imageWidth, data.imageHeight, limits)
   if (!patch) return null
-  if (positive(data.cardWidth) === patch.size.w && positive(data.cardHeight) === patch.size.h) return null
+  if (positive(currentSize?.w) === patch.size.w && positive(currentSize?.h) === patch.size.h) return null
   return patch
 }
 
@@ -144,12 +148,14 @@ export function measuredCardSizePatch(
   imageWidth: unknown,
   imageHeight: unknown,
   limits?: Partial<ImageFitLimits> | null,
+  /** 当前 node.size（唯一尺寸来源） */
+  currentSize?: { w: number; h: number } | null,
 ): CardSizePatch | null {
   if (!data) return null
   const patch = cardSizePatch(imageWidth, imageHeight, limits)
   if (!patch) return null
   // 宽高与卡片尺寸都已经是这一组 → 一次都不写（幂等）
   const sameMeta = positive(data.imageWidth) === positive(imageWidth) && positive(data.imageHeight) === positive(imageHeight)
-  const sameSize = positive(data.cardWidth) === patch.size.w && positive(data.cardHeight) === patch.size.h
+  const sameSize = positive(currentSize?.w) === patch.size.w && positive(currentSize?.h) === patch.size.h
   return sameMeta && sameSize ? null : patch
 }

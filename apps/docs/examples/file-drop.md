@@ -219,7 +219,7 @@ function fitImageSize(dims: { width: number; height: number }): { w: number; h: 
 }
 ```
 
-然后在 `dropFiles` 里：`const dims = await readImageDims(file)`，`tx.createNode('image', pos, data)` 后面跟上尺寸 —— 用 doc 的尺寸写口（`ctx.nodes.setSize(id, w, h)`）把宽高写进去，它进历史并自动刷新卡片镜像。真实插件走的是另一条等价路：批量建节点时给每条载荷带 `size` 字段（`tx.addNodes` 直接消费），卡片尺寸只有一个正身 —— `size`，`data.cardWidth/cardHeight` 由 nodeStore 自动镜像，插件不手写。宽高也顺手写进 `data.imageWidth / imageHeight`，别的插件（比如裁剪、对比）可以直接读。
+然后在 `dropFiles` 里：`const dims = await readImageDims(file)`，`tx.createNode('image', pos, data)` 后面跟上尺寸 —— 用 doc 的尺寸写口（`ctx.nodes.setSize(id, w, h)`）把宽高写进去，它进历史并立刻刷新画布上的宽高。真实插件走的是另一条等价路：批量建节点时给每条载荷带 `size` 字段（`tx.addNodes` 直接消费）。卡片尺寸只有一个正身 —— `node.size`，没有 `data.cardWidth/cardHeight` 第二份。宽高也顺手写进 `data.imageWidth / imageHeight`，别的插件（比如裁剪、对比）可以直接读。
 
 **⑦ effect 是监听器的「保险柜」**：`ctx.effect(setup)` 立刻执行 setup，把返回的清理函数登记进本插件的 scope。插件卸载 → 内核逐个调清理函数。不包 effect 直接 `window.addEventListener`，卸载后监听还活着：删掉的插件还在偷偷建节点，这种 bug 只在「卸载后」出现，极难排查。**所有 window/document 监听都必须走 effect** —— 这是仓库插件写监听的固定姿势。
 

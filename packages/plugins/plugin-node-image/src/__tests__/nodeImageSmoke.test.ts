@@ -134,6 +134,28 @@ describe('node-image 装配 smoke', () => {
     ctx.stop()
   })
 
+  it('按资源引用建节点且给了真实宽高时：卡片尺寸按图片比例写进 node.size', async () => {
+    // 回归（用户 2026-11-15）：视频截帧建出的图片节点，标题「1280×720」是对的，
+    // 但卡片停在类型默认 320×240（4:3），16:9 的画面被裁掉一截。
+    const ctx = boot()
+    await ctx.start()
+    const svc = ctx.get<{
+      addImageNodeFromResource(
+        p: { x: number; y: number },
+        ref: string,
+        meta?: { name?: string; width?: number; height?: number },
+      ): string
+    }>('image')
+    const id = svc.addImageNodeFromResource({ x: 1, y: 2 }, 'res-9', { width: 1280, height: 720 })
+    const node = ctx.get<DocService>('doc').getNode(id)!
+    // 120..420 的适配规则：16:9 的最长边取 420 → 420×236
+    expect(node.size).toEqual({ w: 420, h: 236 })
+    // 唯一来源：data 里不再有第二份尺寸
+    expect('cardWidth' in node.data).toBe(false)
+    expect('cardHeight' in node.data).toBe(false)
+    ctx.stop()
+  })
+
   it('六条图片命令都注册（按钮与命令共用同一批实现）', async () => {
     const ctx = boot()
     await ctx.start()
@@ -208,7 +230,9 @@ describe('node-image 装配 smoke', () => {
     const ctx = boot()
     await ctx.start()
     const doc = ctx.get<DocService>('doc')
-    const id = doc.createNode('image', { x: 0, y: 0 }, { imageWidth: 1000, imageHeight: 500, cardWidth: 300, cardHeight: 150 })
+    const id = doc.createNode('image', { x: 0, y: 0 }, { imageWidth: 1000, imageHeight: 500 })
+    // 尺寸只有 node.size：建节点时是类型默认，先改成测试基线
+    doc.setNodeSize(id, 300, 150)
     // 基线：300×150 符合当前规则（最长边 420、最短边 120）
     expect(doc.getNode(id)!.size).toEqual({ w: 300, h: 150 })
     // 调到最长边 200 → 立刻变成 200×100

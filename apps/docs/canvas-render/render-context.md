@@ -70,7 +70,7 @@ type NodeWrite = (id: string, patch: NodeWritePatch) => void
 | --- | --- |
 | 普通 key | 写进 `node.data`（标题、文本内容等） |
 | 保留 key `size` | 写进**正式尺寸字段** `node.size`，**不**塞进 data |
-| 为什么 size 特殊 | 卡片 resize 时 `data.cardWidth` 与 `node.size` 要在**同一个 patch** 里提交：否则一次 resize 记两条撤销记录，且两份尺寸可能不一致 |
+| 为什么 size 特殊 | 尺寸只有 `node.size` 一份（2026-11-14 起没有 `data.cardWidth` 镜像），所以 resize 也只提交这一个字段 |
 | 谁触发历史 | 宿主内置的写回实现走 `graph.updateNode`（唯一图写入口）→ 自动进历史 + 提交落盘。插件不用自己 `save` |
 
 ```ts
@@ -78,7 +78,6 @@ type NodeWrite = (id: string, patch: NodeWritePatch) => void
 const { nodeWrite } = useCanvasRender()
 nodeWrite(props.id, { label: '新标题' })                     // ① 普通字段 → node.data.label
 nodeWrite(props.id, { size: { w: 320, h: 180 } })             // ② 正式尺寸 → node.size（保留 key）
-nodeWrite(props.id, { cardWidth: 320, size: { w: 320, h: 180 } })  // ③ 两者同帧、同一条历史
 ```
 
 ### 三、能力包：`useCapabilities()` 与 `needs`

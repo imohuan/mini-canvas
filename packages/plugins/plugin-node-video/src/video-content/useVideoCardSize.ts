@@ -11,6 +11,8 @@ export interface VideoCardSizeOptions {
   nodeId: () => string
   data: () => Record<string, unknown>
   ops: VideoOpsContext
+  /** 当前 node.size（唯一尺寸来源）；null = 还没尺寸。缺省按“无尺寸”处理（测试桩） */
+  currentSize?: () => { w: number; h: number } | null
   sourceFields: Ref<{ resourceId: string; legacyUrl: string }>
   onSourceChanged: () => void
   /**
@@ -29,7 +31,7 @@ export interface VideoCardSizeOptions {
  * 播放器拿到 loadedmetadata 时走同一个写入口，两者都幂等。
  */
 export function useVideoCardSize(options: VideoCardSizeOptions) {
-  const { nodeId, data, ops, sourceFields, onSourceChanged, dragging } = options
+  const { nodeId, data, ops, currentSize, sourceFields, onSourceChanged, dragging } = options
 
   const sourceKey = computed(() => sourceFields.value.resourceId + '|' + sourceFields.value.legacyUrl)
 
@@ -61,7 +63,7 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
    * 挂载时整体重算一遍安全。
    */
   function mountSize(): void {
-    void nextTick(() => syncCardSize(followedVideoCardSizePatch(data(), ops.fitLimits?.())))
+    void nextTick(() => syncCardSize(followedVideoCardSizePatch(data(), ops.fitLimits?.(), currentSize?.() ?? null)))
   }
 
   watch(sourceKey, () => {
@@ -70,7 +72,7 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
     // 换源后必须重新量一次：旧实现只在「同一地址」时去重，换源后地址不同自然会量；
     // 但直接把 inflight 留空更明确，避免先前的失败任务挡住新一轮。
     inflight = null
-    syncCardSize(followedVideoCardSizePatch(data(), ops.fitLimits?.()))
+    syncCardSize(followedVideoCardSizePatch(data(), ops.fitLimits?.(), currentSize?.() ?? null))
   })
 
   /**
@@ -132,9 +134,10 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
     // 宽高与卡片尺寸一起写：缺了宽高，后续按比例算卡片、裁剪换算都无从下手。
     const patch = videoCardSizePatch(w, h, ops.fitLimits?.())
     const sameMeta = positiveNum(current.videoWidth) === w && positiveNum(current.videoHeight) === h
+    const currentSizeNow = currentSize?.() ?? null
     const sameSize =
       patch === null ||
-      (positiveNum(current.cardWidth) === patch.size.w && positiveNum(current.cardHeight) === patch.size.h)
+      (positiveNum(currentSizeNow?.w) === patch.size.w && positiveNum(currentSizeNow?.h) === patch.size.h)
     if (sameMeta && sameSize) return
     // 测量结果不是用户动作：走 measured 写入（落盘、不进撤销栈）
     ops.writeMeasured?.(nodeId(), { ...current, videoWidth: w, videoHeight: h }, patch?.size)

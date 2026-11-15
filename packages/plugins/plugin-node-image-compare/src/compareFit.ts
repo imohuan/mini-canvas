@@ -94,15 +94,17 @@ export const DEFAULT_COMPARE_HEIGHT = 320
  * 为什么只给 size：宽度过去要同时写 data.cardWidth 与 node.size 两份，漏一个就出现
  * 「卡片变了、但边的端点还画在旧宽度上」。现在镜像由 nodeStore 从 size 统一生成。
  *
- * @param data 对比节点当前 data（读 cardWidth/cardHeight 与已存比例）
+ * @param data 对比节点当前 data（读已存比例）
+ * @param currentSize 当前 node.size（唯一尺寸来源）
  * @returns null = 幂等（尺寸与比例都没变，一次都不写）
  */
 export function compareFollowPatch(
   target: { w: number; h: number; ratio: number } | null,
   data: Record<string, unknown> | undefined,
+  currentSize?: { w: number; h: number } | null,
 ): CompareFollowPatch | null {
   if (target === null) return null
-  const changed = followedSizePatch(target, data?.cardWidth, data?.cardHeight)
+  const changed = followedSizePatch(target, currentSize?.w, currentSize?.h)
   const ratioChanged = !data || typeof data[FOLLOW_RATIO_KEY] !== 'number' || !Number.isFinite(data[FOLLOW_RATIO_KEY] as number) || Math.abs((data[FOLLOW_RATIO_KEY] as number) - target.ratio) > 1e-9
   if (!changed && !ratioChanged) return null
   // 尺寸本身没变（只有比例字段脏/缺）→ 不带 size，避免无谓的一次写

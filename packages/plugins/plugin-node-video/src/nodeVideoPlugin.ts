@@ -433,9 +433,10 @@ export function apply(ctx: Context) {
     }>('doc')
     if (!doc) return
     const limits = readVideoFitLimits(ctx)
+    const geometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
     for (const node of doc.getNodes()) {
       if (node.type !== VIDEO_NODE_TYPE) continue
-      const patch = followedVideoCardSizePatch(node.data, limits)
+      const patch = followedVideoCardSizePatch(node.data, limits, geometry?.get(node.id) ?? null)
       if (!patch) continue
       if (doc.updateNodeRuntime) doc.updateNodeRuntime(node.id, { size: patch.size })
       else doc.updateNode?.(node.id, { size: patch.size })

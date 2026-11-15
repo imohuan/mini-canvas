@@ -53,8 +53,8 @@ function createPendingAudioNode(ctx: Context, sourceId: string, label: string): 
     id: n.id,
     x: n.position.x,
     y: n.position.y,
-    w: n.size?.w ?? (Number(n.data?.cardWidth) || AUDIO_FALLBACK.w),
-    h: n.size?.h ?? (Number(n.data?.cardHeight) || AUDIO_FALLBACK.h),
+    w: n.size?.w ?? AUDIO_FALLBACK.w,
+    h: n.size?.h ?? AUDIO_FALLBACK.h,
   })
   const sourceRect = rectOf(source)
   const position = placeAdjacent({

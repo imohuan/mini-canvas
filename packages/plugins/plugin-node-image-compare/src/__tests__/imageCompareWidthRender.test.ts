@@ -17,9 +17,16 @@ const writes: Array<{ id: string; patch: { data: Record<string, unknown>; size?:
 
 /** 上游图片节点表：id → data（含卡片显示宽度） */
 const upstream: Record<string, Record<string, unknown>> = {
-  imgA: { imageUrl: 'a.png', cardWidth: 420, cardHeight: 280 },
-  imgB: { imageUrl: 'b.png', cardWidth: 300, cardHeight: 200 },
+  imgA: { imageUrl: 'a.png' },
+  imgB: { imageUrl: 'b.png' },
   noSize: { imageUrl: 'c.png' },
+}
+
+/** 每个节点自己的尺寸（尺寸唯一来源 = node.size；测试里按 id 模拟） */
+const sizes: Record<string, { w: number; h: number }> = {
+  imgA: { w: 420, h: 280 },
+  imgB: { w: 300, h: 200 },
+  cmp: { w: 480, h: 260 },
 }
 
 /** 当前接的边（按连线先后） */
@@ -31,7 +38,18 @@ function renderCtx(): CanvasRenderContext {
     ctx: {
       get: (name: string) =>
         // 5c：写回走 doc（老名 graph 已下线）
-        name === 'doc' ? { updateNode: (id: string, patch: never) => writes.push({ id, patch }) } : undefined,
+        name === 'doc'
+          ? {
+              updateNode: (id: string, patch: { size?: { w: number; h: number }; data?: Record<string, unknown> }) => {
+                writes.push({ id, patch: { ...patch, data: patch.data ?? {} } })
+                if (patch.size) sizes[id] = { w: patch.size.w, h: patch.size.h }
+              },
+            }
+          : name === 'nodeGeometry'
+            ? { get: (id: string) => sizes[id] ?? null }
+            : undefined,
+      tryGet: (name: string) =>
+        name === 'nodeGeometry' ? { get: (id: string) => sizes[id] ?? null } : undefined,
       // 极简 ui 目录：空态回落组件自身的一行灰字
       registryOf: () => new RegistryImpl(),
     },
@@ -50,6 +68,8 @@ function render(id: string, data: Record<string, unknown>): Promise<string> {
 beforeEach(() => {
   writes.length = 0
   edges = []
+  // 尺寸是共享桩：每个用例回到“对比节点 480×260”的初始值
+  sizes.cmp = { w: 480, h: 260 }
 })
 
 describe('对比节点宽度跟随第一条连线的图片', () => {
@@ -65,6 +85,7 @@ describe('对比节点宽度跟随第一条连线的图片', () => {
 
   it('尺寸和比例都已一致 → 一个字都不写（幂等，避免自己触发自己）', async () => {
     edges = [{ id: 'e1', source: 'imgA', target: 'cmp' }]
+    sizes.cmp = { w: 420, h: 280 }
     await render('cmp', { cardWidth: 420, cardHeight: 280, followRatio: 420 / 280 })
     expect(writes).toHaveLength(0)
   })

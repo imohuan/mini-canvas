@@ -101,12 +101,13 @@ const hasTwo = computed(() => !!leftImage.value && !!rightImage.value)
 
 // ==================== 尺寸跟随第一条连线的图片 ====================
 /**
- * 上游**图片节点的显示尺寸**（data.cardWidth/cardHeight）—— 图片插件在上传/换图/裁剪/生成后都会写它，
- * 也就是用户在画布上实际看到的那个宽高。对比窗口对齐的就是这个显示尺寸，不是原始像素。
+ * 上游**图片节点的显示尺寸**：只从 nodeGeometry 服务读 node.size。
+ * 对比窗口对齐的是用户在画布上看到的宽高，不是原始像素。
  */
+const nodeGeometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
 function upstreamCardSize(nodeId: string): { w: unknown; h: unknown } {
-  const d = nodeData(nodeId)
-  return { w: d?.cardWidth, h: d?.cardHeight }
+  const size = nodeGeometry?.get(nodeId)
+  return { w: size?.w, h: size?.h }
 }
 
 /**
@@ -118,7 +119,8 @@ function upstreamCardSize(nodeId: string): { w: unknown; h: unknown } {
  */
 function syncFollowSize(): void {
   const target = resolveFollowSize(sources.value, upstreamCardSize)
-  const patch = compareFollowPatch(target, props.data)
+  const selfSize = nodeGeometry?.get(props.id) ?? null
+  const patch = compareFollowPatch(target, props.data, selfSize)
   if (!patch) return
   ctx
     .get<{ updateNode(id: string, patch: { size?: { w: number; h: number }; data?: Record<string, unknown> }): void }>(
@@ -129,7 +131,7 @@ function syncFollowSize(): void {
 }
 
 // 上游图变化（新连一张 / 换图 / 上游尺寸被 resize）→ 重新对齐尺寸与比例。
-// 依赖里带上上游的 cardWidth/cardHeight 本身，所以"上游被拖动改宽"也会跟随。
+// 依赖里带上上游的 node.size 本身，所以"上游被拖动改宽"也会跟随。
 watch(
   () => sources.value.map((e) => `${e.sourceId}:${String(upstreamCardSize(e.sourceId).w)}x${String(upstreamCardSize(e.sourceId).h)}`).join(','),
   () => syncFollowSize(),

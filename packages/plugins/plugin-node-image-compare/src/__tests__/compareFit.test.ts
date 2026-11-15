@@ -74,7 +74,8 @@ describe('compareFollowPatch：size 与比例 data 的幂等写回', () => {
   it('尺寸变了 → size 与比例一起写（比例存 data，供 resizeRatio 读）', () => {
     const patch = compareFollowPatch(
       { w: 420, h: 280, ratio: 420 / 280 },
-      { cardWidth: 480, cardHeight: 260 },
+      {},
+      { w: 480, h: 260 },
     )
     expect(patch).toEqual({
       size: { w: 420, h: 280 },
@@ -85,30 +86,32 @@ describe('compareFollowPatch：size 与比例 data 的幂等写回', () => {
   it('尺寸一致但比例字段脏/缺 → 只补比例，不带 size（避免无谓一次写）', () => {
     const patch = compareFollowPatch(
       { w: 420, h: 280, ratio: 1.5 },
-      { cardWidth: 420, cardHeight: 280, [FOLLOW_RATIO_KEY]: 'bad' },
+      { [FOLLOW_RATIO_KEY]: 'bad' },
+      { w: 420, h: 280 },
     )
     expect(patch).toEqual({ data: { [FOLLOW_RATIO_KEY]: 1.5 } })
   })
 
   it('尺寸与比例都对 → null（一次都不写，这是幂等的落点）', () => {
     expect(
-      compareFollowPatch({ w: 420, h: 280, ratio: 1.5 }, { cardWidth: 420, cardHeight: 280, [FOLLOW_RATIO_KEY]: 1.5 }),
+      compareFollowPatch({ w: 420, h: 280, ratio: 1.5 }, { [FOLLOW_RATIO_KEY]: 1.5 }, { w: 420, h: 280 }),
     ).toBeNull()
   })
 
   it('算不出目标（没连图）→ null，完全不碰节点', () => {
-    expect(compareFollowPatch(null, { cardWidth: 480, cardHeight: 260 })).toBeNull()
+    expect(compareFollowPatch(null, {}, { w: 480, h: 260 })).toBeNull()
   })
 
   it('重复触发（写回后 data 已同步）只产生一次写入 —— 监听不会自转成死循环', () => {
     // 模拟真实回路：连上一张 420×280 的图 → 写回 → data 更新 → 监听再触发
-    let data: Record<string, unknown> = { cardWidth: 480, cardHeight: 260 }
+    let data: Record<string, unknown> = {}
+    let size: { w: number; h: number } | null = { w: 480, h: 260 }
     const writes: Array<{ w?: number; h?: number; ratio?: number }> = []
     const trigger = (): void => {
-      const patch = compareFollowPatch(resolveFollowSize([{ sourceId: 'a' }], getCardSize), data)
+      const patch = compareFollowPatch(resolveFollowSize([{ sourceId: 'a' }], getCardSize), data, size)
       if (!patch) return
       writes.push({ ...(patch.size ?? {}), ratio: patch.data[FOLLOW_RATIO_KEY] as number })
-      if (patch.size) data = { ...data, cardWidth: patch.size.w, cardHeight: patch.size.h }
+      if (patch.size) size = { w: patch.size.w, h: patch.size.h }
       data = { ...data, ...patch.data }
     }
     trigger()

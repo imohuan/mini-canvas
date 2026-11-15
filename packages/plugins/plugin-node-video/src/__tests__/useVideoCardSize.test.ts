@@ -19,14 +19,11 @@ vi.mock('../videoTransform', () => ({
   readVideoMeta: vi.fn(async () => ({ width: 1280, height: 720, duration: 10 })),
 }))
 
-function makeOps(data: Record<string, unknown>): VideoOpsContext {
+/** 测试里把 node.size 单独存一份（尺寸唯一来源） */
+function makeOps(data: Record<string, unknown>, state: { size: { w: number; h: number } | null }): VideoOpsContext {
   const apply = (_id: string, next: Record<string, unknown>, size?: { w: number; h: number }): void => {
-    // 与真实 nodeStore.applyPatch 同顺序：先合并 data，再由 size 生成 cardWidth/cardHeight 镜像
     Object.assign(data, next)
-    if (size) {
-      data.cardWidth = size.w
-      data.cardHeight = size.h
-    }
+    if (size) state.size = { w: size.w, h: size.h }
   }
   return {
     read: () => data,
@@ -38,37 +35,34 @@ function makeOps(data: Record<string, unknown>): VideoOpsContext {
 describe('useVideoCardSize.mountSize', () => {
   it('尺寸缺失 → 补算', async () => {
     const data: Record<string, unknown> = { videoWidth: 1280, videoHeight: 720 }
+    const state: { size: { w: number; h: number } | null } = { size: null }
     const { mountSize } = useVideoCardSize({
       nodeId: () => 'v1',
       data: () => data,
-      ops: makeOps(data),
+      ops: makeOps(data, state),
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '' } } as never,
       onSourceChanged: () => {},
     })
     mountSize()
     await new Promise((r) => setTimeout(r, 0))
-    expect(data.cardWidth).toBe(videoCardSizePatch(1280, 720)!.size.w)
-    expect(data.cardHeight).toBe(videoCardSizePatch(1280, 720)!.size.h)
+    expect(state.size).toEqual(videoCardSizePatch(1280, 720)!.size)
   })
 
   it('尺寸存在但比例不对 → 挂载时纠正（440×260 装 16:9 的实测场景）', async () => {
-    const data: Record<string, unknown> = {
-      videoWidth: 1280,
-      videoHeight: 720,
-      cardWidth: 440,
-      cardHeight: 260,
-    }
+    const data: Record<string, unknown> = { videoWidth: 1280, videoHeight: 720 }
+    const state: { size: { w: number; h: number } | null } = { size: { w: 440, h: 260 } }
     const { mountSize } = useVideoCardSize({
       nodeId: () => 'v2',
       data: () => data,
-      ops: makeOps(data),
+      ops: makeOps(data, state),
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '' } } as never,
       onSourceChanged: () => {},
     })
     mountSize()
     await new Promise((r) => setTimeout(r, 0))
-    expect(data.cardWidth).toBe(videoCardSizePatch(1280, 720)!.size.w)
-    expect(data.cardHeight).toBe(videoCardSizePatch(1280, 720)!.size.h)
+    expect(state.size).toEqual(videoCardSizePatch(1280, 720)!.size)
   })
 
   it('尺寸已正确 → 不写（幂等，不产生多余写入）', async () => {
@@ -76,11 +70,10 @@ describe('useVideoCardSize.mountSize', () => {
     const data: Record<string, unknown> = {
       videoWidth: 1280,
       videoHeight: 720,
-      cardWidth: fit.w,
-      cardHeight: fit.h,
     }
+    const state: { size: { w: number; h: number } | null } = { size: { w: fit.w, h: fit.h } }
     let writes = 0
-    const ops = makeOps(data)
+    const ops = makeOps(data, state)
     const measured = ops.writeMeasured!
     ops.writeMeasured = (...args) => {
       writes++
@@ -90,6 +83,7 @@ describe('useVideoCardSize.mountSize', () => {
       nodeId: () => 'v3',
       data: () => data,
       ops,
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '' } } as never,
       onSourceChanged: () => {},
     })
@@ -106,9 +100,10 @@ describe('useVideoCardSize.onMeta：拿到视频真实宽高后立即对齐卡�
    * 才写回，而拖入时卡片已经有默认尺寸（480×320），真实宽高被忽略。
    */
   it('卡片已有默认尺寸、比例不对 → 按真实视频比例纠正', () => {
-    const data: Record<string, unknown> = { cardWidth: 480, cardHeight: 320 }
+    const data: Record<string, unknown> = {}
+    const state: { size: { w: number; h: number } | null } = { size: { w: 480, h: 320 } }
     let writes = 0
-    const ops = makeOps(data)
+    const ops = makeOps(data, state)
     const orig = ops.writeMeasured!
     ops.writeMeasured = (...args) => {
       writes++
@@ -118,22 +113,23 @@ describe('useVideoCardSize.onMeta：拿到视频真实宽高后立即对齐卡�
       nodeId: () => 'v4',
       data: () => data,
       ops,
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '' } } as never,
       onSourceChanged: () => {},
     })
     onMeta({ videoWidth: 1280, videoHeight: 720 })
     const fit = videoCardSizePatch(1280, 720)!.size
-    expect(data.cardWidth).toBe(fit.w)
-    expect(data.cardHeight).toBe(fit.h)
+    expect(state.size).toEqual(fit)
     expect(data.videoWidth).toBe(1280)
     expect(data.videoHeight).toBe(720)
     expect(writes).toBe(1)
   })
 
   it('重复触发（loadedmetadata 多次）只写一次 —— 不会自己触发自己', () => {
-    const data: Record<string, unknown> = { cardWidth: 480, cardHeight: 320 }
+    const data: Record<string, unknown> = {}
+    const state: { size: { w: number; h: number } | null } = { size: { w: 480, h: 320 } }
     let writes = 0
-    const ops = makeOps(data)
+    const ops = makeOps(data, state)
     const measured = ops.writeMeasured!
     ops.writeMeasured = (...args) => {
       writes++
@@ -143,6 +139,7 @@ describe('useVideoCardSize.onMeta：拿到视频真实宽高后立即对齐卡�
       nodeId: () => 'v5',
       data: () => data,
       ops,
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '' } } as never,
       onSourceChanged: () => {},
     })
@@ -154,26 +151,26 @@ describe('useVideoCardSize.onMeta：拿到视频真实宽高后立即对齐卡�
   })
 
   it('拖动中拿到宽高 → 先不改卡片尺寸，松手后补上（节点不在指针下跳）', async () => {
-    const data: Record<string, unknown> = { cardWidth: 480, cardHeight: 320 }
+    const data: Record<string, unknown> = {}
+    const state: { size: { w: number; h: number } | null } = { size: { w: 480, h: 320 } }
     // 真实组件里这里读的是 interaction.activity（响应式）；测试用 ref 模拟同一个依赖
     const dragging = ref(true)
     const { onMeta } = useVideoCardSize({
       nodeId: () => 'v6',
       data: () => data,
-      ops: makeOps(data),
+      ops: makeOps(data, state),
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '' } } as never,
       onSourceChanged: () => {},
       dragging: () => dragging.value,
     })
     onMeta({ videoWidth: 1280, videoHeight: 720 })
     // 拖动中：尺寸原样不动（改了会让节点在指针下跳）
-    expect(data.cardWidth).toBe(480)
-    expect(data.cardHeight).toBe(320)
+    expect(state.size).toEqual({ w: 480, h: 320 })
     dragging.value = false
     // 拖动结束的 watch 是异步刷新的（默认 pre），等一拍
     await nextTick()
-    expect(data.cardWidth).toBe(videoCardSizePatch(1280, 720)!.size.w)
-    expect(data.cardHeight).toBe(videoCardSizePatch(1280, 720)!.size.h)
+    expect(state.size).toEqual(videoCardSizePatch(1280, 720)!.size)
   })
 })
 
@@ -181,11 +178,13 @@ describe('useVideoCardSize.measure：URL 一变就量尺寸，再按尺寸显示
   beforeEach(() => { vi.mocked(readVideoMeta).mockClear() })
 
   it('量到 1280×720 → 宽高与卡片尺寸一起写（不用等悬停播放）', async () => {
-    const data: Record<string, unknown> = { cardWidth: 480, cardHeight: 320 }
+    const data: Record<string, unknown> = {}
+    const state: { size: { w: number; h: number } | null } = { size: { w: 480, h: 320 } }
     const { measure } = useVideoCardSize({
       nodeId: () => 'm1',
       data: () => data,
-      ops: makeOps(data),
+      ops: makeOps(data, state),
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '/api/assets/a.mp4' } } as never,
       onSourceChanged: () => {},
     })
@@ -193,16 +192,17 @@ describe('useVideoCardSize.measure：URL 一变就量尺寸，再按尺寸显示
     const fit = videoCardSizePatch(1280, 720)!.size
     expect(data.videoWidth).toBe(1280)
     expect(data.videoHeight).toBe(720)
-    expect(data.cardWidth).toBe(fit.w)
-    expect(data.cardHeight).toBe(fit.h)
+    expect(state.size).toEqual(fit)
   })
 
   it('同一地址不重复解码（loadedmetadata 与 URL 监听会重复触发）', async () => {
     const data: Record<string, unknown> = {}
+    const state: { size: { w: number; h: number } | null } = { size: null }
     const { measure } = useVideoCardSize({
       nodeId: () => 'm2',
       data: () => data,
-      ops: makeOps(data),
+      ops: makeOps(data, state),
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '/api/assets/a.mp4' } } as never,
       onSourceChanged: () => {},
     })
@@ -213,16 +213,18 @@ describe('useVideoCardSize.measure：URL 一变就量尺寸，再按尺寸显示
 
   it('量不到尺寸 → 什么都不写（不猜数字），下次还能重试', async () => {
     vi.mocked(readVideoMeta).mockResolvedValueOnce(null)
-    const data: Record<string, unknown> = { cardWidth: 480, cardHeight: 320 }
+    const data: Record<string, unknown> = {}
+    const state: { size: { w: number; h: number } | null } = { size: { w: 480, h: 320 } }
     const { measure } = useVideoCardSize({
       nodeId: () => 'm3',
       data: () => data,
-      ops: makeOps(data),
+      ops: makeOps(data, state),
+      currentSize: () => state.size,
       sourceFields: { value: { resourceId: '', legacyUrl: '/api/assets/a.mp4' } } as never,
       onSourceChanged: () => {},
     })
     await measure('/api/assets/a.mp4')
-    expect(data.cardWidth).toBe(480)
+    expect(state.size).toEqual({ w: 480, h: 320 })
     expect(data.videoWidth).toBeUndefined()
     await measure('/api/assets/a.mp4')
     expect(readVideoMeta).toHaveBeenCalledTimes(2)

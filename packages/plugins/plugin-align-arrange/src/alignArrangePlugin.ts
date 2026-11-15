@@ -113,6 +113,11 @@ export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSc
   const selection = ctx.get('selection')
   // 几何与视口统一由 view 服务给出。
   const layout = ctx.tryGet('view')
+  /** 节点几何唯一读写口（尺寸只存 node.size）；没装该服务的极简宿主才退回 view */
+  const geometry = ctx.tryGet<{
+    get(id: string): { w: number; h: number } | null
+    getRect(id: string): { x: number; y: number; w: number; h: number } | null
+  }>('nodeGeometry')
 
   // ⚙ 设置面板单一数据源（内置恒在）。每次执行命令**实时**读它 —— 面板改过立刻生效，
   // 不能把 apply 时的 config 冻结成闭包常量（那样改了间距/日志开关都不生效）。
@@ -148,6 +153,10 @@ export function apply(ctx: Context, rawConfig?: Partial<AlignArrangeConfigFromSc
 
   /** 取节点矩形：位置用 node.position（相对坐标，与 updateNodes 写入一致）；尺寸走 nodeLayout 实测/声明/默认。 */
   function toRect(n: CanvasNode): ArrangeRect {
+    const rect = geometry?.getRect(n.id)
+    if (rect && rect.w > 0 && rect.h > 0) {
+      return { id: n.id, x: rect.x, y: rect.y, w: rect.w, h: rect.h }
+    }
     const dim = layout?.nodeSize(n.id)
     const w = dim?.w ?? n.size?.w ?? FALLBACK_W
     const h = dim?.h ?? n.size?.h ?? FALLBACK_H

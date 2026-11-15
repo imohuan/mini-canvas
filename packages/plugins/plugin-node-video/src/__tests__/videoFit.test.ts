@@ -109,7 +109,9 @@ describe('missingVideoCardSizePatch：挂载时补算缺失的尺寸', () => {
   })
 
   it('尺寸已在（含用户手动拖过的）→ null，挂载不覆盖用户的选择', () => {
-    expect(missingVideoCardSizePatch({ videoWidth: 1280, videoHeight: 720, cardWidth: 700, cardHeight: 500 })).toBeNull()
+    expect(
+      missingVideoCardSizePatch({ videoWidth: 1280, videoHeight: 720 }, null, { w: 700, h: 500 }),
+    ).toBeNull()
   })
 
   it('连视频尺寸都没有 → null（无中生有不了一个尺寸）', () => {
@@ -130,30 +132,31 @@ describe('missingVideoCardSizePatch：挂载时补算缺失的尺寸', () => {
 
 describe('followedVideoCardSizePatch：换视频时跟随 + 幂等', () => {
   it('视频尺寸与当前卡片尺寸不一致 → 给出新补丁', () => {
-    expect(followedVideoCardSizePatch({ videoWidth: 1280, videoHeight: 720, cardWidth: 320, cardHeight: 240 })).toEqual(
+    expect(followedVideoCardSizePatch({ videoWidth: 1280, videoHeight: 720 }, null, { w: 320, h: 240 })).toEqual(
       videoCardSizePatch(1280, 720),
     )
   })
 
   it('幂等：算出来的尺寸与当前一致 → null（否则自己触发自己成死循环）', () => {
-    expect(followedVideoCardSizePatch({ videoWidth: 1280, videoHeight: 720, cardWidth: 560, cardHeight: 315 })).toBeNull()
-    expect(followedVideoCardSizePatch({ videoWidth: 320, videoHeight: 240, cardWidth: 320, cardHeight: 240 })).toBeNull()
+    expect(followedVideoCardSizePatch({ videoWidth: 1280, videoHeight: 720 }, null, { w: 560, h: 315 })).toBeNull()
+    expect(followedVideoCardSizePatch({ videoWidth: 320, videoHeight: 240 }, null, { w: 320, h: 240 })).toBeNull()
   })
 
-  it('重复触发（写回后 data 已同步）只产生**一次**写入 —— 兜底监听不会自转成死循环', () => {
-    let data: Record<string, unknown> = { videoWidth: 1280, videoHeight: 720 }
-    const writes: Array<{ cardWidth: number; cardHeight: number }> = []
+  it('重复触发（写回后 size 已同步）只产生**一次**写入 —— 兜底监听不会自转成死循环', () => {
+    const data: Record<string, unknown> = { videoWidth: 1280, videoHeight: 720 }
+    let size: { w: number; h: number } | null = null
+    const writes: Array<{ w: number; h: number }> = []
     const trigger = (): void => {
-      const patch = followedVideoCardSizePatch(data)
+      const patch = followedVideoCardSizePatch(data, null, size)
       if (!patch) return
-      // nodeStore 写 size 时同步镜像 data.cardWidth/cardHeight（这里手写模拟那一步）
-      writes.push({ cardWidth: patch.size.w, cardHeight: patch.size.h })
-      data = { ...data, cardWidth: patch.size.w, cardHeight: patch.size.h }
+      // 写回 node.size（唯一尺寸来源）
+      writes.push({ w: patch.size.w, h: patch.size.h })
+      size = { w: patch.size.w, h: patch.size.h }
     }
     trigger()
     trigger()
     trigger()
-    expect(writes).toEqual([{ cardWidth: 560, cardHeight: 315 }])
+    expect(writes).toEqual([{ w: 560, h: 315 }])
   })
 })
 

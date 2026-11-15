@@ -21,12 +21,17 @@ import { endEdit, isEditing } from './cropSession'
 import { isPainting } from './paintSession'
 import { clearImageBroken, isImageBroken, markImageBroken } from './imageStatus'
 import { createImageOps } from './imageOps'
-import { followedCardSizePatch, measuredCardSizePatch, missingCardSizePatch, type CardSizePatch } from './imageFit'
+import { followedCardSizePatch, measuredCardSizePatch, type CardSizePatch } from './imageFit'
 import { readImageSourceFields, resolveImageSrc } from './imageRefs'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx, flow, visibleNodes } = useCanvasRender()
+
+/** 节点尺寸唯一来源（nodeGeometry → node.size）；null = 还没尺寸 */
+function currentNodeSize(): { w: number; h: number } | null {
+  return ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')?.get(props.id) ?? null
+}
 /** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
 
@@ -219,8 +224,25 @@ function onImgLoad(e: Event): void {
   // 标题上的「1280×720」和裁剪框的像素换算都读这份数据。
   const showingOriginal = !tierImage.value || editing.value
   if (!showingOriginal) return
-  // 原图回来了：用它把卡片比例再对一遍（缩略图阶段只改过比例，这里补上真实的原图像素）
+  // 加载完就按原图比例把卡片尺寸对一遍（用户 2026-11-15 确认的口径）：
+  // 拿到原始宽高 → 走最短边/最长边规则算目标尺寸 → 与当前不一致就写回。
+  // 这条是最后一道保险：哪怕建节点的一方忘了写 size、或写了个默认比例，
+  // 图片真正画出来后也会被纠正成对的形状。
   applyMeasured(el.naturalWidth, el.naturalHeight)
+}
+
+/**
+ * 拿 `<img>` 自己报的原始宽高，写回卡片尺寸。
+ *
+ * 不额外请求 / 不解码：只接收已经在元素上的 naturalWidth / naturalHeight。
+ * 幂等（measuredCardSizePatch 会判断），所以反复触发也不会来回写。
+ */
+function applyMeasured(width: number, height: number): void {
+  const patch = measuredCardSizePatch(props.data, width, height, ops.fitLimits?.(), currentNodeSize())
+  if (!patch) return
+  const current = ops.read(props.id) ?? props.data
+  // 测量结果不是用户动作：走 measured 写入（落盘、不进撤销栈）
+  ops.writeMeasured(props.id, { ...current, imageWidth: width, imageHeight: height }, patch.size)
 }
 
 // ==================== 卡片尺寸兜底 ====================
@@ -246,21 +268,6 @@ function positiveNum(v: unknown): number | null {
 }
 
 /**
- * 拿元素自己报的真实宽高，写回卡片。
- *
- * 用户口径（2026-11-11）：「不用额外请求；每次加载图片时顺手算一下宽高，有偏差就修正」。
- * 所以这里不主动去 fetch / 解码，只接收 `<img>` 已经加载完的那份 naturalWidth/Height；
- * 幂等：尺寸与当前一致时一次都不写。
- */
-function applyMeasured(width: number, height: number): void {
-  const patch = measuredCardSizePatch(props.data, width, height, ops.fitLimits?.())
-  if (!patch) return
-  const current = ops.read(props.id) ?? props.data
-  // 测量结果不是用户动作：走 measured 写入（落盘、不进撤销栈）
-  ops.writeMeasured(props.id, { ...current, imageWidth: width, imageHeight: height }, patch.size)
-}
-
-/**
  * 挂载时补算尺寸 —— **必须等挂载这一帧过去再写**（nextTick），不能同步写在 onMounted 里。
  *
  * 实测（内置浏览器，8/8 稳定复现）：节点**挂载窗口内**发生的 store 写入会被丢掉 ——
@@ -275,19 +282,20 @@ function applyMeasured(width: number, height: number): void {
  */
 onMounted(() => {
   void nextTick(() => {
-    syncCardSize(missingCardSizePatch(props.data, ops.fitLimits?.()))
-    // 已知宽高：纠正卡片比例（重开画布 / 卡片被写歪的旧节点都靠这条恢复）。
+    // 已知宽高：**按图片比例对齐卡片**（缺尺寸的补上，比例写歪的纠正）。
+    // 图片节点不支持手动 resize（resizable:false），卡片尺寸本就该由画面比例决定，
+    // 所以这里不看“有没有 size”，只看“size 和图片比例对不对”。
     // 必须放在 nextTick 里：挂载当帧的写入会被丢掉（见上面那段实测说明）。
+    syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.(), currentNodeSize()))
     const w = positiveNum(props.data?.imageWidth)
     const h = positiveNum(props.data?.imageHeight)
     if (w !== null && h !== null) applyMeasured(w, h)
   })
 })
 watch(imageUrl, (url) => {
-  syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.()))
+  // 换图：按新图比例对齐卡片（幂等：算出来与当前一致就一次都不写）
+  syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.(), currentNodeSize()))
   if (!url) return
-  // 新地址可能在 `<img>` 重挂之前就已知宽高（上传/裁剪/生成时写过），先按它纠正一次；
-  // 之后 `<img>` 加载完还会再核对一遍真实宽高，有偏差就以真实值为准。
   const w = positiveNum(props.data?.imageWidth)
   const h = positiveNum(props.data?.imageHeight)
   if (w !== null && h !== null) applyMeasured(w, h)

@@ -138,7 +138,6 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
     expect(history.undoDepth).toBe(depth)
     const node = nodeStore.getNode(id)!
     expect(node.data.imageWidth).toBe(320)
-    expect(node.data.cardWidth).toBe(320)
     expect(node.size).toEqual({ w: 320, h: 240 })
   })
 
@@ -158,15 +157,14 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
     expect(await uploadImage(opsNoRes, id, new File(['x'], 'c.png'), fakeTransform())).toBe(false)
   })
 
-  it('卡片宽高跟图片走（1000×800 最长边压到 420 → 420×336）：data 与 node.size 一次写全', async () => {
+  it('卡片宽高跟图片走（1000×800 最长边压到 420 → 420×336）：只写 node.size', async () => {
     const { nodeStore, ops, id } = boot()
     await uploadImage(ops, id, new File(['x'], 'photo.png'), fakeTransform())
     const node = nodeStore.getNode(id)!
     // 1000×800 / 最长边 420：ratio=0.42 → 420×336
-    expect(node.data.cardWidth).toBe(420)
-    expect(node.data.cardHeight).toBe(336)
-    // 内核正式尺寸字段也要有（不能只写 data，否则布局回退链断在中间）
+    // 尺寸只有 node.size 一份
     expect(node.size).toEqual({ w: 420, h: 336 })
+    expect('cardWidth' in node.data).toBe(false)
   })
 
   it('换图 = 一条撤销记录（尺寸与 data 同一次提交，不会退半步）', async () => {
@@ -176,12 +174,11 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
     // 再换一张（尺寸也跟着变）
     await uploadImage(ops, id, new File(['x'], 'b.png'), fakeTransform({ readImageSize: async () => ({ width: 300, height: 300 }) }))
     expect(history.undoDepth).toBe(depth + 1)
-    expect(nodeStore.getNode(id)!.data.cardWidth).toBe(300)
+    expect(nodeStore.getNode(id)!.size).toEqual({ w: 300, h: 300 })
 
     history.undo()
     const reverted = nodeStore.getNode(id)!
     expect(reverted.data.imageWidth).toBe(1000)
-    expect(reverted.data.cardWidth).toBe(420)
     expect(reverted.size).toEqual({ w: 420, h: 336 })
   })
 
@@ -190,9 +187,9 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
     await uploadImage(ops, id, new File(['x'], 'unmeasurable.png'), fakeTransform({ readImageSize: async () => null }))
     const node = nodeStore.getNode(id)!
     expect(typeof node.data.resourceId).toBe('string')
-    expect(node.data.cardWidth).toBeUndefined()
     expect(node.data.imageWidth).toBeUndefined()
-    expect(node.size).toBeUndefined()
+    // 建节点时已有类型默认尺寸；量不到图片尺寸就不改它
+    expect(node.size).toEqual({ w: 320, h: 240 })
   })
 
   it('封顶值可配：注入更小的上限 → 卡片算得更小', async () => {
@@ -212,8 +209,7 @@ describe('uploadImage：上传写回（字节进资源库，不写 base64）', (
     } as never)
     await uploadImage(opsWithSettings, id, new File(['x'], 'p.png'), fakeTransform())
     // 最长边 200、图 1000×800 → ratio=0.2 → 200×160
-    expect(nodeStore.getNode(id)!.data.cardWidth).toBe(200)
-    expect(nodeStore.getNode(id)!.data.cardHeight).toBe(160)
+    expect(nodeStore.getNode(id)!.size).toEqual({ w: 200, h: 160 })
   })
 })
 
@@ -304,7 +300,8 @@ describe('cropImage：裁剪 = 新建下游图片节点并连边（原图不动�
     await cropImage(ops, id, rect, fakeTransform())
     expect(history.undoDepth).toBe(depth + 1)
     history.undo()
-    expect(nodeStore.getNode(id)!.data.cardWidth).toBe(420)
+    // 撤销后回到裁剪前的上传尺寸（1000×800 → 420×336）
+    expect(nodeStore.getNode(id)!.size).toEqual({ w: 420, h: 336 })
   })
 })
 
@@ -417,12 +414,10 @@ describe('rotateImage / downloadImageNode', () => {
   it('旋转后卡片宽高跟着互换后的比例重算', async () => {
     const { nodeStore, ops, id } = boot()
     await uploadImage(ops, id, new File(['x'], 'p.png'), fakeTransform())
-    expect(nodeStore.getNode(id)!.data.cardWidth).toBe(420)
+    expect(nodeStore.getNode(id)!.size).toEqual({ w: 420, h: 336 })
     // 旋转把 1000×800 变成 800×1000 → 最长边压到 420：420×336
     expect(await rotateImage(ops, id, fakeTransform({ rotateToBlob: async () => ({ blob: BLOB('r'), width: 800, height: 1000 }) }))).toBe(true)
     const node = nodeStore.getNode(id)!
-    expect(node.data.cardWidth).toBe(336)
-    expect(node.data.cardHeight).toBe(420)
     expect(node.size).toEqual({ w: 336, h: 420 })
   })
 })

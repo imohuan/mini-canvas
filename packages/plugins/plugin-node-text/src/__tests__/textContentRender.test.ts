@@ -20,9 +20,15 @@ import TextContent from '../TextContent.vue'
 import { beginEdit, endEdit, resetTextEditSessions } from '../textEditSession'
 
 /** 最小渲染上下文：TextContent 只用到 ctx.get('settings'/'text') 与 viewport.zoom */
-function renderCtx(zoom = 1, settings?: { get(key: string): unknown }): CanvasRenderContext {
+function renderCtx(
+  zoom = 1,
+  settings?: { get(key: string): unknown },
+  size: { w: number; h: number } | null = null,
+): CanvasRenderContext {
   const services: Record<string, unknown> = {
     text: { editText: () => {} },
+    // 尺寸唯一来源：nodeGeometry → node.size
+    nodeGeometry: { get: () => size },
     ...(settings ? { settings: { ...settings, onChange: () => ({ dispose: () => {} }) } } : {}),
   }
   return {
@@ -36,10 +42,22 @@ function renderCtx(zoom = 1, settings?: { get(key: string): unknown }): CanvasRe
   } as unknown as CanvasRenderContext
 }
 
-function render(id: string, data: Record<string, unknown>, zoom = 1): Promise<string> {
+function render(
+  id: string,
+  data: Record<string, unknown>,
+  zoom = 1,
+  size: { w: number; h: number } | null = null,
+): Promise<string> {
   const app = createSSRApp({ render: () => h(TextContent as Component, { id, data }) })
-  app.provide(RENDER_CONTEXT_KEY, renderCtx(zoom))
+  app.provide(RENDER_CONTEXT_KEY, renderCtx(zoom, undefined, size ?? sizeFromData(data)))
   return renderToString(app)
+}
+
+/** 测试里 data 上写的 cardWidth/cardHeight 只当“这个节点的 size 是多少”的输入（data 不再承载尺寸） */
+function sizeFromData(data: Record<string, unknown>): { w: number; h: number } | null {
+  const w = data.cardWidth
+  const h = data.cardHeight
+  return typeof w === 'number' && typeof h === 'number' ? { w, h } : null
 }
 
 afterEach(() => resetTextEditSessions())

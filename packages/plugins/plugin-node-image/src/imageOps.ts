@@ -507,7 +507,7 @@ export async function paintImageNodes(
 
   // 定位：结果图贴原图右侧，蒙版再往右一格（宽度按结果图实际宽算，不叠在一起）
   const source = ctx.listNodes?.()?.find((n) => n.id === nodeId)
-  const sourceWidth = source?.size?.w ?? (source?.data?.cardWidth as number | undefined) ?? MIN_CARD_WIDTH
+const sourceWidth = source?.size?.w ?? MIN_CARD_WIDTH
   const y = source?.position.y ?? 0
   const baseName = (source?.data?.label as string | undefined) || ''
   const base = baseName.replace(/\s*\d+$/, '') || '图片'
@@ -570,8 +570,9 @@ function placeAcrossSource(
     id: n.id,
     x: n.position.x,
     y: n.position.y,
-    w: n.size?.w ?? (Number(n.data?.cardWidth) || MIN_CARD_WIDTH),
-    h: n.size?.h ?? (Number(n.data?.cardHeight) || 240),
+    // 尺寸只读 node.size（缺失才用兜底常量）
+    w: n.size?.w ?? MIN_CARD_WIDTH,
+    h: n.size?.h ?? 240,
   })
   const size = cardSizePatch(pixel.w, pixel.h, ctx.fitLimits?.())?.size ?? { w: MIN_CARD_WIDTH, h: 240 }
   return placeAdjacent({

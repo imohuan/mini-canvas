@@ -67,7 +67,8 @@ const width = ref(320)
 
 // 松手才写回：这里写 store（会进撤销栈），拖动过程只动本地的 width
 function commit(v: number): void {
-  ctx.doc.updateNode('some-node-id', { data: { cardWidth: v } })
+  // 尺寸只有 node.size 一份：写它，画面上的卡片宽高立刻跟着变
+  ctx.get('nodeGeometry').set('some-node-id', v, ctx.get('nodeGeometry').get('some-node-id')?.h ?? 180)
 }
 </script>
 

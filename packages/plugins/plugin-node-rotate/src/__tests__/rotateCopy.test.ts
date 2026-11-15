@@ -107,7 +107,7 @@ describe('duplicateImageForRotate', () => {
     expect(rotateMode.value).toBeNull()
   })
 
-  it('老存档只在 data 里带尺寸 → 副本沿用迁移后的同一宽高', () => {
+  it('副本沿用原节点 node.size 的宽高', () => {
     const { ctx, nodeStore } = makeStack()
     closeRotateMode()
     nodeStore.replaceAll([
@@ -115,7 +115,8 @@ describe('duplicateImageForRotate', () => {
         id: 'legacy-1',
         type: 'image',
         position: { x: 0, y: 0 },
-        data: { label: '旧图', imageUrl: 'blob:old', cardWidth: 360, cardHeight: 240 },
+        data: { label: '旧图', imageUrl: 'blob:old' },
+        size: { w: 360, h: 240 },
       },
     ])
     const original = nodeStore.getNodes()[0]

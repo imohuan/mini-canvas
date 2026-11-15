@@ -102,3 +102,4 @@ describe('空态与失效态不受影响', () => {
     expect(html).not.toContain('<img')
   })
 })
+

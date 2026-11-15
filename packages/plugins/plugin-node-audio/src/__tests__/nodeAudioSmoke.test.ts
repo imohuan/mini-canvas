@@ -108,17 +108,15 @@ describe('音频节点插件整装', () => {
     const node = nodeStore.getNode(id)!
     const def = nodeStore.types.get(AUDIO_NODE_TYPE)!
     expect(node.size).toEqual({ w: def.defaultSize.w, h: def.defaultSize.h })
-    expect(node.data.cardWidth).toBe(def.defaultSize.w)
-    expect(node.data.cardHeight).toBe(def.defaultSize.h)
+    expect('cardWidth' in node.data).toBe(false)
     ctx.stop()
   })
 
   /**
-   * 存量画布：本插件装上之前就存在的音频节点只有类型默认尺寸，没有自己的 size。
-   * 布局读 view.nodeSize() 时只能靠默认值兜底 —— 一旦默认值在设置里改过、或实测还没跑，
-   * 就会出现“框比卡片小”。装载时一次性补齐（只补缺 size 的，不覆盖用户/插件已写的值）。
+   * 存量画布不需要插件自己补尺寸：数据层 replaceAll 统一补（用户 2026-11-14：
+   * 只保留一个尺寸来源，不做插件级兼容）。这里锁“已经写过的 size 不被覆盖”。
    */
-  it('装载时给存量音频节点补统一 size；已有 size 的不覆盖', async () => {
+  it('回填画布时已有 size 的音频节点不被覆盖', async () => {
     const ctx = new Context()
     const nodeStore = new NodeStore()
     const edgeStore = new EdgeStore()
@@ -136,28 +134,25 @@ describe('音频节点插件整装', () => {
     ctx.inject('nodeFactory', new NodeFactory())
     ctx.inject('nodeRegistry', new NodeRegistry())
     ctx.inject('themeRegistry', new ThemeRegistry())
-    // 插件装载前就存在的音频节点（模拟旧存档）：走 replaceAll 回填，不预先注册类型
-    // （类型由插件自己注册；旧存档里的节点不需要类型表也能存在）。
+    ctx.plugin(nodeAudioPlugin)
+    await ctx.start()
+
+    // 插件启动（类型已注册）之后整包恢复画布：数据层给缺 size 的补默认尺寸
     nodeStore.replaceAll([
       { id: 'legacy', type: AUDIO_NODE_TYPE, position: { x: 0, y: 0 }, data: { label: '音频 1' } } as never,
       {
         id: 'kept',
         type: AUDIO_NODE_TYPE,
         position: { x: 10, y: 10 },
-        data: { label: '音频 2', cardWidth: 480, cardHeight: 200 },
+        data: { label: '音频 2' },
         size: { w: 480, h: 200 },
       } as never,
     ])
-    expect(nodeStore.getNode('legacy')!.size).toBeUndefined()
-
-    ctx.plugin(nodeAudioPlugin)
-    await ctx.start()
 
     expect(nodeStore.getNode('legacy')!.size).toEqual({ w: 320, h: 120 })
-    expect(nodeStore.getNode('legacy')!.data.cardWidth).toBe(320)
     expect(nodeStore.getNode('kept')!.size).toEqual({ w: 480, h: 200 })
 
-    // 回填发生在插件装载之后（宿主先装插件、再 restore）也要补上。
+    // 之后再整包恢复一次：同样补默认尺寸（不依赖插件自己写）
     nodeStore.replaceAll([
       { id: 'late', type: AUDIO_NODE_TYPE, position: { x: 0, y: 0 }, data: { label: '音频 3' } } as never,
     ])

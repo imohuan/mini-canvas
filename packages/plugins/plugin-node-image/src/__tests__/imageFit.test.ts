@@ -102,12 +102,12 @@ describe('missingCardSizePatch：挂载时补算缺失的尺寸', () => {
     expect(missingCardSizePatch({ imageWidth: 800, imageHeight: 600 })).toEqual(cardSizePatch(800, 600))
   })
 
-  it('尺寸已在（含用户手动拖过的）→ null，挂载不覆盖用户的选择', () => {
-    expect(missingCardSizePatch({ imageWidth: 800, imageHeight: 600, cardWidth: 700, cardHeight: 500 })).toBeNull()
+  it('尺寸已在（node.size 有值）→ null，挂载不覆盖用户的选择', () => {
+    expect(missingCardSizePatch({ imageWidth: 800, imageHeight: 600 }, null, { w: 700, h: 500 })).toBeNull()
   })
 
-  it('只有一半尺寸（脏数据）→ 视为缺失，重新补算', () => {
-    expect(missingCardSizePatch({ imageWidth: 800, imageHeight: 600, cardWidth: 700 })).toEqual(cardSizePatch(800, 600))
+  it('node.size 缺失 → 按图片补算', () => {
+    expect(missingCardSizePatch({ imageWidth: 800, imageHeight: 600 }, null, null)).toEqual(cardSizePatch(800, 600))
   })
 
   it('连图片尺寸都没有 → null（无中生有不了一个尺寸）', () => {
@@ -118,59 +118,73 @@ describe('missingCardSizePatch：挂载时补算缺失的尺寸', () => {
 
 describe('followedCardSizePatch：换图时跟随新图 + 幂等', () => {
   it('图片尺寸与当前卡片尺寸不一致 → 给出新补丁（跟随新图）', () => {
-    expect(followedCardSizePatch({ imageWidth: 1200, imageHeight: 800, cardWidth: 320, cardHeight: 240 })).toEqual(
+    expect(followedCardSizePatch({ imageWidth: 1200, imageHeight: 800 }, null, { w: 320, h: 240 })).toEqual(
       cardSizePatch(1200, 800),
     )
   })
 
   it('幂等：算出来的尺寸与当前一致 → null，一次都不写（否则自己触发自己成死循环）', () => {
-    expect(followedCardSizePatch({ imageWidth: 1200, imageHeight: 800, cardWidth: 420, cardHeight: 280 })).toBeNull()
-    expect(followedCardSizePatch({ imageWidth: 200, imageHeight: 100, cardWidth: 240, cardHeight: 120 })).toBeNull()
+    expect(followedCardSizePatch({ imageWidth: 1200, imageHeight: 800 }, null, { w: 420, h: 280 })).toBeNull()
+    expect(followedCardSizePatch({ imageWidth: 200, imageHeight: 100 }, null, { w: 240, h: 120 })).toBeNull()
   })
 
   it('用户手动改过尺寸后又换图 → 照样跟随新图（不做"手动调过就锁定"）', () => {
     // 用户把卡片拖成 900×500，随后换成 800×600 的图 → 仍按上限算出 420×315
-    expect(followedCardSizePatch({ imageWidth: 800, imageHeight: 600, cardWidth: 900, cardHeight: 500 })).toEqual(
+    expect(followedCardSizePatch({ imageWidth: 800, imageHeight: 600 }, null, { w: 900, h: 500 })).toEqual(
       cardSizePatch(800, 600),
     )
   })
 
   it('尺寸拿不到 → null（不猜尺寸，也不把已有尺寸改坏）', () => {
-    expect(followedCardSizePatch({ cardWidth: 320, cardHeight: 240 })).toBeNull()
+    expect(followedCardSizePatch({}, null, { w: 320, h: 240 })).toBeNull()
   })
 
-  it('重复触发（写回后 data 已同步）只产生**一次**写入 —— 兜底监听不会自转成死循环', () => {
-    // 模拟真实回路：watch 触发 → 算补丁 → 写回 → data 更新 → watch 再触发
-    let data: Record<string, unknown> = { imageWidth: 1200, imageHeight: 800 }
-    const writes: Array<{ cardWidth: number; cardHeight: number }> = []
+  it('重复触发（写回后 size 已同步）只产生**一次**写入 —— 兜底监听不会自转成死循环', () => {
+    // 模拟真实回路：watch 触发 → 算补丁 → 写回 node.size → watch 再触发
+    const data: Record<string, unknown> = { imageWidth: 1200, imageHeight: 800 }
+    let size: { w: number; h: number } | null = null
+    const writes: Array<{ w: number; h: number }> = []
     const trigger = (): void => {
-      const patch = followedCardSizePatch(data)
+      const patch = followedCardSizePatch(data, null, size)
       if (!patch) return
-      // nodeStore 写 size 时会同步镜像 data.cardWidth/cardHeight（这里手写模拟那一步）
-      writes.push({ cardWidth: patch.size.w, cardHeight: patch.size.h })
-      data = { ...data, cardWidth: patch.size.w, cardHeight: patch.size.h }
+      writes.push({ w: patch.size.w, h: patch.size.h })
+      size = { w: patch.size.w, h: patch.size.h }
     }
     trigger()
     trigger()
     trigger()
-    expect(writes).toEqual([{ cardWidth: 420, cardHeight: 280 }])
+    expect(writes).toEqual([{ w: 420, h: 280 }])
   })
 })
 
 describe('measuredCardSizePatch：量到宽高就按尺寸显示（已有错误比例也纠正）', () => {
   it('卡片是默认 4:3、图是 16:9 → 给出新补丁（拖入后黑边的那个场景）', () => {
     expect(
-      measuredCardSizePatch({ imageWidth: 1600, imageHeight: 900, cardWidth: 320, cardHeight: 240 }, 1600, 900),
+      measuredCardSizePatch({ imageWidth: 1600, imageHeight: 900 }, 1600, 900, null, { w: 320, h: 240 }),
     ).toEqual(cardSizePatch(1600, 900))
+  })
+
+  it('尺寸已经是规则算出来的那一组 → null（比例对、大小也对，一次都不写）', () => {
+    // 防止"加载完就无条件写回"：4:3 的 960×720 按最长边 420 算出来就是 420×315，
+    // 卡片已经是 420×315 时不该再写一次（否则每次加载都多一条落盘）。
+    expect(measuredCardSizePatch({ imageWidth: 960, imageHeight: 720 }, 960, 720, null, { w: 420, h: 315 })).toBeNull()
+  })
+
+  it('960×720 配默认 320×240 → 420×315（小图按规则放大，比例相同但尺寸要补齐）', () => {
+    expect(measuredCardSizePatch({ imageWidth: 960, imageHeight: 720 }, 960, 720, null, { w: 320, h: 240 })).toEqual({
+      size: { w: 420, h: 315 },
+    })
   })
 
   it('宽高与尺寸都已一致 → null（幂等，一次都不写）', () => {
     const fit = cardSizePatch(1600, 900)!.size
     expect(
       measuredCardSizePatch(
-        { imageWidth: 1600, imageHeight: 900, cardWidth: fit.w, cardHeight: fit.h },
+        { imageWidth: 1600, imageHeight: 900 },
         1600,
         900,
+        null,
+        { w: fit.w, h: fit.h },
       ),
     ).toBeNull()
   })

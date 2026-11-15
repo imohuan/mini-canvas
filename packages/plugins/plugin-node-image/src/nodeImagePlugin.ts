@@ -101,7 +101,15 @@ export class ImageService extends Service implements ImageNodeService {
     if (meta?.name) data.imageName = meta.name
     if (typeof meta?.width === 'number' && meta.width > 0) data.imageWidth = meta.width
     if (typeof meta?.height === 'number' && meta.height > 0) data.imageHeight = meta.height
-    return doc.transaction('add-image-node', (tx) => tx.createNode('image', position, data))
+    // 给了真实宽高就顺手按比例写 node.size —— 否则节点停在类型默认 320×240（4:3），
+    // 16:9 的画面被裁掉一截（用户 2026-11-15 报：视频截帧建出的图片节点宽高不对，
+    // 标题上的 1280×720 却是对的）。尺寸与 data 同一次事务：只记一条撤销。
+    const card = cardSizePatch(meta?.width, meta?.height, readImageFitLimits(this.ctx))?.size
+    return doc.transaction('add-image-node', (tx) => {
+      const id = tx.createNode('image', position, data)
+      if (card) tx.updateNode(id, { size: { w: card.w, h: card.h } })
+      return id
+    })
   }
 
   /**
@@ -391,9 +399,10 @@ export function apply(ctx: Context) {
     }>('doc')
     if (!doc) return
     const limits = readImageFitLimits(ctx)
+      const geometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
     for (const node of doc.getNodes()) {
       if (node.type !== 'image') continue
-      const patch = followedCardSizePatch(node.data, limits)
+        const patch = followedCardSizePatch(node.data, limits, geometry?.get(node.id) ?? null)
       if (!patch) continue
       if (doc.updateNodeRuntime) doc.updateNodeRuntime(node.id, { size: patch.size })
       else doc.updateNode?.(node.id, { size: patch.size })

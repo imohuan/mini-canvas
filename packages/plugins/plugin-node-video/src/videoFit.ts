@@ -108,9 +108,11 @@ export function videoCardSizePatch(
 export function missingVideoCardSizePatch(
   data: Record<string, unknown> | undefined,
   limits?: Partial<VideoFitLimits> | null,
+  /** 当前 node.size（经 nodeGeometry 读）；有正数就代表“已经有尺寸”，不补 */
+  currentSize?: { w: number; h: number } | null,
 ): CardSizePatch | null {
   if (!data) return null
-  if (positive(data.cardWidth) !== null && positive(data.cardHeight) !== null) return null
+  if (positive(currentSize?.w) !== null && positive(currentSize?.h) !== null) return null
   const source = cardSourceSize(data)
   return videoCardSizePatch(source.width, source.height, limits)
 }
@@ -124,12 +126,14 @@ export function missingVideoCardSizePatch(
 export function followedVideoCardSizePatch(
   data: Record<string, unknown> | undefined,
   limits?: Partial<VideoFitLimits> | null,
+  /** 当前 node.size（唯一尺寸来源） */
+  currentSize?: { w: number; h: number } | null,
 ): CardSizePatch | null {
   if (!data) return null
   const source = cardSourceSize(data)
   const patch = videoCardSizePatch(source.width, source.height, limits)
   if (!patch) return null
-  if (positive(data.cardWidth) === patch.size.w && positive(data.cardHeight) === patch.size.h) return null
+  if (positive(currentSize?.w) === patch.size.w && positive(currentSize?.h) === patch.size.h) return null
   return patch
 }
 

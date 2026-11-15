@@ -152,9 +152,8 @@ describe('loadVideo：载入视频', () => {
     expect(data.videoHeight).toBe(720)
     expect(data.videoDuration).toBe(12)
     // 1280×720 → 560×315（等比 + 封顶 560×360）
-    expect(data.cardWidth).toBe(560)
-    expect(data.cardHeight).toBe(315)
     expect(env.nodeStore.getNode(id)!.size).toEqual({ w: 560, h: 315 })
+    expect('cardWidth' in data).toBe(false)
   })
 
   it('换视频会清掉旧的裁剪框与剪辑范围（它们属于上一段视频）', async () => {
@@ -179,7 +178,8 @@ describe('loadVideo：载入视频', () => {
     const data = env.nodeStore.getNode(id)!.data
     expect(data.videoUrl).toBe('blob:v')
     expect(data.videoWidth).toBeUndefined()
-    expect(data.cardWidth).toBeUndefined()
+    // 元数据读不出 → 尺寸保持建节点时的类型默认，不猜
+    expect(env.nodeStore.getNode(id)!.size).toEqual({ w: 480, h: 320 })
   })
 
   it('整个载入只记一条撤销记录（一次撤销退干净）', async () => {
@@ -192,7 +192,7 @@ describe('loadVideo：载入视频', () => {
     env.history.undo()
     // 一次撤销把 url / 名字 / 尺寸全部退回 —— 不是"退半步"
     expect(env.nodeStore.getNode(id)!.data.videoUrl).toBeUndefined()
-    expect(env.nodeStore.getNode(id)!.data.cardWidth).toBeUndefined()
+    expect(env.nodeStore.getNode(id)!.size).toEqual({ w: 480, h: 320 })
   })
 
   it('节点不存在 / 地址为空 → false，且不写库', async () => {
@@ -252,8 +252,7 @@ describe('cropVideo / resetCrop：取景式裁剪', () => {
     const data = env.nodeStore.getNode(id)!.data
     expect(data.cropRect).toEqual({ x: 100, y: 50, width: 640, height: 360 })
     // 640×360 → 560×315
-    expect(data.cardWidth).toBe(560)
-    expect(data.cardHeight).toBe(315)
+    expect(env.nodeStore.getNode(id)!.size).toEqual({ w: 560, h: 315 })
   })
 
   it('裁框夹进原画面内（脏数据不该写进库）', () => {
@@ -279,15 +278,13 @@ describe('cropVideo / resetCrop：取景式裁剪', () => {
       videoWidth: 1280,
       videoHeight: 720,
       cropRect: { x: 0, y: 0, width: 400, height: 400 },
-      cardWidth: 400,
-      cardHeight: 400,
     })
+    env.nodeStore.updateNode(id, { size: { w: 400, h: 400 } })
     const ops = createVideoOps(env.ctx)
     expect(resetCrop(ops, id)).toBe(true)
     const data = env.nodeStore.getNode(id)!.data
     expect(data.cropRect).toBeUndefined()
-    expect(data.cardWidth).toBe(560)
-    expect(data.cardHeight).toBe(315)
+    expect(env.nodeStore.getNode(id)!.size).toEqual({ w: 560, h: 315 })
   })
 
   it('resetCrop 用 dataUnset 真正删除 cropRect 键（浅合并删不掉键）', () => {

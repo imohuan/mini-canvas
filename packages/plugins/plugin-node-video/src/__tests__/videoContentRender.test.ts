@@ -23,6 +23,7 @@ import { registerUiStubs } from './uiStubs'
 import VideoContent from '../VideoContent.vue'
 import { beginOverlay, endOverlay } from '../videoSession'
 import { framingStyle } from '../videoCrop'
+import { resolveMediaFillMode, type MediaFillInput } from '../mediaFill'
 
 const VIDEO = '/api/canvases/c1/resources/abc.mp4'
 
@@ -45,6 +46,8 @@ function renderCtx(selectedIds: string[] = []): CanvasRenderContext {
   const services: Record<string, unknown> = {
     nodeStore: { getNode: () => undefined, getNodes: () => [] },
     graph: { updateNode: () => {} },
+    // 尺寸唯一来源：nodeGeometry → node.size
+    nodeGeometry: { get: () => ({ w: 480, h: 320 }) },
     command: { execute: () => undefined },
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
     selection: {
@@ -56,6 +59,7 @@ function renderCtx(selectedIds: string[] = []): CanvasRenderContext {
   return {
     ctx: {
       get: (name: string) => services[name],
+      tryGet: (name: string) => services[name],
       on: () => ({ dispose: () => {} }),
       registryOf: (kind: string) => (kind === 'ui' ? uiFieldShared : new RegistryImpl()),
     },
@@ -144,6 +148,52 @@ describe('取景几何（裁剪框 → 放大与偏移）', () => {
     expect(rule![1]).toContain('img.video-media')
     // 预览图的 style 必须复用视频那套取景，不能自己写死铺满
     expect(src).toMatch(/const posterStyle = computed<Record<string, string>>\(\(\) => videoStyle\.value\)/)
+  })
+})
+
+/**
+ * 回归（用户 2026-11-14 截图）：视频节点四周出现一条约 1px 的黑边，看着像「边框被裁掉了」。
+ *
+ * 根因不在 BaseNode 的边框（那是 1px 浅灰，圆角也正常）：
+ * 卡片尺寸由 `fitMediaCard` 取整得出（420×576 的裁框 → 408×560），比例与画面差不到 1px；
+ * 帧图 / 视频用 `contain` 等比缩放后，多出来的那不足 1px 就露出 `.video-stage` 的近黑底，
+ * 在屏幕上就是一条黑缝。卡片比例与画面一致时这层底本来永远看不见。
+ *
+ * 规则：**卡片尺寸（去掉边框后）与画面比例一致 → 画面铺满**（这种比例下 cover 与 contain
+ * 结果相同，不会切掉任何画面）；比例真的不一致（手动拖过 / 画面还没量到）才回到 contain ——
+ * 那时宁可留窄黑边，也不能丢掉画面内容。
+ */
+describe('画面铺满：比例一致时不留黑缝', () => {
+  const frame = (over: Partial<MediaFillInput> = {}): MediaFillInput => ({
+    mediaWidth: 420,
+    mediaHeight: 576,
+    cardWidth: 408,
+    cardHeight: 560,
+    // 卡片边框现在是盒子外面的 ring：画面可用区域 = 整个卡片尺寸
+    borderWidth: 0,
+    ...over,
+  })
+
+  it('卡片 408×560 装 420×576 的画面（只差取整那一点）→ 铺满', () => {
+    expect(resolveMediaFillMode(frame())).toBe('cover')
+  })
+
+  it('宿主主题真有内描边（border 1px）时也能算对：不影响「比例一致就铺满」的判断', () => {
+    expect(resolveMediaFillMode(frame({ borderWidth: 1 }))).toBe('cover')
+  })
+
+  it('16:9 视频装进 4:3 卡片（比例真的不对）→ 保持 contain，不许裁画面', () => {
+    expect(resolveMediaFillMode(frame({ mediaWidth: 1280, mediaHeight: 720, cardWidth: 320, cardHeight: 240 }))).toBe('contain')
+  })
+
+  it('阈值按缩放反算：缩小时不足 1px 的差不算「比例不符」', () => {
+    expect(resolveMediaFillMode(frame(), 0.2)).toBe('cover')
+    expect(resolveMediaFillMode(frame({ mediaWidth: 1280, mediaHeight: 720, cardWidth: 320, cardHeight: 240 }), 0.2)).toBe('contain')
+  })
+
+  it('尺寸缺失 / 非法 → 不下结论（回传 contain，与改动前一致）', () => {
+    expect(resolveMediaFillMode(frame({ cardWidth: 0 }))).toBe('contain')
+    expect(resolveMediaFillMode(frame({ mediaHeight: Number.NaN }))).toBe('contain')
   })
 })
 

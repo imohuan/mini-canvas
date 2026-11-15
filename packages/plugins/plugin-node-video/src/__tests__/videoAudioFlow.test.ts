@@ -89,7 +89,7 @@ describe('视频转音频：先建音频节点 + 连线，再回填', () => {
      * 取音频类型此刻的 defaultSize（设置面板可能改过），与菜单建的音频节点同一条链。
      */
     expect(created!.size).toEqual(env.nodeStore.types.get('audio')!.defaultSize)
-    expect(created!.data.cardWidth).toBe(created!.size!.w)
+    expect('cardWidth' in created!.data).toBe(false)
   })
 
   it('后台还在跑：音频节点已经出现并带 running 态，此时还没有音频地址', async () => {

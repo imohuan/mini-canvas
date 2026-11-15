@@ -162,7 +162,7 @@ describe('fitVideoSize（视频卡片适配）', () => {
   })
 
   it('封顶与 plugin-node-video 的 560×360 一致（拖进来与在节点里上传必须同尺寸）', () => {
-    expect(DEFAULT_VIDEO_SIZE).toEqual({ cardWidth: 560, cardHeight: 360 })
+    expect(DEFAULT_VIDEO_SIZE).toEqual({ w: 560, h: 360 })
   })
 })
 
@@ -182,7 +182,7 @@ describe('buildVideoPayload', () => {
     expect(p.data.videoHeight).toBe(720)
     // 时长取整到秒（与老版 Math.round 一致）
     expect(p.data.videoDuration).toBe(12)
-    // 卡片尺寸只给 size（唯一正身）；data.cardWidth/cardHeight 由 nodeStore 自动镜像
+    // 卡片尺寸只给 size（唯一正身）；data 里不再有第二份尺寸
     expect(p.size).toEqual({ w: 560, h: 315 })
     expect(p.data.cardWidth).toBeUndefined()
     expect(p.data.cardHeight).toBeUndefined()

@@ -42,7 +42,7 @@ import TextSkeleton from './TextSkeleton.vue'
 /** 内容区固定内边距（px）：横条要在这个框里排，所以外层与预览字共享同一组数值 */
 const CONTENT_PADDING = 16
 
-const props = defineProps<{ id: string; data: { text?: string; cardWidth?: number; cardHeight?: number } }>()
+const props = defineProps<{ id: string; data: { text?: string } }>()
 
 // 统一渲染上下文经 useCanvasRender() 取(宿主 provide)；ctx 是裸内核上下文(boot 后已就绪，见 CanvasSurface)。
 // 根 Context 没有服务属性 Proxy（declare module 只增强类型）；这里用 ctx.get 取 text 服务，避免 ctx.text 运行时为 undefined。
@@ -256,12 +256,17 @@ watch(inputEl, (el) => {
   scrollbarRo?.observe(el)
   void nextTick(syncScrollbar)
 })
-// 估算用内容盒尺寸：卡片宽高（data 里的卡片镜像）减掉内边距。
-// 只用于 ResizeObserver 报到之前的首帧估算 —— 卡片被 resize 过就有值（否则类型默认尺寸兜 300×200）。
-const boxHint = computed(() => ({
-  width: Math.max(finiteOr(props.data.cardWidth, 300) - CONTENT_PADDING * 2, 0),
-  height: Math.max(finiteOr(props.data.cardHeight, 200) - CONTENT_PADDING * 2, 0),
-}))
+// 估算用内容盒尺寸：**node.size**（经 nodeGeometry 服务）减掉内边距。
+// 只用于 ResizeObserver 报到之前的首帧估算；尺寸只有一个来源，不再读 data 镜像。
+const nodeGeometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+const boxHint = computed(() => {
+  void props.data
+  const size = nodeGeometry?.get(props.id)
+  return {
+    width: Math.max(finiteOr(size?.w, 300) - CONTENT_PADDING * 2, 0),
+    height: Math.max(finiteOr(size?.h, 200) - CONTENT_PADDING * 2, 0),
+  }
+})
 
 function finiteOr(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback

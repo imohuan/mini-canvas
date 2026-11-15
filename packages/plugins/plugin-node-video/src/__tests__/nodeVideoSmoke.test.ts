@@ -86,8 +86,7 @@ describe('node-video 装配 smoke', () => {
     expect(node.data.videoName).toBe('视频 A.mp4')
     // 1280×720 → 560×315：卡片一建出来就是视频比例，不用等内容组件补
     expect(node.size).toEqual({ w: 560, h: 315 })
-    expect(node.data.cardWidth).toBe(560)
-    expect(node.data.cardHeight).toBe(315)
+    expect('cardWidth' in node.data).toBe(false)
     ctx.stop()
   })
 
@@ -99,7 +98,8 @@ describe('node-video 装配 smoke', () => {
     const node = nodeStore.getNode(id)!
     expect(node.data.videoUrl).toBe('/api/assets/files/b.mp4')
     expect(node.data.videoWidth).toBeUndefined()
-    expect(node.size).toBeUndefined()
+    // 元数据读不出 → 保持类型默认尺寸，不猜
+    expect(node.size).toEqual({ w: 480, h: 320 })
     ctx.stop()
   })
 

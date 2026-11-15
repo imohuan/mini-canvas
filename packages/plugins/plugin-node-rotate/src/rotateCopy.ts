@@ -76,9 +76,9 @@ function positive(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined
 }
 
-/** 原图宽度：正式尺寸 > data 镜像 > 类型默认值 */
+/** 原图宽度：只认 node.size；没尺寸才回落类型默认值 */
 function readWidth(node: NodeLike): number {
-  return positive(node.size?.w) ?? positive(node.data.cardWidth) ?? FALLBACK_WIDTH
+  return positive(node.size?.w) ?? FALLBACK_WIDTH
 }
 
 /** 进入旋转模式：选中副本 + 本插件会话 + nodeToolbar 会话（面板按两者同时成立才渲染） */
@@ -113,7 +113,7 @@ export function duplicateImageForRotate(
   if (!doc || !source || source.type !== 'image') return null
 
   const width = readWidth(source)
-  const height = positive(source.size?.h) ?? positive(source.data.cardHeight)
+  const height = positive(source.size?.h)
   const data = cloneData(source.data)
   // 副本标题标出它是复制出来的（用户截图里的「图片 1-副本」同一心智）：
   // 一眼能分清哪张是原图；原节点没有标题时才退回类型序号名。
@@ -121,7 +121,7 @@ export function duplicateImageForRotate(
   data.label = label ? `${label}-副本` : doc.nextTypeName(source.type)
   const copyId = doc.nextNodeId()
   const position = { x: source.position.x + width + COPY_GAP, y: source.position.y }
-  // 老节点可能只有 data 里的镜像尺寸：读到了合法宽高就一并带给副本，外观与原图保持一致
+  // 读到了合法宽高就一并带给副本，外观与原图保持一致
   const size = height !== undefined ? { w: width, h: height } : undefined
 
   try {
