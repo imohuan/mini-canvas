@@ -28,7 +28,6 @@ import { groupPlugin } from '@plume-canvas/plugin-group'
 import { multiSelectPlugin } from '@plume-canvas/plugin-multi-select'
 import { edgeCuttingPlugin } from '@plume-canvas/plugin-edge-cutting'
 import { hotReloadPlugin } from '@plume-canvas/plugin-hot-reload'
-import { uiAssetUploadPlugin } from './assetUploadPlugin'
 import { agentPlugin } from '@plume-canvas/plugin-agent'
 import { styleLibraryPlugin } from '@plume-canvas/plugin-style-library'
 import { projectsApiPlugin } from './projectsApiPlugin'
@@ -53,7 +52,6 @@ export const DEV_PLUGIN_REGISTRY: readonly AppPluginEntry[] = [
   { plugin: pluginManagerPlugin, kind: 'app', reason: '插件管理页' },
   { plugin: agentPlugin, kind: 'app', reason: 'Agent 对话与设置' },
   { plugin: hotReloadPlugin, kind: 'app', reason: '热重载开发工具' },
-  { plugin: uiAssetUploadPlugin, kind: 'app', reason: '资产入库入口' },
   { plugin: styleLibraryPlugin, kind: 'app', reason: '素材库（项目页可浏览）' },
   { plugin: projectsApiPlugin, kind: 'app', reason: '项目数据服务（项目页面板可用）' },
   { plugin: shortcutSettingsPlugin, kind: 'app', reason: '设置页快捷键配置' },

@@ -23,6 +23,7 @@ import AssetUploadHost from './components/AssetUploadHost.vue'
 import AssetUiSlot from './components/AssetUiSlot.vue'
 import { useUi, useUiComponentOutside } from './composables/ui'
 import { registerShellCommands } from './shellCommands'
+import { registerAssetCommands } from './assetUploadPlugin'
 import { handleTab } from './tabPageOnly'
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { provideMiniMapDockTarget } from './composables/miniMapDock'
@@ -50,6 +51,8 @@ const s = ui.state
 // 外壳命令（打开抽屉 / 切页签 / 收起展开）：注册在 Provider 的 ctx 上，
 // 插件按钮通过 command 调用，不反向依赖 @plume-canvas/ui 的状态。
 let shellCommandDisposers: Array<{ dispose(): void }> = []
+/** 「收藏到资产库 / 导出节点包 / 资源库 ▸ 节点包·节点组」三条接缝的注册句柄 */
+let assetCommandDisposers: Array<{ dispose?: () => void }> = []
 
 // 根级应用底座：由 Root.vue 的 AppProvider 提供。画布会话在 onMounted 里挂上。
 const shell = inject(APP_SHELL_KEY) as AppShell
@@ -78,6 +81,11 @@ function bindHost(host: CanvasHostHandle): void {
   void ui.onReady()
   for (const d of shellCommandDisposers) d.dispose()
   shellCommandDisposers = registerShellCommands(host.ctx, ui)
+  // 资产入口必须挂在**画布上下文**：build 版从 cloud-server 装的是插件包，
+  // 而这几条命令住在 apps/web（要开上传弹窗）。只放在 dev 清单里的话，正式构建
+  // 右键菜单就少掉「收藏到资产库」「导出节点包」和资源库二级菜单（用户 2026-11-15 报的现象）。
+  for (const d of assetCommandDisposers) d.dispose?.()
+  assetCommandDisposers = registerAssetCommands(host.ctx)
 }
 
 /** 当前画布会话；离开画布时先落盘再卸。 */
@@ -160,6 +168,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   for (const d of shellCommandDisposers) d.dispose()
   shellCommandDisposers = []
+  for (const d of assetCommandDisposers) d.dispose?.()
+  assetCommandDisposers = []
   // 撤掉 settings:ui-close 订阅：面板关闭广播的唯一落点，宿主销毁时不该继续持有 ctx 回调。
   ui.unbindSettingsClose()
   // 撤掉画布开关的设置订阅（edgeVisible / snapToGrid / nodesDraggable 的镜像同步）。

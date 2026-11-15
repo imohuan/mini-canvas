@@ -24,7 +24,7 @@ import { assetsFilesDir, assetsIndexFile, canvasResourcesDir, isSafeAssetName, i
  * 单独一类而不是丢进 other：左侧抽屉据此知道它是"能拖出节点的东西"，
  * 拖到画布时的落点是"还原节点 + 写脚本"，而不是"建一个媒体节点"。
  */
-export type AssetKind = 'image' | 'video' | 'audio' | 'node-package' | 'other'
+export type AssetKind = 'image' | 'video' | 'audio' | 'node-package' | 'node-group' | 'other'
 export interface Asset {
   id: string
   name: string
@@ -76,6 +76,7 @@ function foldersFile(root: string): string {
 export function kindOfName(name: string): AssetKind {
   const ext = (name.split('?')[0].split('.').pop() ?? '').toLowerCase()
   if (ext === 'plumenode') return 'node-package'
+  if (ext === 'plumegroup') return 'node-group'
   if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif'].includes(ext)) return 'image'
   if (['mp4', 'webm', 'mov'].includes(ext)) return 'video'
   if (['mp3', 'wav', 'ogg', 'm4a'].includes(ext)) return 'audio'

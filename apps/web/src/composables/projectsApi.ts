@@ -21,7 +21,7 @@ export interface CanvasSummary {
 export interface AssetSummary {
   id: string
   name: string
-  kind: 'image' | 'video' | 'audio' | 'other'
+  kind: 'image' | 'video' | 'audio' | 'node-package' | 'node-group' | 'other'
   url: string
   /** 本机绝对路径（有字节落盘时才有；客户端的引用要用它，见「添加到 Agent」） */
   path?: string

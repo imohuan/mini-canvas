@@ -15,14 +15,17 @@ const dialog = readFileSync(path.resolve(HERE, '../components/AssetUploadDialog.
 describe('缩略图按类型渲染', () => {
   it('★ 图片用 img、视频用 video、其它用图标（不再一律 img）', () => {
     expect(dialog).toMatch(/<img v-if="it\.kind === 'image' && it\.preview"/)
-    expect(dialog).toMatch(/<video v-else-if="it\.kind === 'video' && it\.preview"/)
+    // 视频分支现在是一段模板：先垫类型图标，<video> 有画面后盖住它
+    expect(dialog).toMatch(/<template v-else-if="it\.kind === 'video'">[\s\S]{0,400}<video v-if="it\.preview"/)
     // 其它类型的兜底是图标，不是 img
-    expect(dialog).toMatch(/<span v-else class="grid h-full w-full place-items-center text-ink-mute">/)
+    expect(dialog).toMatch(/<template v-else><span class="grid h-full w-full place-items-center text-ink-mute">/)
   })
 
   it('视频缩略图不自动播放、不发声（只取首帧）', () => {
-    const seg = dialog.slice(dialog.indexOf("<video v-else-if"))
-    const tag = seg.slice(0, seg.indexOf('>'))
+    const seg = dialog.slice(dialog.indexOf("<template v-else-if=\"it.kind === 'video'\""))
+    const tagStart = seg.indexOf('<video')
+    expect(tagStart, '找不到视频标签').toBeGreaterThan(-1)
+    const tag = seg.slice(tagStart, seg.indexOf('>', tagStart))
     expect(tag).toContain('preload="metadata"')
     expect(tag).toContain('muted')
     expect(tag).not.toContain('autoplay')
@@ -48,7 +51,12 @@ describe('类型判定', () => {
     expect(dialog).toMatch(/preview: p\.url[\s\S]{0,60}kind: kindOfName\(p\.name\)/)
   })
 
-  it('objectURL 只给图片（视频/音频给了也没法用 img 显示）', () => {
-    expect(dialog).toMatch(/if \(kind === 'image'\) item\.preview = URL\.createObjectURL\(f\)/)
+  it('★ 图片与视频都给 preview 地址（视频要出首帧，用户 2026-11-15）', () => {
+    expect(dialog).toMatch(/if \(kind === 'image' \|\| kind === 'video'\) item\.preview = URL\.createObjectURL\(f\)/)
+  })
+
+  it('★ 视频预览中间压一个播放图标（与资产树的视频角标同一视觉）', () => {
+    expect(dialog).toContain("v-if=\"it.kind === 'video' && it.preview\"")
+    expect(dialog).toContain('polygon points="7,4 19,12 7,20"')
   })
 })

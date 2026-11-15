@@ -1,6 +1,7 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useUi } from '../../../composables/ui'
 import { assetKindOf } from '../../../composables/assetModel'
+import { GROUP_PACK_EXT } from '../../../composables/groupPack'
 
 /** 拖出资源树的资产 MIME（AssetTree 写入，宿主在 drop 时兜底读取） */
 const ASSET_DRAG_MIME = 'application/x-plume-asset'
@@ -56,16 +57,19 @@ export function useAssetCanvasDrop() {
     //   而包这条路的落点完全不同（写脚本 + 还原节点，见 ui.importPackFile）。
     const dropped = Array.from(e.dataTransfer?.files ?? [])
     const packs = dropped.filter((f) => f.name.toLowerCase().endsWith('.plumenode'))
-    if (packs.length) {
+    // 节点组包（.plumegroup）= 一整组节点数据：与节点包同一个落点语义（按指针位置还原）
+    const groupPacks = dropped.filter((f) => f.name.toLowerCase().endsWith(GROUP_PACK_EXT))
+    if (packs.length || groupPacks.length) {
       e.preventDefault()
       e.stopPropagation()
-      const rest = dropped.filter((f) => !packs.includes(f))
+      const rest = dropped.filter((f) => !packs.includes(f) && !groupPacks.includes(f))
       // 落点 = 指针位置（与拖媒体文件、拖资产完全同一条口径）：
       //   用户口径「拖拽之后和直接从文件夹中拖拽进来的效果是一样的」——
       //   所以这里也把指针换算成 flow 坐标传下去，别再让包落到级联默认位。
       const atFlow = ui.screenToFlow(e.clientX, e.clientY) ?? undefined
       void (async () => {
         for (const p of packs) await ui.importPackFile(p, atFlow)
+        for (const p of groupPacks) await ui.importGroupPackFile(p, atFlow)
         if (rest.length) await ui.addFilesToCanvas(rest)
       })()
       return
@@ -79,7 +83,10 @@ export function useAssetCanvasDrop() {
     void ui.dropAssetToCanvas(
       { name: asset.name, url: asset.url, assetKind: asset.assetKind },
       { x: e.clientX, y: e.clientY },
-    ).then((created) => { if (created) ui.showToast('已添加节点：' + asset.name) })
+    ).then((created) => {
+      // 节点组自己会报“已添加节点组”，这里只给单个媒体节点补一句
+      if (created && asset.assetKind !== 'node-group') ui.showToast('已添加节点：' + asset.name)
+    })
     draggingAssetId = null
   }
 

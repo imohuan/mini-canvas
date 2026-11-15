@@ -1,6 +1,7 @@
 import { nextTick } from 'vue'
 import { SAMPLE_IMAGE_URL } from '../../assembly'
 import { importPack, isNodePackFile, resolvePackBase, VERSION_SEP } from '../nodePack'
+import { GROUP_PACK_EXT, GROUP_PACK_KIND, hydrateGroupPackMedia, parseGroupPack, planGroupPlacement } from '../groupPack'
 import { uniqueLabel } from '../nodeLabel'
 import { assetKindOf } from '../assetModel'
 import type { UiState } from './createUiState'
@@ -139,6 +140,16 @@ export function createCreateNodeScope(
       //        （= 按 F 聚焦选中，会缩放平移视口），而拖拽那条本该只 selectNewNode。
       void importPackFromUrl(asset.url, asset.name, atFlow)
       return null
+    }
+    // ★ 节点组（.plumegroup）同样走“整包还原”，不是建一个媒体节点。
+    //   用户口径 2026-11-15：从资源库拖出来应当还原成**一整组**节点，而不是单个节点。
+    if (assetKindOf(asset) === GROUP_PACK_KIND) {
+      try {
+        return await insertGroupPackFromUrl(asset.url, atFlow)
+      } catch (err) {
+        showToast('导入节点组失败：' + (err instanceof Error ? err.message : String(err)))
+        return null
+      }
     }
     const type = nodeTypeOfAsset(asset)
     if (!type) {
@@ -298,12 +309,16 @@ export function createCreateNodeScope(
     //   媒体文件是"建一个媒体节点"，包是"写脚本 + 还原节点"。
     //   先挑出来落地，剩下的交给 file-drop（用户可能一次拖了包 + 图片）。
     const packs = list.filter((f) => isNodePackFile(f.name))
-    const restFiles = list.filter((f) => !isNodePackFile(f.name))
+    // ★ 节点组包（.plumegroup）同理：拖进来 = 还原一整组，不是建一个普通文件节点。
+    const groupPacks = list.filter((f) => f.name.toLowerCase().endsWith(GROUP_PACK_EXT))
+    const restFiles = list.filter((f) => !isNodePackFile(f.name) && !groupPacks.includes(f))
     // 节点包与媒体文件落到同一处：没有指针落点时用**视口中心**（与 addMediaFilesToCanvas 一致）
     const packAnchor = viewportCenterFlow() ?? undefined
     for (const p of packs) await importPackFile(p, packAnchor)
-    if (restFiles.length === 0) return packs.length
-    return (await addMediaFilesToCanvas(restFiles)) + packs.length
+    for (const p of groupPacks) await importGroupPackFile(p, packAnchor)
+    const packCount = packs.length + groupPacks.length
+    if (restFiles.length === 0) return packCount
+    return (await addMediaFilesToCanvas(restFiles)) + packCount
   }
 
   /**
@@ -390,6 +405,107 @@ export function createCreateNodeScope(
       showToast('导入失败：' + (err instanceof Error ? err.message : String(err)))
       return false
     }
+  }
+
+  /**
+   * 从**资产库里的地址**取回一个节点组包，并在落点还原成整组节点（组 + 全部子节点 + 内部连线）。
+   *
+   * 与 importPackFromUrl 的分工一样：网络/解析在这里，数据写入走 doc.transaction（一次撤销）。
+   * 子节点坐标本来就是相对组的，所以只挪根节点，子节点整体跟随。
+   */
+  async function insertGroupPackFromUrl(
+    url: string,
+    atFlow?: { x: number; y: number },
+  ): Promise<string | null> {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('取节点组失败（HTTP ' + res.status + '）')
+    return await insertGroupPackData(parseGroupPack(JSON.parse(await res.text())), atFlow)
+  }
+
+  /** 从**本地文件**（.plumegroup）还原整组：与从资源库拖出来同一条落点语义 */
+  async function importGroupPackFile(file: File, atFlow?: { x: number; y: number }): Promise<string | null> {
+    try {
+      const pack = parseGroupPack(JSON.parse(await file.text()))
+      return await insertGroupPackData(pack, atFlow)
+    } catch (err) {
+      showToast('导入节点组失败：' + (err instanceof Error ? err.message : String(err)))
+      return null
+    }
+  }
+
+  /** 拿到解好的包之后，往画布写：新 id、整组一次事务、一次撤销 */
+  async function insertGroupPackData(
+    pack: ReturnType<typeof parseGroupPack>,
+    atFlow?: { x: number; y: number },
+  ): Promise<string | null> {
+    const target = canvasHost()
+    const ctx = hostCtx()
+    if (!target?.command || !ctx) return null
+
+    // 组里的图片/视频若是「按 resourceId 存的」（本地 IndexedDB / 云端画布资源），
+    // 收藏时抄下来的是**原画布**的引用；换一张画布后必须先按本机资源服务换一次地址，
+    // 否则拖回来是一组空白卡片。换不到就保留原字段（至少不比不补更差）。
+    const resources = ctx.tryGet?.<{ resolve(ref: string): Promise<string | undefined> }>('resources')
+    const hydrated = resources?.resolve
+      ? await hydrateGroupPackMedia(pack, (id) => resources.resolve(id))
+      : pack
+
+    const doc = ctx.get<{
+      nextNodeId(): string
+      types?: ReadonlyMap<string, unknown>
+      transaction<T>(reason: string, fn: (tx: {
+        addNodes(inputs: Array<Record<string, unknown>>): number
+        addEdge(input: Record<string, unknown>): string
+      }) => T): T
+    }>('doc')
+    const origin = (atFlow ? spawnPosition(atFlow) : viewportCenterFlow() ?? spawnPosition(undefined))
+    let plan = planGroupPlacement(hydrated, {
+      origin,
+      allocateId: () => doc.nextNodeId(),
+      takenLabels: existingLabels(),
+    })
+    // 包里可能有**当前已卸载插件**的节点类型（例如导出时装了音频插件、后来卸了）。
+    // nodeStore.addNodes 遇到未知类型会整批抛错 —— 那会让整组一个都建不出来。
+    // 这里只留能建的（缺类型时给一句提示），其余类型等插件装回来再说。
+    const known = doc.types
+    if (known) {
+      const alive = new Set(plan.nodes.filter((n) => known.has(n.type)).map((n) => n.id))
+      const dropped = plan.nodes.length - alive.size
+      // 连分组节点本身都建不了（分组插件没装）：整组无从谈起，说清楚再退出，
+      // 否则 addNodes 会因未知类型整批抛错。
+      if (!alive.has(plan.rootId)) {
+        showToast('分组插件未启用，无法还原节点组')
+        return null
+      }
+      if (dropped > 0) {
+        plan = {
+          rootId: plan.rootId,
+          nodes: plan.nodes.filter((n) => alive.has(n.id) || n.id === plan.rootId).map((n) => (n.parentId && !alive.has(n.parentId) ? { ...n, parentId: undefined } : n)),
+          edges: plan.edges.filter((e) => alive.has(e.source) && alive.has(e.target)),
+        }
+        showToast('这一组里有 ' + dropped + ' 个节点的插件未启用，已跳过')
+      }
+    }
+    doc.transaction('group-pack-import', (tx) => {
+      tx.addNodes(plan.nodes as unknown as Array<Record<string, unknown>>)
+      for (const e of plan.edges) {
+        // 端点类型不允许时这条边建不出来 —— 节点本身保留，不因一条线整组失败
+        try {
+          tx.addEdge(e as unknown as Record<string, unknown>)
+        } catch {
+          /* 忽略单条连线 */
+        }
+      }
+    })
+    // 整组选中（用户一眼看到“拖进来了一整组”）；菜单入口才取景，拖拽入口只选中。
+    hostCtx()?.get<{ set(ids: Iterable<string>): void }>('selection')?.set(plan.nodes.map((n) => n.id))
+    // 取景用**整组**的选中集：focusNewNode 会把选区改成单个根节点，
+    // 那样刚建好的一整组只剩一个被选中（与「拖进来一整组」的反馈相悖）。
+    if (!atFlow) {
+      void nextTick(() => hostCtx()?.get<{ runCommand(id: string): unknown }>('canvas')?.runCommand('auto-layout:focus-selected'))
+    }
+    showToast('已从资源库添加节点组：' + pack.name)
+    return plan.rootId
   }
 
   /** 媒体文件那条老路（原 addFilesToCanvas 的实现，原样搬过来） */
@@ -500,6 +616,7 @@ export function createCreateNodeScope(
     createNode, nodeTypeOfAsset, spawnPosition, selectNewNode, focusNewNode, existingLabels, dedupeNodeLabel,
     createAssetNode, createImageNodeWithUrl, screenToFlow, viewportCenterFlow,
     addAssetToCanvas, dropAssetToCanvas, addFilesToCanvas, importPackFile, importPackFromUrl,
+    insertGroupPackFromUrl, importGroupPackFile,
     addMediaFilesToCanvas, addFolderToAgent, addFolderAssetsToCanvas, addAssetToAgent,
   }
 }

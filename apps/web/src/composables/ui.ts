@@ -89,6 +89,8 @@ export function createUi() {
     addFilesToCanvas: nodes.addFilesToCanvas,
     importPackFile: nodes.importPackFile,
     importPackFromUrl: nodes.importPackFromUrl,
+    insertGroupPackFromUrl: nodes.insertGroupPackFromUrl,
+    importGroupPackFile: nodes.importGroupPackFile,
     uploadAssets: assets.uploadAssets, uploadAssetsTo: assets.uploadAssetsTo,
     uploadAssetsFromUrls: assets.uploadAssetsFromUrls, deleteAssetById: assets.deleteAssetById,
     assetFolders: assets.assetFolders, assetFolderTree: assets.assetFolderTree,

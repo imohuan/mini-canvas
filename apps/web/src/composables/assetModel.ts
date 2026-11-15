@@ -62,3 +62,25 @@ export function assetKindOf(a: { kind?: string; assetKind?: string } | null | un
   if (!a) return 'other'
   return a.assetKind ?? a.kind ?? 'other'
 }
+
+/**
+ * 资产类型筛选的**中文标签**（与 kind 的双向对照只此一份）。
+ *
+ * 之前「中文标签 → 英文 kind」在抽屉与弹窗各写了一遍三元表达式，加一种类型（节点组）
+ * 就得改两处、还容易漏。这里收成一张表，两边都读它。
+ */
+export const ASSET_KIND_FILTERS: ReadonlyArray<{ label: string; kind: string | null }> = [
+  { label: '全部', kind: null },
+  { label: '图片', kind: 'image' },
+  { label: '视频', kind: 'video' },
+  { label: '音频', kind: 'audio' },
+  // 「节点组」= 分组收藏出来的整组数据（.plumegroup），与「其他」分开才能一眼找到
+  { label: '节点组', kind: 'node-group' },
+  { label: '其他', kind: 'other' },
+]
+
+/** 中文筛选标签 → 后台 kind（'全部' / 空 → null = 不筛） */
+export function assetKindFilterOf(label: string | undefined): string | null {
+  const hit = ASSET_KIND_FILTERS.find((f) => f.label === label)
+  return hit ? hit.kind : null
+}

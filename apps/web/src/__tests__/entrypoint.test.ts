@@ -72,7 +72,8 @@ describe('@plume-canvas/ui 出口契约', () => {
     // 混进成品清单 —— 需要假后台的浏览器回归在测试里现场注册一条 e2e 动作。
     // +1：ui-dropdown（全局下拉注册件，order -1 顶替主题默认件）。
     // +1：ui-hot-reload（设置面板「热重载」分类：登记链接，产物变了自动重装）。
-    // +1：ui-asset-upload（「加入资产库」：节点右键 + 多选上控制栏 → 贴进上传弹窗）。
+    // 「收藏到资产库」不再占清单名额：它由 App.vue 在画布会话绑定时注册（dev 与 build 同一条路），
+    // 以前只在 dev 清单里，build 版右键菜单里就整条消失（用户 2026-11-15 报的现象）。
     // 注：「引用标签被点了」走的是**系统事件**（agent:ref-click），没有对应的插件/服务 ——
     //     监听与浮层都在 AssetUiSlot（挂在 CanvasHost #ui 槽里），故不占清单名额。
     // +1（2026-10-12）：node-ui（AI 可视化节点：声明输入参数 → AI 生成 HTML 在节点里渲染）。
@@ -91,11 +92,11 @@ describe('@plume-canvas/ui 出口契约', () => {
     // 主题已拆成 theme-components（应用级）与 theme-canvas（画布级）。
     // +1（2026-11-05）：canvas-render（渲染层基础设施：标准能力包注册）。
     // 它必须排在业务插件之前：业务插件启动时按名取能力，缺了就得等下一次唤醒。
-    expect(DEV_APP_PLUGINS).toHaveLength(9)
+    expect(DEV_APP_PLUGINS).toHaveLength(8)
     expect(DEV_CANVAS_PLUGINS.length).toBeGreaterThan(10)
     // +2（2026-11-13）：mini-map / auto-layout 收进自带件 —— 状态栏「切换小地图」
     // 与「整理画布」是外壳自己的按钮，插件缺席时按钮只剩图标变化，点了画布毫无反应。
-    expect(DEV_APP_PLUGINS.length + DEV_CANVAS_PLUGINS.length).toBe(27)
+    expect(DEV_APP_PLUGINS.length + DEV_CANVAS_PLUGINS.length).toBe(26)
     // 第一项是渲染层能力注册；紧随其后的主题皮提供节点壳 / 边 / 背景 / 设置面板默认皮，
     // 缺了画布就是白屏。能力先于业务插件，是因为业务插件 apply 时就要按名取能力。
     expect(DEV_APP_PLUGINS[0]).toBe(canvasRenderPlugin)

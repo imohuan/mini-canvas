@@ -12,7 +12,7 @@ export interface AssetTreeRow {
   url?: string
   /** 资产：本机绝对路径（空 = 字节不在本机 → 不给「添加到 Agent / 添加到画布」） */
   path?: string
-  /** 资产：类型（image / video / audio / other）—— 行里字段名是 assetKind（见 assetModel.assetKindOf） */
+  /** 资产：类型（image / video / audio / node-package / node-group / other）—— 行里字段名是 assetKind（见 assetModel.assetKindOf） */
   assetKind?: string
   /** 资产：标签 */
   tags?: string[]

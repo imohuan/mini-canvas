@@ -17,6 +17,7 @@ import { useUi } from '../../../composables/ui'
 import { checkedRowIds } from '../../../composables/assetSelection'
 import { folderIconComponent } from '../../../composables/folderIcons'
 import { useAssetTreeActions } from './useAssetTreeActions'
+import { assetKindFilterOf } from '../../../composables/assetModel'
 
 const ui = useUi()
 const s = ui.state
@@ -60,8 +61,8 @@ onMounted(() => document.addEventListener('keydown', onEscKey))
 onBeforeUnmount(() => document.removeEventListener('keydown', onEscKey))
 
 // 「节点」= 节点包（.plumenode）用的标签；与 LeftDrawer / composables/ui.ts 同一份口径
-const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效', '节点'] as const
-const ASSET_KINDS = ['全部', '图片', '视频', '音频', '其他'] as const
+const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效', '节点', '节点组'] as const
+const ASSET_KINDS = ['全部', '图片', '视频', '音频', '节点组', '其他'] as const
 /** 当前浏览的文件夹（空 = 根=个人资产库） */
 const currentFolderId = ref<string | undefined>(undefined)
 const kindOpen = ref(false)
@@ -185,10 +186,8 @@ const rows = computed<AssetTreeRow[]>(() => {
     }
     for (const a of assets.filter((x) => (x.folderId ?? undefined) === parent)) {
       if (q && !a.name.toLowerCase().includes(q)) continue
-      if (s.assetFilterKind !== '全部') {
-        const want = s.assetFilterKind === '图片' ? 'image' : s.assetFilterKind === '视频' ? 'video' : s.assetFilterKind === '音频' ? 'audio' : 'other'
-        if (a.kind !== want) continue
-      }
+      const want = assetKindFilterOf(s.assetFilterKind)
+      if (want && a.kind !== want) continue
       out.push({ kind: 'asset', id: a.id, name: a.name, depth, url: a.url, assetKind: a.kind, tags: a.tags, ...(a.path ? { path: a.path } : {}), ...(parent ? { parentId: parent } : {}) })
     }
   }

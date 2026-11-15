@@ -12,6 +12,7 @@
 import { ref } from 'vue'
 import { assetKindOf } from './assetModel'
 import { peekPack } from './nodePack'
+import { GROUP_PACK_KIND, parseGroupPack } from './groupPack'
 
 /** 全屏预览要放的媒体（与主题 mediaViewer 的 item 同形） */
 export interface AssetPreviewItem {
@@ -167,6 +168,32 @@ export async function openAssetPreviewFromAsset(
 ): Promise<void> {
   const { list, names, ids, kinds, index } = group ?? {}
   const kind = assetKindOf(item)
+  // 节点组（.plumegroup）不是可加载的媒体，也不是可视化节点的 HTML —— 它是一份“整组数据”。
+  // 预览给出**内容摘要**（几个节点、几条连线），比打开一片空白有用得多。
+  if (kind === GROUP_PACK_KIND) {
+    try {
+      const res = await fetch(item.url)
+      if (!res.ok) throw new Error('HTTP ' + res.status)
+      const pack = parseGroupPack(JSON.parse(await res.text()))
+      openAssetPreview({
+        ...(item.id ? { id: item.id } : {}),
+        name: item.name,
+        kind: 'text',
+        text:
+          '节点组：' + pack.name + '\n\n' +
+          '包含 ' + pack.nodes.length + ' 个节点、' + pack.edges.length + ' 条连线。\n' +
+          '把它拖到画布（或右键「资源库 ▸ 节点组」）就会还原成整组。',
+      })
+    } catch (err) {
+      openAssetPreview({
+        ...(item.id ? { id: item.id } : {}),
+        name: item.name,
+        kind: 'text',
+        text: '这个节点组读不出来：' + (err instanceof Error ? err.message : String(err)),
+      })
+    }
+    return
+  }
   if (kind !== 'node-package') {
     openAssetPreview({
       ...(item.id ? { id: item.id } : {}),

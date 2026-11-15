@@ -42,7 +42,7 @@ export function createUiState() {
     searchQuery: '',
     // 资产 tab：搜索关键字与类型筛选（「全部 / 图片 / 视频 / 音频 / 其他」；空 = 不筛）
     assetSearchQuery: '',
-    assetFilterKind: '全部' as '全部' | '图片' | '视频' | '音频' | '其他',
+    assetFilterKind: '全部' as '全部' | '图片' | '视频' | '音频' | '节点组' | '其他',
     // 资产 tab：批量选择模式（开关 + 已选 id 集合，转数组用）
     assetBatchOn: false,
     assetSelectedIds: [] as string[],

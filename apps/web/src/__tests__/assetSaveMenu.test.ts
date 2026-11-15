@@ -44,11 +44,13 @@ describe('节点包收藏：预选「节点」标签 + 「节点库」位置（�
 
   it('★ 「节点库」没有就自动创建（用户：如果没有，则自动创建）', () => {
     expect(plugin).toContain("const NODE_LIBRARY_FOLDER = '节点库'")
-    expect(plugin).toMatch(/ensureNodeLibraryFolder[\s\S]{0,600}newAssetFolder\(NODE_LIBRARY_FOLDER\)/)
+    // 节点库与节点组库共用同一个「取（没有就建）」入口：ensureAssetFolder(ui, name)
+    expect(plugin).toMatch(/async function ensureNodeLibraryFolder\([\s\S]{0,400}ensureAssetFolder\(ui, NODE_LIBRARY_FOLDER\)/)
+    expect(plugin).toMatch(/async function ensureAssetFolder\([\s\S]{0,1200}newAssetFolder\(name\)/)
   })
 
   it('只在**根目录**找节点库（用户说的是"根目录下的一个节点库"）', () => {
-    expect(plugin).toMatch(/f\.name === NODE_LIBRARY_FOLDER && !f\.parentId/)
+    expect(plugin).toMatch(/f\.name === name && !f\.parentId/)
   })
 })
 

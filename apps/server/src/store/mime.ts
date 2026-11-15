@@ -34,6 +34,9 @@ export const MIME_BY_EXT: Record<string, string> = {
   // 白名单外的一律落成空扩展名，那样左侧抽屉就看不出它是"能拖出节点的东西"，
   // 只能当成一个普通文件（2026-10-13 加节点包时一并补上）。
   '.plumenode': 'application/x-plume-node',
+  // 节点组（分组节点 + 它的整棵子树 + 内部连线打成一个 JSON 文件，可拖回画布）。
+  // 与 .plumenode 同一类「能拖出内容的资产」，只是内容是整组而不是单个节点。
+  '.plumegroup': 'application/x-plume-group',
 }
 
 /** 允许的扩展名（上传时按它过滤，白名单外的回落空串） */

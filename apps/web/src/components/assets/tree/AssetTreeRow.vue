@@ -245,6 +245,20 @@ function openMenuAt(e: MouseEvent): void {
           ></iframe>
           <ImageIcon v-else :size="15" />
         </span>
+        <!-- 节点组（.plumegroup）：内容是一整组节点数据，没有可画的封面 —— 用“分组”图标，
+             与可视化节点包的 iframe 缩略图并列，一眼分得清“包了一个节点”还是“包了一整组”。 -->
+        <span
+          v-else-if="(row.assetKind ?? '') === 'node-group'"
+          class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute"
+          :title="'预览 ' + row.name"
+          @click.stop="onThumbClick(row, $event)"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+            <path d="M3.5 9h17" />
+            <path d="M8 13h4M8 16h7" stroke-linecap="round" />
+          </svg>
+        </span>
         <span
           v-else
           class="grid size-8 flex-none place-items-center overflow-hidden rounded-lg bg-thumb-soft text-ink-mute"

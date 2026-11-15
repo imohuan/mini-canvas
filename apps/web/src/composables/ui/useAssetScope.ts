@@ -14,7 +14,7 @@ import {
   setAssetTags as apiSetAssetTags,
   type AssetFolderSummary,
 } from '../projectsApi'
-import { toAssetItems, assetKindOf, type AssetItem } from '../assetModel'
+import { toAssetItems, assetKindOf, assetKindFilterOf, type AssetItem } from '../assetModel'
 import { applyRowClick } from '../assetSelection'
 import { prefetchAssetVideoThumbs } from '../canvasTree'
 import type { UiState } from './createUiState'
@@ -79,11 +79,9 @@ export function createAssetScope(state: UiState, host: UiHostScope) {
     const kindWanted = state.assetFilterKind
     return assetItems.value.filter((a) => {
       if (q && !a.name.toLowerCase().includes(q)) return false
-      if (kindWanted !== '全部') {
-        // 中文筛选标签 → 后台的英文 kind
-        const want = kindWanted === '图片' ? 'image' : kindWanted === '视频' ? 'video' : kindWanted === '音频' ? 'audio' : 'other'
-        if (a.kind !== want) return false
-      }
+      // 中文筛选标签 → 后台的英文 kind（对照表住在 assetModel，抽屉与弹窗共用一份）
+      const want = assetKindFilterOf(kindWanted)
+      if (want && a.kind !== want) return false
       return true
     })
   })
@@ -326,7 +324,8 @@ export function createAssetScope(state: UiState, host: UiHostScope) {
    * 「节点」是 2026-10-13 为节点包加的：收藏进来的包默认打这个标签，
    * 筛起来一眼能找到"哪些是可复用的节点"。
    */
-  const assetTagOptions = computed(() => ['角色', '场景', '物品', '风格', '音效', '节点'])
+  // 「节点组」是 2026-11-15 为分组包加的：收藏进来的分组默认打这个标签，与「节点」（可视化节点包）分开。
+  const assetTagOptions = computed(() => ['角色', '场景', '物品', '风格', '音效', '节点', '节点组'])
 
   return {
     assetItems, filteredAssets, loadAssets, uploadAssets, uploadAssetsTo, uploadAssetsFromUrls,

@@ -33,6 +33,7 @@
 | 给自己的颜色加实时预览 | [颜色与预览](/theme/preview) | `Config` 的 `type: 'color'` + `ctx.slots.register(THEME_PREVIEW_SLOT)` | `plugin-multi-select` |
 | 看某个 shadcn 组件是哪个文件在用 | [组件库](/plugins/theme-components) | 「常规 → 调试 → 组件库使用标记」 | `theme-components` |
 | 写界面 / 补组件 / 弹通知 | [UI 开发](/plugins/ui-development) | `useUiComponent()` + `ctx.get('notify')` | `plugin-manager` |
+| 把一整组节点存进资产库、之后拖回来还原 | [节点组](/plugins/parsed/node-ui/node-group) | `buildGroupPack` / `planGroupPlacement` / `ui.insertGroupPackFromUrl` | `apps/web/src/composables/groupPack.ts` |
 
 ## 没找到你想做的？
 

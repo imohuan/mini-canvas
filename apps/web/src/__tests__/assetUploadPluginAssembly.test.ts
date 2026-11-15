@@ -76,5 +76,18 @@ describe('uiAssetUploadPlugin 装配', () => {
     expect([...s.commands.keys()]).not.toContain('ui:node-save-pack')
     vi.unstubAllGlobals()
   })
+
+  /**
+   * 正式构建（build）里没有 dev 插件清单，这几条命令必须由外壳在画布就绪时注册。
+   * 用户 2026-11-15 报的「可视化节点右键里收藏到资产库不见了」就是因为它只在 dev 清单里。
+   */
+  it('★ 注册入口可被外壳单独调用（dev 与 build 同一条路）', async () => {
+    const mod = await import('../assetUploadPlugin')
+    expect(typeof mod.registerAssetCommands).toBe('function')
+    const s = fakeScope()
+    const handles = mod.registerAssetCommands(s.scope)
+    expect([...s.commands.keys()]).toContain('ui:node-save-to-assets')
+    for (const h of handles) h.dispose?.()
+  })
 })
 

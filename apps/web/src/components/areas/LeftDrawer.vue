@@ -22,6 +22,7 @@ import { useDrawerTabs } from './left-drawer/useDrawerTabs'
 import { useAssetTreeActions } from './left-drawer/useAssetTreeActions'
 import { useCanvasTree } from './left-drawer/useCanvasTree'
 import { useAssetCanvasDrop } from './left-drawer/useAssetCanvasDrop'
+import { ASSET_KIND_FILTERS } from '../../composables/assetModel'
 
 const ui = useUi()
 const s = ui.state
@@ -95,6 +96,8 @@ const {
 useAssetCanvasDrop()
 /** 当前是不是画布 tab（模板里多次比较 s.leftTab 会被 TS 逐次收窄，用独立只读判断避开） */
 const isCanvasTab = computed(() => s.leftTab === 'canvas')
+/** 资产类型筛选的中文标签（对照表住在 assetModel，弹窗读同一份） */
+const ASSET_KIND_LABELS = ASSET_KIND_FILTERS.map((f) => f.label)
 
 </script>
 
@@ -139,7 +142,7 @@ const isCanvasTab = computed(() => s.leftTab === 'canvas')
       <CanvasTabToolbar :menu-open="menuOpen" :view-mode="viewMode" @update:menu-open="setMenuOpen"
         @update:view-mode="setViewMode" @expand-all="expandAll" @collapse-all="collapseAll" />
       <AssetTabToolbar :asset-search-active="assetSearchActive" :plus-open="plusOpen"
-        :asset-kinds="['全部', '图片', '视频', '音频', '其他']" @update:plus-open="setPlusOpen" @update:upload-open="setUploadOpen"
+        :asset-kinds="ASSET_KIND_LABELS" @update:plus-open="setPlusOpen" @update:upload-open="setUploadOpen"
         @update:asset-search-active="setAssetSearchActive" @add-folder="addFolder()"
         @pick-asset-kind="pickAssetKind" @upload-change="onUploadChange" />
       <!-- ===== 资产 tab：文件夹树 + 根级资产（后台结构与此显示一致）===== -->

@@ -20,7 +20,7 @@ export function useAssetTreeActions() {
   const ASSET_KINDS = ['全部', '图片', '视频', '音频', '其他'] as const
   /** 标签固定清单（用户口径：暂时就这几个） */
   // 「节点」= 节点包（.plumenode）用的标签；与 composables/ui.ts 的 assetTagOptions 同一份口径
-  const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效', '节点'] as const
+  const ASSET_TAGS = ['角色', '场景', '物品', '风格', '音效', '节点', '节点组'] as const
   function pickAssetKind(k: string): void {
     s.assetFilterKind = s.assetFilterKind === k ? '全部' : (k as typeof s.assetFilterKind)
   }

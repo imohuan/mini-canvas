@@ -15,7 +15,7 @@
  *     · ctx.commands.register({ areas:['node'], ... }) —— 右键菜单按 areas 收命令（context-menu 插件既有语义）；
  *     · ctx.selectionRegion.attach({ region:'out:top', ... }) —— 多选插件暴露的"上控制栏注册函数"。
  */
-import { markRaw } from 'vue'
+import { markRaw, watch } from 'vue'
 import type { PluginModule } from '@plume-canvas/kernel'
 import SelectionSaveAssetsToolbar from './components/SelectionSaveAssetsToolbar.vue'
 import { pendingUploads, queueUploadsFromNodeIds } from './composables/assetUploadBus'
@@ -23,11 +23,23 @@ import { buildPack, downloadBytes, packFileName, resolvePackBase, bytesToBlob } 
 import { queueUploads } from './composables/assetUploadBus'
 import { useUi } from './composables/ui'
 import { assetKindOf } from './composables/assetModel'
+import {
+  GROUP_PACK_EXT,
+  GROUP_PACK_KIND,
+  buildGroupPack,
+  isGroupNodeLike,
+} from './composables/groupPack'
 
 export const name = 'ui-asset-upload'
 
 /** 本插件在本场里的 id（诊断用） */
 export const ASSET_UPLOAD_ID = name
+
+/**
+ * 多选上控制栏只挂一次。
+ * 挂载点在根上下文（画布会话复用它），热重载或重复绑定时再挂一遍会多出一个按钮。
+ */
+let selectionToolbarHandle: { dispose?: () => void } | null = null
 
 interface CtxLike {
   /**
@@ -43,9 +55,26 @@ interface CtxLike {
 export const uiAssetUploadPlugin: PluginModule = {
   name,
   apply(scope) {
-    // 内核 PluginScope 的 commands.register 收 CommandDef；本插件只用得到这四件事，
+    registerAssetCommands(scope as unknown as CtxLike)
+  },
+}
+
+/**
+ * 把「收藏到资产库 / 导出节点包 / 资源库二级菜单」注册到**画布上下文**。
+ *
+ * 为什么单独导出、并且由外壳在画布就绪时调用：这些命令住在 apps/web（要开上传弹窗），
+ * 而 build 版只从 cloud-server 装载插件包 —— 以前只挂在 dev 插件清单里，正式构建里
+ * **一条都不存在**，用户看到的「收藏到资产库」按钮消失就是这个原因。
+ * 现在由外壳在每次画布会话绑定时注册，dev 与 build 走同一条路。
+ */
+export function registerAssetCommands(scope: unknown): Array<{ dispose?: () => void }> {
+  const handles: Array<{ dispose?: () => void }> = []
+  /** 本趟挂在 window 上的两个同步函数（画布重挂时必须摘掉，否则监听会一层层叠上去） */
+  const assetSyncListeners: Array<() => void> = []
+  {
+    // 内核 PluginScope 的 commands.register 收 CommandDef；本插件只用得到这几件事，
     // 收窄成 CtxLike 便于阅读（运行时同一对象）。
-    const ctx = scope as unknown as CtxLike
+    const ctx = scope as CtxLike
     /** 成品应用单例（上传弹窗 / 文件夹清单都在它上面） */
     const ui = useUi()
     // ① 节点右键「收藏到资产库」：**一条命令管全部节点类型**。
@@ -59,7 +88,7 @@ export const uiAssetUploadPlugin: PluginModule = {
     //      · 图片 / 视频 / 音频 → 把它的媒体贴进上传弹窗（和左侧「上传资产」同一个弹窗）；
     //      · 可视化节点（type=ui）→ 打包成 .plumenode 再贴进去（就是原来那条「收藏到资产库」）；
     //      · 别的类型 → 明确提示"这个节点没有可收藏的媒体"，不静默什么都不做。
-    ctx.commands.register({
+    handles.push(ctx.commands.register({
       id: 'ui:node-save-to-assets',
       title: '收藏到资产库',
       areas: ['node'],
@@ -69,10 +98,17 @@ export const uiAssetUploadPlugin: PluginModule = {
         const nodeId = payload?.nodeId
         if (!nodeId) return
         const doc = ctx.get<{
-          getNode(id: string): { id: string; type?: string; data?: Record<string, unknown> } | undefined
+          getNode(id: string): { id: string; type?: string; position?: { x: number; y: number }; data?: Record<string, unknown>; size?: { w: number; h: number }; parentId?: string } | undefined
+          getNodes(): Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown>; size?: { w: number; h: number }; parentId?: string }>
+          getEdges(): Array<{ source: string; target: string; sourceHandle?: string; targetHandle?: string; type?: string; data?: Record<string, unknown> }>
+          childNodesOf(id: string): Array<{ id: string }>
         }>('doc')
         const node = doc.getNode(nodeId)
         if (!node) return
+        if (isGroupNodeLike(node)) {
+          await saveGroupToAssets(nodeId)
+          return
+        }
         if (isUiNode(node)) {
           await savePackToAssets(nodeId)
           return
@@ -88,16 +124,19 @@ export const uiAssetUploadPlugin: PluginModule = {
           console.warn('[资产] 节点「' + label + '」没有可收藏的媒体（图片 / 视频 / 音频字段都为空）')
         }
       },
-    })
+    }))
 
     // ② 多选上控制栏「加入资产库」（借用多选插件暴露的注册函数，多选插件零改动）。
-    ctx.selectionRegion?.attach({
-      region: 'out:top',
-      id: ASSET_UPLOAD_ID,
-      order: 20,
-      component: markRaw(SelectionSaveAssetsToolbar),
-      needs: ['selection'],
-    })
+    if (!selectionToolbarHandle && ctx.selectionRegion) {
+      const attached = ctx.selectionRegion.attach({
+        region: 'out:top',
+        id: ASSET_UPLOAD_ID,
+        order: 20,
+        component: markRaw(SelectionSaveAssetsToolbar),
+        needs: ['selection'],
+      })
+      selectionToolbarHandle = (attached as { dispose?: () => void } | undefined) ?? {}
+    }
 
     // ③ 节点包：导出成文件 / 收藏进资产库。
     //
@@ -111,7 +150,7 @@ export const uiAssetUploadPlugin: PluginModule = {
       return buildPack({ base, canvasId: currentCanvasIdOf(ctx), nodeId })
     }
 
-    ctx.commands.register({
+    handles.push(ctx.commands.register({
       id: 'ui:node-export-pack',
       title: '导出节点包',
       areas: ['node'],
@@ -134,7 +173,7 @@ export const uiAssetUploadPlugin: PluginModule = {
           useUi().showToast('导出节点包失败：' + (err instanceof Error ? err.message : String(err)))
         }
       },
-    })
+    }))
 
     /**
      * 把可视化节点打包成 .plumenode 并**贴进上传弹窗**（合并后由 ① 调用）。
@@ -202,12 +241,128 @@ export const uiAssetUploadPlugin: PluginModule = {
       }
     }
 
+    /**
+     * 分组包 → 右键空白处的「资源库 ▸ 节点组」二级菜单（用户口径 2026-11-15：
+     * 「节点组添加之后需要在右键菜单添加二级菜单显示当前资产里面的节点组资产，就和可视化节点一致」）。
+     *
+     * 与节点包同一条做法（动态注册、资产变化即重建）：菜单那边按 group/title 的斜杠自动成二级菜单，
+     * 这里只负责“库里有哪些组”以及“点一下在右键处放回整组”。
+     */
+    const registeredGroups = new Map<string, { dispose?: () => void }>()
+    const syncGroupCommands = (): void => {
+      const groups = ui.assetItems.value.filter((a) => assetKindOf(a) === GROUP_PACK_KIND)
+      const seen = new Set<string>()
+      for (const p of groups) {
+        seen.add(p.url)
+        if (registeredGroups.has(p.url)) continue
+        const id = 'ui:import-group:' + p.id
+        const title = (p.name || '节点组').replace(new RegExp('\\' + GROUP_PACK_EXT + '$', 'i'), '')
+        const handle = ctx.commands.register({
+          id,
+          title,
+          areas: ['pane'],
+          group: '资源库/节点组',
+          order: 10,
+          run: async (_c: unknown, payload?: { flowPosition?: { x: number; y: number } }) => {
+            try {
+              await ui.insertGroupPackFromUrl(p.url, payload?.flowPosition)
+            } catch (err) {
+              useUi().showToast('导入节点组失败：' + (err instanceof Error ? err.message : String(err)))
+            }
+          },
+        })
+        registeredGroups.set(p.url, handle)
+      }
+      for (const [url, handle] of [...registeredGroups]) {
+        if (seen.has(url)) continue
+        handle.dispose?.()
+        registeredGroups.delete(url)
+      }
+    }
+
+    /**
+     * 把整组节点打成 .plumegroup，贴进上传弹窗（与可视化节点同一条收藏路）。
+     *
+     * 用户口径：拖出来要是**一整组的节点数据**，而左栏分类直接是「节点组」。
+     */
+    async function saveGroupToAssets(groupId: string): Promise<void> {
+      try {
+        const doc = ctx.get<{
+          getNode(id: string): { id: string; type?: string; position?: { x: number; y: number }; data?: Record<string, unknown>; size?: { w: number; h: number }; parentId?: string } | undefined
+          getNodes(): Array<{ id: string; type: string; position: { x: number; y: number }; data: Record<string, unknown>; size?: { w: number; h: number }; parentId?: string }>
+          getEdges(): Array<{ source: string; target: string; sourceHandle?: string; targetHandle?: string; type?: string; data?: Record<string, unknown> }>
+        }>('doc')
+        // 没被手动缩放过的新组只有声明尺寸；量一次真实矩形再写进包，拖回去大小才原样。
+        const view = ctx.get<{ getNodeRect?(id: string): { x: number; y: number; w: number; h: number } | null }>('view')
+        const nodes = doc.getNodes().map((n) => {
+          const rect = view?.getNodeRect?.(n.id)
+          const w = n.size?.w ?? rect?.w ?? 0
+          const h = n.size?.h ?? rect?.h ?? 0
+          return { ...n, ...(w > 0 && h > 0 ? { size: { w, h } } : {}) }
+        })
+        const pack = buildGroupPack({ groupId, nodes, edges: doc.getEdges() })
+        if (!pack) {
+          useUi().showToast('这个节点不是分组，无法收藏成节点组')
+          return
+        }
+        const name = (pack.name || '节点组') + GROUP_PACK_EXT
+        const file = new File([JSON.stringify(pack, null, 2)], name, { type: 'application/x-plume-group' })
+        const folderId = await ensureAssetFolder(useUi(), '节点组库')
+        queueUploads([{ name: file.name, file, tags: ['节点组'], ...(folderId ? { folderId } : {}) }])
+      } catch (err) {
+        console.warn('[ui] 收藏节点组失败:', err)
+        useUi().showToast('收藏节点组失败：' + (err instanceof Error ? err.message : String(err)))
+      }
+    }
+
     // 资产一变就重建（收藏完、删完立刻反映到右键菜单）
     // ⚠️ 守一下 window：这个插件在**非浏览器环境**（单测、SSR、构建期预渲染）也会被 apply，
     //    裸用 window 会直接抛 —— 而装配期抛一下，整个界面就是白屏（2026-10-13 踩到）。
-    if (typeof window !== 'undefined') window.addEventListener('plume-canvas:assets-changed', syncPackCommands)
-    void ui.loadAssets().then(syncPackCommands)
-  },
+    if (typeof window !== 'undefined') {
+      window.addEventListener('plume-canvas:assets-changed', syncPackCommands)
+      window.addEventListener('plume-canvas:assets-changed', syncGroupCommands)
+      assetSyncListeners.push(() => {
+        window.removeEventListener('plume-canvas:assets-changed', syncPackCommands)
+        window.removeEventListener('plume-canvas:assets-changed', syncGroupCommands)
+      })
+    }
+    void ui.loadAssets().then(() => {
+      syncPackCommands()
+      syncGroupCommands()
+    })
+    /**
+     * 资产清单**一变就重建**两条二级菜单。
+     *
+     * 为什么不能只靠 window 事件：上传弹窗保存走的是同一份 `ui` 单例的 `loadAssets()`，
+     * 它并不发 `plume-canvas:assets-changed`（那个事件是给“插件直接 POST 资产”那种入口的）。
+     * 实测：收藏完分组，右键菜单里还是空的 —— 必须盯住 `assetItems` 本身。
+     * `watch` 在组件之外也可用（返回 stop 句柄），这里把它并进外层回收。
+     */
+    const stopWatch = watch(
+      () => ui.assetItems.value,
+      () => {
+        syncPackCommands()
+        syncGroupCommands()
+      },
+      { deep: false },
+    )
+    assetSyncListeners.push(() => stopWatch())
+  }
+  // 统一的外层回收：命令句柄 + window 监听。App.vue 每次画布会话重挂时先调它，
+  // 否则切画布几次就会注册多份同名命令（内核会报重复 id）与多份监听。
+  return [
+    {
+      dispose: () => {
+        for (const off of assetSyncListeners) off()
+        assetSyncListeners.length = 0
+        for (const h of handles) h.dispose?.()
+        handles.length = 0
+        // 多选上控制栏也要摘掉：画布会话重建后要能重新挂上（否则第二次进画布就没这个按钮了）
+        selectionToolbarHandle?.dispose?.()
+        selectionToolbarHandle = null
+      },
+    },
+  ]
 }
 
 /** 当前画布 id（与 uiConfig.currentCanvasId 同一套判据：哈希路由 #/canvas/<id>） */
@@ -243,13 +398,25 @@ async function ensureNodeLibraryFolder(
     newAssetFolder(name: string, parentId?: string): Promise<string | undefined>
   },
 ): Promise<string | undefined> {
+  return ensureAssetFolder(ui, NODE_LIBRARY_FOLDER)
+}
+
+/** 取（没有就建）根目录下的某个资产文件夹 —— 节点库 / 节点组库共用一段 */
+async function ensureAssetFolder(
+  ui: {
+    assetFolders: { value: Array<{ id: string; name: string; parentId?: string }> }
+    loadAssetFolders(): Promise<void>
+    newAssetFolder(name: string, parentId?: string): Promise<string | undefined>
+  },
+  name: string,
+): Promise<string | undefined> {
   try {
     if (!ui.assetFolders.value.length) await ui.loadAssetFolders()
-    const hit = ui.assetFolders.value.find((f) => f.name === NODE_LIBRARY_FOLDER && !f.parentId)
+    const hit = ui.assetFolders.value.find((f) => f.name === name && !f.parentId)
     if (hit) return hit.id
-    return await ui.newAssetFolder(NODE_LIBRARY_FOLDER)
+    return await ui.newAssetFolder(name)
   } catch (err) {
-    console.warn('[ui] 取「' + NODE_LIBRARY_FOLDER + '」文件夹失败，收藏仍继续:', err)
+    console.warn('[ui] 取「' + name + '」文件夹失败，收藏仍继续:', err)
     return undefined
   }
 }

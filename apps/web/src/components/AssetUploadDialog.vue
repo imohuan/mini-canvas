@@ -154,9 +154,10 @@ function onPick(e: Event): void {
     }
     const kind = kindOf(f)
     const item: PickItem = { file: f, state: 'pending', name: f.name, kind }
-    // objectURL 只给**能画出来的**类型（图片）。视频/音频不给 —— 那不是 <img> 能显示的，
-    // 给了反而是裂图（用户 2026-10-14 报的「UI 显示错误」）。
-    if (kind === 'image') item.preview = URL.createObjectURL(f)
+    // 图片与视频都要预览地址：图片画封面，视频用 <video> 取首帧（用户 2026-11-15：
+    // 「视频节点没有显示对应的预览图，也需要显示预览图，并在图片的中间显示一个图标」）。
+    // 音频/其它不给 —— 没有可视封面，交给类型图标。
+    if (kind === 'image' || kind === 'video') item.preview = URL.createObjectURL(f)
     items.value.push(item)
   }
   input.value = ''
@@ -233,7 +234,7 @@ function save(): void {
               multiple
               class="hidden"
               aria-hidden="true"
-              accept="image/jpeg,image/png,video/mp4,audio/mpeg"
+              accept="image/jpeg,image/png,video/mp4,audio/mpeg,.plumenode,.plumegroup"
               @change="onPick"
             />
             <div v-for="(it, i) in items" :key="it.name + i" class="group/p relative flex w-[104px] flex-none flex-col rounded-xl border border-line bg-veil/60 p-1.5">
@@ -244,8 +245,28 @@ function save(): void {
                   视频用 video（首帧当缩略图，不自动播放）、音频/其它用类型图标。
                 -->
                 <img v-if="it.kind === 'image' && it.preview" :src="it.preview" alt="" class="h-full w-full object-cover" />
-                <video v-else-if="it.kind === 'video' && it.preview" :src="it.preview" class="h-full w-full object-cover" preload="metadata" muted playsinline />
-                <span v-else class="grid h-full w-full place-items-center text-ink-mute"><component :is="kindIcon(it.kind)" :size="20" /></span>
+                <!-- 视频：先垫一格类型图标（首帧还没解出来时卡片不空着），<video> 有画面后自然盖住它 -->
+                <template v-else-if="it.kind === 'video'">
+                  <span class="absolute inset-0 grid place-items-center text-ink-mute" aria-hidden="true"><VideoIcon :size="20" /></span>
+                  <video v-if="it.preview" :src="it.preview" class="relative h-full w-full object-cover" preload="metadata" muted playsinline />
+                </template>
+                <template v-else><span class="grid h-full w-full place-items-center text-ink-mute"><component :is="kindIcon(it.kind)" :size="20" /></span></template>
+                <!-- 视频预览中间压一个播放图标：一眼看出“这是视频”而不是一张图（用户 2026-11-15） -->
+                <span
+                  v-if="it.kind === 'video' && it.preview"
+                  class="pointer-events-none absolute inset-0 z-10 grid place-items-center"
+                  aria-hidden="true"
+                >
+                  <!--
+                    角标要比视频画面明显：**不透明**深色底 + 白描边 + 白色三角。
+                    为什么不用半透明的 --ui-scrim：视频首帧多是浅色画面（白底人物图），
+                    半透明底压上去对比不够，实测缩略图里几乎看不出有一个播放键。
+                    白边用 border 而不是 ring：缩略图容器 overflow-hidden 会把 ring 裁掉。
+                  -->
+                  <span class="upload-video-badge grid size-7 place-items-center rounded-full">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 19,12 7,20" /></svg>
+                  </span>
+                </span>
                 <!-- 状态角标：上传失败 → 图标+重试；pending 无角标 -->
                 <span v-if="it.state === 'failed'" class="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-veil/80 text-[10px] text-danger">
                   <span class="flex items-center gap-0.5"><AlertIcon :size="11" /> 上传失败</span>
@@ -259,7 +280,8 @@ function save(): void {
           <p class="mt-2 text-[11px] leading-relaxed text-ink-dim">
             支持的文件格式：<span class="inline-flex items-center gap-0.5"><FileIcon :size="11" /> jpg/jpeg/png</span>
             <span class="ml-2 inline-flex items-center gap-0.5"><VideoIcon :size="11" /> mp4</span>
-            <span class="ml-2 inline-flex items-center gap-0.5"><AudioIcon :size="11" /> mp3</span><br />
+            <span class="ml-2 inline-flex items-center gap-0.5"><AudioIcon :size="11" /> mp3</span>
+            <span class="ml-2 inline-flex items-center gap-0.5"><FileIcon :size="11" /> .plumenode/.plumegroup</span><br />
             单个文件大小不超过 {{ MAX_MB }}MB
           </p>
         </div>
@@ -309,7 +331,8 @@ function save(): void {
             <DropdownMenu v-model:open="tagsOpen">
               <DropdownMenuTrigger as-child>
                 <button class="flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-line bg-chip px-3 text-[13px] text-ink transition-colors hover:bg-hover" aria-label="选择标签">
-                  <span class="truncate text-ink-dim">{{ pickedTags.length ? pickedTags.join('、') : '请选择标签' }}</span>
+                  <!-- 选了标签就用正文色：灰字看着像“没选上”（用户 2026-11-15 报的“选中颜色为什么是灰色”） -->
+                  <span class="truncate" :class="pickedTags.length ? 'text-ink' : 'text-ink-dim'">{{ pickedTags.length ? pickedTags.join('、') : '请选择标签' }}</span>
                   <span class="flex-none text-ink-dim">▾</span>
                 </button>
               </DropdownMenuTrigger>
@@ -348,3 +371,18 @@ function save(): void {
   </div>
   </Teleport>
 </template>
+
+<style scoped>
+/*
+ * 视频缩略图上的播放角标。
+ *
+ * 为什么单独一段样式而不是 Tailwind 类：它压在视频画面上，需要**不透明**的深色底才看得清
+ * （视频首帧常常是白底 / 浅色画面，半透明 --ui-scrim 压上去对比不够，实测几乎看不见）。
+ * 深色底 + 白描边 + 白色三角，在任何画面上都有对比；颜色全部走主题 token，不自造色值。
+ */
+.upload-video-badge {
+  background: var(--ui-ink);
+  color: var(--ui-panel);
+  box-shadow: 0 0 0 1.5px var(--ui-panel);
+}
+</style>
