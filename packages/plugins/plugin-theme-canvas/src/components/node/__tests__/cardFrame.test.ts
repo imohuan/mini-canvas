@@ -10,17 +10,32 @@
  * 于是类型可以声明 frameless（"我不要卡片边框"），由类型自己决定，外壳不猜。
  * 本文件锁两件事：
  * 1. frameless 的类型边框宽度为 0（用户要的"图片贴边"）；
- * 2. 去掉边框**不影响选中环** —— 选中环是 ::after 的 box-shadow，本来就不吃边框，
+ * 2. 去掉边框**不影响选中环** —— 选中环是 box-shadow，本来就不吃边框，
  *    所以图片节点选中了照样看得见（这条是删边框时最容易被忽略的回归点）。
  */
 import { describe, it, expect } from 'vitest'
 import { resolveCardFrame } from '../cardFrame'
 
 describe('普通类型：保留卡片边框', () => {
-  it('边框宽度 = 1px ÷ 缩放（反向缩放，屏幕上恒为 1px）', () => {
-    expect(resolveCardFrame({ zoom: 1, frameless: false, selected: false }).borderWidth).toBe('1px')
-    expect(resolveCardFrame({ zoom: 0.5, frameless: false, selected: false }).borderWidth).toBe('2px')
-    expect(resolveCardFrame({ zoom: 2, frameless: false, selected: false }).borderWidth).toBe('0.5px')
+  it('边框走外扩 ring：宽度 = 1px ÷ 缩放（反向缩放，屏幕上恒为 1px）', () => {
+    expect(resolveCardFrame({ zoom: 1, frameless: false, selected: false }).ringWidth).toBe('1px')
+    expect(resolveCardFrame({ zoom: 0.5, frameless: false, selected: false }).ringWidth).toBe('2px')
+    expect(resolveCardFrame({ zoom: 2, frameless: false, selected: false }).ringWidth).toBe('0.5px')
+  })
+
+  /**
+   * 用户 2026-11-14 截图：失败态 / 加载态的覆盖层把边框盖住了。
+   *
+   * 根因：边框以前是 border-box 里的 border，属于「卡片内部」，覆盖层按整卡尺寸铺就压到它。
+   * 现在盒子自身 border 恒为 0，边框改由 box-shadow 的外扩圈画在盒子外面 ——
+   * 覆盖层的矩形与卡片一致，永远盖不到外面那一圈。
+   */
+  it('盒子自身 border 恒为 0（边框必须在盒子外面，覆盖层才盖不到）', () => {
+    for (const frameless of [true, false]) {
+      for (const zoom of [0.2, 1, 3]) {
+        expect(resolveCardFrame({ zoom, frameless, selected: false }).borderWidth).toBe('0px')
+      }
+    }
   })
 
   it('圆角仍是 8px（本次只动边框，圆角不变）', () => {
@@ -33,6 +48,8 @@ describe('普通类型：保留卡片边框', () => {
     expect(f.shadow).toContain('--canvas-node-shadow-subtle')
     // 内容裁剪层底色改走 --canvas-node-panel-surface（原来写死 #eee，暗色下是块亮板）
     expect(f.contentSurface).toContain('--canvas-node-panel-surface')
+    // 边框颜色走主题变量（选中/非法连接会换掉它，外壳不再各自写一套）
+    expect(f.ringColor).toContain('--canvas-node-border')
   })
 })
 
@@ -44,7 +61,7 @@ describe('transparent 类型（分组）：卡片表面透明', () => {
     // 内容裁剪层（#eee 兜底底）也要透明 —— 否则选中态 z 提升后照样遮住连线
     expect(f.contentSurface).toBe('transparent')
     // 分组仍要边框（视觉上是"容器"的一圈轮廓）
-    expect(f.borderWidth).toBe('1px')
+    expect(f.ringWidth).toBe('1px')
   })
 
   it('选中环不受影响（与 frameless 同一条契约：环独立于边框/底色）', () => {
@@ -54,13 +71,17 @@ describe('transparent 类型（分组）：卡片表面透明', () => {
 })
 
 describe('frameless 类型（图片）：没有边框', () => {
-  it('边框宽度为 0（内容贴边，不再有那一圈缝）', () => {
-    expect(resolveCardFrame({ zoom: 1, frameless: true, selected: false }).borderWidth).toBe('0px')
+  it('外扩 ring 宽度为 0（内容贴边，不再有那一圈缝）', () => {
+    expect(resolveCardFrame({ zoom: 1, frameless: true, selected: false }).ringWidth).toBe('0px')
+  })
+
+  it('外扩 ring 颜色也是透明（宽度 0 之外再多一层保险）', () => {
+    expect(resolveCardFrame({ zoom: 1, frameless: true, selected: false }).ringColor).toBe('transparent')
   })
 
   it('任意缩放下都是 0（不会因为 zoom 又冒出边框）', () => {
     for (const zoom of [0.2, 0.5, 1, 2]) {
-      expect(resolveCardFrame({ zoom, frameless: true, selected: false }).borderWidth).toBe('0px')
+      expect(resolveCardFrame({ zoom, frameless: true, selected: false }).ringWidth).toBe('0px')
     }
   })
 
@@ -83,7 +104,7 @@ describe('选中环不受边框影响（删边框最容易漏的回归点）', (
 
 describe('缩放值非法时不产生坏 CSS', () => {
   it('zoom=0 / NaN → 不做除零，回落成 1px 档', () => {
-    expect(resolveCardFrame({ zoom: 0, frameless: false, selected: false }).borderWidth).toBe('1px')
-    expect(resolveCardFrame({ zoom: Number.NaN, frameless: false, selected: false }).borderWidth).toBe('1px')
+    expect(resolveCardFrame({ zoom: 0, frameless: false, selected: false }).ringWidth).toBe('1px')
+    expect(resolveCardFrame({ zoom: Number.NaN, frameless: false, selected: false }).ringWidth).toBe('1px')
   })
 })

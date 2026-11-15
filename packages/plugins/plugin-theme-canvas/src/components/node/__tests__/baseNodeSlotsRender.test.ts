@@ -124,6 +124,8 @@ function renderNode(
     draggingId?: string | null
     /** 节点类型（缺省 image）；图片 / 视频有"一律不许 resize"的专门规则 */
     type?: string
+    /** 节点尺寸（nodeGeometry → node.size）；缺省给一个固定值，便于断言浮层尺寸 */
+    nodeSize?: { w: number; h: number } | null
   } = {},
 ): Promise<string> {
   const app = createSSRApp({
@@ -132,7 +134,14 @@ function renderNode(
       return () => h(BaseNode, { id: 'n1', type: opts.type ?? 'image', data, selected: false })
     },
   })
-  app.provide(RENDER_CONTEXT_KEY, renderCtx(registry, settings, opts))
+  const ctx = renderCtx(registry, settings, opts)
+  // 尺寸唯一来源是 nodeGeometry → node.size；测试桩按 opts 给
+  ;(ctx.ctx as unknown as { get(n: string): unknown }).get = ((orig) => (n: string) =>
+    n === 'nodeGeometry' ? { get: () => opts.nodeSize ?? null } : orig(n))(
+    (ctx.ctx as unknown as { get(n: string): unknown }).get,
+  )
+  ;(ctx.ctx as unknown as { tryGet(n: string): unknown }).tryGet = (ctx.ctx as unknown as { get(n: string): unknown }).get
+  app.provide(RENDER_CONTEXT_KEY, ctx)
   return renderToString(app)
 }
 
@@ -194,7 +203,7 @@ describe('BaseNode over:inset 区域：编辑浮层画在卡片外面（用户�
   it('浮层尺寸 = 卡片尺寸（不反缩放：必须与底下的画面像素严格对齐）', async () => {
     const r = new NodeRegistry()
     r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
-    const html = await renderNode(r, { cardWidth: 420, cardHeight: 236 })
+    const html = await renderNode(r, { cardWidth: 420, cardHeight: 236 }, {}, { nodeSize: { w: 420, h: 236 } })
     const overlayTag = html.match(/<div class="v2-overlay[^>]*>/)?.[0] ?? ''
     // Vue 渲染内联样式时不带空格（width:420px），故按无空格断言
     expect(overlayTag).toContain('width:420px')
@@ -677,6 +686,43 @@ describe('拖动进行中收起上/下控制栏（用户要求）', () => {
     r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
     const html = await renderNode(r, {}, {}, { draggingId: 'n1' })
     expect(html).toContain('probe-overlay')
+  })
+})
+
+/**
+ * 容器轮廓（边框）的绘制顺序契约。
+ *
+ * 用户 2026-11-14 连续两次复测：「边框被内容 / 覆盖层挡住了」。
+ * 这不是边框画在内还是画在外的问题，而是**谁最后画**：状态层、编辑浮层、内容段
+ * 都是卡片之后的同级层，边框只要跟着卡片画，就一定会被它们盖住一角。
+ * 所以边框必须是节点的最后一个子层，并且层级高于状态层(24)与编辑浮层(25)。
+ */
+describe('容器轮廓：单独一层、最后绘制、不被覆盖层压住', () => {
+  it('渲染独立的轮廓层（不是卡片的 border / box-shadow）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub })
+    const html = await renderNode(r)
+    const cardTag = html.match(/<div class="v2-card[^"]*"[^>]*>/)?.[0] ?? ''
+    expect(cardTag).not.toMatch(/box-shadow:[^;"]*0px 0px 0px/)
+    expect(html).toContain('v2-frame')
+    expect(html).toContain('--card-ring-width')
+  })
+
+  it('轮廓层排在状态层与编辑浮层之后（DOM 顺序 = 绘制顺序）', async () => {
+    const r = new NodeRegistry()
+    r.register('image', { in: ContentStub, 'over:inset': OverlayStub })
+    const html = await renderNode(
+      r,
+      { runState: { status: 'error', message: '失败了' } },
+    )
+    const frameAt = html.indexOf('v2-frame')
+    const stateAt = html.indexOf('v2-state-layer')
+    const overlayAt = html.indexOf('v2-overlay')
+    expect(frameAt).toBeGreaterThan(-1)
+    expect(stateAt).toBeGreaterThan(-1)
+    expect(overlayAt).toBeGreaterThan(-1)
+    expect(frameAt).toBeGreaterThan(stateAt)
+    expect(frameAt).toBeGreaterThan(overlayAt)
   })
 })
 

@@ -25,7 +25,12 @@ export interface CardFrameInput {
 
 /** 卡片外观取值结果（直接可拼进 CSS） */
 export interface CardFrame {
+  /** 盒子自身的 border 宽度 —— 恒为 0：边框改由外扩 ring 画，覆盖层盖不到 */
   borderWidth: string
+  /** 外扩边框（ring）宽度：屏幕上恒 1px；frameless 类型为 0 */
+  ringWidth: string
+  /** 外扩边框颜色：frameless 类型透明 */
+  ringColor: string
   borderRadius: string
   /** 选中环宽度（走 --card-outline-width，由 .v2-card::after 消费） */
   outlineWidth: string
@@ -58,12 +63,17 @@ function screenPx(px: number, zoom: number): string {
  * 算出卡片的边框 / 圆角 / 选中环宽度。
  *
  * - frameless 的类型边框恒为 `0px`（内容贴边，不留那一圈缝）；
- * - 选中环与边框**互相独立**：环是 `.v2-card::after` 的 box-shadow，不吃盒模型，
+ * - 选中环与边框**互相独立**：环是外圈 box-shadow，不吃盒模型，
  *   所以去掉边框后图片节点选中照样看得见（这是删边框时最该防的回归）。
+ * - 边框画在独立轮廓层（`.v2-frame`，节点最后一个子层）上，卡片本体 border 恒为 0：
+ *   边框必须最后绘制、层级高于内容与覆盖层，否则一定会在边缘和圆角被盖住。
  */
 export function resolveCardFrame(input: CardFrameInput): CardFrame {
   return {
-    borderWidth: input.frameless ? '0px' : screenPx(BORDER_PX, input.zoom),
+    // border 恒为 0：盒子尺寸完全交给 node.size，边框以 ring 的形式画在外面
+    borderWidth: '0px',
+    ringWidth: input.frameless ? '0px' : screenPx(BORDER_PX, input.zoom),
+    ringColor: input.frameless ? 'transparent' : 'var(--canvas-node-border, rgb(209 213 219 / 0.95))',
     borderRadius: CARD_RADIUS,
     outlineWidth: input.selected ? screenPx(OUTLINE_PX, input.zoom) : '0px',
     surface: input.transparent ? 'transparent' : 'var(--canvas-node-surface, #f9fafb)',

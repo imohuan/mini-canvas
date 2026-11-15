@@ -1,11 +1,10 @@
 /**
- * 加载态卡片尺寸：声明 loadingDefaultSize 的类型（图片/视频）在跑任务时按**类型默认尺寸**渲染。
+ * 卡片尺寸只认 node.size（用户 2026-11-14 拍板）。
  *
- * 用户口径（2026-10-10）：图片/视频节点一旦有内容，node.size 就被按媒体真实比例写死（9:16 竖图 →
- * 169×300）。重新生成时卡片仍是竖版（"重新生成就变竖屏"）。要求跑任务期间回到设置里配的默认宽高，
- * 跑完再跟随新产物比例。
+ * 以前这里有一条“生成中按类型默认尺寸渲染（横屏）”的旁路：同一个节点在生成期间
+ * 有两个宽高，布局与卡片必然打架。现在生成中也按 size 画；需要横屏态就由插件改 size。
  *
- * 用 SSR 拿真实 HTML 断言卡片内联样式 —— "卡片有没有真的按默认尺寸画"只能从模板看出来。
+ * 用 SSR 拿真实 HTML 断言卡片内联样式 —— "卡片到底按哪个尺寸画"只能从模板看出来。
  */
 import { describe, it, expect } from 'vitest'
 import { createSSRApp, defineComponent, h } from 'vue'
@@ -31,10 +30,13 @@ function renderNode(
   registry: NodeRegistry,
   data: Record<string, unknown>,
   loadingDefaultSize = true,
+  size: { w: number; h: number } | null = null,
 ): Promise<string> {
   const refOf = (v: unknown) => ({ value: v })
   const services: Record<string, unknown> = {
     doc: { types: typeTable(loadingDefaultSize), getNode: () => undefined, updateNode: () => {} },
+    // 尺寸唯一来源：nodeGeometry → node.size
+    nodeGeometry: { get: () => size },
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
     selection: { ids: new Set<string>(), has: () => false, onChange: () => () => {} },
   }
@@ -78,43 +80,41 @@ describe('BaseNode 加载态尺寸（loadingDefaultSize 类型）', () => {
     return x
   })()
 
-  it('running → 卡片按类型默认尺寸（480×240），不沿用媒体比例（169×300）', async () => {
+  it('running → 卡片仍按 node.size（不临时改成类型默认尺寸）', async () => {
     const html = await renderNode(r, {
       cardWidth: 169, cardHeight: 300,
       runState: { status: 'running', progress: 40 },
-    })
-    const style = cardStyle(html)
-    expect(style).toContain('width:480px')
-    expect(style).toContain('height:240px')
-    expect(style).not.toContain('width:169px')
-    expect(style).not.toContain('height:300px')
-  })
-
-  it('done → 回到 data 里的真实产物比例（169×300）', async () => {
-    const html = await renderNode(r, {
-      cardWidth: 169, cardHeight: 300,
-      runState: { status: 'done' },
-    })
+    }, true, { w: 169, h: 300 })
     const style = cardStyle(html)
     expect(style).toContain('width:169px')
     expect(style).toContain('height:300px')
   })
 
-  it('error（失败/取消）→ 也回到真实比例，原图与尺寸都还在（只改渲染，不删数据）', async () => {
+  it('done → 同一个 size（169×300）', async () => {
+    const html = await renderNode(r, {
+      cardWidth: 169, cardHeight: 300,
+      runState: { status: 'done' },
+    }, true, { w: 169, h: 300 })
+    const style = cardStyle(html)
+    expect(style).toContain('width:169px')
+    expect(style).toContain('height:300px')
+  })
+
+  it('error（失败/取消）→ 尺寸仍是 node.size，原图与尺寸都还在', async () => {
     const html = await renderNode(r, {
       cardWidth: 440, cardHeight: 248,
       runState: { status: 'error', message: '已取消' },
-    })
+    }, true, { w: 440, h: 248 })
     const style = cardStyle(html)
     expect(style).toContain('width:440px')
     expect(style).toContain('height:248px')
   })
 
-  it('没声明 loadingDefaultSize 的类型：running 期间照旧用显式尺寸（行为不变）', async () => {
+  it('没声明 loadingDefaultSize 的类型：running 期间也用 node.size', async () => {
     const html = await renderNode(r, {
       cardWidth: 169, cardHeight: 300,
       runState: { status: 'running' },
-    }, false)
+    }, false, { w: 169, h: 300 })
     const style = cardStyle(html)
     expect(style).toContain('width:169px')
     expect(style).toContain('height:300px')

@@ -44,6 +44,7 @@ export function useNodeCardChrome(input: NodeCardChromeInput) {
   const titleCanvasWidth = computed(
     () => input.cardWidth.value * Math.max(input.zoom.value, input.titleMinZoom.value),
   )
+  /** 卡片边框已改成外扩 ring：标题条与卡片边缘的距离改用 ring 宽度（同样按缩放反算） */
   const cardBorderComp = computed(() =>
     cap.frameless.value ? 0 : Math.max(1 / input.zoom.value, 1),
   )
@@ -72,10 +73,28 @@ export function useNodeCardChrome(input: NodeCardChromeInput) {
     transform: input.cardTransform.value,
     borderWidth: cardFrame.value.borderWidth,
     borderRadius: cardFrame.value.borderRadius,
-    '--card-outline-width': cardFrame.value.outlineWidth,
     '--card-surface': cardFrame.value.surface,
     '--card-shadow': cardFrame.value.shadow,
     '--card-content-surface': cardFrame.value.contentSurface,
+  }))
+
+  /**
+   * 边框层（.v2-frame）的样式。
+   *
+   * 为什么边框要单独一层、而不是 `.v2-card` 的 border / box-shadow：
+   * 卡片里的内容、加载态、失败态、裁剪浮层都是**卡片之后**绘制的同级层，
+   * 不管边框画在盒子内还是盒子外，后画的层都会在角落和边缘把它压住。
+   * 只有把边框做成 `.v2-node` 的**最后一个**子层（z-index 高于状态层与编辑浮层），
+   * 它才永远在所有人上面 —— 边框是容器的轮廓，本来就不该被内容遮住。
+   */
+  const frameInlineStyle = computed<Record<string, string>>(() => ({
+    width: `${input.cardWidth.value}px`,
+    height: `${input.cardHeight.value}px`,
+    transform: input.cardTransform.value,
+    borderRadius: cardFrame.value.borderRadius,
+    '--card-ring-width': cardFrame.value.ringWidth,
+    '--card-ring-ink': cardFrame.value.ringColor,
+    '--card-outline-width': cardFrame.value.outlineWidth,
   }))
 
   const showTitle = computed(
@@ -94,6 +113,7 @@ export function useNodeCardChrome(input: NodeCardChromeInput) {
     titlePositionStyle,
     showSelectionOutline,
     cardInlineStyle,
+    frameInlineStyle,
     showTitle,
   }
 }

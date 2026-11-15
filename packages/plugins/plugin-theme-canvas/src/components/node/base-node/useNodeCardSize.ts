@@ -14,6 +14,8 @@ export interface NodeCardSizeInput {
   flow: CanvasRenderContext['flow']
   interaction: CanvasRenderContext['interaction']
   zoom: Ref<number>
+  /** 当前卡片尺寸（来自 node.size；由渲染上下文投影） */
+  cardSize: () => { w: number; h: number } | null
 }
 
 /** 卡片尺寸 + resize 会话接线（抓点偏移、共享活动位、缩放补算）。 */
@@ -39,6 +41,7 @@ export function useNodeCardSize(input: NodeCardSizeInput) {
     onVisualSize: (w, h) => input.flow.updateNodeVisualSize(input.id, w, h),
     onResizeStart: () => beginNodeResize(input.interaction, input.id),
     onResizeEnd: () => endNodeResize(input.interaction, input.id),
+    cardSize: input.cardSize,
   })
 
   const cardWidth = card.cardWidth

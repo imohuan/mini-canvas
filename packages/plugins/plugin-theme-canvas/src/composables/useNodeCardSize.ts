@@ -1,8 +1,8 @@
 /**
  * useNodeCardSize —— 卡片固定尺寸 + 右下角拖拽 resize（移植自 v1 Decoration/BaseNode 的内置 resize 逻辑）。
  *
- * v2 卡片从"内容自适应"改为"固定可改尺寸框"。尺寸来源：node.data.cardWidth/cardHeight（与 v1 同名，便于存量迁移）
- * ?? nodeStore.types.defaultSize。
+ * 尺寸唯一来源：`node.size`（用户 2026-11-14 拍板）。卡片宽高由外层（VueFlow 投影的 size）
+ * 决定，这里只负责 resize 拖拽会话；不再读 data.cardWidth/cardHeight。
  *
  * 尺寸换算（2026-09-28 修）：拖拽中把"指针 + 起手抓点偏移"经 **当前视口**（toFlow）换算成画布坐标，
  * 再与起手画布角点求差 —— **不**用"屏幕位移 ÷ 当前 zoom"（后者只在缩放不变时成立，
@@ -20,7 +20,7 @@
  * 要求它们**只认类型声明**，存量节点上残留的 data.resizable 不许把拖柄打开。
  *
  * 用法（BaseNode）：
- *   const card = useNodeCardSize({ id, data, type, writeback: nodeWrite, toFlow, grabOffset })
+ *   const card = useNodeCardSize({ id, data, type, writeback: nodeWrite, toFlow, grabOffset, cardSize })
  *   :style="{ width: card.cardWidth+'px', height: card.cardHeight+'px', ... }"
  *   <div class="resize-handle" @pointerdown="card.onResizePointerDown" />
  *   watch(zoom, () => card.isResizing.value && card.refreshSize())
@@ -28,7 +28,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useNodeCapability } from "./useNodeCapability";
 import { createResizeDragSession, type PointerEventTargetLike } from "./resizeDragSession";
-import { nodeSizePatch, isNodeRunning } from "@plume-canvas/canvas-data";
+import { nodeSizePatch } from "@plume-canvas/canvas-data";
 
 export interface NodeCardSizeOptions {
   nodeId: string;
@@ -78,6 +78,11 @@ export interface NodeCardSizeOptions {
    */
   onResizeStart?: () => void;
   onResizeEnd?: () => void;
+  /**
+   * 当前卡片尺寸（来自 `node.size`；BaseNode 从渲染上下文取）。
+   * 缺省时回落到类型默认尺寸 —— 仅用于极简宿主/单测；生产路径必须有值。
+   */
+  cardSize?: () => { w: number; h: number } | null;
 }
 
 export const CARD_MIN_WIDTH = 120;
@@ -94,85 +99,26 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
   /** 当前 data（响应式：依赖 props.data 变化） */
   const data = computed(() => opts.data() ?? {});
 
-  /**
-   * 是否处于"加载态按默认尺寸显示"：类型声明了该能力 **且** 节点正在跑任务。
-   *
-   * 用户口径（2026-10-10）：图片/视频节点重新生成时，卡片先回到设置里配的默认宽高（横屏），
-   * 生成完成再跟随新产物的真实比例。这里只影响**渲染**，绝不改 node.size / data —— 因此
-   * 生成失败或取消时，上一次的图与尺寸都原样还在（把图删掉再让它回落默认尺寸的写法会把作品弄丢）。
-   *
-   * 与 canvas-render 的 nodesFromStore 同一条判定（都读 loadingDefaultSize + isNodeRunning），
-   * 保证包裹尺寸与卡片实测尺寸一致，端口/连线端点不会错位。
-   */
-  const loadingDefaultSize = computed(
-    () => capability.loadingDefaultSize.value && isNodeRunning({ data: data.value }),
-  );
+  const isResizing = ref(false);
 
-  /** 加载态取类型默认尺寸；否则取 data 显式尺寸；再退到类型默认尺寸 */
-  const sizeFrom = (key: 'cardWidth' | 'cardHeight', fallback: number): number => {
-    if (loadingDefaultSize.value) return fallback;
-    return (data.value[key] as number) || fallback;
+  /** 当前尺寸：只认 node.size（由外层投影）；没有就回落类型默认，保证首帧不塌 */
+  const currentSize = (): { w: number; h: number } => {
+    const s = opts.cardSize?.();
+    if (s && s.w > 0 && s.h > 0) return s;
+    const d = capability.defaultSize.value;
+    return { w: d.w, h: d.h };
   };
 
-  // 初值：加载态 → 类型 defaultSize；否则 data 显式尺寸 ?? 类型 defaultSize
-  const cardWidth = ref<number>(sizeFrom('cardWidth', capability.defaultSize.value.w));
-  const cardHeight = ref<number>(sizeFrom('cardHeight', capability.defaultSize.value.h));
-
-  /**
-   * **实时跟随类型默认尺寸**：只有「没有显式尺寸」（没被 resize 过、data.cardWidth 缺失）的节点才跟。
-   * 用户在设置面板调了某类型的默认尺寸，未 resize 的节点立刻重画 —— 不用刷新、不用重建节点。
-   * 已经 resize 过的节点有 data.cardWidth/cardHeight，`!Number.isFinite(...)` 为假 → 不跟随。
-   */
-  watch(
-    () => capability.defaultSize.value,
-    (d) => {
-      if (isResizing.value) return;
-      if (loadingDefaultSize.value) {
-        cardWidth.value = d.w;
-        cardHeight.value = d.h;
-        return;
-      }
-      const hasOwnW = Number.isFinite(data.value?.cardWidth);
-      const hasOwnH = Number.isFinite(data.value?.cardHeight);
-      if (!hasOwnW) cardWidth.value = d.w;
-      if (!hasOwnH) cardHeight.value = d.h;
-    },
-    { deep: true },
-  );
-
-  /**
-   * 进出加载态时整体重算尺寸：
-   * - 进（开始生成）→ 立刻回到类型默认宽高（重新生成不再沿用上张图的竖版比例）；
-   * - 出（跑完/失败/取消）→ 回到 data 里的显式尺寸（就是刚写回的真实产物比例）。
-   * 拖拽中不覆盖本地拖拽值（与下面两条 watch 同一规矩）。
-   */
-  watch(loadingDefaultSize, (on) => {
-    if (isResizing.value) return;
-    if (on) {
-      cardWidth.value = capability.defaultSize.value.w;
-      cardHeight.value = capability.defaultSize.value.h;
-      return;
-    }
-    const w = Number.isFinite(data.value?.cardWidth) ? (data.value.cardWidth as number) : capability.defaultSize.value.w;
-    const h = Number.isFinite(data.value?.cardHeight) ? (data.value.cardHeight as number) : capability.defaultSize.value.h;
-    cardWidth.value = w;
-    cardHeight.value = h;
+  // 拖拽中保留本地值（视觉跟手）；松手后再跟随 node.size。
+  const dragSize = ref<{ w: number; h: number } | null>(null);
+  const cardWidth = computed({
+    get: () => (isResizing.value && dragSize.value ? dragSize.value.w : currentSize().w),
+    set: () => {},
   });
-
-  // 外部(data.cardWidth/Height)改动同步进来；拖拽期间不覆盖本地拖拽值；加载态不覆盖（那时按默认尺寸）
-  const isResizing = ref(false);
-  watch(
-    () => data.value?.cardWidth as number | undefined,
-    (w) => {
-      if (w !== undefined && !isResizing.value && !loadingDefaultSize.value) cardWidth.value = w;
-    },
-  );
-  watch(
-    () => data.value?.cardHeight as number | undefined,
-    (h) => {
-      if (h !== undefined && !isResizing.value && !loadingDefaultSize.value) cardHeight.value = h;
-    },
-  );
+  const cardHeight = computed({
+    get: () => (isResizing.value && dragSize.value ? dragSize.value.h : currentSize().h),
+    set: () => {},
+  });
 
   // 显示拖柄的门：类型声明支持 resize(capability.resizable) **或** 实例 data.resizable === true（后者单独覆盖）。
   // 类型级优先用调用方传入的 typeResizable 取值器；未传则回退 capability 已读到的类型声明。
@@ -213,18 +159,16 @@ export function useNodeCardSize(opts: NodeCardSizeOptions) {
     mode: () => resizeMode.value,
     aspectRatio,
     onLive(w, h) {
-      cardWidth.value = w;
-      cardHeight.value = h;
+      dragSize.value = { w, h };
     },
     // 拖拽中同步给渲染层：VueFlow 内部重算端口位置与相连边端点（否则停在旧尺寸）
     onVisualSize: opts.onVisualSize,
     onCommit(w, h) {
       isResizing.value = false;
+      dragSize.value = null;
       // 先灭共享活动位再落盘：落盘会触发重渲染，控制栏此刻就该恢复（松手即恢复）
       opts.onResizeEnd?.();
-      // 只写正式尺寸 size（唯一正身）：nodeStore 会顺手把 data.cardWidth/cardHeight 镜像成同值。
-      // 以前这里手写三件套（cardWidth/cardHeight/size），镜像与正身靠"每次记得同时写"维系；
-      // 现在改由数据层统一生成镜像，漏写的可能从根上消掉。
+      // 只写 node.size（唯一尺寸）。
       if (opts.writeback) {
         opts.writeback(opts.nodeId, nodeSizePatch(w, h));
       }
