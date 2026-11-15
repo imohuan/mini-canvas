@@ -47,7 +47,7 @@ const PopoverTrigger = useUiComponent('PopoverTrigger')
 const open = ref(false)
 
 /** 当前色块（取色器回来可能是空串 = 跟随主题，这里回落白色） */
-const swatch = computed(() => props.modelValue || '#ffffff')
+const swatch = computed(() => props.modelValue || '#ffffff') // 主题色白名单: 缺省色块是「还没选过的画笔色 / 分组底色」（内容色），不是界面配色
 
 function pick(value: string): void {
   emit('update:modelValue', value)
