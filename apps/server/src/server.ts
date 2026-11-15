@@ -11,6 +11,7 @@
  * 前 3 项是纯接口，第 4 项是"打开就能看画布"的那一步。
  */
 import { promises as fs } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { cors } from 'hono/cors'
 import { serve, type ServerType } from '@hono/node-server'
@@ -74,8 +75,14 @@ import type { CloudServerOptions, CloudServer } from './serverTypes.js'
 /** 默认端口：避开 ui dev 的 5288 与 mcp-server 的 8765 */
 export const DEFAULT_PORT = 8865
 
-/** 默认数据目录名（相对启动目录） */
-export const DEFAULT_DATA_DIR = '.plume'
+/**
+ * 默认数据目录：固定在用户主目录下的 `.plume`。
+ *
+ * 不能写成相对路径：`pnpm start` 最后是在 `apps/server` 里执行 `serve`，
+ * 相对路径会按启动目录解析，数据就散到 `apps/server/.plume` 去了。
+ * 数据目录只认一份，跟从哪里启动无关。
+ */
+export const DEFAULT_DATA_DIR = path.join(os.homedir(), '.plume')
 
 export type { CloudServerOptions, CloudServer } from './serverTypes.js'
 
