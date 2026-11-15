@@ -159,11 +159,11 @@ export interface DocService {
   setNodeParent(id: string, parentId: string | undefined): void
   /**
    * 改某节点的卡片尺寸（宽高，px）。这是"设尺寸"的**一等入口**：内部走唯一写入口，
-   * 自动进历史 + 调度落盘，并把 data.cardWidth/cardHeight 镜像一并刷新（不用自己写两份）。
+   * 自动进历史 + 调度落盘（尺寸只有 node.size 一份）。
    *
    * 为什么单独给一个方法，而不要求调用方拼 `updateNode(id, { size: { w, h } })`：
    * 尺寸是插件最常改的东西之一，把"拼 patch + 记得正身是 size"这条约定收进一个方法，
-   * 作者不必知道 `size` 与 `data.cardWidth` 的分工（那是内部实现细节）。
+   * 作者只需知道“宽度高度写在 node.size 上”，不必关心内部怎么提交与落盘。
    *
    * @returns 是否写入成功；宽高非正有限数（0/负数/NaN/字符串）→ false 且不写（不污染节点）
    */

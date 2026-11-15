@@ -3,21 +3,32 @@ import { createPlumeHost } from '../createPlumeHost'
 import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
 
 /**
- * Spec 3.1 / 验收 8.1：基础服务只剩 7 个名字；旧名一律不可取。
+ * Spec 3.1 / 验收 8.1：基础服务名字收敛；旧名一律不可取。
+ * 2026-11-14 起多了 `nodeGeometry`（尺寸 / 矩形唯一读写口，尺寸只存 node.size）。
  * 只装基础插件、不装任何业务插件。nodeToolbar 是 Spec D4 明确保留的渲染层辅助服务，
  * 单独断言；它不算「基础 7 个」的一部分。
  */
 describe('基础服务名收敛', () => {
-  it('基础七名 + 渲染层辅助 nodeToolbar', async () => {
+  it('基础八名 + 渲染层辅助 nodeToolbar', async () => {
     const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
     const names = host.ctx.injectedServices().sort()
     // injectedServices() 只列「服务表」里的名字；`tools` 是内核内置、不在表里，
     // 由 hasService/get 仍可取到，故这里不列它。
-    expect(names).toEqual(['canvas', 'doc', 'nodeToolbar', 'resources', 'save', 'selection', 'view'])
-    // tools 是内核内置：injectedServices 会单独列它；其余六名来自基础插件/宿主。
+    expect(names).toEqual([
+      'canvas',
+      'doc',
+      'nodeGeometry',
+      'nodeToolbar',
+      'resources',
+      'save',
+      'selection',
+      'view',
+    ])
+    // tools 是内核内置：injectedServices 会单独列它；其余七名来自基础插件/宿主。
     expect(names.filter((n) => n !== 'tools' && n !== 'nodeToolbar')).toEqual([
       'canvas',
       'doc',
+      'nodeGeometry',
       'resources',
       'save',
       'selection',

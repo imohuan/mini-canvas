@@ -250,8 +250,7 @@ export function useCanvasConnections(opts: {
   }
 
   /** 取 host 内核中存活节点矩形（flow 坐标）。
-   *  尺寸优先用 nodeLayout 的**实测值**（ResizeObserver 量到的真实渲染尺寸），
-   *  退而用内核声明的 size，最后才是兜底 —— 否则卡片实际高度与兜底值不同，命中判定会偏。 */
+   *  尺寸走 view.nodeSize()（只读 node.size），最后才是兜底 —— 命中判定与卡片绘制用同一个值。 */
   function liveNodeRects(): NodeRect[] {
     const h = hostRef.value
     if (!h) return []

@@ -266,6 +266,7 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
     // doc / selection 随 canvas-data 的 fiber 回收；共享根 Context 时再显式摘一次，
     // 保证离开画布后 ctx.tryGet('doc') 一定是 undefined。
     base.services.revokeDoc?.()
+    base.services.revokeNodeGeometry?.()
     base.services.revokeSelection?.()
   }
   ctx.slots.register('overlay', {

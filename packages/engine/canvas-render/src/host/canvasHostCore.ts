@@ -7,7 +7,7 @@
  * 边界：不 import @vue-flow/core，不 import Vue 运行时；类型用最小结构接口避免拉运行时。
  */
 
-import { isTransient, isNodeRunning, type NodeStoreService, type CanvasNode } from '@plume-canvas/canvas-data'
+import { isTransient, type NodeStoreService, type CanvasNode } from '@plume-canvas/canvas-data'
 import type { ThemeRegistry } from '@plume-canvas/canvas-data'
 import type { EdgeVisual } from '../contracts/edgeContext'
 import type { CanvasParams } from '../contracts/canvasParamKey'
@@ -31,7 +31,7 @@ export const FIRST_RUN_FIT_RETRY_DELAYS = [80, 150, 300, 600, 1000] as const
 
 /** 节点写回 patch 的归一结果：data 部分 + 可选正式尺寸 */
 export interface NodeWriteSplit {
-  /** 写进 node.data 的字段（标题/文本内容/cardWidth…） */
+  /** 写进 node.data 的字段（标题/文本内容…） */
   data: Record<string, unknown>
   /** 保留 key `size` → node.size 正式尺寸字段；patch 未带该 key 时为 undefined */
   size?: { w: number; h: number }
@@ -41,8 +41,7 @@ export interface NodeWriteSplit {
  * 把 BaseNode 经 nodeWrite 回传的 patch 拆成 { data, size } 两路。
  *
  * 保留 key `size`：卡片 resize 要把尺寸写进内核的**正式尺寸字段** node.size，而不是塞进 data。
- * 拆出来交给同一次 graph.updateNode 提交，保证「data.cardWidth 与 node.size 同帧、同一条历史」——
- * 否则一次 resize 会记两条撤销记录，且两份尺寸可能不一致。
+ * 拆出来交给同一次 graph.updateNode 提交：尺寸只写 node.size 一份，一次 resize 一条历史。
  *
  * patch 未带 size（如标题就地重命名）→ size 为 undefined，调用方只写 data。
  */
@@ -165,17 +164,12 @@ export function nodesFromStore(
       }
       out.zIndex = depth === 0 ? LAYERS.groupBase : LAYERS.groupNested
     }
-    // size → style 像素尺寸：VueFlow 用它布局父容器/边界；无 size 则交由节点壳自撑。
+    // size → style 像素尺寸：VueFlow 用它布局父容器/边界。
     //
-    // 例外：声明 loadingDefaultSize 的类型（图片/视频）在跑任务时投影**类型默认尺寸** ——
-    // 包裹尺寸与卡片实测尺寸一起落到用户在设置里配的默认宽高，加载态那张卡就是横屏默认态，
-    // 而不是上一次那张图/视频的比例。只影响渲染，不动 node.size：任务结束 runState 一变比例就回来。
-    //
-    // 为什么投影默认尺寸、而不是干脆不给 style：VueFlow 对节点更新是**合并**语义，
-    // 去掉 style 不会把上一次写进 DOM 的 width/height 抹掉（实测：包裹仍停在旧比例）；
-    // 显式给一个值才会真正改写。
-    const loadingSize = store.types.get(n.type)?.loadingDefaultSize === true && isNodeRunning(n) ? store.types.get(n.type)?.defaultSize : undefined
-    const styleSize = loadingSize ?? n.size
+    // 尺寸唯一来源是 `node.size`（用户 2026-11-14 拍板）。以前这里还有一条“图片/视频生成中
+    // 临时投影类型默认尺寸（横屏）”的旁路 —— 同一个节点出现两个宽高，布局与卡片必然打架；
+    // 现在生成中也按 size 显示，进度盖在原卡片上，产物回来时插件用 nodeGeometry 改 size。
+    const styleSize = n.size
     if (styleSize) out.style = { width: styleSize.w + 'px', height: styleSize.h + 'px' }
     // 中间态节点（如拖线落空白时的菜单卡）—— 必须在 VueFlow 维度隔离：
     //   draggable/selectable/deletable 全关 → pane click 的 removeSelectedElements 摸不到它、

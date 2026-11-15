@@ -45,16 +45,19 @@ describe('view · 几何与视口合体', () => {
     expect(animate).toHaveBeenCalledWith({ x: 4, y: 5, zoom: 1 }, 320)
   })
 
-  it('内部写口仍能改实测尺寸（量测不能断）', () => {
+  /**
+   * 尺寸唯一来源是 node.size。实测写口保留（量测链路不断），但不再覆盖读口。
+   */
+  it('实测写口只记录，不覆盖 node.size', () => {
     const store = new NodeStore()
     store.registerType({ type: 'note', label: '便签', defaultSize: { w: 300, h: 200 } })
     store.addNodes([{ type: 'note', position: { x: 0, y: 0 }, id: 'n1' }])
     const id = 'n1'
     const v = new ViewService({ nodeStore: store })
     v.setMeasuredSize(id, 200, 100)
-    expect(v.nodeSize(id)).toEqual({ w: 200, h: 100 })
+    expect(v.nodeSize(id)).toEqual({ w: 300, h: 200 })
     v.clearMeasuredSize(id)
-    expect(v.nodeSize(id)).not.toEqual({ w: 200, h: 100 })
+    expect(v.nodeSize(id)).toEqual({ w: 300, h: 200 })
   })
 
   it('fitTo 选中集合按 id 解析，空目标返回 false', () => {

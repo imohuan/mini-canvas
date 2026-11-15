@@ -145,7 +145,7 @@ export function buildCapabilities(
     remove(id: string): boolean
     /**
      * 改某节点的尺寸（宽高，px）—— 节点尺寸的一等入口，走唯一写入口（进历史 + 落盘），
-     * 并自动刷新卡片镜像（作者不用管 size 与 data.cardWidth 的分工）。
+     * 画布上卡片的宽高立刻跟着变（尺寸只存 node.size 一份）。
      *
      * @returns 是否写入成功；宽高非正有限数 → false 且不写。
      */

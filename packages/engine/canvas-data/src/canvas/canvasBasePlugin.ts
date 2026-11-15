@@ -41,6 +41,8 @@ import { GRAPH_EDGES_KEY, GRAPH_KEY } from '../storage/keys'
 import type { StorageAdapter } from '../storage/types'
 import { createDocService } from '../docService'
 import type { DocService } from '../docService'
+import { createNodeGeometry } from '../nodeGeometry'
+import type { BindableNodeGeometryService } from '../nodeGeometry'
 import { NodeRegistry } from './registry/nodeRegistry'
 import { ThemeRegistry } from './registry/themeRegistry'
 import { NodeFactory } from './nodeFactory'
@@ -96,6 +98,8 @@ export interface CanvasBaseServices {
   save: SaveServiceImpl
   /** 文档门面（§4.1）：nodeStore/edgeStore/graph/history 合并后的正式名字（5c 起四个老名下线） */
   doc: DocService
+  /** 节点尺寸 / 矩形唯一读写口（尺寸只存 node.size） */
+  nodeGeometry: BindableNodeGeometryService
   nodeStore: NodeStore
   edgeStore: EdgeStore
   resources: ResourceStore
@@ -110,6 +114,7 @@ export interface CanvasBaseServices {
   settingsPersist?: SettingsPersistService
   /** 会话级服务撤销句柄（共享根 Context 时，离开画布要主动摘掉，不能等整棵 Context 停） */
   revokeDoc?: () => void
+  revokeNodeGeometry?: () => void
   revokeSelection?: () => void
 }
 
@@ -209,12 +214,17 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
   // 门面是纯转发视图、零状态：底层实例随本插件 fiber 回收，门面随之作废。
   const doc = createDocService({ nodeStore, edgeStore, graph, history })
 
+  // 节点几何（尺寸/矩形）唯一读写口：尺寸只存 node.size，插件一律经这个服务读。
+  // 实例同样在工厂调用时建好（只依赖 doc），宿主 / 渲染层 / 主题壳都能在 start 前拿到同一份。
+  const nodeGeometry = createNodeGeometry(doc)
+
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 tools，
   // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get(tools) 共享）。
 
   const services: CanvasBaseServices = {
     save,
     doc,
+    nodeGeometry,
     nodeStore,
     edgeStore,
     resources,
@@ -239,6 +249,9 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
       // 数据那一格只有一个名字：doc（5c 删掉 nodeStore/edgeStore/graph/history 四个老服务名）。
       // 四个实例仍在 base.services 上（宿主/渲染层拿它们订阅、量尺寸），但**不再是按名可取的服务**。
       services.revokeDoc = ctx.inject('doc', doc)
+      // 尺寸服务与 doc 同生共死：注入后把内部对 doc 的订阅挂进本插件 scope。
+      services.revokeNodeGeometry = ctx.inject('nodeGeometry', nodeGeometry)
+      nodeGeometry.bind((dispose) => ctx.effect(() => () => dispose()))
       if (!app) ctx.inject('resources', resources)
       services.revokeSelection = ctx.inject('selection', selection)
       // 容器与工厂不再上架服务名：能力糖 / 画布命令 / 宿主经内部运行时读同一批实例。

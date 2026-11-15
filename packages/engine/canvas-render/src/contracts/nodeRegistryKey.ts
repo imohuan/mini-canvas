@@ -14,9 +14,8 @@
  * - 普通 key → 写进 node.data（标题/文本内容等）；
  * - 保留 key `size` → 写进 nodeStore 的**正式尺寸字段** node.size（不塞进 data）。
  *
- * 为什么 size 要走这里（用户反馈 + 审查结论）：卡片 resize 原先只写 data.cardWidth/cardHeight，
- * 漏掉 node.size，于是"同一尺寸存两份、正式字段恒空"；布局回退链（实测 > size > 类型默认）断在中间，
- * 一旦实测链路异常就按类型默认尺寸错算。让两者在同一个 patch 里更新，可保证只产生一条撤销记录。
+ * 为什么 size 要走这里：卡片 resize 必须落到唯一的正式尺寸字段 node.size 上。
+ * 曾经把尺寸另存一份到 data.cardWidth/cardHeight，结果两份各说各话（2026-11-14 已删除镜像）。
  */
 export type NodeWritePatch = Record<string, unknown> & { size?: { w: number; h: number } }
 export type NodeWrite = (id: string, patch: NodeWritePatch) => void

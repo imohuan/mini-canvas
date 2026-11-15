@@ -1,8 +1,9 @@
 /**
  * NodeLayoutService —— 节点布局只读服务（渲染层提供、插件/工具消费）。
  *
- * 背景（用户拍板 3A）：节点动态实测宽高不入存储。内核 nodeStore 只存声明/默认尺寸；
- * 渲染层用 ResizeObserver 量测真实 DOM 尺寸后经 setMeasuredSize 注入本服务（内存态，不落盘）。
+ * 尺寸唯一来源：`node.size`（用户 2026-11-14 拍板，不再有 data.cardWidth 镜像）。
+ * 渲染层用 ResizeObserver 量测真实 DOM 尺寸，仅用于**一致性诊断**（DOM 与 size 不一致时告警），
+ * 不再用实测值覆盖读口 —— 否则“卡片 400、布局 390”这类偏差会再次出现。
  *
  * 矩形坐标一律 flow 绝对坐标：子节点 position 相对父，逐级累加父链得绝对坐标。
  *
@@ -48,10 +49,12 @@ export class NodeLayoutService implements NodeLayoutContract {
     }
   }
 
-  /** 取某节点的实际尺寸：实测 > node.size > type.defaultSize。 */
+  /**
+   * 取某节点尺寸：只读 `node.size`。
+   * 没有 size 的节点（孤儿/未注册类型）回落到类型默认尺寸；再没有返回 {0,0}。
+   * 实测值不参与计算，见文件头。
+   */
   nodeSize(id: string): { w: number; h: number } {
-    const m = this.measured.get(id)
-    if (m) return { ...m }
     const node = this.store.getNode(id)
     if (!node) return { w: 0, h: 0 }
     if (node.size) return { ...node.size }

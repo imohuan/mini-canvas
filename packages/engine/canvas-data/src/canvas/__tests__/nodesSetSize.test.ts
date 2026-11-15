@@ -39,7 +39,7 @@ async function boot(plugins: PluginModule[]): Promise<{ ctx: Context; nodeStore:
 const mk = (name: string, apply: (c: PluginScope) => void): PluginModule => ({ name, apply })
 
 describe('ctx.nodes.setSize', () => {
-  it('设尺寸 → node.size 与 data 镜像都更新', async () => {
+  it('设尺寸 → 只写 node.size（没有 data 镜像）', async () => {
     let nodeId = ''
     const { nodeStore } = await boot([
       mk('p', (c) => {
@@ -51,8 +51,8 @@ describe('ctx.nodes.setSize', () => {
     ])
     const n = nodeStore.getNode(nodeId)!
     expect(n.size).toEqual({ w: 1600, h: 100 })
-    expect(n.data.cardWidth).toBe(1600)
-    expect(n.data.cardHeight).toBe(100)
+    expect('cardWidth' in n.data).toBe(false)
+    expect('cardHeight' in n.data).toBe(false)
   })
 
   it('非法尺寸 → false 且不写', async () => {
@@ -66,8 +66,8 @@ describe('ctx.nodes.setSize', () => {
       }),
     ])
     expect(ok).toBe(false)
-    // 没写 → 保持缺席（用类型默认）
-    expect(nodeStore.getNodes()[0].size).toBeUndefined()
+    // 没写 → 保持建节点时的类型默认尺寸
+    expect(nodeStore.getNodes()[0].size).toEqual({ w: 320, h: 240 })
   })
 
   it('ctx.nodes.setLabel / move / setParent / remove 都在（薄糖走 doc 同一实现）', async () => {

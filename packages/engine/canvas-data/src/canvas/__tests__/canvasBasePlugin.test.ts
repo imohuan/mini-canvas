@@ -41,7 +41,7 @@ async function bootHeadless(adapter?: MemoryStorageAdapter) {
 describe('canvasBasePlugin —— 建出来的基础服务', () => {
   it('基础服务只上架 save/doc/resources/selection；其余实例进内部运行时', async () => {
     const { ctx, services } = await bootHeadless()
-    const names = ['save', 'doc', 'resources', 'selection'] as const
+    const names = ['save', 'doc', 'nodeGeometry', 'resources', 'selection'] as const
     for (const n of names) {
       expect(ctx.get(n), n + ' 未注入').toBe(services[n as keyof typeof services])
     }
@@ -63,6 +63,23 @@ describe('canvasBasePlugin —— 建出来的基础服务', () => {
     expect(canvasRuntime()?.command).toBe(services.command)
     // 配置持久化桥（缺省开启）
     expect(canvasRuntime()?.settingsPersist).toBe(services.settingsPersist)
+    ctx.stop()
+  })
+
+  it('nodeGeometry 真的注入到 ctx，且读的就是 node.size', async () => {
+    const { ctx, services } = await bootHeadless()
+    expect(ctx.get('nodeGeometry')).toBe(services.nodeGeometry)
+
+    services.nodeStore.registerType({ type: 'probe', label: '探针', defaultSize: { w: 100, h: 50 } })
+    const id = services.doc.createNode('probe', { x: 10, y: 20 })
+    // 新节点直接用类型默认尺寸，服务读得到（不是 undefined）
+    expect(ctx.get('nodeGeometry').get(id)).toEqual({ w: 100, h: 50 })
+
+    // 写服务 → node.size 变 → 读服务同步变（唯一来源，没有第二份）
+    expect(ctx.get('nodeGeometry').set(id, 420, 236)).toBe(true)
+    expect(services.nodeStore.getNode(id)!.size).toEqual({ w: 420, h: 236 })
+    expect(ctx.get('nodeGeometry').get(id)).toEqual({ w: 420, h: 236 })
+    expect(ctx.get('nodeGeometry').getRect(id)).toEqual({ id, x: 10, y: 20, w: 420, h: 236 })
     ctx.stop()
   })
 

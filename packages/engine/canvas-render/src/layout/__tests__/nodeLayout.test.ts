@@ -21,15 +21,17 @@ describe('NodeLayoutService 布局只读服务', () => {
     expect(svc.getNodeRect('b')).toEqual({ id: 'b', x: 30, y: 40, w: 500, h: 100 })
   })
 
-  it('setMeasuredSize 覆盖静态尺寸；clearMeasuredSize 回落；非法值忽略', () => {
+  /**
+   * 尺寸唯一来源是 node.size（用户 2026-11-14 拍板）。
+   * 实测只做一致性诊断，不再覆盖读口 —— 否则“卡片 640、布局 300”这种偏差会再次出现。
+   */
+  it('实测尺寸不覆盖 node.size（只作诊断）；清除后仍读 size', () => {
     const s = makeStore()
     s.addNodes([{ type: 'text', position: { x: 0, y: 0 }, id: 'a' }])
     const svc = new NodeLayoutService(s)
     svc.setMeasuredSize('a', 640, 480)
-    expect(svc.getNodeRect('a')!.w).toBe(640)
-    expect(svc.getNodeRect('a')!.h).toBe(480)
-    svc.setMeasuredSize('a', 0, 10) // 非法宽忽略
-    expect(svc.getNodeRect('a')!.w).toBe(640)
+    expect(svc.getNodeRect('a')!.w).toBe(300)
+    expect(svc.getNodeRect('a')!.h).toBe(200)
     svc.clearMeasuredSize('a')
     expect(svc.getNodeRect('a')!.w).toBe(300)
   })

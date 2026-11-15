@@ -14,8 +14,8 @@ export function useCanvasLayer(opts: {
   // 节点写回（标题就地重命名 / 卡片 resize 尺寸）：缺省 = 改内核 nodeStore 并落盘。
   // nodeStore.subscribe 会自动刷新渲染态，无需像旧 demo 那样手动 map 改 nodes 数组。
   //
-  // 保留 key `size`：写进正式尺寸字段 node.size（而非 data），与 data.cardWidth/cardHeight 同一个 patch
-  // 原子提交 —— 这样 resize 一次只产生一条撤销记录，且 node.size 不再恒空（布局回退链可与数据字段一致）。
+  // 保留 key `size`：写进正式尺寸字段 node.size（而非 data）。尺寸只有这一份，
+  // 一次 resize 即一条撤销记录，卡片与布局读的是同一个值。
   function defaultWrite(id: string, patch: NodeWritePatch): void {
     const h = hostRef.value
     if (!h) return

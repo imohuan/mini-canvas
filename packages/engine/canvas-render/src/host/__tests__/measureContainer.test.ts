@@ -2,7 +2,7 @@
  * 节点量测容器解析 —— 回归测试（线上 bug：resize 过的节点尺寸没进布局）。
  *
  * 现象（用户在 http://localhost:5288 目验 + CDP 实测确认）：
- *   text 节点被右下角 resize 拖成 ~1150×451（data.cardWidth/cardHeight 已存对，DOM 也渲染对了），
+ *   text 节点被右下角 resize 拖成 ~1150×451（node.size 已存对，DOM 也渲染对了），
  *   但自动布局仍按 text 类型 defaultSize 300×200 计算 —— 布局读到的尺寸是错的。
  *
  * 根因：CanvasSurface 拿 `.vue-flow__renderer` 当量测容器，而 Vue Flow 1.48 起 DOM 里**没有**这个
@@ -83,9 +83,13 @@ describe('量测容器解析（Vue Flow 1.48 无 .vue-flow__renderer）', () => 
     expect(container!.querySelectorAll('.vue-flow__node').length).toBe(1)
   })
 
-  it('实测尺寸真的注入 nodeLayout（resize 后的 1150×451 不再是默认 300×200）', () => {
+  /**
+   * 尺寸唯一来源是 node.size。量测链路要活着（容器必须解析出来、节点必须被 observe），
+   * 但实测值只作诊断，不再改写读口 —— 否则又会造出“卡片一个数、布局另一个数”。
+   */
+  it('量测链路可用（容器解析 + 节点被 observe），但不覆盖 node.size', () => {
     const store = makeStore()
-    store.addNodes([{ type: 'text', position: { x: 0, y: 0 }, id: '1', data: { cardWidth: 1150, cardHeight: 451 } }])
+    store.addNodes([{ type: 'text', position: { x: 0, y: 0 }, id: '1', size: { w: 1150, h: 451 } }])
     const layout = new NodeLayoutService(store)
     const root = makeVueFlow148Dom([fakeNode('1', 1150, 451)])
 
@@ -93,8 +97,8 @@ describe('量测容器解析（Vue Flow 1.48 无 .vue-flow__renderer）', () => 
     m.start()
 
     expect(layout.nodeSize('1')).toEqual({ w: 1150, h: 451 })
-    // 修复前这里会是类型默认 300×200（容器 null → 从不 observe → 回落到 defaultSize）
-    expect(layout.nodeSize('1').w).not.toBe(300)
+    // 量测确实跑到了（观察器观察到节点，说明容器解析没断）
+    expect(FakeRO.instances[FakeRO.instances.length - 1].observed.length).toBeGreaterThan(0)
     m.stop()
   })
 

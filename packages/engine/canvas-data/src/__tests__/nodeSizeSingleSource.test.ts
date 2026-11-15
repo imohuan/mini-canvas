@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { NodeStore, nodeSizePatch, nodeSizeOf } from '../nodeStore'
+import { NodeStore, nodeSizePatch } from '../nodeStore'
 import { createDocService } from '../docService'
 import { EdgeStore } from '../edgeStore'
 import { Selection } from '../selection'
@@ -7,13 +7,14 @@ import { History } from '../history'
 import { GraphDocument } from '../graphDocument'
 
 /**
- * 尺寸单一来源契约（大改造）：
- *   node.size 是唯一正身，data.cardWidth/cardHeight 是从它生成的镜像。
+ * 尺寸单一来源契约（用户 2026-11-14 拍板）：
+ *   **尺寸只存 node.size**。没有 data.cardWidth/cardHeight 镜像，也不做旧数据兼容。
  *
- * 这组测试锁住三件事：
- * 1. 写 size → 镜像自动补齐（写尺寸的插件不再手拼三件套）；
- * 2. 老数据只写 data.cardWidth/cardHeight → 自动提升为 node.size（迁移）；
- * 3. size 缺席 = 用类型默认尺寸，不在建节点时凭空造一个尺寸。
+ * 锁住四件事：
+ * 1. 新节点一定有 size（用类型默认尺寸）；
+ * 2. 写 size 不产生 data.cardWidth/cardHeight；
+ * 3. 写 data 里的同名旧字段不再影响尺寸；
+ * 4. 非法尺寸一律拒写。
  */
 function makeStore(): NodeStore {
   const s = new NodeStore()
@@ -21,137 +22,71 @@ function makeStore(): NodeStore {
   return s
 }
 
-describe('nodeSizePatch：唯一正身写法', () => {
-  it('只给 size，不再手拼 cardWidth/cardHeight', () => {
+describe('nodeSizePatch：唯一写法', () => {
+  it('只给 size', () => {
     expect(nodeSizePatch(700, 300)).toEqual({ size: { w: 700, h: 300 } })
   })
 })
 
-describe('写 size → 镜像自动补齐', () => {
-  it('updateNode({ size }) 后 data.cardWidth/cardHeight 与 size 同值', () => {
+describe('新建节点一律带 size（类型默认尺寸）', () => {
+  it('addNode 写 size', () => {
+    const s = makeStore()
+    const id = s.addNode('text', { x: 0, y: 0 })
+    expect(s.getNode(id)!.size).toEqual({ w: 100, h: 40 })
+  })
+
+  it('addNodes 没给 size 时也写类型默认尺寸', () => {
+    const s = makeStore()
+    s.addNodes([{ type: 'text', position: { x: 0, y: 0 } }])
+    expect(s.getNodes()[0].size).toEqual({ w: 100, h: 40 })
+  })
+
+  it('addNodes 显式给 size 时用给的', () => {
+    const s = makeStore()
+    s.addNodes([{ type: 'text', position: { x: 0, y: 0 }, size: { w: 260, h: 180 } }])
+    expect(s.getNodes()[0].size).toEqual({ w: 260, h: 180 })
+  })
+
+  it('replaceAll 缺 size 的节点补类型默认尺寸', () => {
+    const s = makeStore()
+    s.replaceAll([{ id: '1', type: 'text', position: { x: 0, y: 0 }, data: {} } as never])
+    expect(s.getNode('1')!.size).toEqual({ w: 100, h: 40 })
+  })
+
+  it('replaceAll 未注册类型的节点不编造尺寸', () => {
+    const s = makeStore()
+    s.replaceAll([{ id: '1', type: 'ghost', position: { x: 0, y: 0 }, data: {} } as never])
+    expect(s.getNode('1')!.size).toBeUndefined()
+  })
+})
+
+describe('尺寸只存 size，不写 data 镜像', () => {
+  it('updateNode({ size }) 不产生 data.cardWidth/cardHeight', () => {
     const s = makeStore()
     const id = s.addNode('text', { x: 0, y: 0 })
     s.updateNode(id, nodeSizePatch(700, 300))
     const n = s.getNode(id)!
     expect(n.size).toEqual({ w: 700, h: 300 })
-    expect(n.data.cardWidth).toBe(700)
-    expect(n.data.cardHeight).toBe(300)
+    expect('cardWidth' in n.data).toBe(false)
+    expect('cardHeight' in n.data).toBe(false)
   })
 
-  it('addNodes 显式给 size → 也顺手镜像', () => {
-    const s = makeStore()
-    s.addNodes([{ type: 'text', position: { x: 0, y: 0 }, id: 'g', size: { w: 260, h: 180 } }])
-    const n = s.getNode('g')!
-    expect(n.data.cardWidth).toBe(260)
-    expect(n.data.cardHeight).toBe(180)
-  })
-
-  it('清 size（size: undefined）→ 镜像一并清掉（否则卡片停在旧尺寸）', () => {
+  it('清 size（size: undefined）→ size 消失，但不动 data', () => {
     const s = makeStore()
     const id = s.addNode('text', { x: 0, y: 0 })
-    s.updateNode(id, nodeSizePatch(400, 200))
-    expect(s.getNode(id)!.data.cardWidth).toBe(400)
     s.updateNode(id, { size: undefined })
-    const n = s.getNode(id)!
-    expect(n.size).toBeUndefined()
-    expect(n.data.cardWidth).toBeUndefined()
-    expect(n.data.cardHeight).toBeUndefined()
-  })
-})
-
-describe('老数据迁移：只写 data 的尺寸被提升为 size', () => {
-  it('updateNode({ data: { cardWidth, cardHeight } }) → size 补上', () => {
-    const s = makeStore()
-    const id = s.addNode('text', { x: 0, y: 0 })
-    s.updateNode(id, { data: { cardWidth: 375, cardHeight: 300 } })
-    expect(s.getNode(id)!.size).toEqual({ w: 375, h: 300 })
-  })
-
-  it('replaceAll 回填旧存档（只有 data 尺寸）→ size 与镜像都补齐', () => {
-    const s = makeStore()
-    s.replaceAll([
-      { id: '1', type: 'text', position: { x: 0, y: 0 }, data: { cardWidth: 640, cardHeight: 360 } } as never,
-    ])
-    const n = s.getNode('1')!
-    expect(n.size).toEqual({ w: 640, h: 360 })
-    expect(n.data.cardWidth).toBe(640)
-    expect(n.data.cardHeight).toBe(360)
-  })
-
-  it('replaceAll 的非法镜像值（0/NaN）不提升为 size', () => {
-    const s = makeStore()
-    s.replaceAll([
-      { id: '1', type: 'text', position: { x: 0, y: 0 }, data: { cardWidth: 0, cardHeight: Number.NaN } } as never,
-    ])
-    expect(s.getNode('1')!.size).toBeUndefined()
-  })
-
-  it('已有 size 的回填不被 data 覆盖（size 是正身）', () => {
-    const s = makeStore()
-    s.replaceAll([
-      { id: '1', type: 'text', position: { x: 0, y: 0 }, size: { w: 500, h: 500 }, data: { cardWidth: 10, cardHeight: 10 } } as never,
-    ])
-    expect(s.getNode('1')!.size).toEqual({ w: 500, h: 500 })
-    expect(s.getNode('1')!.data.cardWidth).toBe(500)
-  })
-
-  /**
-   * 用户 2026-11-14 报的 bug：布局按 `view.nodeSize()` 算出来的框比卡片小。
-   *
-   * 根因之一在这里：节点**已有 size** 时，后来只写 `data.cardWidth/cardHeight`
-   * （插件按内容改卡片尺寸的旧写法）不会同步回 size —— 卡片壳按 data 画得更大，
-   * 而布局/对齐/自动布局读的 size 还停在旧值，于是“算出来的位置压到别人身上”。
-   * data 镜像只能由 size 生成、不能反着改 size 这条不适用于“size 当时根本不知道的新值”：
-   * 那次写入本身就是一次尺寸声明。
-   */
-  it('已有 size 时只写 data.cardWidth/cardHeight → size 跟着更新（不脱节）', () => {
-    const s = makeStore()
-    const id = s.addNode('text', { x: 0, y: 0 })
-    s.updateNode(id, nodeSizePatch(300, 200))
-    s.updateNode(id, { data: { audioName: '新名字', cardWidth: 420, cardHeight: 260 } })
-    const n = s.getNode(id)!
-    expect(n.size).toEqual({ w: 420, h: 260 })
-    expect(n.data.cardWidth).toBe(420)
-    expect(n.data.cardHeight).toBe(260)
-  })
-
-  it('只改 data 的其它字段（没带尺寸）→ size 不动', () => {
-    const s = makeStore()
-    const id = s.addNode('text', { x: 0, y: 0 })
-    s.updateNode(id, nodeSizePatch(300, 200))
-    s.updateNode(id, { data: { label: '改名' } })
-    expect(s.getNode(id)!.size).toEqual({ w: 300, h: 200 })
-  })
-})
-
-describe('size 缺席 = 用类型默认尺寸（不凭空造尺寸）', () => {
-  it('addNode 不写 size，也不镜像', () => {
-    const s = makeStore()
-    const id = s.addNode('text', { x: 0, y: 0 })
-    expect(s.getNode(id)!.size).toBeUndefined()
-    expect(s.getNode(id)!.data.cardWidth).toBeUndefined()
-  })
-
-  it('无尺寸的标题改名 patch 不建立 size', () => {
-    const s = makeStore()
-    const id = s.addNode('text', { x: 0, y: 0 })
-    s.updateNode(id, { data: { label: '新名字' } })
     expect(s.getNode(id)!.size).toBeUndefined()
   })
-})
 
-describe('nodeSizeOf：只认正有限数', () => {
-  it('正常值 → 尺寸；非法值 → undefined', () => {
-    expect(nodeSizeOf({ cardWidth: 300, cardHeight: 200 })).toEqual({ w: 300, h: 200 })
-    for (const bad of [0, -1, Number.NaN, Infinity, '300', null, undefined]) {
-      expect(nodeSizeOf({ cardWidth: bad, cardHeight: 200 })).toBeUndefined()
-      expect(nodeSizeOf({ cardWidth: 300, cardHeight: bad })).toBeUndefined()
-    }
-    expect(nodeSizeOf(undefined)).toBeUndefined()
+  it('写 data.cardWidth/cardHeight → 尺寸不变（旧字段不再参与）', () => {
+    const s = makeStore()
+    const id = s.addNode('text', { x: 0, y: 0 })
+    s.updateNode(id, { data: { cardWidth: 420, cardHeight: 260 } })
+    expect(s.getNode(id)!.size).toEqual({ w: 100, h: 40 })
   })
 })
 
-describe('doc.setNodeSize：改尺寸的一等入口（写 size + 自动镜像）', () => {
+describe('doc.setNodeSize：尺寸的一等入口', () => {
   function makeDoc() {
     const nodeStore = new NodeStore()
     nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 100, h: 40 } })
@@ -166,17 +101,16 @@ describe('doc.setNodeSize：改尺寸的一等入口（写 size + 自动镜像�
     return { doc, nodeStore, history }
   }
 
-  it('设尺寸 → node.size 与 data 镜像都更新', () => {
+  it('设尺寸 → node.size 更新，不写 data 镜像', () => {
     const { doc, nodeStore } = makeDoc()
     const id = doc.createNode('text', { x: 0, y: 0 })
     expect(doc.setNodeSize(id, 1600, 100)).toBe(true)
     const n = nodeStore.getNode(id)!
     expect(n.size).toEqual({ w: 1600, h: 100 })
-    expect(n.data.cardWidth).toBe(1600)
-    expect(n.data.cardHeight).toBe(100)
+    expect('cardWidth' in n.data).toBe(false)
   })
 
-  it('非法尺寸一律拒写（不污染节点）', () => {
+  it('非法尺寸一律拒写', () => {
     const { doc, nodeStore } = makeDoc()
     const id = doc.createNode('text', { x: 0, y: 0 })
     doc.setNodeSize(id, 400, 200)
@@ -188,7 +122,6 @@ describe('doc.setNodeSize：改尺寸的一等入口（写 size + 自动镜像�
     ] as Array<[number, number]>) {
       expect(doc.setNodeSize(id, w, h)).toBe(false)
     }
-    // 停在最后一次合法值
     expect(nodeStore.getNode(id)!.size).toEqual({ w: 400, h: 200 })
   })
 
@@ -201,7 +134,7 @@ describe('doc.setNodeSize：改尺寸的一等入口（写 size + 自动镜像�
   })
 })
 
-describe('doc 语义写方法：标题 / 位置 / 父（不逼作者写原始字段）', () => {
+describe('doc 语义写方法：标题 / 位置 / 父', () => {
   function makeDoc() {
     const nodeStore = new NodeStore()
     nodeStore.registerType({ type: 'text', label: '文本', defaultSize: { w: 100, h: 40 } })

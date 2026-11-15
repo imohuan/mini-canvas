@@ -1,12 +1,8 @@
 /**
- * 节点尺寸写回 —— resize 只报正式尺寸 size，卡片镜像 data.cardWidth/Height 由 nodeStore 自动补。
+ * 节点尺寸写回 —— 尺寸只存 node.size（用户 2026-11-14 拍板，不再有 data 镜像）。
  *
- * 背景（大改造：尺寸单一来源）：
- *   以前 resize 要手写三件套 cardWidth/cardHeight + size，两边靠"每次记得同时写"维系。
- *   现在写口只认 size（唯一正身），data 镜像由 nodeStore 统一生成 —— 漏写的可能从根上消掉。
- *
- * 本测试锁死修好后的语义：
- *   一次 resize → 只报 size → node.size 与 data 镜像都更新 → 只记一条历史 → 落盘后刷新仍在。
+ * 本测试锁死新的语义：
+ *   一次 resize → 只写 node.size → 只记一条历史 → 落盘后刷新仍在。
  */
 import { describe, it, expect } from 'vitest'
 import { createPlumeHost } from '@plume-canvas/canvas-render'
@@ -25,12 +21,12 @@ async function boot(adapter = new MemoryStorageAdapter()) {
 }
 
 describe('resize 写回：只报 size，镜像自动补', () => {
-  it('只给 size（nodeSizePatch）→ node.size 与 data 镜像都更新', async () => {
+  it('只给 size（nodeSizePatch）→ 只更新 node.size', async () => {
     const { host } = await boot()
     const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
     const id = text.addTextNode({ x: 0, y: 0 })
-    // 建节点时未写 size（nodeStore.addNode 只存 id/type/position/data）
-    expect(host.nodeStore.getNode(id)!.size).toBeUndefined()
+    // 建节点即落类型默认尺寸
+    expect(host.nodeStore.getNode(id)!.size).toEqual({ w: 300, h: 200 })
 
     // 一次 resize 落盘：useNodeCardSize 现在只报 size（唯一正身）
     const { data, size } = splitNodeWritePatch(nodeSizePatch(700, 300))
@@ -38,13 +34,13 @@ describe('resize 写回：只报 size，镜像自动补', () => {
 
     const node = host.nodeStore.getNode(id)!
     expect(node.size).toEqual({ w: 700, h: 300 })
-    // 卡片镜像由 nodeStore 自动补齐 —— 不再要求 resize 侧手写
-    expect(node.data.cardWidth).toBe(700)
-    expect(node.data.cardHeight).toBe(300)
+    // 尺寸只有一份：data 里不再有 cardWidth/cardHeight
+    expect('cardWidth' in node.data).toBe(false)
+    expect('cardHeight' in node.data).toBe(false)
     host.stop()
   })
 
-  it('一次 resize 只记一条历史；undo 把尺寸与 data 一起还原', async () => {
+  it('一次 resize 只记一条历史；undo 把尺寸还原', async () => {
     const { host } = await boot()
     const text = host.ctx.get<{ addTextNode(p: { x: number; y: number }): string }>('text')
     const id = text.addTextNode({ x: 0, y: 0 })
@@ -62,12 +58,11 @@ describe('resize 写回：只报 size，镜像自动补', () => {
 
     host.command.execute('command:undo')
     const reverted = host.nodeStore.getNode(id)!
-    expect(reverted.size).toBeUndefined()
-    expect(reverted.data.cardWidth).toBeUndefined()
+    expect(reverted.size).toEqual({ w: 300, h: 200 })
     host.stop()
   })
 
-  it('落盘后二次 boot：node.size 与 data.cardWidth 都还在（刷新不丢）', async () => {
+  it('落盘后二次 boot：node.size 还在（刷新不丢）', async () => {
     const storage = new MemoryStorageAdapter()
     const id = '1'
     {
@@ -87,7 +82,6 @@ describe('resize 写回：只报 size，镜像自动补', () => {
       const { host } = await boot(storage)
       const node = host.nodeStore.getNode(id)!
       expect(node.size).toEqual({ w: 640, h: 360 })
-      expect(node.data.cardWidth).toBe(640)
       // 落盘内容里也带着 size（不是只在内存）
       const saved = await storage.get<CanvasNode[]>('canvas:graph')
       expect(saved?.find((n) => n.id === id)?.size).toEqual({ w: 640, h: 360 })
@@ -103,7 +97,7 @@ describe('resize 写回：只报 size，镜像自动补', () => {
     const { data, size } = splitNodeWritePatch({ label: '改个名' })
     host.graph.updateNode(id, size !== undefined ? { data, size } : { data })
     expect(host.nodeStore.getNode(id)!.data.label).toBe('改个名')
-    expect(host.nodeStore.getNode(id)!.size).toBeUndefined()
+    expect(host.nodeStore.getNode(id)!.size).toEqual({ w: 300, h: 200 })
     host.stop()
   })
 })

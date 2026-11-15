@@ -18,6 +18,7 @@
 import type { SettingsStore } from '@plume-canvas/kernel'
 import type { SettingsMenuRegistry } from './settingsMenu'
 import type { DocService } from '../docService'
+import type { NodeGeometryService } from '../nodeGeometry'
 import type { SelectionService } from '../selection'
 import type { ResourceService } from '../resourceService'
 import type { SaveService } from '../storage/types'
@@ -45,6 +46,8 @@ declare module '@plume-canvas/kernel' {
     settingsMenu: SettingsMenuRegistry
     /** 文档门面：节点 + 边 + 事务 + 撤销 + 快照 + 订阅（5c 起四个老名合并成这一个） */
     doc: DocService
+    /** 节点尺寸 / 矩形唯一读写口：尺寸只存 node.size */
+    nodeGeometry: NodeGeometryService
     /** 选中态 */
     selection: SelectionService
     /** 资源生命周期（Blob / objectURL） */
@@ -87,6 +90,8 @@ declare module '@plume-canvas/canvas-data' {
   interface Context {
     /** 文档门面（节点 + 边 + 事务 + 撤销 + 快照） */
     doc: DocService
+    /** 节点尺寸 / 矩形唯一读写口（尺寸只存 node.size） */
+    nodeGeometry: NodeGeometryService
     /** 选中态 */
     selection: SelectionService
     /** 资源生命周期 */

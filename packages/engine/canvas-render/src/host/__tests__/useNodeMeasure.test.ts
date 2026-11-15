@@ -43,7 +43,7 @@ describe('useNodeMeasure 挂载冒烟（fake 观察器）', () => {
     vi.stubGlobal('MutationObserver', FakeMO)
   })
 
-  it('start 时容器就绪：MutationObserver observe + 节点被 ResizeObserver observe + 立即注入尺寸', () => {
+  it('start 时容器就绪：MutationObserver observe + 节点被 ResizeObserver observe（尺寸仍读 node.size）', () => {
     const store = makeStore()
     store.addNodes([{ type: 'text', position: { x: 0, y: 0 }, id: 'a' }])
     const layout = new NodeLayoutService(store)
@@ -56,7 +56,8 @@ describe('useNodeMeasure 挂载冒烟（fake 观察器）', () => {
     expect(FakeMO.instances.length).toBe(1)
     expect(FakeMO.instances[0].observed[0].root).toBe(root)
     expect(FakeRO.instances[0].observed).toEqual([nodeA])
-    expect(layout.getNodeRect('a')).toEqual({ id: 'a', x: 0, y: 0, w: 320, h: 180 })
+    // 尺寸唯一来源是 node.size；实测只记录，不覆盖读口
+    expect(layout.getNodeRect('a')).toEqual({ id: 'a', x: 0, y: 0, w: 100, h: 40 })
     m.stop()
     // stop 后 nodeLayout 实测被 reset
     expect(layout.getNodeRect('a')!.w).toBe(100)
@@ -72,7 +73,7 @@ describe('useNodeMeasure 挂载冒烟（fake 观察器）', () => {
     m.stop()
   })
 
-  it('可见剔除：DOM 消失但 store 里还在 → 保留实测尺寸', () => {
+  it('可见剔除：DOM 消失但 store 里还在 → 尺寸读口不受影响', () => {
     const store = makeStore()
     store.addNodes([{ type: 'text', position: { x: 0, y: 0 }, id: 'a' }])
     const layout = new NodeLayoutService(store)
@@ -82,12 +83,12 @@ describe('useNodeMeasure 挂载冒烟（fake 观察器）', () => {
 
     const m = useNodeMeasure({ nodeLayout: layout, container: () => root, scheduleImmediate: (fn) => fn() })
     m.start()
-    expect(layout.nodeSize('a')).toEqual({ w: 320, h: 180 })
+    expect(layout.nodeSize('a')).toEqual({ w: 100, h: 40 })
 
     // 模拟可见剔除：DOM 被移除，但 nodeStore 仍有该节点
     nodes = []
     FakeMO.instances[0].cb()
-    expect(layout.nodeSize('a'), '剔除期间不能丢掉实测尺寸').toEqual({ w: 320, h: 180 })
+    expect(layout.nodeSize('a'), '剔除期间尺寸读口不变').toEqual({ w: 100, h: 40 })
 
     // 真删除：store 里也没有了 → 清实测，回落默认值
     store.removeNodes(['a'])

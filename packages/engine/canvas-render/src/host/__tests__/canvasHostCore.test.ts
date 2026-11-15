@@ -48,6 +48,8 @@ describe('nodesFromStore', () => {
       position: { x: 10, y: 20 },
       // label 是建节点时按类型模板生成的默认名（nodeStore.nextDefaultName），随 data 一起过来
       data: { label: '文本 1', text: 'hi', _cullState: 'visible' },
+      // 尺寸唯一来源是 node.size：建节点即落类型默认尺寸
+      style: { width: '100px', height: '40px' },
       // 显式分层：普通节点落 LAYERS.node（不再靠 DOM 顺序）
       zIndex: LAYERS.node,
       // 可见状态（2026-10-26）：hidden 路线退役后显式 false 清除旧存档残留；未传 cullIds → 恒 visible
@@ -97,47 +99,23 @@ describe('nodesFromStore', () => {
     expect(g.parentNode).toBeUndefined()
     expect(g.style).toEqual({ width: '300px', height: '200px' })
     expect(c.parentNode).toBe('g')
-    expect(c.style).toBeUndefined()
+    expect(c.style).toEqual({ width: '100px', height: '40px' })
   })
 
   /**
-   * 图片/视频：加载态包裹尺寸投影**类型默认尺寸**。
-   *
-   * 用户口径（2026-10-10）：重新生成时卡片先回到设置里配的默认宽高，跑完再跟随新产物比例。
-   * 这里锁"包裹尺寸"这一半（另一半是卡片壳 useNodeCardSize，见 theme-default 测试）。
-   *
-   * 为什么是**投影默认尺寸**而不是抹掉 style：VueFlow 的节点更新是合并语义，去掉 style
-   * 不会把上一次写进 DOM 的宽高抹掉（实测包裹停在旧比例）；必须显式给值才改写。
+   * 生成中也只认 node.size（用户 2026-11-14 拍板）。
+   * 不再有“按类型默认尺寸临时投影”的旁路 —— 尺寸改了就让插件改 size，别在渲染层造第二个数。
    */
-  it('loadingDefaultSize 类型：running 投影类型默认尺寸，非 running 投影 node.size', () => {
+  it('running 期间也照常投影 node.size（不再临时改尺寸）', () => {
     const s = makeStore()
-    s.registerType({ type: 'media', label: '媒体', defaultSize: { w: 200, h: 120 }, loadingDefaultSize: true })
+    s.registerType({ type: 'media', label: '媒体', defaultSize: { w: 200, h: 120 } })
     const id = s.addNode('media', { x: 0, y: 0 })
     s.updateNode(id, { size: { w: 169, h: 300 } })
-    // 非 running：照常按 node.size 投 style（就是媒体真实比例）
-    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '169px', height: '300px' })
-    // running：投影类型默认尺寸（200×120）—— 重新生成时不沿用上一张图的 169×300 竖版比例
+    // 生成中：仍是 169×300（插件需要“横屏态”就自己改 size）
     s.updateNodeData(id, { runState: { status: 'running' } })
-    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '200px', height: '120px' })
-    // 跑完：比例回来
+    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '169px', height: '300px' })
+    // 跑完：同一个数
     s.updateNodeData(id, { runState: { status: 'done' } })
-    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '169px', height: '300px' })
-  })
-
-  it('loadingDefaultSize 类型但节点没有 size：running 仍给默认尺寸（空节点加载态也一致）', () => {
-    const s = makeStore()
-    s.registerType({ type: 'media2', label: '媒体2', defaultSize: { w: 200, h: 120 }, loadingDefaultSize: true })
-    const id = s.addNode('media2', { x: 0, y: 0 })
-    s.updateNodeData(id, { runState: { status: 'running' } })
-    expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '200px', height: '120px' })
-  })
-
-  it('没声明 loadingDefaultSize 的类型：running 期间照常投影 size（行为不变）', () => {
-    const s = makeStore()
-    s.registerType({ type: 'plain', label: '普通', defaultSize: { w: 200, h: 120 } })
-    const id = s.addNode('plain', { x: 0, y: 0 })
-    s.updateNode(id, { size: { w: 169, h: 300 } })
-    s.updateNodeData(id, { runState: { status: 'running' } })
     expect(nodesFromStore(s).find((n) => n.id === id)!.style).toEqual({ width: '169px', height: '300px' })
   })
 
@@ -673,15 +651,13 @@ describe('默认外观常量字段完整（P2-8 防漂移）', () => {
   })
 })
 
-describe('splitNodeWritePatch（resize 一份 patch 写全 data + node.size）', () => {
+describe('splitNodeWritePatch（resize 写 node.size）', () => {
   it('带 size：size 单独拆出来，其余字段进 data（不把 size 塞进 data）', () => {
     const r = splitNodeWritePatch({
-      cardWidth: 700,
-      cardHeight: 300,
       size: { w: 700, h: 300 },
     })
     expect(r.size).toEqual({ w: 700, h: 300 })
-    expect(r.data).toEqual({ cardWidth: 700, cardHeight: 300 })
+    expect(r.data).toEqual({})
     expect('size' in r.data).toBe(false)
   })
 
