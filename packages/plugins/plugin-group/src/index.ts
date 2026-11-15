@@ -20,7 +20,6 @@ export {
   resolveGroupChanges,
   selectDownloadableGroupChildren,
   resolveGroupBackgroundColor,
-  GROUP_COLOR_SWATCHES,
   DEFAULT_GROUP_BACKGROUND_COLOR,
   DEFAULT_GROUP_PADDING,
 } from './groupEngine'
@@ -28,7 +27,6 @@ export type {
   GroupRect,
   GroupBounds,
   GroupMembershipCandidate,
-  GroupColorSwatch,
   GroupPadding,
 } from './groupEngine'
 

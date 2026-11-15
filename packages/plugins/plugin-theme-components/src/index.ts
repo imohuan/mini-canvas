@@ -28,6 +28,7 @@ import {
   PrecisionSlider,
   ToolParamField,
   ColorField,
+  ColorSwatchPicker,
   NodeEmptyState,
   SlotDebugPopover,
 } from "./components/ui"
@@ -158,6 +159,7 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
   ui.add("toolParamRatio", ToolRatioGrid, { id: "default" })
   ui.add("toolParamSlider", ToolParamSlider, { id: "default" })
   ui.add("color", ColorField, { id: "default" })
+  ui.add("colorSwatchPicker", ColorSwatchPicker, { id: "default" })
   ui.add("settingsField", SettingsSchemaField, { id: "default" })
   ui.add("slotDebugOverlay", SlotDebugOverlay, { id: "default" })
   // 组件库使用标记（设置 → 调试 → 组件库使用标记）：外壳按名取，换主题时一起换。
@@ -191,7 +193,7 @@ export const themeComponentsPlugin: PluginModule = { name, inject, Config, apply
  * 下拉 / 选择 / 提示不再从这里提供：它们统一使用 ui 目录里登记的
  * 分离件（DropdownMenu / Select / Tooltip），本主题不再维护第二套实现。
  */
-export { PrecisionSlider, ToolParamField, ColorField, NodeEmptyState } from "./components/ui"
+export { PrecisionSlider, ToolParamField, ColorField, ColorSwatchPicker, NodeEmptyState } from "./components/ui"
 export { MediaViewer } from "./components/ui"
 export { themePreviewLayer, registerThemePreview } from "./themePreview"
 export { ThemeStudio, registerThemeStudio, THEME_STUDIO_NAV_ID } from "./components/theme-studio/register"

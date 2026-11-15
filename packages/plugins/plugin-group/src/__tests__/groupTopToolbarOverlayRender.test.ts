@@ -78,6 +78,10 @@ function renderCtx(opts: { resizingId?: string | null; nodesDraggable?: boolean 
           if (name === 'DropdownMenuContent') {
             return { value: defineComponent({ name: 'StubDropdownContent', setup() { return () => null } }) }
           }
+          // 背景颜色面板（与绘制模式共用的取色件）：本文件只测整条浮层在不在，给个空壳即可
+          if (name === 'colorSwatchPicker') {
+            return { value: defineComponent({ name: 'StubColorSwatchPicker', setup() { return () => null } }) }
+          }
           return undefined
         },
         list: () => [],

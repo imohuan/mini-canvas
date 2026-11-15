@@ -36,6 +36,7 @@ export const UI_NAMES = [
   'toolParamRatio',
   'toolParamSlider',
   'color',
+  'colorSwatchPicker',
   'movingHandle',
   'connectionLine',
   'nodeModeTopBar',

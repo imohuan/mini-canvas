@@ -226,6 +226,7 @@ const pluginsSidebar = [
       { text: '节点加载态', link: '/plugins/theme-components/node-loading-state' },
       { text: '精细滑块', link: '/plugins/theme-components/precision-slider' },
       { text: '取色器', link: '/plugins/theme-components/color-field' },
+      { text: '取色面板', link: '/plugins/theme-components/color-swatch-picker' },
       { text: '参数控件', link: '/plugins/theme-components/tool-param-field' },
       { text: '参数说明', link: '/plugins/theme-components/tool-param-hint' },
       { text: '参数组', link: '/plugins/theme-components/tool-param-group' },

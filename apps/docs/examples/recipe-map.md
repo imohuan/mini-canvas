@@ -21,6 +21,7 @@
 | 节点/画面正在加载时显示统一的加载态 | [节点加载态](/plugins/theme-components/node-loading-state) | `useUiComponent('nodeLoadingState')` | `plugin-theme-canvas` / `plugin-node-video` |
 | 给节点加自定义状态层（排队中之类） | [节点加载态 · 注册自己的状态组件](/plugins/theme-components/node-loading-state) | `ctx.nodes.attach('*', { region: 'state:overlay', component })` | `plugin-theme-canvas` |
 | 工具栏下拉里嵌一块自定义面板（色板、宫格） | [下拉菜单](/plugins/theme-components/dropdown) | shadcn `DropdownMenuSub` 的默认插槽 | `plugin-image-grid-split` |
+| 给节点加一个「预置色 + 自定义取色」的颜色面板 | [取色面板](/plugins/theme-components/color-swatch-picker) | `useUiComponent('colorSwatchPicker')` | `plugin-node-image` / `plugin-group` |
 | 节点底栏多一个动作按钮 | [案例 7](/examples/bottom-bar) | `ctx.get('nodeBar').register(ctx, action)` | `plugin-node-text` |
 | 拖文件/粘贴进画布建节点 | [案例 8](/examples/file-drop) | `ctx.effect` 包 window 监听 | `plugin-file-drop` |
 | 给节点加图片/视频/音频，只存资源 ID | — | `useCapability('media')` → `put` 拿 ID、`addNode(kind, id, pos)` | `plugin-node-image` / `plugin-node-video` / `plugin-node-audio` |

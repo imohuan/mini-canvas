@@ -11,6 +11,9 @@ export { default as MediaViewer } from './MediaViewer.vue'
 export { default as PrecisionSlider } from './PrecisionSlider.vue'
 export { default as ToolParamField } from './ToolParamField.vue'
 export { default as ColorField } from './ColorField.vue'
+/** 预置色 + 自定义取色的完整面板（绘制标记色 / 分组底色共用同一份实现） */
+export { default as ColorSwatchPicker } from './ColorSwatchPicker.vue'
+export { COLOR_SWATCH_PRESETS } from './colorSwatchPresets'
 /** 节点内容区的统一空状态（图片/视频/音频/3D 等共用；文本/说明/图标/动作都可配） */
 export { default as NodeEmptyState } from './NodeEmptyState.vue'
 // 参数合并展示件：把「比例 · 画质 · 2K · 1张」这种多参数收敛成一个下拉（参考 LibTV 底行）

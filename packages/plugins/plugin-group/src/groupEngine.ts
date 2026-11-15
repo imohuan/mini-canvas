@@ -156,8 +156,11 @@ export interface GroupMembershipCandidate {
 }
 
 /**
- * 分组预设色板（下拉里展示的就是这几个色块；用户拍板：只给预制色，不做自定义取色，
- * 所以这里是一张**封闭**表 —— 不再有 v1 那个"自定义"入口）。
+ * 分组底色色板（旧版字段形状）。
+ *
+ * 用户口径 2026-11-15：分组的背景颜色改用图片「绘制」模式那套面板（预置色 + 自定义取色），
+ * 色块表因此搬到默认主题的 `COLOR_SWATCH_PRESETS`，两边共用。这里只保留「默认底色」
+ * 与老存档的回落语义；新代码不要再读这张旧表。
  */
 export interface GroupColorSwatch {
   id: string
@@ -165,17 +168,9 @@ export interface GroupColorSwatch {
   label: string
 }
 
-export const GROUP_COLOR_SWATCHES: GroupColorSwatch[] = [
-  { id: 'slate', color: '#334155', label: '石板灰' }, // 主题色白名单: 用户可选的分组标识色（写进节点数据，不是主题外观）
-  { id: 'blue', color: '#0ea5e9', label: '蓝色' }, // 主题色白名单: 同上，分组标识色
-  { id: 'red', color: '#ef4444', label: '红色' }, // 主题色白名单: 同上，分组标识色
-  { id: 'orange', color: '#f97316', label: '橙色' }, // 主题色白名单: 同上，分组标识色
-  { id: 'yellow', color: '#eab308', label: '黄色' }, // 主题色白名单: 同上，分组标识色
-  { id: 'green', color: '#22c55e', label: '绿色' }, // 主题色白名单: 同上，分组标识色
-  { id: 'violet', color: '#6366f1', label: '紫色' }, // 主题色白名单: 同上，分组标识色
-]
-
-export const DEFAULT_GROUP_BACKGROUND_COLOR = GROUP_COLOR_SWATCHES[0].color
+/** 默认底色（石板灰）：没设过背景色的分组画这个 */
+// 主题色白名单: 分组默认标识色（写进节点数据，不是主题外观）
+export const DEFAULT_GROUP_BACKGROUND_COLOR = '#334155'
 
 /** 取分组底色：存了颜色用存的，否则回退默认石板灰（对齐老版 model.ts 语义） */
 export function resolveGroupBackgroundColor(color: unknown): string {
