@@ -4,6 +4,24 @@
 import type { NodeLike, ServerCtxLike } from './shared-types.js'
 import { describeNodeDoc, nodeDocOf } from '../task/nodeDoc.js'
 
+/**
+ * 由请求自己的 Host 头推「这个请求是发给谁」的 origin。
+ *
+ * 与注入的 `selfOrigin` 的区别（2026-11-15 修跨域时理清）：
+ *   - 注入的 `selfOrigin` 是**服务启动时**定死的（`http://127.0.0.1:端口`），不随页面访问方式变；
+ *   - 这个函数按请求现算：用 localhost 打开就是 `http://localhost:端口`，
+ *     走反代就是反代域名（`x-forwarded-proto` 决定 http/https）。
+ * 同源判断应当以它为准 —— 否则「同一个服务换个主机名打开」会被误判成跨源。
+ */
+export function requestOrigin(c: ServerCtxLike): string {
+  const host = c.req.header('host')
+  if (!host) return ''
+  const proto =
+    c.req.header('x-forwarded-proto') ||
+    (host.startsWith('localhost') || host.startsWith('127.') || host.startsWith('[::1]') ? 'http' : 'https')
+  return proto + '://' + host
+}
+
 export function selfOrigin(c: ServerCtxLike): string {
   const host = c.req.header('host')
   if (!host) return ''

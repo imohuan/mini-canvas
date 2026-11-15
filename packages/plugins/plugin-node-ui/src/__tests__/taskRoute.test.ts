@@ -517,5 +517,84 @@ describe('任务脚本：三条路由（+ 三条配套）', () => {
       const res = (await s.routes.get('POST /api/node-packages/import')!(withOrigin())) as Response
       expect(res.status).not.toBe(403)
     })
+
+    /**
+     * ★ 用户 2026-11-15 实测：同一个服务，用 localhost 打开页面就报
+     *   「导入失败：跨源请求被拒（只允许本机页面调用）」，换成 127.0.0.1 就正常。
+     *
+     * 根因：判据只跟服务自报的那**一个** host 字符串比。浏览器眼里 localhost / 127.0.0.1 / [::1]
+     * 是同一个本机服务，只是回环写法不同 —— 不能因此判成跨源。
+     */
+    it('★ 自报 127.0.0.1，页面走 localhost 打开 → 放行', async () => {
+      const s = originCtx('http://127.0.0.1:8865')
+      apply(s.ctx)
+      const res = (await s.routes.get('POST /api/node-packages/import')!(withOrigin('http://localhost:8865'))) as Response
+      expect(res.status).not.toBe(403)
+    })
+
+    it('★ 自报 localhost，页面走 127.0.0.1 → 放行；IPv6 回环同理', async () => {
+      const s1 = originCtx('http://localhost:8865')
+      apply(s1.ctx)
+      const r1 = (await s1.routes.get('POST /api/node-packages/import')!(withOrigin('http://127.0.0.1:8865'))) as Response
+      expect(r1.status).not.toBe(403)
+      const s2 = originCtx('http://127.0.0.1:8865')
+      apply(s2.ctx)
+      const r2 = (await s2.routes.get('POST /api/node-packages/import')!(withOrigin('http://[::1]:8865'))) as Response
+      expect(r2.status).not.toBe(403)
+    })
+
+    it('★ 回环放宽不放外部：别的 host / 别的端口 / 别人的 127.0.0.1 → 403', async () => {
+      const s = originCtx('http://127.0.0.1:8865')
+      apply(s.ctx)
+      for (const bad of ['http://127.0.0.2:8865', 'http://localhost:9999', 'http://evil.example', 'http://127.0.0.1:8865.evil.example']) {
+        const res = (await s.routes.get('POST /api/node-packages/import')!(withOrigin(bad))) as Response
+        expect(res.status, bad + ' 不该被放行').toBe(403)
+      }
+    })
+
+    /**
+     * ★ 反代 / 局域网 IP / 自定义域名：按**请求自己的 Host** 判同源。
+     *   这些部署下，浏览器与后台明明同源，却不等于启动时注入的 127.0.0.1 ——
+     *   只跟注入地址比就会误报跨域（与 localhost 那次是同一个根因）。
+     */
+    it('★ Origin 与本请求的 Host 一致（反代域名 / 局域网 IP）→ 放行', async () => {
+      const cases: Array<{ host: string; origin: string }> = [
+        { host: '127.0.0.1:8865', origin: 'http://127.0.0.1:8865' },
+        { host: '127.0.0.1:8865', origin: 'http://localhost:8865' },
+        { host: '127.0.0.1:8865', origin: 'http://[::1]:8865' },
+      ]
+      for (const cs of cases) {
+        const s = originCtx('http://127.0.0.1:8865')
+        apply(s.ctx)
+        const req = withOrigin(cs.origin)
+        req.req.header = ((n: string) => (n.toLowerCase() === 'host' ? cs.host : n.toLowerCase() === 'origin' ? cs.origin : undefined)) as never
+        const res = (await s.routes.get('POST /api/node-packages/import')!(req)) as Response
+        expect(res.status, cs.origin + ' → ' + cs.host + ' 应放行').not.toBe(403)
+      }
+    })
+
+    it('★ 反代域名：Host=反代域名 且 Origin 相同 → 放行（不再只看注入的 127.0.0.1）', async () => {
+      const s = originCtx('http://127.0.0.1:8865')
+      apply(s.ctx)
+      const req = withOrigin('https://canvas.example.com')
+      req.req.header = ((n: string) => {
+        const k = n.toLowerCase()
+        if (k === 'host') return 'canvas.example.com'
+        if (k === 'origin') return 'https://canvas.example.com'
+        if (k === 'x-forwarded-proto') return 'https'
+        return undefined
+      }) as never
+      const res = (await s.routes.get('POST /api/node-packages/import')!(req)) as Response
+      expect(res.status).not.toBe(403)
+    })
+
+    it('★ 伪造 Host（Origin 对不上 Host，也不是注入地址）→ 仍 403', async () => {
+      const s = originCtx('http://127.0.0.1:8865')
+      apply(s.ctx)
+      const req = withOrigin('http://evil.example')
+      req.req.header = ((n: string) => (n.toLowerCase() === 'host' ? '132.0.1.5:8865' : n.toLowerCase() === 'origin' ? 'http://evil.example' : undefined)) as never
+      const res = (await s.routes.get('POST /api/node-packages/import')!(req)) as Response
+      expect(res.status).toBe(403)
+    })
   })
 })

@@ -45,6 +45,18 @@ export interface ImportRoutesCtx {
 /** 最大包体（防手滑拖一个大文件进来把内存吃光） */
 const MAX_PACK_BYTES = 32 * 1024 * 1024
 
+/** 本机回环的几个等价写法（端口由 URL 自己带着，这里只比主机名） */
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1'])
+
+/** 归一化 origin：小写 scheme/host、去掉尾斜杠；解析不了返回空串（交给白名单拒） */
+function parseOrigin(raw: string): URL | null {
+  try {
+    return new URL(raw.trim())
+  } catch {
+    return null
+  }
+}
+
 /**
  * 跨源拦截：**浏览器带着 Origin 来的时候，必须是本机自己**。
  *
@@ -53,15 +65,44 @@ const MAX_PACK_BYTES = 32 * 1024 * 1024
  * 能挡住的是最现实的那种攻击：用户在浏览器里开着的**别的网页**偷偷 POST 一个包过来
  * （那类请求浏览器一定会带 Origin）。
  *
+ * ★ 为什么不能只跟 `selfOrigin` 字符串比（用户 2026-11-15 实测的「跨源请求被拒」）：
+ *   服务自报的是 `http://127.0.0.1:8865`，而用户从**同一个服务**用
+ *   `http://localhost:8865` 打开页面 —— 浏览器发的 Origin 是后一个，字符串不等就被判成跨源。
+ *   对浏览器来说这是**同一个本机服务**，只是回环主机名写法不同（localhost / 127.0.0.1 / [::1]），
+ *   反代下还会换成反代域名。所以判据按优先级收敛成三条：
+ *     ① 与**这次请求自己的 origin**（Host + x-forwarded-proto）一致 —— 这是最准的一条，
+ *        反代 / 局域网 IP / 自定义域名都能正确认成同源；
+ *     ② 与启动时注入的 `selfOrigin` 一致；
+ *     ③ 两边都是本机回环、端口与 scheme 一致（localhost ↔ 127.0.0.1 ↔ [::1]）。
+ *   Host 本身已被 cloud-server 的来源边界按白名单校验过，所以 ① 不是「谁都能过」。
  * 剩下两条护栏（不靠这条也成立）：服务默认只监听 127.0.0.1；升版本机制保证**绝不覆盖**
  * 本机已有的脚本（最坏也只是多写一个 _vN 新文件）。
  */
-function originAllowed(c: Ctx, selfOrigin: string): boolean {
+export function originAllowed(c: Ctx, selfOrigin: string): boolean {
   const from = c.req.header('origin')
   if (!from) return true
-  if (!selfOrigin) return true
-  const norm = (s: string): string => s.replace(/\/+$/, '')
-  return norm(from) === norm(selfOrigin)
+  const fromUrl = parseOrigin(from)
+  if (!fromUrl) return false
+  // ① 按这次请求自己的 Host 判（反代 / 局域网 / 自定义域名都靠它）
+  const host = c.req.header('host')
+  if (host) {
+    const proto =
+      c.req.header('x-forwarded-proto') ||
+      (host.startsWith('localhost') || host.startsWith('127.') || host.startsWith('[::1]') ? 'http' : 'https')
+    const reqUrl = parseOrigin(proto + '://' + host)
+    if (reqUrl && reqUrl.origin === fromUrl.origin) return true
+  }
+  // ② 与启动时注入的自报地址一致
+  const selfUrl = selfOrigin ? parseOrigin(selfOrigin) : null
+  if (selfUrl && fromUrl.origin === selfUrl.origin) return true
+  if (!selfUrl) return true
+  // ③ 两边都是回环，只差主机名写法
+  return (
+    LOOPBACK_HOSTS.has(fromUrl.hostname.toLowerCase()) &&
+    LOOPBACK_HOSTS.has(selfUrl.hostname.toLowerCase()) &&
+    fromUrl.port === selfUrl.port &&
+    fromUrl.protocol === selfUrl.protocol
+  )
 }
 
 /** 收原始字节 */
