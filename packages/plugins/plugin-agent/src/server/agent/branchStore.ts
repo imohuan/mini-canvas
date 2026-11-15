@@ -90,7 +90,7 @@ export function branchStore(root: string): BranchStore {
     async replaceSession(canvasId, oldId, newId) {
       const data = await read(root, canvasId)
       // ① 它作为某个位置的版本：原地换成新会话（位置不变 = 分页器页码不变）
-      for (const [key, children] of Object.entries(data.points)) {
+      for (const children of Object.values(data.points)) {
         const at = children.indexOf(oldId)
         if (at >= 0) children[at] = newId
       }
