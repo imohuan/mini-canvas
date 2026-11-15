@@ -5,6 +5,8 @@
  * 两边共用这一个件，所以「预置色有哪些、触发器长什么样、有没有自定义取色」只需在这里锁一次。
  */
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { createSSRApp, defineComponent, h, type Component } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
@@ -118,5 +120,19 @@ describe('ColorSwatchPicker（分组底色 / 绘制标记色共用）', () => {
     expect(label).toContain('csp-trigger--label')
     // 文字与 aria-label 同名：可见标签能被读屏念出来
     expect(label).toContain('>背景颜色<')
+  })
+
+  /**
+   * 回归（用户 2026-11-15 实测）：分组开了 closeOnPick，在自定义取色器色域里点一下，
+   * 整个面板就消失了；绘制模式正常。根因是取色器的改色回调复用了「选完收起」的预置色路径。
+   *
+   * 这条盯源码：取色器回调只能 emit，不能再碰 open —— 拖动期间每帧都回调，跟着收起等于点一下就没。
+   */
+  it('自定义取色器改色不收起面板（即便 closeOnPick 开着）', () => {
+    const src = readFileSync(fileURLToPath(new URL('../ColorSwatchPicker.vue', import.meta.url)), 'utf8')
+    const block = src.slice(src.indexOf('function onColorChange'), src.indexOf('</script>', src.indexOf('function onColorChange')))
+    expect(block).toContain("emit('update:modelValue', value)")
+    expect(block).not.toContain('pick(')
+    expect(block).not.toMatch(/open\.value\s*=\s*false/)
   })
 })

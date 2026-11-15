@@ -49,15 +49,23 @@ const open = ref(false)
 /** 当前色块（取色器回来可能是空串 = 跟随主题，这里回落白色） */
 const swatch = computed(() => props.modelValue || '#ffffff') // 主题色白名单: 缺省色块是「还没选过的画笔色 / 分组底色」（内容色），不是界面配色
 
+/** 点预置色：写回，并按 closeOnPick 决定是否收起（菜单式一次选完就关） */
 function pick(value: string): void {
   emit('update:modelValue', value)
   if (props.closeOnPick) open.value = false
 }
 
-/** 取色器改色：写回当前值，不关面板（用户可能还要微调） */
+/**
+ * 取色器改色：**只回写，绝不收起面板**。
+ *
+ * 用户实测报的问题（2026-11-15）：分组点开自定义取色器，在色域里点一下，整个面板就消失了；
+ * 绘制模式却正常。根因不是取色器本身 —— 是这里复用了 pick()，而分组开了 closeOnPick
+ * （预置色点完该收）。取色器拖动时每一帧都会回调，跟着收起就等于「点一下色域就关」；
+ * 而且用户还要继续调色相 / 透明度，这时关面板没有任何道理。
+ */
 function onColorChange(value: string): void {
   if (!value) return
-  pick(value)
+  emit('update:modelValue', value)
 }
 </script>
 
