@@ -789,9 +789,9 @@ const HoverCardContent = useUiComponent('HoverCardContent')
               </HoverCardContent>
             </HoverCard>
           </span>
-          <Button size="icon" data-ac-send :class="{ 'is-running': sendMode === 'stop' }"
+          <Button size="icon" data-ac-send :class="{ 'is-running': sendMode === 'stop'}"
             :aria-label="sendMode === 'stop' ? '停止' : '发送'" :disabled="sendMode === 'disabled'"
-            @click="sendMode === 'stop' ? agent.stop() : submit()">
+            @click="sendMode === 'stop' ? agent.stop() : submit()" style="--plume-radius: 999px">
             <!-- 三态（设计 G1）：有内容 ⇒ 发送（**跑着也是发送**，点了进队列）；
                  空 + 跑着 ⇒ 红方块「终止」；空 + 空闲 ⇒ 禁用（灰色箭头）。
                  方块用 CSS 画（不受 lucide 线性图标 stroke 影响），颜色随 currentColor。 -->

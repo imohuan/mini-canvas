@@ -503,4 +503,4 @@ const pagerMap = pagerByAnchor as unknown as ComputedRef<Map<string, PagerGroup[
     </div>
 </template>
 
-<style scoped src="./AgentMessageList.css"></style>
+<style  src="./AgentMessageList.css"></style>
