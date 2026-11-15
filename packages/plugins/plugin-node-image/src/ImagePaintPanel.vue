@@ -122,16 +122,19 @@ async function save(): Promise<void> {
 
     <!-- 4) 粗细：图标 + 滑块 -->
     <span class="ipp-size-icon" :title="'笔刷粗细 ' + session.brushSize" aria-hidden="true" v-html="ICON_BRUSH_SIZE" />
-    <Slider
-      v-if="Slider"
-      class="ipp-slider"
-      :model-value="session.brushSize"
-      :min="1"
-      :max="100"
-      :step="1"
-      aria-label="笔刷粗细"
-      @update:model-value="setBrushSize"
-    />
+    <!-- 滑块装在定宽盒子里：主题滑块根元素自带 width:100%，直接给它写宽度会被覆盖，
+         于是它撑满整条状态栏、把后面的按钮挤出白底（用户 2026-11-15 截图报的问题）。 -->
+    <span v-if="Slider" class="ipp-slider-box">
+      <Slider
+        class="ipp-slider"
+        :model-value="session.brushSize"
+        :min="1"
+        :max="100"
+        :step="1"
+        aria-label="笔刷粗细"
+        @update:model-value="setBrushSize"
+      />
+    </span>
 
     <!-- 5) 历史：撤销 + 重做（不是只有一个按钮） -->
     <Button variant="ghost" size="icon-sm" type="button" title="撤销" aria-label="撤销"
@@ -158,10 +161,14 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
-/* 滑块：固定宽度，与按钮同行 */
-.ipp-slider {
+/* 滑块：定宽盒子占位（滑块自己 width:100% 跟盒子走），与按钮同行 */
+.ipp-slider-box {
+  display: block;
   width: 96px;
   flex: 0 0 auto;
+}
+.ipp-slider {
+  width: 100%;
 }
 
 /* 粗细图标：与工具栏按钮图标同尺寸、同色系 */

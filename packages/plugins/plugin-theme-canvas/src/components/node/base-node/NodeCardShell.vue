@@ -65,6 +65,17 @@ const cap = useNodeCapability(props.type)
 const showTargetHandle = cap.hasTarget
 const showSourceHandle = cap.hasSource
 
+/**
+ * 卡片尺寸唯一来源：`node.size`（经 nodeGeometry 服务读）。
+ * `props.data` 在每次 store 通知时都会换成新对象，所以以它为响应式锚 ——
+ * 尺寸变化（包括生成中临时改 size）都能及时反映到卡片上。
+ */
+const geometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+const nodeSize = computed(() => {
+  void props.data
+  return geometry?.get(props.id) ?? null
+})
+
 const cardSize = useNodeCardSize({
   id: props.id,
   type: props.type,
@@ -73,6 +84,7 @@ const cardSize = useNodeCardSize({
   flow,
   interaction,
   zoom,
+  cardSize: () => nodeSize.value,
 })
 const { card, cardWidth, cardHeight, cardResizable, cardIsResizing } = cardSize
 
@@ -357,6 +369,7 @@ const {
   titlePositionStyle,
   showSelectionOutline,
   cardInlineStyle,
+  frameInlineStyle,
   showTitle,
 } = chrome
 </script>
@@ -623,6 +636,19 @@ const {
     <div v-if="outsetRegions.length > 0 && !lowDetail && !culledReduced" class="v2-region v2-region--over-outset nodrag nopan" :style="overlayLayerStyle">
       <RegionEntryHost v-for="seg in outsetRegions" :key="'over-outset-' + seg.id" :entry="seg" :cache="capabilityCache" :node-id="id" :type="type" :data="data" :is-dev="capabilityIsDev" />
     </div>
+
+    <!--
+      容器轮廓（边框层）：整个节点里**最后**绘制的子层。
+
+      用户 2026-11-14 复测：边框仍然被内容 / 覆盖层压住。根因不是 border 的位置，
+      而是绘制顺序 —— 卡片内容、加载态、失败态、裁剪浮层都是卡片之后的同级层，
+      后画的层必然在角落和边缘盖住先画的边框（哪怕边框画在盒子外面也一样）。
+
+      所以边框单独成层，放在最后、z-index 高于状态层(24)与编辑浮层(25)：
+      覆盖层可以盖内容，但盖不住容器的轮廓。层级仍低于上/下控制栏(30)，按钮照常可点。
+      pointer-events:none —— 纯视觉，不挡任何交互。
+    -->
+    <div v-if="!culledReduced" class="v2-frame plume-export-ignore" :style="frameInlineStyle" aria-hidden="true" />
   </div>
 </template>
 
@@ -635,6 +661,38 @@ const {
   /* 跟随主题插件「外观 → 正文字体」；没选时回落到原来的系统栈。
      这条以前写死 system-ui，于是整站换字体时节点里的文字不跟着变。 */
   font-family: var(--plume-font-body, system-ui, sans-serif);
+}
+
+/* —— 容器轮廓层 —— */
+.v2-frame {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  transform-origin: center;
+  /* 高于状态层(24)、编辑浮层(25)、多选圆点(26)；低于上/下控制栏(30) */
+  z-index: 27;
+  pointer-events: none;
+  /* 默认边框：盒外的 1px 圈；宽度与颜色都按缩放反算/取自主题 */
+  box-shadow: 0 0 0 var(--card-ring-width, 0px) var(--card-ring-ink);
+  transition: box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* 选中：边框换选中色 + 外侧 2px 选中环 */
+.v2-node.is-selected .v2-frame {
+  box-shadow:
+    0 0 0 var(--card-ring-width, 0px) var(--card-ring-ink),
+    0 0 0 calc(var(--card-ring-width, 0px) + var(--card-outline-width, 0px))
+      var(--canvas-node-ring-soft, rgb(17 24 39 / 0.38));
+}
+
+/* 拖线可连 / 非法连接：只换轮廓颜色 */
+.v2-node.is-connecting-hover .v2-frame {
+  --card-ring-ink: var(--canvas-node-border-selected, rgb(17 24 39 / 0.85));
+}
+
+.v2-node.is-connection-invalid .v2-frame {
+  --card-ring-ink: var(--canvas-node-border-hover, rgba(156, 163, 175, 0.45));
 }
 
 /* —— 视口外节点（culled / culled-linked）骨架态 ——
@@ -653,9 +711,12 @@ const {
   visibility: visible;
   background: transparent;
   box-shadow: none;
-  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
-  /* 圆角继承卡片本体（cardFrame 单一出处），不自造数值（ui-style-guide） */
-  border-radius: inherit;
+}
+
+/* ghost 档的骨架轮廓也走独立的框层：卡片本体隐身，但保留同一圈 35% 的细框 */
+.v2-node.is-culled-ghost .v2-frame {
+  --card-ring-ink: color-mix(in srgb, currentColor 35%, transparent);
+  box-shadow: 0 0 0 var(--card-ring-width, 0px) var(--card-ring-ink);
 }
 
 /* —— 上/下插槽定位层（位置由壳给，插件只放内容）——
@@ -677,6 +738,21 @@ const {
 .v2-slot--top,
 .v2-slot--bottom {
   pointer-events: auto;
+}
+
+/**
+ * 顶栏宽度必须由内容决定（用户 2026-11-15 报：绘制模式的滑块和后面的按钮跑到白底外面）。
+ *
+ * 根因：`.v2-slot` 是绝对定位 + 宽度 auto，浏览器按「收缩适应」算宽 ——
+ * 可用宽度只有卡片一半（left:50% 之后剩下的那段），于是容器被压成 398px，
+ * 而这一排按钮实际要 780px，多出来的部分就画在容器白底之外。
+ *
+ * 顶栏是一排不折行的按钮，内容多宽它就多宽；居中仍由 translateX(-50%) 负责，
+ * 超出卡片时朝两边对称溢出，不会再出现「半截白底」。
+ * 底栏不套这条：里面是整个生成面板（含输入框），宽度要可控、不能跟着长文本撑开。
+ */
+.v2-slot--top {
+  width: max-content;
 }
 
 /* 上/下插槽的外层。
@@ -708,46 +784,30 @@ const {
   position: relative;
   box-sizing: border-box;
   transform-origin: center;
-  border-style: solid;
-  border-color: var(--canvas-node-border, rgb(209 213 219 / 0.95));
+  /*
+   * 卡片只负责「表面」：底色 + 投影。**边框不在这里画**。
+   *
+   * 用户 2026-11-14 连续两次复测：边框被内容 / 覆盖层压住。
+   * 根因是绘制顺序，不是 border 摆在哪 —— 卡片内容、加载态、失败态、裁剪浮层
+   * 都是卡片之后绘制的同级层，先画的边框必然在角落和边缘被它们盖住。
+   * 所以边框整体搬到 `.v2-frame`（节点最后一个子层，z-index 高于所有覆盖层），
+   * 这里连 ring 都不留，避免两圈边框叠成 2px。
+   */
+  border: 0;
   background: var(--card-surface, var(--canvas-node-surface, #f9fafb));
   box-shadow: var(--card-shadow, 0 1px 3px var(--canvas-node-shadow-subtle, rgb(0 0 0 / 0.06)));
   overflow: visible;
   /* SVG 吸附调试带可负 x 溢出左缘，必须 visible */
-  transition:
-    border-color 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: box-shadow 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .v2-node.is-low-detail .v2-card {
   transition: none;
+  /* 低细节只去掉投影；轮廓由 .v2-frame 继续画（它承载“节点边界在哪”） */
   box-shadow: none;
 }
 
-/* 选中态：边框色 + 外侧 2px 环 */
-.v2-node.is-selected .v2-card {
-  border-color: var(--canvas-node-border-selected, rgb(17 24 39 / 0.85));
-}
-
-.v2-node.is-selected .v2-card::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: 0 0 0 var(--card-outline-width, 0px) var(--canvas-node-ring-soft, rgb(17 24 39 / 0.38));
-  pointer-events: none;
-}
-
-/* 连接中可连：边框高亮 + 光晕 */
-.v2-card.is-connecting-hover {
-  border-color: var(--canvas-node-border-selected, rgb(17 24 39 / 0.85));
-}
-
-/* 非法连接：灰框 + 内容模糊遮罩 */
-.v2-card.is-connection-invalid {
-  border-color: var(--canvas-node-border-hover, rgba(156, 163, 175, 0.45));
-}
-
+/* 非法连接：内容模糊遮罩（边框颜色由 .v2-frame 切换） */
 .v2-card.is-connection-invalid::after {
   content: '';
   position: absolute;
