@@ -77,3 +77,34 @@ export function promptDocPersistFields(doc: unknown): Record<string, unknown> {
   return { [PROMPT_DOC_FIELD]: doc }
 }
 
+/**
+ * AI 按钮把结果整段写回节点时要用的 data 补丁。
+ *
+ * 用户 2026-11-16 报：「点一下 AI 按钮，输入框里出现结果，但重新点开节点就没了。」
+ * 根因不是没落盘 —— `barPrompt` 确实写进去了；是**旧的富文本快照没清**：
+ * 流式写入只覆盖纯文本，`barPromptDoc` 还留着改写前那份；底栏重挂载时编辑器
+ * 优先按快照恢复（见 useEditor 的 deserializeDoc），旧内容就把 AI 的结果盖回去，
+ * 看起来像「只临时写了一下」。
+ *
+ * 所以 AI 结果必须「纯文本 + 明确删掉快照」一起写：AI 产出的是纯文字，
+ * 没有标签，这一拍不该再有旧快照。用 dataUnset 而不是写 undefined，
+ * 免得把占位键留在节点数据里。
+ */
+export function aiPromptDataPatch(
+  binding: 'none' | 'text',
+  value: string,
+  opts?: { conversation?: boolean },
+): { data: Record<string, unknown>; dataUnset: string[] } {
+  // 对话模式（文本节点 agent:chat）：输入框里存的是**你的问题**（barPrompt），
+  // data.text 是模型答案 —— AI 按钮是在改写提问，绝不能把答案顶掉。
+  if (opts?.conversation) {
+    return { data: promptPersistFields('none', value), dataUnset: [PROMPT_DOC_FIELD] }
+  }
+  return {
+    // 'text' 绑定在这里要**自己写** data.text：promptPersistFields 对它是空对象
+    // （平时每键入由 onPromptUpdate 即时写，避免返库两份），AI 一次性整体写回时没有那条通道。
+    data: binding === 'text' ? { text: value } : promptPersistFields(binding, value),
+    dataUnset: [PROMPT_DOC_FIELD],
+  }
+}
+

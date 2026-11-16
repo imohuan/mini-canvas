@@ -501,7 +501,8 @@ const HoverCardContent = useUiComponent('HoverCardContent')
                     <InputGroupAddon align="inline-start">
                       <Search :size="14" aria-hidden="true" />
                     </InputGroupAddon>
-                    <InputGroupInput v-model="skillQuery" type="search" name="ac-skill-search"
+                    <!-- type=text：原生搜索框自带的清除叉会和右边那颗并排（用户 2026-11-16 截图） -->
+                    <InputGroupInput v-model="skillQuery" type="text" name="ac-skill-search"
                       data-ac-search="skill" placeholder="搜索技能" aria-label="搜索技能" autocomplete="off" spellcheck="false" />
                     <InputGroupAddon v-if="skillQuery" align="inline-end">
                       <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="skillQuery = ''">
@@ -654,7 +655,7 @@ const HoverCardContent = useUiComponent('HoverCardContent')
                     <InputGroupAddon align="inline-start">
                       <Search :size="14" aria-hidden="true" />
                     </InputGroupAddon>
-                    <InputGroupInput v-model="mcpQuery" type="search" name="ac-mcp-search"
+                    <InputGroupInput v-model="mcpQuery" type="text" name="ac-mcp-search"
                       data-ac-search="mcp" placeholder="搜索服务或工具" aria-label="搜索服务或工具" autocomplete="off" spellcheck="false" />
                     <InputGroupAddon v-if="mcpQuery" align="inline-end">
                       <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="mcpQuery = ''">

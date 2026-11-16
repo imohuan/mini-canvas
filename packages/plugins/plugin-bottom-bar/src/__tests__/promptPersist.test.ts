@@ -11,7 +11,7 @@
  * 挂载时再从它恢复；'text' 绑定仍是 data.text，不重复写。
  */
 import { describe, it, expect } from 'vitest'
-import { initialPromptText, promptPersistFields } from '../promptPersist'
+import { aiPromptDataPatch, initialPromptText, promptPersistFields, PROMPT_DOC_FIELD } from '../promptPersist'
 
 describe('initialPromptText：挂载时从哪里恢复输入框内容', () => {
   it('text 绑定节点（有 data.text）→ 用 data.text', () => {
@@ -60,5 +60,36 @@ describe('promptPersistFields：输入要写回哪些 data 字段', () => {
 
   it("text 绑定 → 不在这里写（由 onPromptUpdate 即时写 data.text，避免每键入返库两份）", () => {
     expect(promptPersistFields('text', '正文')).toEqual({})
+  })
+})
+
+describe('aiPromptDataPatch：AI 结果必须顺手清掉旧的富文本快照（用户 2026-11-16）', () => {
+  /**
+   * 真实 bug：点 AI 按钮后输入框里出现结果，但重新点开节点又变回改写前的内容。
+   * canvas.json 里 `barPrompt` 已经是 AI 的新结果，`barPromptDoc` 却还是旧快照；
+   * 底栏重挂载时编辑器优先按快照恢复，旧内容把新结果盖回去。
+   */
+  it('图片节点（none 绑定）：写 barPrompt，同时要求删掉 barPromptDoc', () => {
+    const patch = aiPromptDataPatch('none', '一个中国女孩')
+    expect(patch.data).toEqual({ barPrompt: '一个中国女孩' })
+    expect(patch.dataUnset).toContain(PROMPT_DOC_FIELD)
+  })
+
+  it('文本节点（text 绑定）：写 data.text，同样要求删掉旧快照', () => {
+    const patch = aiPromptDataPatch('text', '改好的正文')
+    expect(patch.data).toEqual({ text: '改好的正文' })
+    expect(patch.dataUnset).toContain(PROMPT_DOC_FIELD)
+  })
+
+  /**
+   * 对话模式（文本节点 agent:chat）与普通文本节点写法不同：
+   * 输入框里的内容是「你的问题」，存在 barPrompt；`data.text` 是模型答案。
+   * AI 按钮在这里是改写提问，写错字段就会把答案冲掉（用户 2026-11-10 报过同一处）。
+   */
+  it('对话模式：只写 barPrompt，绝不碰 data.text（那是模型答案）', () => {
+    const patch = aiPromptDataPatch('text', '润色后的问题', { conversation: true })
+    expect(patch.data).toEqual({ barPrompt: '润色后的问题' })
+    expect((patch.data as { text?: unknown }).text).toBeUndefined()
+    expect(patch.dataUnset).toContain(PROMPT_DOC_FIELD)
   })
 })

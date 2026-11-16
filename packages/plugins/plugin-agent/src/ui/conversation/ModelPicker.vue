@@ -290,7 +290,8 @@ defineExpose({ refreshLayout })
         <InputGroupAddon align="inline-start">
           <Search :size="14" aria-hidden="true" />
         </InputGroupAddon>
-        <InputGroupInput v-model="query" type="search" name="mp-model-search"
+        <!-- type=text 而不是 search：原生搜索框会自带一颗清除叉，和右边这颗并排（用户 2026-11-16 截图） -->
+        <InputGroupInput v-model="query" type="text" name="mp-model-search"
           data-ac-search="model" placeholder="搜索模型或平台" aria-label="搜索模型或平台" autocomplete="off" spellcheck="false" />
         <InputGroupAddon v-if="query" align="inline-end">
           <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="query = ''">

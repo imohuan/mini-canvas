@@ -113,3 +113,28 @@ describe('头尾间距', () => {
     expect(head).toMatch(/padding: 12px 12px 10px/)
   })
 })
+
+describe('搜索框只保留一颗清除叉（用户 2026-11-16 截图：搜索框里有俩 X）', () => {
+  /**
+   * 根因：输入框写了 `type="search"`，Chromium 会给它画一颗原生清除叉；
+   * 右边又是我们自己画的 InputGroupButton。两颗并排出现。
+   * 统一改成 type="text"，清除只保留组件库那一颗。
+   */
+  const files = {
+    ModelPicker: readFileSync(path.resolve(HERE, '../ui/conversation/ModelPicker.vue'), 'utf8'),
+    ChoicePicker: readFileSync(path.resolve(HERE, '../ui/conversation/ChoicePicker.vue'), 'utf8'),
+    AgentComposer: readFileSync(path.resolve(HERE, '../ui/conversation/AgentComposer.vue'), 'utf8'),
+  }
+
+  it('模型 / 生成 / 技能 / MCP 搜索框都不再用 type="search"', () => {
+    for (const [name, src] of Object.entries(files)) {
+      expect(src, name + ' 仍在使用原生搜索框').not.toContain('type="search"')
+    }
+  })
+
+  it('清空按钮仍然保留（不能顺手把功能删了）', () => {
+    for (const [name, src] of Object.entries(files)) {
+      expect(src, name + ' 少了「清空搜索」').toContain('清空搜索')
+    }
+  })
+})

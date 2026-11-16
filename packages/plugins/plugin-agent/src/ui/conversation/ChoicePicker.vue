@@ -377,7 +377,13 @@ defineExpose({ refreshLayout })
         <InputGroupAddon align="inline-start">
           <Search :size="14" aria-hidden="true" />
         </InputGroupAddon>
-        <InputGroupInput v-model="query" type="search" name="cp-search" :placeholder="placeholder"
+        <!--
+          type 必须是 text，不能是 search（用户 2026-11-16 截图：搜索框里有两个叉）。
+          Chromium 会给 type=search 的原生输入框额外画一颗清除叉（::-webkit-search-cancel-button），
+          右边那颗是我们自己画的 InputGroupButton —— 两颗并排出现。这里用 text，
+          清除只保留一颗、样式也归我们管（与底栏标签菜单同一结论）。
+        -->
+        <InputGroupInput v-model="query" type="text" name="cp-search" :placeholder="placeholder"
           :aria-label="placeholder" autocomplete="off" spellcheck="false" />
         <InputGroupAddon v-if="query" align="inline-end">
           <InputGroupButton size="icon-xs" aria-label="清空搜索" @click="query = ''">

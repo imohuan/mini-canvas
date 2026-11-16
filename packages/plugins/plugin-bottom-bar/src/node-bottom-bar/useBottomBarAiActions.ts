@@ -11,7 +11,7 @@ import {
   DEFAULT_AI_ICON,
   type AiActionConfig,
 } from '../aiActions'
-import { promptPersistFields } from '../promptPersist'
+import { aiPromptDataPatch } from '../promptPersist'
 import type { BottomBarEditorHandle } from './types'
 
 interface AiDeps {
@@ -20,6 +20,8 @@ interface AiDeps {
   nodeType: Ref<string | undefined>
   currentAction: ComputedRef<BarAction | undefined>
   promptBinding: ComputedRef<'none' | 'text'>
+  /** 对话模式（文本节点 agent:chat）：输入框 = 你的问题，节点正文 = 模型答案 */
+  conversation?: ComputedRef<boolean>
   prompt: Ref<string>
   promptDoc: Ref<unknown>
   showEditor: ComputedRef<boolean>
@@ -79,14 +81,25 @@ export function useBottomBarAiActions(deps: AiDeps) {
     }, 500)
   }
 
+  /**
+   * 把 AI 结果写回节点（纯文本 + 清掉旧的富文本快照）。
+   *
+   * 用户 2026-11-16：「AI 结果写进输入框了，但重新点开节点就没了」。
+   * 根因：这里只写纯文本，`barPromptDoc` 还留着改写前那份富文本快照；
+   * 底栏重挂载时编辑器优先按快照恢复，旧内容把 AI 结果盖回去。
+   * 详见 aiPromptDataPatch 的说明。
+   */
   function flushAiPrompt(): void {
     try {
-      const doc = deps.ctx.get<{ updateNode(id: string, patch: { data: Record<string, unknown> }): void }>('doc')
-      if (deps.promptBinding.value === 'text') {
-        doc.updateNode(deps.props.id, { data: { text: deps.prompt.value } })
-      } else {
-        doc.updateNode(deps.props.id, { data: promptPersistFields(deps.promptBinding.value, deps.prompt.value) })
-      }
+      const doc = deps.ctx.get<{
+        updateNode(id: string, patch: { data: Record<string, unknown>; dataUnset?: string[] }): void
+      }>('doc')
+      doc.updateNode(
+        deps.props.id,
+        aiPromptDataPatch(deps.promptBinding.value, deps.prompt.value, {
+          conversation: deps.conversation?.value === true,
+        }),
+      )
     } catch {
       /* 节点已不在等情况：忽略（下一拍还会再写） */
     }

@@ -637,6 +637,7 @@ const aiApi = useBottomBarAiActions({
   nodeType,
   currentAction,
   promptBinding,
+  conversation: conversationMode,
   prompt,
   promptDoc,
   showEditor,
