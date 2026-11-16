@@ -7,18 +7,19 @@ import type { CanvasSurfaceHandle } from './types'
 
 /** 取景 / 恢复视野之后，盯着视口被重置的最长时间（VueFlow 挂载收尾可能再写一次默认视口） */
 export const VIEWPORT_GUARD_MS = 2000
+/** 首帧最多隐藏多久（算不出构图也要显示，不能一直空着） */
+export const REVEAL_FALLBACK_MS = 800
 
 /**
  * 画布视野：**启动只取景一次，之后只恢复**（用户口径 2026-11-16）。
  *
- * 三件事，按发生顺序：
- * 1. 启动取景：等就绪闸门（插件的异步初始化）放行 → 按全部节点算一次构图（view.focusAll）。
- * 2. 守护：VueFlow 挂载收尾 / 整树重挂会用自己的默认视口（{0,0,1}）覆盖我们的结果，
- *    所以在短时间内盯着，「被改回去就写回来」。用户一动视口立刻停手。
- * 3. 之后的重挂：只把上次视野还回去（restoreViewport），不重新取景 —— 不会出现第二次聚焦。
- *
- * 为什么不能靠「重挂后再取景一次」来兜：那会让同一次打开出现两次构图变化（画面跳），
- * 而且插件装卸越多、跳的次数越多。
+ * 四个要点：
+ * 1. **不提前取景**：启动阶段数据源可能还会换（云端），此刻算出来的构图注定作废。
+ * 2. **只取一次**：等就绪闸门放行后按全部节点算一次（view.focusAll）。
+ * 3. **首帧不露错位**：VueFlow 会先按 {0,0,1} 渲染一帧（节点贴左上角 100%）。
+ *    已知构图就作为 defaultViewport 传给它（首帧即终态）；未知时先隐藏内容，算准再显示。
+ * 4. **重挂只恢复**：插件装/卸会让 VueFlow 整树重挂、视口回到默认值，
+ *    这时把上次视野还回去，绝不重新取景（否则同一次打开会跳两次）。
  */
 export function useCanvasViewport(opts: {
   hostRef: { value: CanvasHostHandle | undefined }
@@ -31,8 +32,16 @@ export function useCanvasViewport(opts: {
 }) {
   const { hostRef, surfaceRef } = opts
   let stopViewportWatch: (() => void) | undefined
-  let viewportTimers: ReturnType<typeof setTimeout>[] = []
-  /** 启动取景是否已经完成（闸门放行 + 成功取景） */
+  /**
+   * 定时器分桶：
+   * - fitTimers     取景重试（新的一轮开始时清掉旧的）
+   * - guardTimers   视野守护（取景/恢复后持续盯着）
+   * - revealTimer   首帧兜底显示（**绝不能**被取景重试清掉，否则画布可能一直隐藏）
+   */
+  const fitTimers = new Set<ReturnType<typeof setTimeout>>()
+  const guardTimers = new Set<ReturnType<typeof setTimeout>>()
+  let revealTimer: ReturnType<typeof setTimeout> | undefined
+  /** 启动取景是否已经完成 */
   let startupFocusDone = false
   /** 用户是否亲手动过视口：动过就永久不再自动动视野 */
   let userMovedViewport = false
@@ -40,28 +49,16 @@ export function useCanvasViewport(opts: {
   let lastViewport: ViewportState | undefined
   /** 取景轮次：新一轮作废旧轮次的重试 */
   let focusRound = 0
-  /** 视野守护的截止时间（0 = 没有守护） */
+  /** 视野守护截止时间（0 = 无守护） */
   let guardUntil = 0
-  /**
-   * 首帧是否已经「构图到位」。
-   *
-   * 首次进入时我们还不知道目标构图（要等 DOM 量测），VueFlow 会先按 {0,0,1} 画一帧 ——
-   * 用户就看到「节点贴在左上角 100%」，随后才跳到正确位置，这就是初始化闪烁。
-   * 现在首帧前保持透明，算好构图（或超时兜底）后再显示：用户看到的第一眼就是终态。
-   */
+  /** 首帧是否已构图到位（false 时画布内容先不显示） */
   const contentVisible = shallowRef(false)
-  /**
-   * 供 VueFlow 首帧使用的默认视口（响应式）。
-   *
-   * 为什么要有它：VueFlow 挂载时会用 defaultViewport 写一次视口。以前我们只能在它写完之后再
-   * setViewport 校正 —— 用户会看到「先左上角 100%，再跳到正确位置」。把已知的目标视口直接作为
-   * defaultViewport 传给它，第一帧就是终态，没有那次跳动。
-   */
+  /** 供 VueFlow 首帧使用的默认视口：有值就首帧到位，不会先跳一次 */
   const initialViewport = shallowRef<ViewportState | null>(null)
 
-  function clearTimers(): void {
-    for (const t of viewportTimers) clearTimeout(t)
-    viewportTimers = []
+  function clearSet(set: Set<ReturnType<typeof setTimeout>>): void {
+    for (const t of set) clearTimeout(t)
+    set.clear()
   }
 
   function sameViewport(a: ViewportState, b: ViewportState): boolean {
@@ -72,102 +69,117 @@ export function useCanvasViewport(opts: {
     )
   }
 
-  /** 当前是否还能自动动视野（启动未完成、且用户没接管） */
   function autoViewportAllowed(): boolean {
     return !userMovedViewport && !startupFocusDone
+  }
+
+  /** 显示画布内容（幂等，且会撤掉兜底定时器） */
+  function reveal(): void {
+    if (revealTimer !== undefined) {
+      clearTimeout(revealTimer)
+      revealTimer = undefined
+    }
+    contentVisible.value = true
   }
 
   /**
    * 守护：确保视口停在 target 上，直到 guardUntil 或用户接管。
    *
-   * 为什么要守：VueFlow 的 Pane 会在挂载收尾时用 defaultViewport 再写一次 {0,0,1}，
-   * 这次写不经过任何重挂信号。只在写入那一刻写一次，会被它随后覆盖
-   * （实测：取景算出 1.68，200ms 后回到 1）。
+   * 为什么需要：VueFlow 的 Pane 在挂载收尾时会用 defaultViewport 再写一次 {0,0,1}，
+   * 这次写不经过任何「重挂」信号 —— 不盯着就会被悄悄改回去（实测：1.55 → 200ms 后回到 1）。
    */
   function guardViewport(target: ViewportState): void {
+    clearSet(guardTimers)
     guardUntil = Date.now() + VIEWPORT_GUARD_MS
     const tick = (): void => {
       const h = hostRef.value
       if (!h || userMovedViewport || lastViewport !== target) return
-      const cur = h.view.getViewport()
-      if (!sameViewport(cur, target)) h.view.setViewport(target)
+      if (!sameViewport(h.view.getViewport(), target)) h.view.setViewport(target)
       if (Date.now() >= guardUntil) return
-      viewportTimers.push(setTimeout(tick, 100))
+      const t = setTimeout(() => {
+        guardTimers.delete(t)
+        tick()
+      }, 100)
+      guardTimers.add(t)
     }
     tick()
   }
 
   /**
-   * 启动取景：按全部节点算一次构图并守住。
+   * 启动取景：按全部节点算一次构图，算出来就守住并显示。
    *
-   * 重试的原因：节点几何要等 DOM 量测；VueFlow 的 d3Zoom 也要等 Pane mounted。
-   * focusAll 在未就绪时返回 false —— 用它判断「这次算得出真实构图了吗」。
+   * 重试的原因：节点几何要等 DOM 量测、d3Zoom 要等 Pane mounted；focusAll 未就绪返回 false。
    */
-  /**
-   * 等视口稳定后显示画布。
-   *
-   * 视口刚算好那一刻，VueFlow 可能还没把结果写进 d3Zoom；这段时间画面会短暂回到默认值。
-   * 连续两次读到同一个（等于目标）视口才显示，用户就不会看到那一下回跳。
-   */
-  function revealWhenSettled(target: ViewportState, tries = 0): void {
-    const h = hostRef.value
-    if (!h || userMovedViewport) {
-      contentVisible.value = true
-      return
-    }
-    /*
-     * 判据不是「现在就相等」而是「接下来一小段都保持相等」：
-     * 视口可能刚写进去又被 VueFlow 的挂载收尾改回去 —— 立刻显示就会露出那一下回跳。
-     * 连续 3 次（约 120ms）都等于目标才显示。
-     */
-    if (sameViewport(h.view.getViewport(), target)) {
-      if (tries >= 3) {
-        contentVisible.value = true
-        return
-      }
-    } else if (tries >= 12) {
-      contentVisible.value = true
-      return
-    }
-    viewportTimers.push(setTimeout(() => revealWhenSettled(target, tries + 1), 40))
-  }
   function focusSurface(surface: CanvasSurfaceHandle, waitFrames = true): void {
     const delays = FIRST_RUN_FIT_RETRY_DELAYS
     let k = 0
+    /** 上一轮算出来的结果：用来判断「这次结果和上次一样」= 已经稳定（VueFlow 不再改它） */
+    let lastResult: ViewportState | undefined
     const round = ++focusRound
-    clearTimers()
+    clearSet(fitTimers)
     const attempt = (): void => {
       const h = hostRef.value
       if (!h || round !== focusRound || surfaceRef.value !== surface || !autoViewportAllowed()) return
+      /*
+       * 等 VueFlow 把它的默认视口写完再做：它初次挂载时会在 Pane 的 mounted 里写一次；
+       * 我们在它之前写，会被它覆盖（实测：1.55 → 120ms 后回到 1）。
+       * view.focusAll 自己在未就绪时返回 false，这里再要求连续两轮「读到的视口没被改」，
+       * 才认为确实写稳了。
+       */
       if (h.view.focusAll()) {
-        lastViewport = h.view.getViewport()
-        // 下一次重挂（插件装载 / 手动装卸）直接以这个视野起帧，避免第一帧再跳一次
+        const result = h.view.getViewport()
+        /*
+         * 必须连续两次算出一模一样的构图才收工：
+         * VueFlow 初次挂载会在 Pane mounted 里写一次默认视口，我们若刚好写在它之前，
+         * 结果会被它覆盖（实测 1.55 → 120ms 后回到 1）。第二次重试算出来仍然相同，
+         * 说明那次默认写入已经过去，此刻的构图才是最终值。
+         */
+        if (!lastResult || !sameViewport(lastResult, result)) {
+          lastResult = result
+          if (k >= delays.length) return
+          const t = setTimeout(() => {
+            fitTimers.delete(t)
+            attempt()
+          }, delays[k])
+          fitTimers.add(t)
+          k++
+          return
+        }
+        lastViewport = result
+        // 下一次重挂直接以这个视野起帧（VueFlow defaultViewport），避免第一帧再跳一次
         initialViewport.value = lastViewport
         startupFocusDone = true
         opts.readiness?.close()
-        // 取景结果落盘：云端那份「上次位置」跟着对齐，不会停在没人看过的旧构图
         h.save.set(GRAPH_VIEWPORT_KEY, lastViewport, 'canvas')
         guardViewport(lastViewport)
-        revealWhenSettled(lastViewport)
+        reveal()
         return
       }
-      if (k >= delays.length) return
-      viewportTimers.push(setTimeout(attempt, delays[k]))
+      if (k >= delays.length) {
+        // 算不出构图也不能一直隐藏：交给兜底定时器显示
+        return
+      }
+      const t = setTimeout(() => {
+        fitTimers.delete(t)
+        attempt()
+      }, delays[k])
+      fitTimers.add(t)
       k++
     }
     if (!waitFrames) return attempt()
     requestAnimationFrame(() => requestAnimationFrame(attempt))
   }
 
-  /** 移动/缩放结束：把当前 viewport 落盘（与 graph 同走 save，读视口统一走 viewport 服务） */
+  /** 移动/缩放结束：把当前 viewport 落盘 */
   function persistViewport(): void {
     const h = hostRef.value
     if (!h) return
     lastViewport = h.view.getViewport()
+    initialViewport.value = lastViewport
     h.save.set(GRAPH_VIEWPORT_KEY, lastViewport, 'canvas')
   }
 
-  /** 把上次的视野还回去（重挂后 / 启动取景完成后数据又变）：不重新取景 */
+  /** 把上次的视野还回去（重挂后）：不重新取景 */
   function restoreViewport(): void {
     const target = lastViewport
     if (!target) return
@@ -177,74 +189,86 @@ export function useCanvasViewport(opts: {
     guardViewport(target)
   }
 
-  /**
-   * 用户亲手平移/缩放（onMoveStart）：永久停手。
-   *
-   * 程序自己写视口不会触发 move-start（VueFlow 的 move 事件只在用户手势里发），
-   * 所以这条信号就代表「用户开始接管视野」。
-   */
+  /** 用户亲手平移/缩放：永久停手，并撤掉所有自动定时器 */
   function markUserMoved(): void {
     userMovedViewport = true
     guardUntil = 0
-    clearTimers()
+    clearSet(fitTimers)
+    clearSet(guardTimers)
     opts.readiness?.close()
   }
 
   function bindViewportRestore(): void {
     /*
-     * 兜底：算构图可能需要等量测，万一迟迟算不出来，也不能让画布一直是空的。
-     * 1.5 秒后无论如何先显示（用户至少能看到内容，之后被守护逻辑校正）。
+     * 兜底：构图实在算不出来时也要让内容出现（不能永远空白）。
+     * 但**只有在没有取景成功**的情况下才直接用「当前」视野显示 ——
+     * 否则会在校正之前先露出一次未校正画面（实测：显示时 1、下一帧才变 1.55）。
      */
-    viewportTimers.push(
-      setTimeout(() => {
+    revealTimer = setTimeout(() => {
+      revealTimer = undefined
+      const h = hostRef.value
+      if (!h) {
         contentVisible.value = true
-      }, 800),
-    )
-    // immediate：watch 默认不跑首次值，而 CanvasSurface 可能已经挂上
+        return
+      }
+      /*
+       * 兜底也要**先取一次景**再显示：直接显示当前视口的话，用户看到的是 VueFlow
+       * 的默认位置（左上角 100%），随后才被校正 —— 那就是「极快的一下闪烁」。
+       * 这里失败也无所谓，下面照样显示，只是可能不够理想。
+       */
+      if (autoViewportAllowed()) h.view.focusAll()
+      const target = h.view.getViewport()
+      lastViewport = target
+      initialViewport.value = target
+      if (!sameViewport(h.view.getViewport(), target)) h.view.setViewport(target)
+      guardViewport(target)
+      requestAnimationFrame(() => {
+        if (lastViewport) restoreViewport()
+        contentVisible.value = true
+      })
+    }, REVEAL_FALLBACK_MS)
+
+    // immediate：CanvasSurface 可能已经挂上，watch 默认不跑首次值
     stopViewportWatch = watch(
       surfaceRef,
       (surface) => {
         if (!surface || !hostRef.value || !opts.persistViewport()) return
-        /*
-         * 启动阶段（闸门未放行）：**先不画、也不算构图**。
-         * 此时节点集可能还会被数据源换掉（云端），此刻算出来的构图注定要作废 ——
-         * 那正是「先 100% 一下、再跳到正确位置」的来源。等闸门放行后一次算准。
-         * 启动取景完成之后：重挂/新挂载只恢复上次视野。
-         */
+        // 启动阶段：数据源可能还会换，此刻**既不取景也不恢复**
         if (autoViewportAllowed()) return
         restoreViewport()
       },
       { immediate: true },
     )
+
     /*
-     * VueFlow 整树重挂（插件装/卸 → nodeEpoch 变化）后视口回到默认值。
-     *
-     * 为什么必须单独监听：重挂发生在 CanvasSurface **内部**（VueFlow 带 key），
-     * surfaceRef 这个句柄不会变 —— 只监听 surfaceRef 收不到「重挂」这件事。
-     * 一律「恢复上次视野」；启动取景只由闸门那次做，所以重挂不会再产生一次取景。
+     * VueFlow 整树重挂：视口回到默认值。这里只恢复上次视野 —— 启动取景只由闸门那次做，
+     * 所以重挂不会再产生一次取景（这是「打开时跳两次」的根因）。
      */
     if (opts.remountSignal) {
       watch(
         opts.remountSignal,
         () => {
-          const surface = surfaceRef.value
-          if (!surface || !hostRef.value || !opts.persistViewport()) return
-          restoreViewport()
+          if (!surfaceRef.value || !hostRef.value || !opts.persistViewport()) return
+          /*
+           * 重挂期间先藏起来：新的 VueFlow 树会先按默认视口画一帧（左上角 100%），
+           * 恢复视野又要等它挂完 —— 这两帧都会被用户看见，表现为「居中→左上角→居中」。
+           * 藏到恢复生效再显示，用户只会看到一次正确画面。
+           */
+          contentVisible.value = false
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            restoreViewport()
+            reveal()
+          }))
         },
         { flush: 'post' },
       )
     }
-    /*
-     * 就绪闸门：等插件声明的异步初始化（联网恢复画布等）落地后再取景 —— 全流程只此一次。
-     */
+
+    // 就绪闸门：等插件异步初始化落地后取景 —— 全流程只此一次
     void (opts.readiness ? opts.readiness.wait() : Promise.resolve()).then(() => {
       const surface = surfaceRef.value
       if (!surface || !hostRef.value || !opts.persistViewport()) return
       if (!autoViewportAllowed()) return
-      /*
-       * 等一帧再算：这时 VueFlow 的容器/节点已经量过一遍，focusAll 才能算出真实构图。
-       * 之前直接算会拿到 0 尺寸的矩形，算出来的缩放不对（于是要重试、白等）。
-       */
       requestAnimationFrame(() => focusSurface(surface, false))
     })
   }
@@ -252,7 +276,12 @@ export function useCanvasViewport(opts: {
   function dispose(): void {
     stopViewportWatch?.()
     guardUntil = 0
-    clearTimers()
+    clearSet(fitTimers)
+    clearSet(guardTimers)
+    if (revealTimer !== undefined) {
+      clearTimeout(revealTimer)
+      revealTimer = undefined
+    }
   }
 
   return {
@@ -263,9 +292,7 @@ export function useCanvasViewport(opts: {
     persistViewport,
     bindViewportRestore,
     markUserMoved,
-    /** 交给 VueFlow 的 defaultViewport：有值就首帧到位 */
     initialViewport,
-    /** 首帧是否已构图到位（false 时画布先透明，避免看到错误的初始位置） */
     contentVisible,
     dispose,
   }
