@@ -64,6 +64,15 @@ describe('frameOf：后台 Job → 节点 runState', () => {
     })
   })
 
+  /**
+   * 用户 2026-11-16：加载卡的右上角耗时一会儿有一会儿没有。
+   * 原因就是后台给了任务开始时间，这里翻译成节点那一帧时漏掉了它；
+   * 兜底对账又整块替换 runState，开始时间被抹掉，计时就消失。
+   */
+  it('running：带上任务开始时间（右上角计时靠它）', () => {
+    expect(frameOf(job({ createdAt: 1_700_000_000_000 })).startedAt).toBe(1_700_000_000_000)
+  })
+
   it('done：100% + 产物', () => {
     const f = frameOf(job({ status: 'done', result: { ok: true, urls: ['x.png'] } }))
     expect(f).toMatchObject({ status: 'done', progress: 100, urls: ['x.png'] })
@@ -115,6 +124,36 @@ describe('jobsWatcher：一条定时器管整张画布', () => {
     await createJobsWatcher(h.deps).tick()
     expect(h.runtime).toHaveLength(1)
     expect(h.runtime[0]!.data.runState).toMatchObject({ status: 'running', progress: 20, taskId: 'j1' })
+  })
+
+  it('对账写回时保住开始时间（同一任务不能把它抹掉）', async () => {
+    // 后台这份没有 createdAt（老后台 / 中间层可能不给），节点上已有值
+    const nodes = [
+      node({
+        data: {
+          runState: { status: 'running', actionId: 'a:1', taskId: 'j1', progress: 10, startedAt: 1_700_000_000_000 },
+        },
+      }),
+    ]
+    const h = harness(nodes)
+    await createJobsWatcher(h.deps).tick()
+    expect(h.runtime).toHaveLength(1)
+    expect(h.runtime[0]!.data.runState).toMatchObject({ startedAt: 1_700_000_000_000 })
+  })
+
+  it('任务号换了就不沿用旧开始时间（新任务的计时从新任务算）', async () => {
+    const nodes = [
+      node({
+        taskId: 'j2',
+        data: {
+          // 节点上记的还是上一个任务（j1）的时间
+          runState: { status: 'running', actionId: 'a:1', taskId: 'j1', progress: 0, startedAt: 1 },
+        },
+      }),
+    ]
+    const h = harness(nodes)
+    await createJobsWatcher(h.deps).tick()
+    expect(h.runtime[0]!.data.runState).not.toHaveProperty('startedAt')
   })
 
   it('终态：写 done，并把产物补进媒体字段', async () => {

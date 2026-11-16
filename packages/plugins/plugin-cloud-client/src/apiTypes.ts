@@ -82,6 +82,11 @@ export interface ServerJob {
   actionId: string
   providerId: string
   status: 'running' | 'done' | 'error'
+  /**
+   * 任务创建时间（ms）。节点加载卡右上角的耗时靠它算 ——
+   * 不带它，兜底对账每次写回都会把节点上的开始时间抹掉（计时消失）。
+   */
+  createdAt?: number
   progress?: number
   message?: string
   /** 加载界面的大数字 / 单位 / 整段文案 / 滚动小尾巴（后台原样透传 provider 的字段） */
