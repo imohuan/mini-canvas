@@ -76,6 +76,16 @@ describe('seed-audio provider', () => {
     expect(a.pollTimeoutMs).toBeGreaterThan(0)
   })
 
+  /**
+   * 图标用平台名而不是自绘 SVG（用户 2026-11-16）：
+   * 底栏会把它查成「豆包」那颗，与语音合成那行同一个图标。
+   */
+  it('图标写平台名 doubao（不自绘，交给图标表）', async () => {
+    const p = await load()
+    expect(p.icon).toBe('doubao')
+    expect(String(p.icon)).not.toContain('<svg')
+  })
+
   it('参考音频进 references，@音频N 的编号与数组顺序一致', async () => {
     const stub = stubFetch()
     try {

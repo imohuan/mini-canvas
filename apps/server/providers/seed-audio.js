@@ -275,7 +275,10 @@ export default {
   id: 'seed-audio',
   title: '51KIK · 音频生成',
   description: '豆包 seed-audio-1.0：参考音色 + 自然语言描述，生成对白、旁白和音效',
-  icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="seedAud" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect width="32" height="32" rx="9" fill="url(#seedAud)"/><g fill="#fff"><rect x="8" y="14" width="2.6" height="4" rx="1.3"/><rect x="12.2" y="10" width="2.6" height="12" rx="1.3"/><rect x="16.4" y="7" width="2.6" height="18" rx="1.3"/><rect x="20.6" y="11" width="2.6" height="10" rx="1.3"/><rect x="24.8" y="14.5" width="2.6" height="3" rx="1.3"/></g></svg>',
+  // 图标写名字就够了：底栏会去 Agent 的图标表里查，和豆包语音合成显示同一颗
+  // （用户 2026-11-16：「你的图标可以直接使用 doubao 那个平台的图标」）。
+  // 写成 SVG 会盖住平台品牌图，所以这里不再自己画。
+  icon: 'doubao',
   config: [
     {
       key: 'baseUrl', label: '服务地址', type: 'string', default: 'https://51kik.com',

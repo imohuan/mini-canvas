@@ -35,7 +35,8 @@ describe('参数区内联下拉：按内容宽而不是固定宽', () => {
   it('下限 80、上限 220', () => {
     const body = blockOf('.nb-field--params:has(.tpg-inline)')
     expect(body).toMatch(/min-width:\s*80px/)
-    expect(body).toMatch(/max-width:\s*220px/)
+    // 上限不再写死：按「整行可用宽 − 右侧按钮区」算（用户 2026-11-16），220 只是兜底
+    expect(body).toMatch(/max-width:\s*var\(--nb-param-max,\s*220px\)/)
   })
 
   /**
@@ -47,7 +48,7 @@ describe('参数区内联下拉：按内容宽而不是固定宽', () => {
   it('模型下拉那格只留上限，不设下限', () => {
     const body = blockOf('.nb-field--action')
     expect(body).toMatch(/min-width:\s*0/)
-    expect(body).toMatch(/max-width:\s*220px/)
+    expect(body).toMatch(/max-width:\s*var\(--nb-model-max,\s*220px\)/)
     expect(body).not.toMatch(/min-width:\s*148px/)
   })
 
@@ -55,7 +56,7 @@ describe('参数区内联下拉：按内容宽而不是固定宽', () => {
     const body = blockOf('.nb-model-trigger')
     expect(body).toMatch(/min-width:\s*85px/)
     expect(body).toMatch(/width:\s*auto/)
-    expect(body).toMatch(/max-width:\s*220px/)
+    expect(body).toMatch(/max-width:\s*var\(--nb-model-max,\s*220px\)/)
   })
 
   /* 触发器填满那一格：格子宽度已由 max-content + 80/220 定死，触发器缩会窄出一圈 */

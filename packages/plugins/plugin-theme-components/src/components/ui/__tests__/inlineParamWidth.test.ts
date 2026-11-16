@@ -60,3 +60,17 @@ describe('内联下拉：按内容宽 + 80 下限', () => {
   })
 })
 
+/**
+ * 摘要只写改动过的参数（用户 2026-11-16）：「没有必要显示每一个选项的值」。
+ * 这一层用源码断言：摘要的生成逻辑在 setup 里，纯函数由底栏那份 paramSummary 单测覆盖。
+ */
+describe('参数摘要不铺满每个值', () => {
+  it('默认值不进摘要，全默认时只说「参数 N」', () => {
+    expect(group).toContain("return '参数 ' + rows.length")
+  })
+
+  it('只有改过默认值的参数才进摘要', () => {
+    expect(group).toMatch(/p\.default !== undefined && String\(p\.default\) === String\(v\)\) continue/)
+  })
+})
+

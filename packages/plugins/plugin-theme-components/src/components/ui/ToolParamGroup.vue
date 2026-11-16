@@ -76,10 +76,31 @@ function labelOf(p: ToolParamDef): string {
   return opt ? opt.label : String(v)
 }
 
-/** 摘要：把有值的参数用 · 连起来（比例 · 标准画质 · 2K · 1张） */
+/**
+ * 摘要：**只显示改过默认值的参数**（用户 2026-11-16）。
+ *
+ * 从前是把每个参数的值都铺出来（`MP3 · 24 kHz · 0 · 0 · 0`），
+ * 底栏那格只有一百多像素，结果把左边的模型名挤成省略号，也读不出重点。
+ * 现在：全默认 → 「参数 5」；改了一两个 → 只写那两个；再多用「+N」收尾。
+ */
 const summary = computed(() => {
-  const parts = (props.params ?? []).map((p) => labelOf(p)).filter((s) => s !== '')
-  return parts.join(' · ')
+  const rows = props.params ?? []
+  if (rows.length === 0) return ''
+  const changed: string[] = []
+  for (const p of rows) {
+    const v = props.values?.[p.key]
+    if (v === undefined || v === null || v === '') continue
+    if (p.default !== undefined && String(p.default) === String(v)) continue
+    const label = labelOf(p)
+    if (!label) continue
+    // 有选项的值自带含义（WAV / 48 kHz）；裸数字才补上参数名（语速 20）
+    const hasOptions = (p.options?.length ?? 0) > 0
+    const name = (p.label ?? '').trim()
+    changed.push(!hasOptions && name ? name + ' ' + label : label)
+  }
+  if (changed.length === 0) return '参数 ' + rows.length
+  if (changed.length <= 2) return changed.join(' · ')
+  return changed.slice(0, 2).join(' · ') + ' +' + (changed.length - 2)
 })
 </script>
 

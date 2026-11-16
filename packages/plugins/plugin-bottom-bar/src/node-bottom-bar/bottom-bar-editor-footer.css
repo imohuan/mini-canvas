@@ -507,7 +507,8 @@
  */
 .nb-field--action {
   min-width: 0;
-  max-width: 220px;
+  /* 上限由 JS 按「整行可用宽 − 右侧按钮区」算好写进 --nb-model-max（用户 2026-11-16） */
+  max-width: var(--nb-model-max, 220px);
 }
 /*
  * 模型触发器（DropdownMenuTrigger 里的 Button，用户 2026-11-06）：
@@ -519,7 +520,7 @@
   padding: 4px 8px;
   /* 用户 2026-11-10：最小宽度 148 太大，短模型名时右侧空一截；收到 85 并让宽度随内容自适应 */
   min-width: 85px;
-  max-width: 220px;
+  max-width: var(--nb-model-max, 220px);
   width: auto;
   height: 28px;
   border-radius: 8px;
@@ -671,7 +672,8 @@
   align-items: center;
   gap: 4px;
   height: 32px;
-  max-width: 190px;
+  /* 上限跟着参数那格一起算（用户 2026-11-16）；190 只是没算出来之前的兜底 */
+  max-width: var(--nb-param-max, 190px);
   padding: 0 8px;
   border-radius: 8px;
   border: 0;
@@ -819,7 +821,8 @@
 .nb-field--params {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: 240px;
+  /* 上限同样是按可用空间算的（用户 2026-11-16），不再写死 240 */
+  max-width: var(--nb-param-max, 240px);
 }
 /* 触发器按内容宽（不拉满），与模型下拉之间保持一个分隔线；箭头仍在文字右侧 */
 .nb-field--params .tpg-root {
@@ -850,7 +853,7 @@
 .nb-field--params:has(.tpg-inline) {
   flex: none;
   min-width: 80px;
-  max-width: 220px;
+  max-width: var(--nb-param-max, 220px);
 }
 
 .nb-actions {

@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { ToolParamDef } from '@plume-canvas/kernel'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { AiActionConfig } from '../aiActions'
 import type { ModelIcon } from './modelIcons'
 import { ICON_AT } from './icons'
 import HtmlPanelFrame from './HtmlPanelFrame.vue'
+import { paramSummary as summaryOf } from './paramSummary'
+import { selectsBudget } from './selectsWidth'
 
 const props = defineProps<{
   id: string
@@ -52,17 +54,53 @@ const emit = defineEmits<{
   panelNotify: [payload: { level: 'info' | 'success' | 'error'; message: string }]
 }>()
 
-/** 参数摘要：下拉触发器上显示「16:9 · 暖色调」，与内置参数下拉同一口径 */
-const paramSummary = computed(() => {
-  const parts: string[] = []
-  for (const p of props.paramDefs) {
-    const v = props.values?.[p.key]
-    if (v === undefined || v === null || v === '') continue
-    const opt = p.options?.find((o) => o.value === v)
-    parts.push(opt ? opt.label : String(v))
-  }
-  return parts.join(' · ')
+/**
+ * 两个下拉那一行的“宽度预算”（用户 2026-11-16）：
+ * 整行可用宽 − 右侧按钮区宽 → 才轮到两个下拉分。
+ *
+ * 为什么要真的量：右侧按钮数随动作变（有的动作有翻译/优化两个 AI 按钮，有的没有），
+ * 写死 px 就会在按钮多时把下拉挤成省略号。量完写进 CSS 变量，两格的 max-width 用它。
+ */
+const bottomRow = ref<HTMLElement | null>(null)
+const actionsBox = ref<HTMLElement | null>(null)
+const modelMax = ref(280)
+const paramMax = ref(240)
+let budgetObserver: ResizeObserver | null = null
+
+function measureBudget(): void {
+  const row = bottomRow.value
+  if (!row) return
+  const actions = actionsBox.value?.getBoundingClientRect().width ?? 0
+  const budget = selectsBudget({
+    rowWidth: row.clientWidth,
+    actionsWidth: actions,
+    gap: 8,
+  })
+  modelMax.value = budget.modelMax
+  paramMax.value = budget.paramMax
+}
+
+onMounted(() => {
+  measureBudget()
+  if (typeof ResizeObserver === 'undefined') return
+  budgetObserver = new ResizeObserver(() => measureBudget())
+  if (bottomRow.value) budgetObserver.observe(bottomRow.value)
+  if (actionsBox.value) budgetObserver.observe(actionsBox.value)
 })
+onBeforeUnmount(() => {
+  budgetObserver?.disconnect()
+  budgetObserver = null
+})
+
+/**
+ * 参数摘要：只显示**改过默认值**的那些（用户 2026-11-16：没必要显示每一个选项的值）。
+ *
+ * 全部用默认值时显示「参数 5」而不是「MP3 · 24 kHz · 0 · 0 · 0」——
+ * 后者会把左边的模型名挤成省略号，也读不出哪个是重点。
+ */
+const paramSummary = computed(() =>
+  summaryOf({ fields: props.paramDefs, values: props.values ?? {}, placeholder: '参数' }),
+)
 /**
  * 面板内容的自然高度（由 iframe 报上来）。
  * 用来给外层 ScrollArea 一个确定高度：短内容刚好贴住，长内容封顶后滚动。
@@ -105,7 +143,8 @@ function pickAction(value: string): void {
 </script>
 
 <template>
-  <div class="nb-bottom">
+  <div class="nb-bottom" ref="bottomRow"
+    :style="{ '--nb-model-max': modelMax + 'px', '--nb-param-max': paramMax + 'px' }">
     <!--
       最左侧的 @ 按钮（用户 2026-11-06 图 2）。
       只做一件事：往输入框光标处塞一个 @ 字符，@ 菜单由编辑器自己弹出。
@@ -237,7 +276,7 @@ function pickAction(value: string): void {
       <!-- 参数区之后的扩展位（预设提示词等按钮挂这里，见 BottomBarPresets） -->
       <slot name="presets" />
     </div>
-    <div class="nb-actions">
+    <div class="nb-actions" ref="actionsBox">
       <Button variant="ghost" size="icon-sm"
         v-for="ai in aiButtons"
         :key="ai.id"
