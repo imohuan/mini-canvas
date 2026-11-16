@@ -72,6 +72,21 @@ const props = defineProps<{
   connectionLineComp: unknown
   /** 插件变更后 bump → 给 VueFlow 加 key 强制重挂 */
   nodeEpoch: number
+  /**
+   * 期望的初始视口（可选）。
+   *
+   * 用途：启动取景 / 重挂恢复时，直接交给 VueFlow 作为它的 defaultViewport ——
+   * 这样**第一帧就是正确构图**，不会先画在 {0,0,1}（左上角 100%）再被校正，
+   * 用户看到的就是「打开即到位」，没有闪一下。
+   */
+  initialViewport?: { x: number; y: number; zoom: number } | null
+  /**
+   * 画布内容是否可以显示（缺省 true）。
+   *
+   * 首次进入时目标构图还没算出来，VueFlow 会先按 {0,0,1} 画一帧（节点贴左上角 100%），
+   * 随后才被校正 —— 用户看到的就是「打开时闪一下」。首帧前传 false，算好再显示。
+   */
+  contentVisible?: boolean
   /** 画布交互配置（「常规/画布」；CanvasHost 从 settings 读成响应式对象，改值实时生效） */
   interactionSettings: CanvasInteractionSettings
   /** 可视矩形变化回调（剔除刷新入口）：viewport/pane 每次变化都会带最新 FlowRect 调用（可为 null=不可用） */
@@ -527,10 +542,15 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="rootEl" class="csurface">
+  <div
+    ref="rootEl"
+    class="csurface"
+    :class="{ 'csurface--pending': contentVisible === false }"
+  >
     <VueFlow
       :key="nodeEpoch"
       :nodes="nodes"
+      :default-viewport="initialViewport ?? undefined"
       :edges="edges"
       :node-types="nodeTypes"
       :edge-types="edgeTypes"
@@ -608,6 +628,16 @@ defineExpose({
   position: relative;
   width: 100%;
   height: 100%;
+}
+/*
+ * 首帧尚未构图到位：先不画内容。
+ *
+ * 为什么必须这样：目标构图要等 DOM 量测才能算（节点尺寸/容器尺寸），
+ * VueFlow 会先按 {0,0,1} 渲染一帧 —— 那一帧就是用户看到的「一闪」。
+ * opacity 而不是 display:none：保持布局与量测继续发生，只是先不让人看见。
+ */
+.csurface--pending > .vue-flow {
+  visibility: hidden;
 }
 .csurface :deep(.vue-flow__node) {
   /* 节点卡片外观由主题 nodeShell(如 BaseNode 的 .v2-card)统一负责；这里只留布局与光标 */

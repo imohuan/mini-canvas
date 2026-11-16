@@ -231,6 +231,8 @@ defineExpose({
         :snap-zone="snapZoneToProvide"
         :edge-selection="selection.edgeSelection"
         :nodes="nodes"
+        :initial-viewport="viewport.initialViewport.value"
+        :content-visible="viewport.contentVisible.value"
         :edges="edges"
         :node-types="theme.nodeTypes.value"
         :edge-types="theme.edgeTypes.value"
