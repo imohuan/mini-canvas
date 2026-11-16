@@ -77,13 +77,6 @@ export function frameOf(job: ServerJob): Record<string, unknown> {
       status: 'running',
       actionId: job.actionId,
       taskId: job.id,
-      /**
-       * 开始时间：加载卡右上角的耗时靠它。
-       *
-       * 这条帧是**整块替换** runState 的，少带它一次，计时就从卡片上消失；
-       * 后台下一帧又带回来，于是出现「一会儿有一会儿没有」。所以只要有就一定要带上。
-       */
-      ...(typeof job.createdAt === 'number' && Number.isFinite(job.createdAt) ? { startedAt: job.createdAt } : {}),
       ...(typeof job.progress === 'number' ? { progress: job.progress } : {}),
       ...(typeof job.message === 'string' && job.message ? { message: job.message } : {}),
       ...(typeof job.value === 'number' ? { value: job.value } : {}),
@@ -137,11 +130,15 @@ export function createJobsWatcher(deps: JobsWatcherDeps): JobsWatcher {
   let timer: ReturnType<typeof setInterval> | null = null
   let inflight = false
 
-  /** 这一帧和节点上现有的完全一样就不写（每帧都写会让整张画布反复落盘） */
+  /**
+   * 这一帧和节点上现有的完全一样就不写（每帧都写会让整张画布反复落盘）。
+   *
+   * 只比较**新帧带了的字段**：新帧没带的字段会被数据层沿用旧值（见 mergeNodeRunState），
+   * 沿用不会改变画面上的状态，所以不该为了它写一次盘。
+   */
   function same(node: RunningNodeLike, next: Record<string, unknown>): boolean {
     const prev = (node.data?.runState ?? {}) as Record<string, unknown>
-    const keys = new Set([...Object.keys(prev), ...Object.keys(next)])
-    for (const k of keys) {
+    for (const k of Object.keys(next)) {
       if (JSON.stringify(prev[k]) !== JSON.stringify(next[k])) return false
     }
     return true
@@ -225,21 +222,6 @@ export function createJobsWatcher(deps: JobsWatcherDeps): JobsWatcher {
           continue
         }
         const frame = frameOf(job)
-        /**
-         * 后台没给开始时间时，沿用它上一次的值（同一任务）。
-         *
-         * 不沿用就等于「每隔两秒把计时清一次」，用户看到的就是时间闪一下然后一直不出现。
-         * 只有任务号对得上才沿用 —— 换了任务就该从新任务的时间重新算。
-         */
-        const prev = (node.data?.runState ?? {}) as { startedAt?: unknown; taskId?: unknown }
-        if (
-          frame.startedAt === undefined &&
-          prev.taskId === job.id &&
-          typeof prev.startedAt === 'number' &&
-          Number.isFinite(prev.startedAt)
-        ) {
-          frame.startedAt = prev.startedAt
-        }
         if (!same(node, frame)) deps.writeRuntime(node.nodeId, { runState: frame })
         if (job.status !== 'running') writeArtifact(node, job)
       }

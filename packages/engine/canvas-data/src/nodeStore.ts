@@ -16,6 +16,7 @@
 // 所以注册进类型表的对象包一层 shallowReactive：只让**顶层**可追踪（`updateTypeSize` 是整体替换
 // `defaultSize` 这个属性），不深包装 icon/segments 等句柄 —— 深包装会把它们变成代理、破坏引用相等。
 import { shallowReactive, type Component } from 'vue'
+import { mergeNodeRunState } from './nodeRunState'
 
 /** 画布节点数据的最小可持久化形状 */
 export interface CanvasNode {
@@ -476,7 +477,16 @@ export class NodeStore implements NodeStoreService {
    */
   private applyPatch(node: CanvasNode, patch: NodePatch): boolean {
     if (patch.position !== undefined) node.position = { x: patch.position.x, y: patch.position.y }
-    if (patch.data !== undefined) node.data = { ...node.data, ...patch.data }
+    if (patch.data !== undefined) {
+      const next = { ...node.data, ...patch.data }
+      /*
+       * 运行状态自带合并：进度帧是整块替换的，任何写入方漏带一个字段都会把旧值抹掉
+       * （真实问题：漏 startedAt → 加载卡右上角耗时每两秒消失一次）。
+       * 合并在数据层做一次，写入方不必各自记得补字段；规则见 mergeNodeRunState。
+       */
+      if ('runState' in next) next.runState = mergeNodeRunState(node.data.runState, next.runState)
+      node.data = next
+    }
     // 先合并、后删除：同一批既写新值又想清掉的 key，以“删除”为最终意图。
     if (patch.dataUnset !== undefined) {
       for (const key of patch.dataUnset) delete node.data[key]

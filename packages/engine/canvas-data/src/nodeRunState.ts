@@ -31,3 +31,33 @@ export function isNodeRunning(node: RunStateLike | undefined | null): boolean {
   const runState = data.runState as { status?: unknown } | undefined | null
   return runState?.status === NODE_RUNNING_STATUS
 }
+
+/**
+ * 把新一帧运行状态并到旧一帧上（**同一个任务**的进度帧才合并）。
+ *
+ * 为什么需要它：进度帧是**整块替换** `runState` 的。任何一条写进度的路径只要漏带一个字段
+ * （最近的真实问题：漏了 `startedAt`，加载卡右上角的耗时每两秒被抹掉一次），就会丢掉旧值。
+ * 在数据层统一合并，写入方不必各自记得补字段。
+ *
+ * 合并范围刻意收窄，避免「老任务的东西串到新任务」：
+ * - 两边都是 running、且**任务号一致**（都没有也算一致）→ 浅合并，新帧优先；
+ * - 任一边没有任务号而另一边有（典型：刚点提交的新帧 vs 上一个还在跑的任务）→ 整帧替换，
+ *   这样新任务绝不会继承旧任务的编号 —— 否则兜底对账会拿着旧号去查、把新任务覆盖成旧状态；
+ * - 任务号不同 → 整帧替换，旧任务的进度 / 耗时 / 文案一概不继承；
+ * - 任一边不是 running（done / error / idle）→ 整帧替换，终态保持干净。
+ *
+ * 只做**浅**合并：`stats` 这类嵌套对象整体以新帧为准，避免新旧字段拼出一个不存在的进度。
+ */
+export function mergeNodeRunState(prev: unknown, next: unknown): unknown {
+  if (!isPlainObject(next)) return next
+  if (!isPlainObject(prev)) return next
+  if (prev.status !== NODE_RUNNING_STATUS || next.status !== NODE_RUNNING_STATUS) return next
+  const taskOf = (state: Record<string, unknown>): string =>
+    typeof state.taskId === 'string' ? state.taskId : ''
+  if (taskOf(prev) !== taskOf(next)) return next
+  return { ...prev, ...next }
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
