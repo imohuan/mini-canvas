@@ -403,26 +403,117 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
     config: save?.adapterOf?.('config'),
     shortcut: save?.adapterOf?.('shortcut'),
   }
-  save?.useAdapter('canvas', adapter)
   // 换资源后端**之前**先抓住本地那个：首次上云时要用它把本地已存的字节捞出来传到云端
   // （换完就够不着本地库了 —— 那正是"本地画布里已有的图，上云后全丢"的成因）。
   const localResourceAdapter = save?.adapterOf?.('resource') as
     | { resolveResource?(ref: string): Promise<string | undefined> }
     | undefined
-  // 资源那一格也切到云端：上传/生成的字节直接落到画布文件夹，节点里存**逻辑 ID**
-  // （`<画布id>/<哈希>`），地址由 resolve 现拼。
-  // 与画布用同一个开关（用户最初的设计：一个 adapter 管文本 + 资源两种形式）。
-  save?.useAdapter('resource', createCloudResourceAdapter(api, CID))
-  // 配置与快捷键：走 cloud-server 的 KV 接口（服务端对这两类照常收，只有 canvas 被专属路由接管）
-  save?.useAdapter('config', createCloudKvAdapter({ baseUrl: cfg.baseUrl, type: 'config' }))
-  save?.useAdapter('shortcut', createCloudKvAdapter({ baseUrl: cfg.baseUrl, type: 'shortcut' }))
+  /**
+   * 把四个存储域切到云端（可在宿主读画布之前执行，见下方 canvasSource 登记）。
+   *
+   * 为什么要单独抽一个函数：宿主现在是「先换后端 → 再读一次画布」。
+   * 换后端这一步以前写死在 onCanvasReady 里（那时宿主已经读完本地了），
+   * 现在要能被提前调用，所以独立成函数；放在这里也更清楚它只做「换后端」这件事。
+   */
+  function switchAdaptersToCloud(): void {
+    save?.useAdapter('canvas', adapter)
+    save?.useAdapter('resource', createCloudResourceAdapter(api, CID))
+    save?.useAdapter('config', createCloudKvAdapter({ baseUrl: cfg.baseUrl, type: 'config' }))
+    save?.useAdapter('shortcut', createCloudKvAdapter({ baseUrl: cfg.baseUrl, type: 'shortcut' }))
+  }
 
-  // 装载先「以云端为准」：宿主的顺序是「先按本地存档恢复画布、再装外部插件」，
-  // 也就是说，不做这一步的话用户看到的是本地那份、而不是服务器的真身。
-  // 服务器上什么都没有时反过来：把本地这份推上去（首次上云）。
+  /*
+   * ★ 让宿主「先换后端、再读画布」。
+   *
+   * 以前：宿主先读本地存档 → 这里再联网拉服务器画布、整包替换 → 再取一次景。
+   * 同一张画布被写两次，用户会先看到本地那份。
+   * 现在：把「换后端」交给 canvasSource.beforeRestore，宿主会在读画布**之前**跑它，
+   * 于是那次普通读取拿到的就是服务器数据，本地那份从头到尾不会被画出来。
+   *
+   * 换后端只影响后续读写；资源域要换回本地引用时用的 localResourceAdapter 已在上方抓住。
+   */
+  const sourceGate = ctx.tryGet<{ beforeRestore(fn: () => Promise<unknown> | void, label?: string): void }>(
+    'canvasSource',
+  )
+  let switchedByHost = false
+  if (sourceGate) {
+    sourceGate.beforeRestore(() => {
+      switchAdaptersToCloud()
+      switchedByHost = true
+    }, 'cloud-client:adapters')
+  } else {
+    // 老宿主没有数据源闸口：保持旧行为（现在就先换，下面再自己恢复一次）
+    switchAdaptersToCloud()
+  }
+
+  /*
+   * 云端画布的落地方式取决于宿主有没有「先换后端」的能力：
+   *
+   * ① 新宿主（有 canvasSource）：宿主先换后端再读画布 —— 画布里现在已经是服务器数据。
+   *    这里只做「首次上云」判据（服务器空、本地有 → 推上去）与保存基准初始化，**绝不再写画布**。
+   * ② 老宿主：保持旧行为（联网拉取 → 整包覆盖本地 → 再取景）。
+   */
+  /**
+   * 宿主已经「先换后端再读画布」时，画布里就是服务器数据。
+   *
+   * 这里只剩三件事：
+   * 1. 服务器为空、本地有 → 首次上云（把本地这份推上去）；
+   * 2. 服务器那份的媒体字段要重建可显示地址（服务器只存 resourceId）；
+   * 3. 初始化保存 / 合并基准（primeFromSnapshot），避免第一次保存把云端已有节点当新增。
+   *
+   * **不再写画布**：数据已经由宿主那一次读取放进去了，再 replaceAll 就是「写两次」。
+   */
+  async function primeWithCloudData(): Promise<void> {
+    try {
+      const server = await adapter.getRaw()
+      const nodes = server.nodes.filter((n): n is Record<string, unknown> => !!n && typeof n === 'object')
+      const edges = Array.isArray(server.edges) ? server.edges : []
+      const hasServer = nodes.length > 0 || edges.length > 0
+
+      if (!hasServer) {
+        // 服务器还没有这张画布：把本地那份（宿主读进来的）推上去。
+        const localNodes = doc.getNodes()
+        const localEdges = doc.getEdges()
+        if (localNodes.length === 0 && localEdges.length === 0) {
+          status.phase = 'empty'
+          await adapter.primeFromServer()
+          return
+        }
+        const migrated = await migrateLocalResources(
+          localNodes as Array<{ data?: Record<string, unknown> }>,
+          localResourceAdapter,
+          api,
+          CID,
+        )
+        await api.replaceCanvas(CID, migrated, localEdges as never)
+        status.phase = 'seeded'
+        // 推上去之后，服务器拥有的是「迁移后的那份」——基准必须用它，不能再用本地引用。
+        adapter.primeFromSnapshot({ nodes: migrated as unknown[], edges: localEdges as unknown[] })
+        return
+      }
+
+      // 服务器有画布：画布内容已由宿主读入。这里补媒体地址（宿主读入的是原始引用）。
+      const resources = ctx.tryGet<ResourcesLike>('resources')
+      if (resources?.restore) {
+        await restoreMediaUrlsList(
+          nodes as Array<{ type?: string; data?: Record<string, unknown> }>,
+          (resourceId, kind) => resources.restore!(resourceId, kind),
+        )
+        doc.replaceAll(nodes as never, edges as never)
+      }
+      status.phase = 'restored'
+      adapter.primeFromSnapshot({ nodes, edges })
+    } catch (err) {
+      status.error = err instanceof Error ? err.message : String(err)
+    }
+  }
   const restoreRun = async (): Promise<void> => {
     try {
       const viewport = ctx.tryGet<ViewportLike>('view')
+      if (switchedByHost) {
+        await primeWithCloudData()
+        return
+      }
       let startupSnapshot: { nodes: unknown[]; edges: unknown[]; revision?: number } | undefined
       const r = await restoreOrSeed({
         readServer: () => adapter.getRaw(),

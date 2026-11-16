@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createCanvasReadiness, CANVAS_READY_TIMEOUT_MS } from '../canvas-host/canvasReadiness'
+import { createCanvasReadiness, createCanvasSource, CANVAS_READY_TIMEOUT_MS } from '../canvas-host/canvasReadiness'
 
 /**
  * 画布就绪闸门：让画布等插件的异步初始化（联网恢复画布等）完成后再取景，只取一次。
@@ -103,5 +103,47 @@ describe('canvasReadiness · 启动取景前等异步插件', () => {
     const a = gate.wait()
     const b = gate.wait()
     expect(a).toBe(b)
+  })
+})
+
+/**
+ * 数据源闸口（canvasSource）：插件在**读画布之前**把存储后端换掉。
+ *
+ * 用户口径 2026-11-16：云端插件只是换了一个 storage adapter，画布用同一个读取函数即可，
+ * 不需要「先写本地、再被云端覆盖」。所以这里守住「换后端一定发生在读之前」。
+ */
+describe('canvasSource · 读画布前换后端', () => {
+  it('登记的动作按顺序执行完，宿主才开始读', async () => {
+    const gate = createCanvasSource()
+    const order: string[] = []
+    gate.beforeRestore(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+      order.push('switch-adapter')
+    }, 'cloud:adapters')
+    gate.beforeRestore(() => { order.push('second') })
+    await gate.runBeforeRestore()
+    order.push('read-canvas')
+    expect(order).toEqual(['switch-adapter', 'second', 'read-canvas'])
+  })
+
+  it('换后端失败不阻断读取（退回原后端，画布照常打开）', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const gate = createCanvasSource()
+    gate.beforeRestore(() => { throw new Error('网关没通') }, 'cloud:adapters')
+    let readAfter = false
+    await gate.runBeforeRestore()
+    readAfter = true
+    expect(readAfter).toBe(true)
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('只跑一次：重复调用不会把换后端做两遍', async () => {
+    const gate = createCanvasSource()
+    let count = 0
+    gate.beforeRestore(() => { count += 1 })
+    await gate.runBeforeRestore()
+    await gate.runBeforeRestore()
+    expect(count).toBe(1)
   })
 })

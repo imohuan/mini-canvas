@@ -87,13 +87,32 @@ view.focusAll({ padding: 24 })  // 需要时改单项，其余默认仍生效
 | 类型 | 例子 | 画布怎么处理 |
 | --- | --- | --- |
 | 同步插件 | 主题、节点类型、底栏、自动布局 | `apply` 返回就等于装完，画布直接能看到最终节点，**无需任何改动** |
-| 异步插件 | 云端连接（要联网拉画布） | 在 `apply` 里把异步工作交给 `canvasReady.hold()`，画布等它落地后再取景 |
+| 异步插件（只差数据） | 云端连接 | 用 `canvasSource.beforeRestore()` 交出「换存储后端」，画布先换后端再读一次 |
+| 异步插件（其它异步工作） | 需要预热的插件 | 把 Promise 交给 `canvasReady.hold()`，画布等它落地后再取景 |
+
+#### 数据从哪儿来：`canvasSource`
+
+画布读数据只走一次 `save.get(GRAPH_KEY, 'canvas')`。云端插件做的事其实就是**换一个 storage adapter**，
+所以它只要要求「读之前换」就够了，不必自己再把画布写一遍：
 
 ```ts
-// 异步插件写法：发起的同一个同步段里登记，画布会等它
+const source = ctx.tryGet<{ beforeRestore(fn: () => void | Promise<unknown>, label?: string): void }>('canvasSource')
+source?.beforeRestore(() => switchAdaptersToCloud(), 'cloud-client:adapters')
+```
+
+顺序变成：
+
+```text
+装完同步插件 → beforeRestore（换成云端后端）→ save.get 读一次 → 直接是云端数据 → 取景
+```
+
+本地那份存档从头到尾不会被画出来，也不存在「先写本地再被覆盖」。
+服务器上还没有这张画布时（首次上云）仍要把本地那份迁上去，这一步由插件在恢复后自己做。
+
+```ts
+// 需要等“数据以外”的异步工作（例如预热资源）时，用就绪闸门
 const gate = ctx.tryGet<{ hold(fn: () => Promise<unknown>, label?: string): Promise<void> }>('canvasReady')
-const restore = async () => { /* 联网把服务器画布搬回本地 */ }
-const ready = gate?.hold ? gate.hold(restore, 'my-plugin:restore') : restore()
+const ready = gate?.hold ? gate.hold(warmup, 'my-plugin:warmup') : warmup()
 ```
 
 闸门的规则：
@@ -103,14 +122,15 @@ const ready = gate?.hold ? gate.hold(restore, 'my-plugin:restore') : restore()
 3. 有 **8 秒兜底**：插件卡死（网络挂起）时先按现状取景，不让画布永远不出现。
 4. 画布呈现之后再登记的（用户临时装插件）**不参与等待**，不会把画布卡住。
 
-改这里之前先看三条：
+改这里之前先看四条：
 
-5. **必须等视口后端真正就绪**。VueFlow 的 Pane 在它自己的 `onMounted` 里用 `defaultViewport`
+1. **必须等视口后端真正就绪**。VueFlow 的 Pane 在它自己的 `onMounted` 里用 `defaultViewport`
    强写一次视口；过早取景会被覆盖回 `{0,0,1}`（表现：节点贴左上角、缩放 100%）。
    `focusAll()` 未就绪时只记一笔待办、返回 `false`，就绪后自动补做。
-6. **插件装卸会让 VueFlow 整棵树重挂**，重挂后视口回到默认值。重挂时把**上次的视野原样恢复**
+2. **插件装卸会让 VueFlow 整棵树重挂**，重挂后视口回到默认值。重挂时把**上次的视野原样恢复**
    （不重新取景）；用户自己平移/缩放后彻底停手。
-7. **视口仍然落盘**（`graph-viewport`），只是启动不再读它 —— 那份记录留给诊断与跨设备排查。
+3. **视口仍然落盘**（`graph-viewport`），只是启动不再读它 —— 那份记录留给诊断与跨设备排查。
+4. **取景后两秒内会守着视口**：VueFlow 挂载收尾时可能用自己的默认视口再写一次，被改回去就写回来。
 
 ### 取景如何避开界面条
 

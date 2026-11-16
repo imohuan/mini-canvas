@@ -38,6 +38,46 @@ export interface CanvasReadinessHandle {
   close(): void
 }
 
+/**
+ * 换存储后端的时机闸口（服务名 canvasSource）。
+ *
+ * 用途：让「数据从哪儿来」的插件（云端连接）在**宿主读取画布之前**把 save 的 canvas 域换成自己的后端。
+ * 换完之后，宿主那一次普通的 save.get(GRAPH_KEY) 就天然读到云端数据 —— 不需要先写本地再覆盖，
+ * 也不需要插件自己再把画布替换一遍。
+ *
+ * 契约只有一条：beforeRestore() 必须**先完成换后端**，再返回；返回后宿主才开始读。
+ */
+export interface CanvasSourceHandle {
+  /**
+   * 登记一个「读画布之前要先跑完」的异步动作（通常是换 adapter）。
+   * @param fn 返回 Promise；完成后宿主才读画布
+   * @param label 诊断名
+   */
+  beforeRestore(fn: () => Promise<unknown> | void, label?: string): void
+  /** 依次执行已登记的动作（宿主在读画布前调用一次） */
+  runBeforeRestore(): Promise<void>
+}
+
+export function createCanvasSource(): CanvasSourceHandle {
+  const jobs: Array<{ label: string; fn: () => Promise<unknown> | void }> = []
+  return {
+    beforeRestore(fn, label = 'plugin') {
+      jobs.push({ label, fn })
+    },
+    async runBeforeRestore() {
+      for (const job of jobs) {
+        try {
+          await job.fn()
+        } catch (err) {
+          // 换后端失败不能拦住画布打开：退回原来的后端（宿主会用默认那份读）
+          console.warn('[canvasSource] ' + job.label + ' 准备数据源失败，继续用默认存储', err)
+        }
+      }
+      jobs.length = 0
+    },
+  }
+}
+
 /** 兜底超时：插件卡死时画布不能永远不打开 */
 export const CANVAS_READY_TIMEOUT_MS = 8000
 

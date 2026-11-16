@@ -10,7 +10,7 @@ import { MemoryStorageAdapter } from '@plume-canvas/canvas-data'
  * 单独断言；它不算「基础 7 个」的一部分。
  */
 describe('基础服务名收敛', () => {
-  it('基础九名 + 渲染层辅助 nodeToolbar', async () => {
+  it('基础十名 + 渲染层辅助 nodeToolbar', async () => {
     const { host } = await createPlumeHost({ adapter: new MemoryStorageAdapter(), coldPlugins: [] })
     const names = host.ctx.injectedServices().sort()
     // injectedServices() 只列「服务表」里的名字；`tools` 是内核内置、不在表里，
@@ -18,6 +18,7 @@ describe('基础服务名收敛', () => {
     expect(names).toEqual([
       'canvas',
       'canvasReady',
+      'canvasSource',
       'doc',
       'nodeGeometry',
       'nodeToolbar',
@@ -30,6 +31,7 @@ describe('基础服务名收敛', () => {
     expect(names.filter((n) => n !== 'tools' && n !== 'nodeToolbar')).toEqual([
       'canvas',
       'canvasReady',
+      'canvasSource',
       'doc',
       'nodeGeometry',
       'resources',

@@ -51,7 +51,7 @@ import { ViewportService } from '../viewport/viewportService'
 import { ViewService } from '../view/viewService'
 import { CanvasService } from '../canvas/canvasService'
 import { NodeToolbarService } from '../toolbar/nodeToolbarService'
-import { createCanvasReadiness } from './canvas-host/canvasReadiness'
+import { createCanvasReadiness, createCanvasSource } from './canvas-host/canvasReadiness'
 import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
@@ -238,6 +238,9 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
    */
   const readiness = createCanvasReadiness()
   const revokeReadiness = ctx.hasService('canvasReady') ? undefined : ctx.inject('canvasReady', readiness)
+  /* 数据源闸口（服务名 canvasSource）：插件可要求「读画布之前先换后端」，见其文件头说明。 */
+  const canvasSource = createCanvasSource()
+  const revokeCanvasSource = ctx.hasService('canvasSource') ? undefined : ctx.inject('canvasSource', canvasSource)
 
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
   // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
@@ -271,6 +274,7 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
     // 撤销函数内部会核对实例身份，不会误删别人的服务。
     revokeView?.()
     revokeReadiness?.()
+    revokeCanvasSource?.()
     revokeCanvas?.()
     revokeNodeToolbar?.()
     // doc / selection 随 canvas-data 的 fiber 回收；共享根 Context 时再显式摘一次，
@@ -353,6 +357,17 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
   // 恢复上次画布；从未保存过才跑 seedDefault（若有）。已保存的空图([])也必须原样恢复，
   // 否则用户删光节点后刷新会重新长出默认 seed。
   // 节点存 GRAPH_KEY(CanvasNode[])，边独立存 GRAPH_EDGES_KEY(CanvasEdge[])。
+
+  /*
+   * ★ 读画布之前，先问一句「数据从哪儿来」。
+   *
+   * 以前是「先读本地存档 → 装插件 → 插件再联网拉画布覆盖一遍」，同一张画布被写两次：
+   * 用户先看到本地那份、几百毫秒后被换成服务器那份。
+   * 现在插件（如云端连接）只要在 canvasSource.beforeRestore() 里交出「换后端」这一步，
+   * 宿主就会**先换后端、再读一次**：下面那次 save.get 直接读到最终数据，本地那份从头到尾没被画出来。
+   */
+  const dataSource = ctx.tryGet<{ runBeforeRestore(): Promise<void> }>('canvasSource')
+  if (dataSource) await dataSource.runBeforeRestore()
   const saved = await save.get<CanvasNode[]>(GRAPH_KEY, 'canvas')
   const savedEdges = await save.get<CanvasEdge[]>(GRAPH_EDGES_KEY, 'canvas')
   // 关键判定：saved === undefined 才是"从未保存"，不应与"保存了空数组"混为一谈。
