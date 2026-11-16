@@ -51,6 +51,7 @@ import { ViewportService } from '../viewport/viewportService'
 import { ViewService } from '../view/viewService'
 import { CanvasService } from '../canvas/canvasService'
 import { NodeToolbarService } from '../toolbar/nodeToolbarService'
+import { createCanvasReadiness } from './canvas-host/canvasReadiness'
 import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
@@ -230,6 +231,14 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
   // 根级 Context 里可能已经有上一次会话残留：卸载时统一清掉，这里只在缺的时候注入。
   const revokeView = ctx.hasService('view') ? undefined : ctx.inject('view', view)
 
+  /*
+   * 画布就绪闸门（服务名 canvasReady）：插件可把「异步初始化」交给它，画布等到它们落地
+   * 再取景一次。同步插件不需要登记 —— 它们在 apply 返回时就已经注册完毕。
+   * 见 canvas-host/canvasReadiness.ts 的说明。
+   */
+  const readiness = createCanvasReadiness()
+  const revokeReadiness = ctx.hasService('canvasReady') ? undefined : ctx.inject('canvasReady', readiness)
+
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
   // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
 
@@ -261,6 +270,7 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
   const disposeSessionServices = (): void => {
     // 撤销函数内部会核对实例身份，不会误删别人的服务。
     revokeView?.()
+    revokeReadiness?.()
     revokeCanvas?.()
     revokeNodeToolbar?.()
     // doc / selection 随 canvas-data 的 fiber 回收；共享根 Context 时再显式摘一次，

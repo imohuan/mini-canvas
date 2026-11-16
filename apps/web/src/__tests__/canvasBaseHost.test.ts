@@ -3,7 +3,7 @@
  *
  * 锁三件事：
  * 1. **搬窝真搬走了**：createPlumeHost.ts 里的 `ctx.inject` 只剩 view / canvas /
- *    nodeToolbar 三个真属于渲染层的服务；
+ *    nodeToolbar / canvasReady 四个真属于渲染层的服务；
  * 2. **对外契约一个没变**：CanvasHostHandle 字段、api 面、默认清单、持久化恢复行为照旧；
  * 3. **四条 manager 路径各自处理"被拦"**（决策 1 表格逐条）。
  */
@@ -18,7 +18,7 @@ import { nodeTextPlugin } from '@plume-canvas/plugin-node-text'
 import type { PluginModule } from '@plume-canvas/kernel'
 
 describe('步骤 4 完成标准① —— 宿主只注入渲染层服务', () => {
-  it('createPlumeHost.ts 只剩 view / canvas / nodeToolbar', () => {
+  it('createPlumeHost.ts 只剩 view / canvas / nodeToolbar / canvasReady', () => {
     // 源码在本仓库的引擎包里；测试跟着插件搬到了应用侧。
     // 从当前文件向上找仓库根（有 pnpm-workspace.yaml 的那一级），不写死相对层级。
     let dir = path.dirname(fileURLToPath(import.meta.url))
@@ -36,9 +36,10 @@ describe('步骤 4 完成标准① —— 宿主只注入渲染层服务', () =>
       .filter((l) => !l.trim().startsWith('*') && !l.trim().startsWith('//'))
       .join('\n')
     const hits = code.match(/ctx\.inject\(/g) ?? []
-    // 三处：几何+视口合并的 view、动作门面 canvas、Spec D4 保留的 nodeToolbar。
+    // 四处：几何+视口合并的 view、动作门面 canvas、Spec D4 保留的 nodeToolbar、
+    // 启动取景的就绪闸门 canvasReady（插件登记异步初始化，画布等它落地再取景）。
     // 旧的 nodeLayout/viewport/pluginManager/tip 兼容别名已删除。
-    expect(hits.length).toBe(3)
+    expect(hits.length).toBe(4)
     expect(src).toContain("ctx.inject('view'")
     expect(src).toContain("ctx.inject('canvas'")
     expect(src).toContain("ctx.inject('nodeToolbar'")

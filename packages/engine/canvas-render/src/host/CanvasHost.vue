@@ -138,6 +138,7 @@ const viewport = useCanvasViewport({
   surfaceRef,
   persistViewport: () => props.persistViewport,
   remountSignal: () => theme.nodeEpoch.value,
+  readiness: host.ctx.tryGet<{ wait(): Promise<void>; close(): void }>('canvasReady'),
 })
 const viewportMove = useCanvasViewportMove({
   hostRef,

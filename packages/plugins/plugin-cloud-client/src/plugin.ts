@@ -420,7 +420,7 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
   // 装载先「以云端为准」：宿主的顺序是「先按本地存档恢复画布、再装外部插件」，
   // 也就是说，不做这一步的话用户看到的是本地那份、而不是服务器的真身。
   // 服务器上什么都没有时反过来：把本地这份推上去（首次上云）。
-  const ready = (async () => {
+  const restoreRun = async (): Promise<void> => {
     try {
       const viewport = ctx.tryGet<ViewportLike>('view')
       let startupSnapshot: { nodes: unknown[]; edges: unknown[]; revision?: number } | undefined
@@ -468,7 +468,20 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
     } catch (err) {
       status.error = err instanceof Error ? err.message : String(err)
     }
-  })()
+  }
+  /*
+   * 画布就绪闸门（宿主提供 canvasReady 服务）：把「联网恢复画布」登记进去。
+   *
+   * 为什么：宿主装上画布后就取景，而这趟联网恢复往往更晚完成 —— 它会整包替换节点，
+   * 导致取景时看到的图和最终显示的图不是同一份（以前只能再取一次景，于是同一打开两次取景）。
+   * 登记之后宿主会等它落地再取景，只取一次。拿不到该服务（老宿主）时照旧直接执行。
+   */
+  const readiness = ctx.tryGet<{ hold(fn: () => Promise<unknown>, label?: string): Promise<void> }>(
+    'canvasReady',
+  )
+  const ready = readiness?.hold
+    ? readiness.hold(restoreRun, 'cloud-client:restore')
+    : (restoreRun() as Promise<void>)
 
   // ==================== 2. 动作清单 → 底栏 ====================
   let knownActionIds: string[] = []

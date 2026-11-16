@@ -1,8 +1,12 @@
 import { watch, type Ref } from 'vue'
 import { GRAPH_VIEWPORT_KEY } from '@plume-canvas/canvas-data'
-import { FIRST_RUN_FIT_RETRY_DELAYS, STARTUP_FOCUS_WINDOW_MS } from '../canvasHostCore'
+import { FIRST_RUN_FIT_RETRY_DELAYS } from '../canvasHostCore'
 import type { CanvasHostHandle } from '../createPlumeHost'
+import type { ViewportState } from '../../viewport/viewportService'
 import type { CanvasSurfaceHandle } from './types'
+
+/** 重挂后恢复视野的最长重试时间（覆盖 VueFlow Pane 挂载时的那次默认视口强写） */
+export const RESTORE_VIEWPORT_TIMEOUT_MS = 1500
 
 /**
  * 画布视口：**启动只取景，不恢复存档视口**（用户口径 2026-11-16）。
@@ -31,14 +35,23 @@ export function useCanvasViewport(opts: {
   persistViewport: () => boolean
   /** VueFlow 整树重挂信号（插件装/卸 bump nodeEpoch）；重挂后视口会被重置 */
   remountSignal?: () => number
+  /** 画布就绪闸门：等插件声明的异步初始化落地后再取景（同步插件不受影响） */
+  readiness?: { wait(): Promise<void>; close(): void }
 }) {
   const { hostRef, surfaceRef } = opts
   let stopViewportWatch: (() => void) | undefined
   let viewportTimers: ReturnType<typeof setTimeout>[] = []
-  /** 启动取景窗口的截止时刻（毫秒时间戳）；窗口内允许因重挂补做 */
-  let startupWindowUntil = 0
-  /** 用户是否在启动窗口期内亲手动过视口：动过就永久不再自动取景 */
+  /**
+   * 启动取景是否**已经完成**（用户口径 2026-11-16）。
+   *
+   * 只取景一次：等就绪闸门（异步插件初始化）落地后按全部节点取景，之后再也不自动动视野。
+   * 之后再来的插件（画布已呈现后用户手动装）、重挂、云端合并，都用「记住并恢复」代替重新取景。
+   */
+  let startupFocusDone = false
+  /** 用户是否亲手动过视口：动过就永久不再自动取景 */
   let userMovedViewport = false
+  /** 上一次程序设定 / 用户确认的视口：重挂或后续数据变更后原样恢复 */
+  let lastViewport: ViewportState | undefined
   /** 取景轮次：每次挂载 / 重挂 +1，旧轮次的重试自动作废（不再互相覆盖） */
   let focusRound = 0
 
@@ -48,7 +61,7 @@ export function useCanvasViewport(opts: {
   }
 
   function startupFocusActive(): boolean {
-    return !userMovedViewport && Date.now() < startupWindowUntil
+    return !userMovedViewport && !startupFocusDone
   }
 
   /**
@@ -76,8 +89,11 @@ export function useCanvasViewport(opts: {
       // 期间画布又重挂了 / 用户动手了：本轮作废，交给新的那一轮
       if (!h || round !== focusRound || surfaceRef.value !== surface || !startupFocusActive()) return
       if (h.view.focusAll()) {
+        lastViewport = h.view.getViewport()
+        startupFocusDone = true
+        opts.readiness?.close()
         // 把这次取景落盘：云端那份「上次位置」也跟着对齐，不会停在一个没人看过的旧构图
-        h.save.set(GRAPH_VIEWPORT_KEY, h.view.getViewport(), 'canvas')
+        h.save.set(GRAPH_VIEWPORT_KEY, lastViewport, 'canvas')
         return
       }
       if (k >= delays.length) return
@@ -94,7 +110,38 @@ export function useCanvasViewport(opts: {
   function persistViewport(): void {
     const h = hostRef.value
     if (!h) return
-    h.save.set(GRAPH_VIEWPORT_KEY, h.view.getViewport(), 'canvas')
+    lastViewport = h.view.getViewport()
+    h.save.set(GRAPH_VIEWPORT_KEY, lastViewport, 'canvas')
+  }
+
+  /**
+   * 把上次的视野原样恢复（重挂后 / 启动取景完成后数据又变）。
+   *
+   * 为什么不重新取景：用户口径 2026-11-16 —— 启动只取景一次。之后再动视野就变成了
+   * 「又聚焦一遍」，画面会跳；记录并恢复用户看到的视野才是正确的补充方式。
+   *
+   * ★ 为什么带重试 + 校验：VueFlow 重挂时，它内部的 Pane 会在**自己的 onMounted** 里
+   * 用 defaultViewport 强写一次 {0,0,1}。如果我们在重挂那一刻就写，会被它随后覆盖掉
+   * （实测：恢复后 200ms 又回到 100%）。所以一直重试到「写进去的视野确实还在」或超时为止。
+   */
+  function restoreViewport(): void {
+    const target = lastViewport
+    if (!target) return
+    const deadline = Date.now() + RESTORE_VIEWPORT_TIMEOUT_MS
+    const tick = (): void => {
+      const h = hostRef.value
+      if (!h || userMovedViewport || lastViewport !== target) return
+      const cur = h.view.getViewport()
+      const same =
+        Math.abs(cur.x - target.x) < 0.5 &&
+        Math.abs(cur.y - target.y) < 0.5 &&
+        Math.abs(cur.zoom - target.zoom) < 1e-4
+      if (same) return
+      h.view.setViewport(target)
+      if (Date.now() >= deadline) return
+      viewportTimers.push(setTimeout(tick, 120))
+    }
+    tick()
   }
 
   /**
@@ -106,18 +153,19 @@ export function useCanvasViewport(opts: {
   function markUserMoved(): void {
     userMovedViewport = true
     clearTimers()
+    // 用户已经接管视野：闸门关掉，之后不再等插件初始化，也不再自动取景
+    opts.readiness?.close()
   }
 
   function bindViewportRestore(): void {
-    startupWindowUntil = Date.now() + STARTUP_FOCUS_WINDOW_MS
     // immediate：watch 默认**不**跑首次值。本函数在 setup 里调用，而 CanvasSurface 可能已经挂上
     // （重进画布、或者挂载比这一行更快），不立即检查就永远收不到那次变化。
     stopViewportWatch = watch(
       surfaceRef,
       (surface) => {
         if (!surface || !hostRef.value || !opts.persistViewport()) return
-        // 启动窗口结束 / 用户已接管 → 不再自动取景（之后重挂保持 VueFlow 自己的视口）
-        if (!startupFocusActive()) return
+        // 启动取景已经做完 / 用户已接管 → 重挂后把上次的视野原样还回去，不再重新取景
+        if (!startupFocusActive()) return restoreViewport()
         focusSurface(surface)
       },
       { immediate: true },
@@ -128,7 +176,7 @@ export function useCanvasViewport(opts: {
      * 为什么必须单独监听：重挂发生在 CanvasSurface **内部**（VueFlow 带 key），
      * surfaceRef 这个句柄不会变 —— 只监听 surfaceRef 就永远收不到「重挂」这件事，
      * 表现就是取景一次、随后被后续插件装载的重挂抹掉（实测：8 节点取景成功 → 重挂 → 100% 贴左上角）。
-     * 每次重挂都按当前图重新取景（轮次号自增，上一轮还没落定的重试自动作废）。
+     * 启动阶段按当前图取景；启动取景完成之后只**恢复**上次视野，不再重新取景（不产生第二次取景）。
      */
     if (opts.remountSignal) {
       watch(
@@ -136,12 +184,19 @@ export function useCanvasViewport(opts: {
         () => {
           const surface = surfaceRef.value
           if (!surface || !hostRef.value || !opts.persistViewport()) return
-          if (!startupFocusActive()) return
+          if (!startupFocusActive()) return restoreViewport()
           focusSurface(surface)
         },
         { flush: 'post' },
       )
     }
+    // 就绪闸门：等插件声明的异步初始化（联网恢复画布等）落地后再取景 —— 只做这一次
+    void (opts.readiness ? opts.readiness.wait() : Promise.resolve()).then(() => {
+      const surface = surfaceRef.value
+      if (!surface || !hostRef.value || !opts.persistViewport()) return
+      if (!startupFocusActive()) return
+      focusSurface(surface)
+    })
   }
 
   function dispose(): void {
