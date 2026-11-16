@@ -197,7 +197,8 @@ function collectDuration(body) {
 
 const action = {
   id: 'seed-audio:generate',
-  title: 'seed-audio-1.0 · 音频生成',
+  // 标题要短：底栏那格只有 200 多像素，长标题会被截成「…音频生成」
+  title: 'Seed Audio 1.0',
   description: '参考音色 + 自然语言描述。写 @音频1 用这段声音，描述里写情绪、语速、场景；纯描述也能生成音效',
   group: '51kik · 音频',
   nodeTypes: ['audio'],

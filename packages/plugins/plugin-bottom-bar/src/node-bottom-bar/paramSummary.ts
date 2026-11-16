@@ -61,7 +61,9 @@ export function paramSummary(input: SummaryInput): string {
     changed.push(!hasOptions && name ? name + ' ' + label : label)
   }
 
-  if (changed.length === 0) return placeholder + ' ' + fields.length
+  // 全默认时只说「参数」：后面挂个数字容易被读成参数值（用户 2026-11-16 截图里
+  // 「参数 5」看着像第 5 个参数，其实只是「有 5 项可调」）。
+  if (changed.length === 0) return placeholder
   if (changed.length <= MAX_PARTS) return changed.join(' · ')
   return changed.slice(0, MAX_PARTS).join(' · ') + ' +' + (changed.length - MAX_PARTS)
 }

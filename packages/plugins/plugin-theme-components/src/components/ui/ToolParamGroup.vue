@@ -98,7 +98,8 @@ const summary = computed(() => {
     const name = (p.label ?? '').trim()
     changed.push(!hasOptions && name ? name + ' ' + label : label)
   }
-  if (changed.length === 0) return '参数 ' + rows.length
+  // 全默认只说「参数」：挂个数字会被读成第几个参数（用户 2026-11-16）
+  if (changed.length === 0) return '参数'
   if (changed.length <= 2) return changed.join(' · ')
   return changed.slice(0, 2).join(' · ') + ' +' + (changed.length - 2)
 })

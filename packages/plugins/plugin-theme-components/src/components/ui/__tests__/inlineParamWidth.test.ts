@@ -65,8 +65,8 @@ describe('内联下拉：按内容宽 + 80 下限', () => {
  * 这一层用源码断言：摘要的生成逻辑在 setup 里，纯函数由底栏那份 paramSummary 单测覆盖。
  */
 describe('参数摘要不铺满每个值', () => {
-  it('默认值不进摘要，全默认时只说「参数 N」', () => {
-    expect(group).toContain("return '参数 ' + rows.length")
+  it('默认值不进摘要，全默认时只说「参数」', () => {
+    expect(group).toContain("return '参数'")
   })
 
   it('只有改过默认值的参数才进摘要', () => {

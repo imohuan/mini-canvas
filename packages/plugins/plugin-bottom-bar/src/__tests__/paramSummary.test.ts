@@ -19,9 +19,10 @@ const FIELDS = [
 const DEFAULTS = { format: 'mp3', sampleRate: 24000, speechRate: 0, pitchRate: 0, loudnessRate: 0 }
 
 describe('参数下拉摘要', () => {
-  it('全是默认值时不铺一串 0，只说「参数 5」', () => {
+  it('全是默认值时不铺一串 0，只说「参数」', () => {
     const s = paramSummary({ fields: FIELDS, values: DEFAULTS })
-    expect(s).toBe('参数 5')
+    // 不挂数字：截图里「参数 5」被读成「第 5 个参数」（用户 2026-11-16）
+    expect(s).toBe('参数')
     expect(s).not.toContain('24 kHz')
   })
 
