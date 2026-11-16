@@ -22,7 +22,7 @@ const view = ctx.tryGet('view')          // 显式可选：缺了返回 undefine
 | --- | --- | --- | --- |
 | **内核内置** | 框架自己 | `tools`、`slots`、`settings` | 是（纯 `new Context()` 也有） |
 | **画布基础** | `canvas-base` 基础插件 | `doc`、`save`、`selection`、`resources` | 装了基础插件才有 |
-| **渲染宿主** | `canvas-render` 宿主 | `view`、`canvas`、`canvasReady` | 起了渲染宿主才有 |
+| **渲染宿主** | `canvas-render` 宿主 | `view`、`canvas`、`canvasBoot`、`nodeToolbar` | 起了渲染宿主才有 |
 
 ## 全部服务（一句话 + 链接）
 
@@ -37,7 +37,7 @@ const view = ctx.tryGet('view')          // 显式可选：缺了返回 undefine
 | `resources` | 资源生命周期：object URL 的登记与回收 | [看](/services/resources) |
 | `upstream` / `media` | 能力包（不是服务名）：读上游、加媒体；用 `useCapability('upstream' / 'media')` 取 | [看](/canvas-data/upstream) |
 | `view` | 实测尺寸 / 绝对坐标 / 视口 / 唯一取景 `fitTo` | [看](/services/view) |
-| `canvasReady` | 就绪闸门：异步插件登记初始化，画布等它落地再取景 | [看](/services/view#异步插件-先等它装完-再取景) |
+| `canvasBoot` | 启动时序：读画布前换数据源、算构图前等异步初始化（两段合一） | [看](/services/view#异步插件-插件登记-画布统一决定时机) |
 | `nodeToolbar` | 节点上下状态栏的会话与模式注册（辅助服务） | [看](/services/node-toolbar) |
 | `tools` | 外部能力注册表：文生图 / 图生文这类"生成工具" | [看](/services/tools) |
 

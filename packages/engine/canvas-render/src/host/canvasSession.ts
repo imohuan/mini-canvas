@@ -120,12 +120,25 @@ async function mountCanvasNow(opts: MountCanvasOptions): Promise<CanvasSessionHa
   const gen = ++generation
   if (active) await unmountCanvas()
 
+  /**
+   * 会话钩子：必须在宿主**读画布之前**叫醒。
+   *
+   * 云端插件在这里换存储后端，于是宿主那一次读取拿到的就是服务器数据，
+   * 不需要「先读本地、再整包覆盖」。钩子返回的清理函数由本会话在离开画布时逆序执行。
+   */
+  const hooks = canvasReadyPlugins(opts).flatMap((plugin) =>
+    typeof plugin.onCanvasReady === 'function'
+      ? [{ name: plugin.name ?? '?', onCanvasReady: plugin.onCanvasReady }]
+      : [],
+  )
+
   const created = await createPlumeHost({
     ctx: opts.ctx,
     // 根级底座已经作为 `canvas-base` 插件装进同一份 Context；这里只传实例，
     // 不再另立插件名（否则会出现两个名字指向同一层底座）。
     appBase: { pluginName: CANVAS_BASE_PLUGIN_NAME, services: opts.appBase },
     coldPlugins: opts.plugins ?? [],
+    sessionHooks: hooks,
     seedDefault: opts.seed,
     dev: opts.dev,
   })
@@ -137,22 +150,8 @@ async function mountCanvasNow(opts: MountCanvasOptions): Promise<CanvasSessionHa
   }
   if (opts.windowKey) created.exposeToWindow(opts.windowKey)
 
-  /**
-   * 画布会话就绪钩子：插件在 apply 里只能拿到应用级服务，
-   * 需要 doc/selection 的部分（如云端同步）在这里挂上。
-   * 钩子抛错不影响画布本身：记一条 warn，继续往下走。
-   */
-  const sessionDisposers: Array<() => void> = []
-  for (const plugin of canvasReadyPlugins(opts)) {
-    const hook = plugin.onCanvasReady
-    if (typeof hook !== 'function') continue
-    try {
-      const dispose = hook(opts.ctx)
-      if (typeof dispose === 'function') sessionDisposers.push(dispose)
-    } catch (err) {
-      console.warn('[canvas-data] onCanvasReady 失败：' + ((plugin as { name?: string }).name ?? '?'), err)
-    }
-  }
+  /** 钩子清理表：由 createPlumeHost 在叫醒钩子时收集（含抛错前的已完成项） */
+  const sessionDisposers = created.sessionDisposers
 
   let disposed = false
   const handle: CanvasSessionHandle = {

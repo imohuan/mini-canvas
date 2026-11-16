@@ -179,35 +179,6 @@ describe('view · 全部节点取景（focusAll）', () => {
     expect(writes).toEqual([])
   })
 
-  it('后端还没挂上时先记一笔，挂上后自动补做（启动时序：doc 先恢复，VueFlow 后挂）', () => {
-    const store = makeStore()
-    const v = new ViewService({ nodeStore: store })
-    expect(v.focusAll()).toBe(false)
-    const { backend, writes } = makeBackend()
-    v.attachBackend(backend)
-    expect(writes).toHaveLength(1)
-  })
-
-  /**
-   * 回归：启动取景被 VueFlow 的 defaultViewport 覆盖。
-   *
-   * VueFlow 的 Pane 在它自己的 onMounted 里强写一次视口（{0,0,1}）。如果取景在那一刻就写，
-   * 会被它覆盖 —— 实测表现是「节点贴左上角、缩放 100%」。所以后端报告「未就绪」时
-   * focusAll 必须什么都不写、只记待办；等视图就绪后再写。
-   */
-  it('视口后端存在但 d3Zoom 未就绪时：不写视口，只记待办', () => {
-    const store = makeStore()
-    const v = new ViewService({ nodeStore: store })
-    let ready = false
-    const { backend, writes } = makeBackend({ viewportReady: () => ready })
-    v.attachBackend(backend)
-    expect(v.focusAll()).toBe(false)
-    expect(writes).toEqual([])
-    // 视图就绪后再调一次（真实宿主是重挂后补做的下一轮）
-    ready = true
-    expect(v.focusAll()).toBe(true)
-    expect(writes.length).toBeGreaterThan(0)
-  })
 
   it('调用方可以覆盖参数（例如只平移），默认值不丢', () => {
     const store = makeStore()
@@ -223,5 +194,40 @@ describe('view · 全部节点取景（focusAll）', () => {
       animate: false,
       keepZoom: true,
     })
+  })
+
+  /**
+   * 首帧取景的正式路径：**只算不写**。
+   *
+   * 画布挂载前没有 DOM 可量，所以容器尺寸由调用方给；结果交给 VueFlow 作为 defaultViewport。
+   * 这条路径必须不产生任何 setViewport —— 有写入就说明又回到了「先渲染再校正」。
+   */
+  it('solveStartupViewport：按给定容器尺寸算出构图，且不写视口', () => {
+    const store = makeStore()
+    const v = new ViewService({ nodeStore: store })
+    const { backend, writes } = makeBackend()
+    v.attachBackend(backend)
+    const plan = v.solveStartupViewport({ w: 1200, h: 800 })
+    expect(plan).toBeDefined()
+    expect(writes).toEqual([])
+    // 两张卡片包围盒 (0,0)-(1200,900)，取景后四角都落在 1200×800 内
+    const x1 = plan!.x
+    const y1 = plan!.y
+    const x2 = 1200 * plan!.zoom + plan!.x
+    const y2 = 900 * plan!.zoom + plan!.y
+    expect(x1).toBeGreaterThanOrEqual(0)
+    expect(y1).toBeGreaterThanOrEqual(0)
+    expect(x2).toBeLessThanOrEqual(1200)
+    expect(y2).toBeLessThanOrEqual(800)
+  })
+
+  it('solveStartupViewport：空画布 / 没尺寸时返回 undefined（调用方用默认视口）', () => {
+    const empty = new ViewService({ nodeStore: new NodeStore() })
+    expect(empty.solveStartupViewport({ w: 1200, h: 800 })).toBeUndefined()
+
+    const store = new NodeStore()
+    store.registerType({ type: 'ghost', label: '未量测', defaultSize: { w: 0, h: 0 } })
+    store.addNodes([{ type: 'ghost', position: { x: 0, y: 0 }, id: 'g' }])
+    expect(new ViewService({ nodeStore: store }).solveStartupViewport({ w: 1200, h: 800 })).toBeUndefined()
   })
 })

@@ -11,8 +11,15 @@ export function useCanvasLifecycle(opts: {
   hostRef: { value: CanvasHostHandle | undefined }
   emitReady: (host: CanvasHostHandle) => void
   emitPluginIssue: (payload: { name: string; lifecycle: string }) => void
-  surfaceReady: Ref<boolean>
   mountError: Ref<string>
+  /**
+   * 订阅/监听全部接好后，由本钩子 await 它来「呈现画布」。
+   *
+   * 为什么是回调而不是一个 boolean：呈现之前还有一步异步（等 canvasBoot 放行、
+   * 算启动构图）。把它交给宿主组件实现，这里只负责“接完了就调用”，
+   * 于是“接订阅”与“何时画出来”两件事各自只有一个责任人。
+   */
+  revealSurface: () => Promise<void>
   interactionSettings: CanvasInteractionSettings
   interaction: CanvasInteractionState
   nodeEpoch: Ref<number>
@@ -41,7 +48,6 @@ export function useCanvasLifecycle(opts: {
   const {
     host,
     hostRef,
-    surfaceReady,
     mountError,
     interactionSettings,
     interaction,
@@ -184,11 +190,12 @@ export function useCanvasLifecycle(opts: {
       window.addEventListener('blur', opts.resetViewportMoveIfIdle)
       window.addEventListener('visibilitychange', opts.resetViewportMoveIfIdle)
 
-      surfaceReady.value = true
+      await opts.revealSurface()
       opts.emitReady(host)
     } catch (err) {
       mountError.value = err instanceof Error ? err.message : String(err)
-      surfaceReady.value = true
+      // 失败也要放行「呈现」这一步，否则界面会永远停在“正在准备画布…”看不到错误。
+      await opts.revealSurface().catch(() => undefined)
     }
   })
 

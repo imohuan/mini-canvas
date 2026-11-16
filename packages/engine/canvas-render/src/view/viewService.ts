@@ -46,14 +46,6 @@ export class ViewService {
   private layout: NodeLayoutService
   private viewport: ViewportService
   /**
-   * 后端挂上之前收到的「全部节点取景」请求。
-   *
-   * 启动时宿主要求取景的那一刻，VueFlow 可能还没挂（view.attachBackend 尚未调用），
-   * 直接调用会静默 no-op，画面就停在 {0,0,1}。这里记一笔，挂上后端时补做一次。
-   * 只保留一笔记号（重复请求合并成一次），不是请求队列。
-   */
-  private pendingFocusAll = false
-  /**
    * 宿主界面条实时尺寸（屏幕像素）。由外壳测量后上报（见 setChromeBars）。
    * 不写死像素：顶部工具栏 / 底部底栏 / 左右抽屉的尺寸随主题、字号、是否停靠而变化。
    */
@@ -108,10 +100,6 @@ export class ViewService {
 
   attachBackend(backend: ViewportBackend): void {
     this.viewport.attachBackend(backend)
-    if (this.pendingFocusAll) {
-      this.pendingFocusAll = false
-      this.focusAll()
-    }
   }
 
   /**
@@ -215,10 +203,27 @@ export class ViewService {
    */
   fitTo(target: FocusTarget, opts: FitToOptions = {}): boolean {
     const rects = this.resolveTargets(target)
+    const result = this.solveFit(rects, opts)
+    if (!result) return false
+    if (opts.animate === false) this.viewport.setViewport(result)
+    else this.viewport.animateViewport(result, opts.durationMs ?? 320)
+    return true
+  }
+
+  /**
+   * 只算不写：给出「这批矩形应该落在什么视口」。
+   *
+   * 为什么要拆出来：画布首次挂载时，我们要在 VueFlow 渲染**之前**就把构图交给它
+   * （作为 defaultViewport），否则第一帧必然先是 {0,0,1}。挂载前没有 DOM 可量，
+   * 所以这段计算只依赖节点尺寸与容器尺寸，不依赖当前视口状态。
+   *
+   * 返回 undefined 表示没什么可取的（没有矩形 / 不需要移动）。
+   */
+  solveFit(rects: LayoutRect[], opts: FitToOptions = {}, hostSize?: { w: number; h: number }): ViewportState | undefined {
     const root = this.viewport.getRootEl()
     const pane = this.viewport.getPaneEl() ?? this.viewport.getRendererEl()
     const host = root ?? pane
-    const viewport = { w: host?.clientWidth ?? 1, h: host?.clientHeight ?? 1 }
+    const viewport = hostSize ?? { w: host?.clientWidth ?? 1, h: host?.clientHeight ?? 1 }
     const zoom = this.viewport.getViewport().zoom || 1
     // 节点自身上/下控制栏是绝对定位在卡片外侧的，getNodeRect 量不到；
     // includeNodeTopBar 时只把**顶部标题条**量进来（底部控制栏不参与，见契约说明）。
@@ -243,10 +248,7 @@ export class ViewService {
       barHeight,
       nodeTopBarHeight: nodeTopBar,
     })
-    if (!result.moved) return false
-    if (opts.animate === false) this.viewport.setViewport(result.viewport)
-    else this.viewport.animateViewport(result.viewport, opts.durationMs ?? 320)
-    return true
+    return result.moved ? result.viewport : undefined
   }
 
   /**
@@ -258,11 +260,6 @@ export class ViewService {
   focusAll(opts: FitToOptions = {}): boolean {
     const rects = this.resolveTargets('all').filter((r) => r.w > 0 && r.h > 0)
     if (rects.length === 0) return false
-    // 后端未挂 / d3Zoom 还没就绪（VueFlow 的 Pane 尚未 mounted）：记一笔，挂上时补做
-    if (!this.viewport.hasBackend() || !this.viewport.viewportReady()) {
-      this.pendingFocusAll = true
-      return false
-    }
     return this.fitTo(rects.map((r) => r.id), {
       padding: STARTUP_FOCUS_PADDING,
       includeBars: 'both',
@@ -270,6 +267,27 @@ export class ViewService {
       animate: false,
       ...opts,
     })
+  }
+
+  /**
+   * 计算出「全部节点」的启动构图，但**不写视口**。
+   *
+   * 这是首帧取景的正式入口：画布还没挂（没有 DOM 可量）时，用调用方给的容器尺寸算，
+   * 把结果当作 VueFlow 的 defaultViewport —— 挂载的第一帧就是终态，不存在「先左上角再校正」。
+   * 节点尺寸要求已写入 node.size（数据层恢复时就补齐了），所以不需要等 VueFlow 量测。
+   *
+   * 返回 undefined = 没有可用矩形（空画布），调用方按默认视口渲染即可。
+   */
+  solveStartupViewport(hostSize?: { w: number; h: number }, opts: FitToOptions = {}): ViewportState | undefined {
+    const rects = this.resolveTargets('all').filter((r) => r.w > 0 && r.h > 0)
+    if (rects.length === 0) return undefined
+    return this.solveFit(rects, {
+      padding: STARTUP_FOCUS_PADDING,
+      includeBars: 'both',
+      includeNodeTopBar: true,
+      animate: false,
+      ...opts,
+    }, hostSize)
   }
 
   /**

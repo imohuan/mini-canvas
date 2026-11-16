@@ -39,7 +39,8 @@ if (view) view.fitTo('selection')
 | `animateViewport(v, ms?)` | 带过渡，缺省 320ms |
 | `setCenter(x, y, zoom?)` | 把画布坐标放到视野中心 |
 | `fitView(padding?)` | 整图适配，缺省留白 0.1 |
-| `focusAll(opts?)` | 把**全部节点**铺进可视区（启动 / 云端换图后用）；与 F 键同一条算法，即时生效 |
+| `focusAll(opts?)` | 把**全部节点**铺进可视区（F 键 / 云端换图后用）；与启动同一条算法，即时生效 |
+| `solveStartupViewport(hostSize?, opts?)` | 只算不写：给出启动构图，宿主拿它作 `default-viewport` |
 | `zoomIn` / `zoomOut` / `zoomTo` | 缩放控制 |
 | `screenToFlow` / `flowToScreen` | 屏幕坐标与画布坐标互转 |
 | `getRootEl` / `getPaneEl` / `getRendererEl` / `queryNodeEl` | 本画布实例的 DOM 锚点；没挂好返回 `null` |
@@ -67,70 +68,81 @@ view.fitTo('all', { heightRatio: 0.5 })
 
 返回 `true` 表示真的移动了视图；已可见或没有目标时返回 `false`。
 
-### 启动只取景一次：`focusAll`
+### 启动构图：`solveStartupViewport`（只算不写）
 
-打开画布时**不再恢复上次保存的视口**，统一调用 `view.focusAll()` 把全部节点铺进画面，
-而且**整个打开过程只取景一次**：
+`fitTo` 和 `focusAll` 都是**写**视口，只能在画布挂上之后用。启动那一次不行 ——
+那时候画布还没挂，写了也会被 VueFlow 的初始化覆盖，于是先闪一帧。
 
 ```ts
-view.focusAll()                 // 留白 48、避开上下界面条、算上节点标题条、不做补间
+const plan = view.solveStartupViewport({ w: 1600, h: 900 })
+// plan = { x, y, zoom } 或 undefined（空画布）
+```
+
+它只依赖节点尺寸和容器尺寸，不碰 DOM，也不写视口。宿主的用法是把这个结果直接交给
+VueFlow 的 `default-viewport`，让首帧就是终态。它和 F 键、`focusAll` 共用同一套取景算法
+（留白 48、避开上下界面条、算上节点标题条、不做补间）。
+
+画布已经挂上、需要重新构图时（例如云端整包换图后）才用 `focusAll()`：
+
+```ts
+view.focusAll()                 // 即时生效，不补间
 view.focusAll({ padding: 24 })  // 需要时改单项，其余默认仍生效
 ```
 
-它解决的是「同一次打开恢复两次」：以前宿主恢复本地存档视口、云端插件又恢复服务器视口，
-画面会跳，而且经常两边都不在好看的构图上。现在只有一种取景 —— 全部节点都在画面里。
-
-### 异步插件：先等它装完，再取景
+### 异步插件：插件登记，画布统一决定时机
 
 插件分两种：
 
 | 类型 | 例子 | 画布怎么处理 |
 | --- | --- | --- |
-| 同步插件 | 主题、节点类型、底栏、自动布局 | `apply` 返回就等于装完，画布直接能看到最终节点，**无需任何改动** |
-| 异步插件（只差数据） | 云端连接 | 用 `canvasSource.beforeRestore()` 交出「换存储后端」，画布先换后端再读一次 |
-| 异步插件（其它异步工作） | 需要预热的插件 | 把 Promise 交给 `canvasReady.hold()`，画布等它落地后再取景 |
+| 同步插件 | 主题、节点类型、底栏、自动布局 | `apply` 返回就等于装完。它们加载完，宿主才开始读画布 |
+| 异步插件 | 云端连接、需要预热资源的插件 | 登记到 `canvasBoot`，由画布按固定顺序触发，插件不用自己排时序 |
 
-#### 数据从哪儿来：`canvasSource`
-
-画布读数据只走一次 `save.get(GRAPH_KEY, 'canvas')`。云端插件做的事其实就是**换一个 storage adapter**，
-所以它只要要求「读之前换」就够了，不必自己再把画布写一遍：
+`canvasBoot` 就是启动时序本身，只有两个登记口：
 
 ```ts
-const source = ctx.tryGet<{ beforeRestore(fn: () => void | Promise<unknown>, label?: string): void }>('canvasSource')
-source?.beforeRestore(() => switchAdaptersToCloud(), 'cloud-client:adapters')
+const boot = ctx.tryGet<{
+  beforeRestore(fn: () => Promise<unknown> | void, label?: string): Promise<void>
+  ready(fn: () => Promise<unknown> | void, label?: string): void
+  restoreResult(): { nodes: unknown[]; edges: unknown[] } | undefined
+}>('canvasBoot')
+
+// ① 读画布之前：换数据源（云端把 save 的四格换成自己的后端）
+boot?.beforeRestore(() => switchAdaptersToCloud(), 'cloud-client:adapters')
+
+// ② 读画布之后、算构图之前：其它异步准备（拉清单、预热）
+boot?.ready(warmup, 'my-plugin:warmup')
 ```
 
-顺序变成：
+于是画布打开只有一条链路：
 
 ```text
-装完同步插件 → beforeRestore（换成云端后端）→ save.get 读一次 → 直接是云端数据 → 取景
+加载同步插件 → canvasBoot.beforeRestore（换数据源）→ save.get 读一次 → canvasBoot.ready 落地
+            → 算启动构图 → 挂载 VueFlow（首帧就是终态）
 ```
 
-本地那份存档从头到尾不会被画出来，也不存在「先写本地再被覆盖」。
-服务器上还没有这张画布时（首次上云）仍要把本地那份迁上去，这一步由插件在恢复后自己做。
+本地那份存档从头到尾不会被画出来，也不存在「先读本地再被覆盖」。
+服务器上还没有这张画布时（首次上云），插件用 `boot.restoreResult()` 看这次读到了什么，
+再决定要不要把本地那份推上去 —— 不必自己再 GET 一次。
 
-```ts
-// 需要等“数据以外”的异步工作（例如预热资源）时，用就绪闸门
-const gate = ctx.tryGet<{ hold(fn: () => Promise<unknown>, label?: string): Promise<void> }>('canvasReady')
-const ready = gate?.hold ? gate.hold(warmup, 'my-plugin:warmup') : warmup()
-```
+`ready()` 的规则：
 
-闸门的规则：
+1. **只登记，不执行**。执行时机由画布统一触发，所以插件可以在很早的时候登记，
+   不必反过来等「宿主是不是已经读完」。
+2. 画布**等它完成**（成功或失败都算完成）才算构图 —— 只取一次景，不会先按旧图画一遍。
+3. 失败不阻断：插件自己的错误照旧写进自己的状态，画布照常打开。
+4. 有 **8 秒兜底**：插件卡死（网络挂起）时先按现状构图，不让画布永远不出现。
+5. 画布呈现之后再登记的（用户临时装插件）**不参与等待**，不会把画布卡住。
 
-1. 登记后画布**等它完成**（成功或失败都算完成）再取景 —— 于是只取一次景，不会先按旧图画一遍。
-2. 失败不阻断：插件自己的错误照旧写进自己的状态，画布照常打开。
-3. 有 **8 秒兜底**：插件卡死（网络挂起）时先按现状取景，不让画布永远不出现。
-4. 画布呈现之后再登记的（用户临时装插件）**不参与等待**，不会把画布卡住。
+改这里之前先看三条：
 
-改这里之前先看四条：
-
-1. **必须等视口后端真正就绪**。VueFlow 的 Pane 在它自己的 `onMounted` 里用 `defaultViewport`
-   强写一次视口；过早取景会被覆盖回 `{0,0,1}`（表现：节点贴左上角、缩放 100%）。
-   `focusAll()` 未就绪时只记一笔待办、返回 `false`，就绪后自动补做。
+1. **必须在挂载之前给定构图**。VueFlow 的 `default-viewport` 只在初始化那一次生效；
+   挂载之后再写视口，就必然先画错一帧再改对 —— 用户看到的就是闪烁。
+   所以 `CanvasHost` 会先把构图算好，再让 `CanvasSurface` 挂载。
 2. **插件装卸会让 VueFlow 整棵树重挂**，重挂后视口回到默认值。重挂时把**上次的视野原样恢复**
    （不重新取景）；用户自己平移/缩放后彻底停手。
-3. **视口仍然落盘**（`graph-viewport`），只是启动不再读它 —— 那份记录留给诊断与跨设备排查。
-4. **取景后两秒内会守着视口**：VueFlow 挂载收尾时可能用自己的默认视口再写一次，被改回去就写回来。
+3. **视口仍然落盘**（`graph-viewport`），但只在用户亲手平移/缩放后写 ——
+   启动构图是按当前窗口重算的，不需要再往存储里记一份。
 
 ### 取景如何避开界面条
 

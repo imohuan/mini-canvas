@@ -51,7 +51,7 @@ import { ViewportService } from '../viewport/viewportService'
 import { ViewService } from '../view/viewService'
 import { CanvasService } from '../canvas/canvasService'
 import { NodeToolbarService } from '../toolbar/nodeToolbarService'
-import { createCanvasReadiness, createCanvasSource } from './canvas-host/canvasReadiness'
+import { createCanvasBoot } from './canvas-host/canvasBoot'
 import {
   CANVAS_INTERACTION_GROUP,
   CANVAS_INTERACTION_SCHEMA,
@@ -85,6 +85,14 @@ export interface PlumeOptions {
   ctx?: Context
   /** 冷启动要装载的插件（顺序即装载顺序）。宿主负责给全(含内置+业务)。支持 PluginModule 对象与 Service 类。 */
   coldPlugins?: HostPlugin[]
+  /**
+   * 画布会话钩子（插件的 `onCanvasReady`），在**读画布之前**调用。
+   *
+   * 为什么必须在读之前：插件要换数据源（云端），必须赶在那唯一一次 `save.get` 之前换掉，
+   * 否则读到的还是本地那份，随后再覆盖一遍 —— 用户看到的就是「同一张画布处理两次」。
+   * 钩子里登记到 `canvasBoot.ready` 的异步工作不在这里执行，它们读完之后、算构图之前才跑。
+   */
+  sessionHooks?: Array<{ name: string; onCanvasReady: (ctx: Context) => void | (() => void) }>
   /**
    * 装配清单冷启动（目标 D / B5）：给则启动走 `manager.applyManifest(manifest)`（热装语义），
    * 支持 disabled 项(登记但关闭不装)、per-plugin config 覆盖、同 id 换版本；与 coldPlugins 二选一(manifest 优先)。
@@ -183,6 +191,8 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
   api: PlumeApi
   manager: PluginManager
   exposeToWindow: (key?: string) => void
+  /** 会话钩子登记的清理函数（离开画布时逆序执行） */
+  sessionDisposers: Array<() => void>
 }> {
   // dev 开关落到 ctx.isDev（决策 9 的 needs 缺项裁决要用；缺省 false = 生产语义）
   const ctx = opts.ctx ?? new Context({ dev: opts.dev ?? false })
@@ -232,15 +242,11 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
   const revokeView = ctx.hasService('view') ? undefined : ctx.inject('view', view)
 
   /*
-   * 画布就绪闸门（服务名 canvasReady）：插件可把「异步初始化」交给它，画布等到它们落地
-   * 再取景一次。同步插件不需要登记 —— 它们在 apply 返回时就已经注册完毕。
-   * 见 canvas-host/canvasReadiness.ts 的说明。
+   * 画布启动时序（服务名 canvasBoot）：插件在这里登记「换数据源」与「异步初始化」两件事，
+   * 画布按同一份契约决定何时读数据、何时算构图。见 canvas-host/canvasBoot.ts。
    */
-  const readiness = createCanvasReadiness()
-  const revokeReadiness = ctx.hasService('canvasReady') ? undefined : ctx.inject('canvasReady', readiness)
-  /* 数据源闸口（服务名 canvasSource）：插件可要求「读画布之前先换后端」，见其文件头说明。 */
-  const canvasSource = createCanvasSource()
-  const revokeCanvasSource = ctx.hasService('canvasSource') ? undefined : ctx.inject('canvasSource', canvasSource)
+  const canvasBoot = createCanvasBoot()
+  const revokeCanvasBoot = ctx.hasService('canvasBoot') ? undefined : ctx.inject('canvasBoot', canvasBoot)
 
   // 工具注册表（外部能力调用：文生图/图生图/文生文…）由内核 Context 构造时内置上架为 'tools'，
   // 基础插件不重复注入（同一实例由插件的 ctx.tools 与节点的 ctx.get('tools') 共享）。
@@ -273,8 +279,7 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
   const disposeSessionServices = (): void => {
     // 撤销函数内部会核对实例身份，不会误删别人的服务。
     revokeView?.()
-    revokeReadiness?.()
-    revokeCanvasSource?.()
+    revokeCanvasBoot?.()
     revokeCanvas?.()
     revokeNodeToolbar?.()
     // doc / selection 随 canvas-data 的 fiber 回收；共享根 Context 时再显式摘一次，
@@ -359,15 +364,27 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
   // 节点存 GRAPH_KEY(CanvasNode[])，边独立存 GRAPH_EDGES_KEY(CanvasEdge[])。
 
   /*
-   * ★ 读画布之前，先问一句「数据从哪儿来」。
+   * ★ 启动时序第一段：叫醒插件的画布会话钩子。
    *
-   * 以前是「先读本地存档 → 装插件 → 插件再联网拉画布覆盖一遍」，同一张画布被写两次：
-   * 用户先看到本地那份、几百毫秒后被换成服务器那份。
-   * 现在插件（如云端连接）只要在 canvasSource.beforeRestore() 里交出「换后端」这一步，
-   * 宿主就会**先换后端、再读一次**：下面那次 save.get 直接读到最终数据，本地那份从头到尾没被画出来。
+   * 它们必须在**读画布之前**跑。云端插件在这里把 save 的四格换成自己的后端，
+   * 于是下面那一次 save.get 读到的直接是服务器数据 —— 不存在「先读本地、再被覆盖」。
+   * 钩子里真正的异步恢复不在这里等：它登记进 canvasBoot.ready，读完画布才跑。
    */
-  const dataSource = ctx.tryGet<{ runBeforeRestore(): Promise<void> }>('canvasSource')
-  if (dataSource) await dataSource.runBeforeRestore()
+  const sessionDisposers: Array<() => void> = []
+  for (const hook of opts.sessionHooks ?? []) {
+    try {
+      const dispose = hook.onCanvasReady(ctx)
+      if (typeof dispose === 'function') sessionDisposers.push(dispose)
+    } catch (err) {
+      console.warn('[canvas-data] onCanvasReady 失败：' + hook.name, err)
+    }
+  }
+
+  /*
+   * ★ 启动时序第二段：跑「准备数据源」。
+   * 换完之后下面那次 save.get 读到的就是最终数据 —— 没有「先写本地再覆盖」那两遍。
+   */
+  await canvasBoot.runBeforeRestore()
   const saved = await save.get<CanvasNode[]>(GRAPH_KEY, 'canvas')
   const savedEdges = await save.get<CanvasEdge[]>(GRAPH_EDGES_KEY, 'canvas')
   // 关键判定：saved === undefined 才是"从未保存"，不应与"保存了空数组"混为一谈。
@@ -386,6 +403,15 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
     nodeStore.replaceAll(seeded)
     edgeStore.replaceAll(restoreEdges ?? [])
   }
+  /*
+   * 把「这次到底读到了什么」记进启动时序服务：插件要用它判断「服务器上还没有这张画布」
+   * （首次上云），而不是自己再 GET 一遍 —— 同一份数据读两次会拿到不同版本，判断也就不可靠。
+   * 记的是**读进来并已重建媒体地址**的最终节点，插件可以当作“画布里现在就长这样”。
+   */
+  canvasBoot.setRestoreResult({
+    nodes: nodeStore.getNodes(),
+    edges: edgeStore.getEdges(),
+  })
 
   /** exposeToWindow 挂载的 window key（host.stop 时自动清理，防旧 API 残留） */
   let exposedWindowKey: string | null = null
@@ -466,5 +492,5 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
     exposedWindowKey = key // 记录供 stop 清理
   }
 
-  return { host, api, manager, exposeToWindow }
+  return { host, api, manager, exposeToWindow, sessionDisposers }
 }

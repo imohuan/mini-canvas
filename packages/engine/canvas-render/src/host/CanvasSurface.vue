@@ -80,13 +80,6 @@ const props = defineProps<{
    * 用户看到的就是「打开即到位」，没有闪一下。
    */
   initialViewport?: { x: number; y: number; zoom: number } | null
-  /**
-   * 画布内容是否可以显示（缺省 true）。
-   *
-   * 首次进入时目标构图还没算出来，VueFlow 会先按 {0,0,1} 画一帧（节点贴左上角 100%），
-   * 随后才被校正 —— 用户看到的就是「打开时闪一下」。首帧前传 false，算好再显示。
-   */
-  contentVisible?: boolean
   /** 画布交互配置（「常规/画布」；CanvasHost 从 settings 读成响应式对象，改值实时生效） */
   interactionSettings: CanvasInteractionSettings
   /** 可视矩形变化回调（剔除刷新入口）：viewport/pane 每次变化都会带最新 FlowRect 调用（可为 null=不可用） */
@@ -380,19 +373,6 @@ onMounted(() => {
     // 走的是它自己的补间；「跟手」场景仍用上面那条即时版。
     animateViewport: (v: { x: number; y: number; zoom: number }, durationMs = 320) =>
       vfApi.setViewport(v, { duration: durationMs }),
-    /**
-     * d3Zoom 是否已就绪。
-     *
-     * 为什么需要：VueFlow 的 Pane 在**它自己的** onMounted 里用 defaultViewport 强写一次视口，
-     * 而子组件的 mounted 比父组件更晚。启动取景如果在这一帧就 setViewport，会被那次强写
-     * 覆盖回 {0,0,1}（实测：算出 zoom 1.55，400ms 后画面回到 100%）。
-     * 取景方据此等到真正就绪再动手。
-     */
-    viewportReady: () =>
-      Boolean(
-        (vfApi as unknown as { d3Zoom?: { value?: unknown }; d3Selection?: { value?: unknown } }).d3Zoom?.value &&
-          (vfApi as unknown as { d3Selection?: { value?: unknown } }).d3Selection?.value,
-      ),
     // 拖拽中视觉写位置（对齐吸附/多选整组移动用；不落盘）
     updateNodeVisual: (id: string, position: { x: number; y: number }) => {
       vfApi.updateNode(id, { position })
@@ -542,11 +522,7 @@ defineExpose({
 </script>
 
 <template>
-  <div
-    ref="rootEl"
-    class="csurface"
-    :class="{ 'csurface--pending': contentVisible === false }"
-  >
+  <div ref="rootEl" class="csurface">
     <VueFlow
       :key="nodeEpoch"
       :nodes="nodes"
@@ -628,16 +604,6 @@ defineExpose({
   position: relative;
   width: 100%;
   height: 100%;
-}
-/*
- * 首帧尚未构图到位：先不画内容。
- *
- * 为什么必须这样：目标构图要等 DOM 量测才能算（节点尺寸/容器尺寸），
- * VueFlow 会先按 {0,0,1} 渲染一帧 —— 那一帧就是用户看到的「一闪」。
- * opacity 而不是 display:none：保持布局与量测继续发生，只是先不让人看见。
- */
-.csurface--pending > .vue-flow {
-  visibility: hidden;
 }
 .csurface :deep(.vue-flow__node) {
   /* 节点卡片外观由主题 nodeShell(如 BaseNode 的 .v2-card)统一负责；这里只留布局与光标 */

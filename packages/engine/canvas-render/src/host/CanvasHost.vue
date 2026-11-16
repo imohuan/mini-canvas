@@ -63,9 +63,16 @@ const emit = defineEmits<CanvasHostEmits>()
 const { host, api, manager } = useCanvasContext()
 const hostRef = shallowRef<CanvasHostHandle>(host)
 
-/** 内层准备状态：订阅/监听接好、CanvasSurface 可以挂载了。 */
+/**
+ * 画布是否已经可以呈现。
+ *
+ * 它不是“订阅接好了”那么简单：真正的画布（CanvasSurface）必须**带着正确的首帧构图**出生，
+ * 所以这个位在「canvasBoot 放行 + 启动构图算完」之后才置 true，见 revealSurface。
+ */
 const surfaceReady = ref(false)
 const mountError = ref('')
+/** 画布容器根元素：未挂载时也要能量到尺寸（构图要在挂载前算） */
+const chostEl = ref<HTMLElement | null>(null)
 /** 内层 CanvasSurface ref（拖线 mousemove/mouseup 要从它拿 screenToFlow / viewport / pane） */
 const surfaceRef = shallowRef<CanvasSurfaceHandle | undefined>()
 
@@ -138,7 +145,8 @@ const viewport = useCanvasViewport({
   surfaceRef,
   persistViewport: () => props.persistViewport,
   remountSignal: () => theme.nodeEpoch.value,
-  readiness: host.ctx.tryGet<{ wait(): Promise<void>; close(): void }>('canvasReady'),
+  // 画布容器尺寸：本组件根元素就是画布区域，外壳布局已定 → 挂载前量得到
+  hostSize: () => ({ w: chostEl.value?.clientWidth ?? 1, h: chostEl.value?.clientHeight ?? 1 }),
 })
 const viewportMove = useCanvasViewportMove({
   hostRef,
@@ -162,16 +170,55 @@ const contextMenu = useCanvasContextMenu({
 })
 const save = useCanvasSave({ hostRef })
 
-// 视口恢复 watch 与原来一样在 setup 期建立（CanvasSurface 首帧挂载时触发一次）。
-viewport.bindViewportRestore()
+// 插件装/卸导致 VueFlow 整树重挂时，沿用当前视野（挂载前写回 defaultViewport）。
+viewport.restoreOnRemount()
+
+/** 画布启动时序：读数据前换后端、算构图前等异步初始化（服务名 canvasBoot） */
+const boot = host.ctx.tryGet<{ waitReady(): Promise<void>; close(): void }>('canvasBoot')
+
+/**
+ * 呈现画布：**这是唯一决定“画布何时出现、出现在什么视野”的地方**。
+ *
+ * 顺序是硬性的：
+ * ① 等插件把数据准备完（canvasBoot；同步插件在这一步已经就绪，直接放行）；
+ * ② 用最终数据 + 已量到的容器尺寸算一次构图；
+ * ③ 才让 CanvasSurface 挂载 —— VueFlow 出生第一帧就是终态构图。
+ *
+ * 若把 ③ 提前，VueFlow 会先用 {0,0,1} 画一帧（节点贴左上角 100%），
+ * 之后再补写视口，用户看到的就是「居中 / 左上角」来回闪。
+ */
+async function revealSurface(): Promise<void> {
+  await boot?.waitReady()
+  // 呈现之后再登记的异步插件不再阻塞画布（用户此刻看到的已是最终画面）。
+  boot?.close()
+  /*
+   * 构图要用到三样东西，这里逐个确保已经可用：
+   * - 数据：CanvasHost 由 App 在 mountCanvas 完成后才渲染，store 里就是最终节点；
+   * - 容器尺寸：本组件根元素已在 DOM 里，clientWidth/Height 会强制一次布局给出真值；
+   * - 界面条：顶栏/底栏住在外壳里，由外壳量完上报（view.setChromeBars）。
+   *   外壳可能比本组件晚一步量完，此时三项都还是 0 —— 等一帧再算。
+   *   这一帧仍然发生在**挂载之前**，用户看不到任何画面，不会闪。
+   */
+  await nextFrameIfChromeBarsMissing()
+  viewport.planStartupViewport()
+  surfaceReady.value = true
+}
+
+/** 界面条尺寸还没上报时，让出一帧等外壳量完（只等一次，不是轮询） */
+function nextFrameIfChromeBarsMissing(): Promise<void> {
+  const bars = host.view.getChromeBars()
+  const measured = bars.top > 0 || bars.bottom > 0 || bars.left > 0 || bars.right > 0
+  if (measured || typeof requestAnimationFrame !== 'function') return Promise.resolve()
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()))
+}
 
 useCanvasLifecycle({
   host,
   hostRef,
   emitReady: (h) => emit('ready', h),
   emitPluginIssue: (payload) => emit('plugin-issue', payload),
-  surfaceReady,
   mountError,
+  revealSurface,
   interactionSettings,
   interaction,
   nodeEpoch: theme.nodeEpoch,
@@ -214,11 +261,13 @@ defineExpose({
 </script>
 
 <template>
-  <div class="chost">
+  <div ref="chostEl" class="chost">
+    <!-- 准备态/错误态都是**浮在画布区之上**的提示，不再替代画布区域本身：
+         容器必须一直在文档里，构图的容器尺寸才量得到（见 hostSize）。 -->
     <div v-if="!surfaceReady" class="chost-status">正在准备画布…</div>
     <div v-else-if="mountError" class="chost-status chost-err">画布初始化失败：{{ mountError }}</div>
 
-    <div v-else class="chost-canvas">
+    <div v-if="surfaceReady" class="chost-canvas">
       <!-- 内层渲染子树宿主：订阅接好后挂载，向渲染组件 provide 裸 ctx/host（见 CanvasSurface.vue） -->
       <CanvasSurface
         ref="surfaceRef"
@@ -232,7 +281,6 @@ defineExpose({
         :edge-selection="selection.edgeSelection"
         :nodes="nodes"
         :initial-viewport="viewport.initialViewport.value"
-        :content-visible="viewport.contentVisible.value"
         :edges="edges"
         :node-types="theme.nodeTypes.value"
         :edge-types="theme.edgeTypes.value"
@@ -277,11 +325,11 @@ defineExpose({
   position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: column;
 }
+/* 准备/失败提示浮在画布区上：容器本身始终占满，量尺寸与挂载互不干扰 */
 .chost-status {
-  flex: 1;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -291,9 +339,8 @@ defineExpose({
   color: var(--ui-danger, #dc2626);
 }
 .chost-canvas {
-  flex: 1;
-  position: relative;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
 }
 </style>
 
