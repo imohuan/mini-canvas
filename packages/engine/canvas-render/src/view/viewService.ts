@@ -20,6 +20,14 @@ import { computeFitTo, resolvePadding, type FitToOptions } from './fitTo'
 
 export type FocusTarget = string[] | 'selection' | 'all'
 
+/**
+ * 启动 / 整体换图后取景的默认四边留白（屏幕像素）。
+ *
+ * 为什么是像素而不是比例：和 F 聚焦的设置默认值（48）对齐 —— 启动取景与用户按 F
+ * 看到的是同一种构图；比例留白在超宽画布上会把内容压得过小。
+ */
+export const STARTUP_FOCUS_PADDING = 48
+
 export interface ViewServiceDeps {
   nodeStore: NodeStore
   layout?: NodeLayoutService
@@ -37,6 +45,14 @@ export interface ChromeBarsReporter {
 export class ViewService {
   private layout: NodeLayoutService
   private viewport: ViewportService
+  /**
+   * 后端挂上之前收到的「全部节点取景」请求。
+   *
+   * 启动时宿主要求取景的那一刻，VueFlow 可能还没挂（view.attachBackend 尚未调用），
+   * 直接调用会静默 no-op，画面就停在 {0,0,1}。这里记一笔，挂上后端时补做一次。
+   * 只保留一笔记号（重复请求合并成一次），不是请求队列。
+   */
+  private pendingFocusAll = false
   /**
    * 宿主界面条实时尺寸（屏幕像素）。由外壳测量后上报（见 setChromeBars）。
    * 不写死像素：顶部工具栏 / 底部底栏 / 左右抽屉的尺寸随主题、字号、是否停靠而变化。
@@ -92,6 +108,10 @@ export class ViewService {
 
   attachBackend(backend: ViewportBackend): void {
     this.viewport.attachBackend(backend)
+    if (this.pendingFocusAll) {
+      this.pendingFocusAll = false
+      this.focusAll()
+    }
   }
 
   /**
@@ -227,6 +247,29 @@ export class ViewService {
     if (opts.animate === false) this.viewport.setViewport(result.viewport)
     else this.viewport.animateViewport(result.viewport, opts.durationMs ?? 320)
     return true
+  }
+
+  /**
+   * 全部节点取景（启动 / 云端整包覆盖本地之后）。
+   *
+   * 与 F 键共用同一条算法（fitTo('all')），只是参数固定成「避开上下界面条、四周留白 48px、
+   * 算上节点标题条、不做补间」。没有节点矩形（空画布 / 尚未恢复）时不动视口并返回 false。
+   */
+  focusAll(opts: FitToOptions = {}): boolean {
+    const rects = this.resolveTargets('all').filter((r) => r.w > 0 && r.h > 0)
+    if (rects.length === 0) return false
+    // 后端未挂 / d3Zoom 还没就绪（VueFlow 的 Pane 尚未 mounted）：记一笔，挂上时补做
+    if (!this.viewport.hasBackend() || !this.viewport.viewportReady()) {
+      this.pendingFocusAll = true
+      return false
+    }
+    return this.fitTo(rects.map((r) => r.id), {
+      padding: STARTUP_FOCUS_PADDING,
+      includeBars: 'both',
+      includeNodeTopBar: true,
+      animate: false,
+      ...opts,
+    })
   }
 
   /**

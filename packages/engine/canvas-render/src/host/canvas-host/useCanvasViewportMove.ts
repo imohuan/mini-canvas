@@ -10,10 +10,14 @@ export function useCanvasViewportMove(opts: {
   interaction: CanvasInteractionState
   persistViewport: () => boolean
   persist: () => void
+  /** 用户亲手开始平移/缩放：启动阶段的自动取景从此停手 */
+  onUserMove?: () => void
   log: { log(message: string): void }
 }) {
   /** 视图平移/缩放开始（pan 与 wheel/pinch 缩放同源于 VueFlow 同一套 move 事件，A 决策：统一置 paneDragging） */
   function onMoveStart(): void {
+    // 只有用户手势才发 move-start（程序写视口不走这条），所以这里就是「用户接管视野」的信号
+    opts.onUserMove?.()
     beginViewportMove(opts.interaction)
     emitMove(RenderEvents.MoveStart)
   }

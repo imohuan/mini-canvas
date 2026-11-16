@@ -47,8 +47,24 @@ CanvasHost 把这些收进一个组件，并给了三条硬保证：**数据一�
 | debugVisual | CanvasDebug | DEFAULT_DEBUG_VISUAL | 调试可视化开关（端口调试 / 吸附调试） |
 | snapZoneVisual | SnapZoneConfig | DEFAULT_SNAP_ZONE_CONFIG | 吸附带配置（高占节点比例 / 宽 / 偏移 / 形状） |
 | windowKey | string | 无（不挂） | 挂到 window 的调试 key（如 PlumeUI） |
-| persistViewport | boolean | true | 是否把视口（zoom + 平移）也落盘并在下次启动恢复 |
+| persistViewport | boolean | true | 是否把视口（zoom + 平移）落盘。**启动不恢复存档视口**，一律按全部节点取景（见下） |
 | dev | boolean | false | 落到 ctx.isDev：能力缺项 dev 抛错 / prod 只 warn。**必须由宿主显式传**（见坑 4） |
+
+### 启动时的视口：只取景，不恢复
+
+画布挂上后按**全部节点**取景（`view.focusAll()`：留白 48、避开上下界面条、算上节点标题条、不做补间），
+不再读取上次保存的 `graph-viewport`。
+
+为什么：以前宿主恢复本地存档视口、云端插件再恢复服务器视口 —— 同一次打开恢复两次，画面会跳，
+换屏幕尺寸后又经常框不到内容。现在只有一种构图。
+
+两个容易踩的点：
+
+1. VueFlow 的 Pane 会在它自己的 `onMounted` 里用 `defaultViewport` 重置视口，
+   取景必须等 `d3Zoom` 就绪；`view.focusAll()` 在未就绪时返回 `false` 并在就绪后补做。
+2. 插件装/卸会 bump `nodeEpoch` 让 VueFlow 整树重挂，重挂后视口回到默认值。
+   启动窗口期（`STARTUP_FOCUS_WINDOW_MS`，约 6.5 秒）内每次重挂都重新取景；
+   用户一动视口（`move-start`）就立刻停手。
 
 外观类 props 的用法（成品应用的真实写法，见 apps/web/src/App.vue）：
 

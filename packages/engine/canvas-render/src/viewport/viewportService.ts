@@ -48,6 +48,8 @@ export interface ViewportBackend {
   getPaneEl?(): HTMLElement | null
   /** 在实例内按 data-id 查节点 DOM */
   queryNodeEl?(nodeId: string): HTMLElement | null
+  /** VueFlow 的 d3Zoom 是否已就绪（Pane onMounted 之后为 true） */
+  viewportReady?(): boolean
 }
 
 export class ViewportService implements ViewportContract {
@@ -60,6 +62,11 @@ export class ViewportService implements ViewportContract {
   /** 后端就绪后挂载（CanvasHost 拿到 VueFlow 实例后调用）；未挂载时方法调用为 no-op。 */
   attachBackend(backend: ViewportBackend): void {
     this.backend = backend
+  }
+
+  /** 后端是否已挂上（CanvasSurface onMounted 之后才为 true）。 */
+  hasBackend(): boolean {
+    return this.backend !== undefined
   }
 
   private requireBackend(): ViewportBackend | undefined {
@@ -127,6 +134,13 @@ export class ViewportService implements ViewportContract {
 
   queryNodeEl(nodeId: string): HTMLElement | null {
     return this.requireBackend()?.queryNodeEl?.(nodeId) ?? null
+  }
+
+  /** 视口后端是否真正能写（VueFlow Pane 挂载完成、d3Zoom 就绪） */
+  viewportReady(): boolean {
+    const backend = this.requireBackend()
+    if (!backend) return false
+    return backend.viewportReady ? backend.viewportReady() : true
   }
 }
 

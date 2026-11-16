@@ -1,7 +1,30 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ViewService } from '../viewService'
+import { ViewService, STARTUP_FOCUS_PADDING } from '../viewService'
 import { NodeLayoutService } from '../../layout/nodeLayout'
 import { NodeStore } from '@plume-canvas/canvas-data'
+
+/** 假视口后端：小地图/取景这类"程序化定位"走 setViewport（即时），并记录每次写值 */
+function makeBackend(over: Partial<Parameters<ViewService['attachBackend']>[0]> = {}) {
+  const writes: Array<{ x: number; y: number; zoom: number }> = []
+  let state = { x: 0, y: 0, zoom: 1 }
+  const backend = {
+    getViewport: () => ({ ...state }),
+    screenToFlow: (x: number, y: number) => ({ x, y }),
+    flowToScreen: (x: number, y: number) => ({ x, y }),
+    zoomIn() {},
+    zoomOut() {},
+    zoomTo() {},
+    fitView() {},
+    setCenter() {},
+    setViewport: (v: { x: number; y: number; zoom: number }) => {
+      writes.push({ ...v })
+      state = { ...v }
+    },
+    getRootEl: () => null,
+    ...over,
+  }
+  return { backend, writes }
+}
 
 describe('view · 几何与视口合体', () => {
   it('未 attach 后端时读默认 {0,0,1}，控制 no-op 不抛', () => {
@@ -67,5 +90,138 @@ describe('view · 几何与视口合体', () => {
     const v = new ViewService({ nodeStore: store })
     expect(v.fitTo(['missing'])).toBe(false)
     expect(v.fitTo('selection')).toBe(false)
+  })
+})
+
+/**
+ * focusAll —— 启动 / 云端整包覆盖本地之后的标准取景。
+ *
+ * 用户 2026-11-16：打开画布时要「全部节点都在画面里」，且启动只聚焦一次 ——
+ * 本地恢复与云端恢复不能再各写一次视口。这里守住三件事：
+ *   ① 有节点时按全部节点取景（不做补间、四周留白、避开界面条、算上节点标题条）；
+ *   ② 空画布 / 节点尺寸还是 0 时不动视口（否则会把缩放算成极小值）；
+ *   ③ 视口后端还没挂上时先记着，挂上后自动补做一次。
+ */
+describe('view · 全部节点取景（focusAll）', () => {
+  function makeStore(): NodeStore {
+    const s = new NodeStore()
+    s.registerType({ type: 'note', label: '便签', defaultSize: { w: 300, h: 200 } })
+    s.addNodes([
+      { type: 'note', position: { x: 0, y: 0 }, id: 'a' },
+      { type: 'note', position: { x: 900, y: 700 }, id: 'b' },
+    ])
+    return s
+  }
+
+  it('启动取景参数：留白 48px、避开上下界面条、算上节点标题条、不做补间', () => {
+    expect(STARTUP_FOCUS_PADDING).toBe(48)
+    const store = makeStore()
+    const v = new ViewService({ nodeStore: store })
+    const fit = vi.spyOn(v, 'fitTo')
+    const { backend } = makeBackend()
+    v.attachBackend(backend)
+    expect(v.focusAll()).toBe(true)
+    expect(fit).toHaveBeenCalledWith(['a', 'b'], {
+      padding: 48,
+      includeBars: 'both',
+      includeNodeTopBar: true,
+      animate: false,
+    })
+  })
+
+  it('把全部节点框进视口：两张卡片都在写出的视口范围内', () => {
+    const store = makeStore()
+    const v = new ViewService({ nodeStore: store })
+    // 假根 DOM：1200×800（真实宿主量的是画布容器尺寸）
+    const { backend, writes } = makeBackend({
+      getRootEl: () =>
+        ({
+          clientWidth: 1200,
+          clientHeight: 800,
+          // 节点标题条量测：真实 DOM 一定有 querySelectorAll；假根返回空表 = 「量不到标签条」
+          querySelectorAll: () => [],
+        }) as unknown as HTMLElement,
+    })
+    v.attachBackend(backend)
+    v.focusAll()
+    const vp = writes.at(-1)!
+    // 两张卡片的包围盒 = (0,0)-(1200,900)（b 的 300×200 从 900,700 起）
+    // 取景后屏幕坐标 = flow × zoom + 平移；四角必须都落在 1200×800 里
+    const sx1 = 0 * vp.zoom + vp.x
+    const sy1 = 0 * vp.zoom + vp.y
+    const sx2 = 1200 * vp.zoom + vp.x
+    const sy2 = 900 * vp.zoom + vp.y
+    expect(sx1).toBeGreaterThanOrEqual(0)
+    expect(sy1).toBeGreaterThanOrEqual(0)
+    expect(sx2).toBeLessThanOrEqual(1200)
+    expect(sy2).toBeLessThanOrEqual(800)
+    // 内容确实铺开了（没有缩成一小团）
+    expect(vp.zoom).toBeGreaterThan(0.2)
+  })
+
+  it('空画布 → 不动视口、返回 false', () => {
+    const v = new ViewService({ nodeStore: new NodeStore() })
+    const { backend, writes } = makeBackend()
+    v.attachBackend(backend)
+    expect(v.focusAll()).toBe(false)
+    expect(writes).toEqual([])
+  })
+
+  it('节点尺寸还是 0（类型没注册 / 量测未就绪）→ 不取景，不把画面缩没', () => {
+    const store = new NodeStore()
+    // 注册了类型但没有默认尺寸、节点也没 size：矩形 w/h 都是 0
+    store.registerType({ type: 'ghost', label: '未量测', defaultSize: { w: 0, h: 0 } })
+    store.addNodes([{ type: 'ghost', position: { x: 0, y: 0 }, id: 'g' }])
+    const v = new ViewService({ nodeStore: store })
+    const { backend, writes } = makeBackend()
+    v.attachBackend(backend)
+    expect(v.focusAll()).toBe(false)
+    expect(writes).toEqual([])
+  })
+
+  it('后端还没挂上时先记一笔，挂上后自动补做（启动时序：doc 先恢复，VueFlow 后挂）', () => {
+    const store = makeStore()
+    const v = new ViewService({ nodeStore: store })
+    expect(v.focusAll()).toBe(false)
+    const { backend, writes } = makeBackend()
+    v.attachBackend(backend)
+    expect(writes).toHaveLength(1)
+  })
+
+  /**
+   * 回归：启动取景被 VueFlow 的 defaultViewport 覆盖。
+   *
+   * VueFlow 的 Pane 在它自己的 onMounted 里强写一次视口（{0,0,1}）。如果取景在那一刻就写，
+   * 会被它覆盖 —— 实测表现是「节点贴左上角、缩放 100%」。所以后端报告「未就绪」时
+   * focusAll 必须什么都不写、只记待办；等视图就绪后再写。
+   */
+  it('视口后端存在但 d3Zoom 未就绪时：不写视口，只记待办', () => {
+    const store = makeStore()
+    const v = new ViewService({ nodeStore: store })
+    let ready = false
+    const { backend, writes } = makeBackend({ viewportReady: () => ready })
+    v.attachBackend(backend)
+    expect(v.focusAll()).toBe(false)
+    expect(writes).toEqual([])
+    // 视图就绪后再调一次（真实宿主是重挂后补做的下一轮）
+    ready = true
+    expect(v.focusAll()).toBe(true)
+    expect(writes.length).toBeGreaterThan(0)
+  })
+
+  it('调用方可以覆盖参数（例如只平移），默认值不丢', () => {
+    const store = makeStore()
+    const v = new ViewService({ nodeStore: store })
+    const fit = vi.spyOn(v, 'fitTo')
+    const { backend } = makeBackend()
+    v.attachBackend(backend)
+    v.focusAll({ keepZoom: true })
+    expect(fit).toHaveBeenCalledWith(['a', 'b'], {
+      padding: 48,
+      includeBars: 'both',
+      includeNodeTopBar: true,
+      animate: false,
+      keepZoom: true,
+    })
   })
 })

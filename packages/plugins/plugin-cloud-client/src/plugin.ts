@@ -90,6 +90,8 @@ interface HostDoc extends DocLike {
 
 interface ViewportLike {
   setViewport(v: { x: number; y: number; zoom: number }): void
+  /** 按全部节点取景（渲染宿主提供；老宿主没有时安静跳过） */
+  focusAll?(opts?: unknown): boolean
 }
 
 interface BarService {
@@ -455,7 +457,8 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
         onServerSnapshot: (snapshot) => {
           startupSnapshot = { nodes: snapshot.nodes, edges: snapshot.edges, ...(typeof snapshot.revision === 'number' ? { revision: snapshot.revision } : {}) }
         },
-        ...(viewport ? { setViewport: (v) => viewport.setViewport(v) } : {}),
+        // 云端画布覆盖本地后重新取景（与启动同一条「全部节点」取景），不再写服务器视口。
+        ...(viewport?.focusAll ? { refocus: () => { viewport.focusAll!() } } : {}),
         ...(doc.types ? { knownType: (t: string) => doc.types!.has(t) } : {}),
         onError: (msg, err) => console.warn(msg, err),
       })

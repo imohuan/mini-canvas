@@ -365,6 +365,19 @@ onMounted(() => {
     // 走的是它自己的补间；「跟手」场景仍用上面那条即时版。
     animateViewport: (v: { x: number; y: number; zoom: number }, durationMs = 320) =>
       vfApi.setViewport(v, { duration: durationMs }),
+    /**
+     * d3Zoom 是否已就绪。
+     *
+     * 为什么需要：VueFlow 的 Pane 在**它自己的** onMounted 里用 defaultViewport 强写一次视口，
+     * 而子组件的 mounted 比父组件更晚。启动取景如果在这一帧就 setViewport，会被那次强写
+     * 覆盖回 {0,0,1}（实测：算出 zoom 1.55，400ms 后画面回到 100%）。
+     * 取景方据此等到真正就绪再动手。
+     */
+    viewportReady: () =>
+      Boolean(
+        (vfApi as unknown as { d3Zoom?: { value?: unknown }; d3Selection?: { value?: unknown } }).d3Zoom?.value &&
+          (vfApi as unknown as { d3Selection?: { value?: unknown } }).d3Selection?.value,
+      ),
     // 拖拽中视觉写位置（对齐吸附/多选整组移动用；不落盘）
     updateNodeVisual: (id: string, position: { x: number; y: number }) => {
       vfApi.updateNode(id, { position })

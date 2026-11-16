@@ -39,6 +39,7 @@ if (view) view.fitTo('selection')
 | `animateViewport(v, ms?)` | 带过渡，缺省 320ms |
 | `setCenter(x, y, zoom?)` | 把画布坐标放到视野中心 |
 | `fitView(padding?)` | 整图适配，缺省留白 0.1 |
+| `focusAll(opts?)` | 把**全部节点**铺进可视区（启动 / 云端换图后用）；与 F 键同一条算法，即时生效 |
 | `zoomIn` / `zoomOut` / `zoomTo` | 缩放控制 |
 | `screenToFlow` / `flowToScreen` | 屏幕坐标与画布坐标互转 |
 | `getRootEl` / `getPaneEl` / `getRendererEl` / `queryNodeEl` | 本画布实例的 DOM 锚点；没挂好返回 `null` |
@@ -65,6 +66,28 @@ view.fitTo('all', { heightRatio: 0.5 })
 | `animate` / `durationMs` | 是否过渡、过渡多久 |
 
 返回 `true` 表示真的移动了视图；已可见或没有目标时返回 `false`。
+
+### 启动只取景一次：`focusAll`
+
+打开画布时**不再恢复上次保存的视口**，统一调用 `view.focusAll()` 把全部节点铺进画面：
+
+```ts
+view.focusAll()                 // 留白 48、避开上下界面条、算上节点标题条、不做补间
+view.focusAll({ padding: 24 })  // 需要时改单项，其余默认仍生效
+```
+
+它解决的是「同一次打开恢复两次」：以前宿主恢复本地存档视口、云端插件又恢复服务器视口，
+画面会跳，而且经常两边都不在好看的构图上。现在只有一种取景 —— 全部节点都在画面里。
+云端画布覆盖本地之后，插件会再调一次 `focusAll()`，结果仍然只有这一种构图。
+
+改这里之前先看三条：
+
+1. **必须等视口后端真正就绪**。VueFlow 的 Pane 在它自己的 `onMounted` 里用 `defaultViewport`
+   强写一次视口；过早取景会被覆盖回 `{0,0,1}`（表现：节点贴左上角、缩放 100%）。
+   `focusAll()` 未就绪时只记一笔待办、返回 `false`，就绪后自动补做。
+2. **插件装卸会让 VueFlow 整棵树重挂**，重挂后视口回到默认值。启动窗口期（约 6.5 秒）内
+   每次重挂都重新取景；窗口结束或用户自己平移/缩放后彻底停手。
+3. **视口仍然落盘**（`graph-viewport`），只是启动不再读它 —— 那份记录留给诊断与跨设备排查。
 
 ### 取景如何避开界面条
 

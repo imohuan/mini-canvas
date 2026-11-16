@@ -436,7 +436,7 @@ export { NodeLayoutService } from './layout/nodeLayout'
 export { ViewportService } from './viewport/viewportService'
 export type { ViewportBackend, ViewportState, FlowPoint as ViewportFlowPoint } from './viewport/viewportService'
 // 几何 + 视口合并服务（服务名 view）：插件/渲染层统一从这里取视口与节点矩形，取景走 fitTo
-export { ViewService } from './view/viewService'
+export { ViewService, STARTUP_FOCUS_PADDING } from './view/viewService'
 export type { FocusTarget, ViewServiceDeps } from './view/viewService'
 export { computeFitTo } from './view/fitTo'
 export type { FitToInput, FitToOptions, FitToResult } from './view/fitTo'

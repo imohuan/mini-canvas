@@ -155,6 +155,16 @@ export type FocusTarget = string[] | 'selection' | 'all'
 export interface ViewContract extends NodeLayoutContract, ViewportContract {
   /** 唯一取景算法；返回是否真的移动了视图（已可见时 false） */
   fitTo(target: FocusTarget, opts?: FitToOptions): boolean
+  /**
+   * 把**全部节点**铺进可视区（启动 / 云端画布覆盖本地之后的标准取景）。
+   *
+   * 与 F 键同一条取景算法（view.fitTo），差别只在参数固定：四周留白、避开宿主界面条、
+   * 把节点顶部标题条算进来，并且**即时生效**（不做补间，避免启动时画面先飞一下）。
+   * 画布还没挂上 VueFlow 时记一笔待办，挂上后自动补一次。
+   *
+   * 返回是否真的移动了视图；画布为空 / 没有可用节点矩形时返回 false。
+   */
+  focusAll(opts?: FitToOptions): boolean
 }
 
 /** 通知选项（服务名 canvas 的 notify / 旧 tip 转发共用） */

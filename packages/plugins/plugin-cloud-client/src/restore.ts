@@ -27,8 +27,14 @@ export interface RestoreDeps {
   restoreMediaUrls?(nodes: unknown[]): void | Promise<void>
   /** 把本地那份推上去（服务器还没有画布时） */
   pushLocal(nodes: unknown[], edges: unknown[]): Promise<void>
-  /** 视图状态（视口）恢复 */
-  setViewport?(view: { x: number; y: number; zoom: number }): void
+  /**
+   * 云端画布覆盖本地之后，按**全部节点**重新取景。
+   *
+   * 为什么不再恢复服务器上的视口：宿主启动时已经取过一次景，再写一次服务器视口
+   * 会形成「同一次打开恢复两次」，画面先跳一下，还常常框不到内容；而且那份视口
+   * 是当时窗口尺寸下的构图，换屏幕就失效。现在统一只有一种取景：全部节点。
+   */
+  refocus?(): void
   /**
    * 恢复完成后的“服务器准信”：启动时用这一份同时初始化保存基准与合并基准。
    * 缺省不调（旧宿主/测试兼容）。
@@ -90,17 +96,9 @@ export async function restoreOrSeed(deps: RestoreDeps): Promise<RestoreResult> {
       : {}),
   })
 
-  const view = server.view
-  if (
-    deps.setViewport &&
-    view &&
-    typeof view === 'object' &&
-    typeof (view as { x?: unknown }).x === 'number' &&
-    typeof (view as { y?: unknown }).y === 'number' &&
-    typeof (view as { zoom?: unknown }).zoom === 'number'
-  ) {
-    deps.setViewport(view as { x: number; y: number; zoom: number })
-  }
+  // 覆盖完成后按全部节点取景。注意不看 server.view：服务器视口只作为诊断记录保留，
+  // 启动时的构图一律由「全部节点」决定。
+  deps.refocus?.()
 
   return { phase: 'restored', nodes: nodes.length, edges: server.edges.length }
 }

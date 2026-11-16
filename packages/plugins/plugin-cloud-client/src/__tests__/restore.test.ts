@@ -6,20 +6,22 @@ function deps(over: Partial<RestoreDeps> & Pick<RestoreDeps, 'readServer' | 'rea
   d: RestoreDeps
   replaced: Array<{ nodes: unknown[]; edges: unknown[] }>
   pushed: Array<{ nodes: unknown[]; edges: unknown[] }>
-  views: unknown[]
+  refocuses: number
 } {
   const replaced: Array<{ nodes: unknown[]; edges: unknown[] }> = []
   const pushed: Array<{ nodes: unknown[]; edges: unknown[] }> = []
-  const views: unknown[] = []
+  let refocuses = 0
   const d: RestoreDeps = {
     replaceLocal: (nodes, edges) => replaced.push({ nodes, edges }),
     pushLocal: async (nodes, edges) => {
       pushed.push({ nodes, edges })
     },
-    setViewport: (v) => views.push(v),
+    refocus: () => {
+      refocuses += 1
+    },
     ...over,
   }
-  return { d, replaced, pushed, views }
+  return { d, replaced, pushed, get refocuses() { return refocuses } }
 }
 
 const node = (id: string, type = 'text') => ({ id, type, position: { x: 0, y: 0 }, data: {} })
@@ -57,22 +59,35 @@ describe('云端优先', () => {
     expect(pushed).toEqual([])
   })
 
-  it('恢复视口（刷新后回到上次停的位置）', async () => {
-    const { d, views } = deps({
+  /**
+   * 视口恢复改成「全部节点取景」（用户 2026-11-16）。
+   *
+   * 以前这里会把服务器视口 setViewport 一次，与宿主启动的本地视口恢复撞在一起 ——
+   * 同一次打开恢复两次。现在只调 refocus()，构图由「全部节点」决定。
+   */
+  it('云端覆盖本地后按全部节点重新取景（不写服务器视口）', async () => {
+    const o = deps({
       readServer: async () => ({ nodes: [node('s1')], edges: [], view: { x: 5, y: 6, zoom: 2 } }),
       readLocal: () => ({ nodes: [], edges: [] }),
     })
-    await restoreOrSeed(d)
-    expect(views).toEqual([{ x: 5, y: 6, zoom: 2 }])
+    await restoreOrSeed(o.d)
+    expect(o.refocuses).toBe(1)
   })
 
-  it('视口形状不对就不设（不瞎编一个视野）', async () => {
-    const { d, views } = deps({
-      readServer: async () => ({ nodes: [node('s1')], edges: [], view: { x: 'bad' } }),
+  it('没有覆盖本地（首次上云 / 两边都空）时不取景', async () => {
+    const seeded = deps({
+      readServer: async () => ({ nodes: [], edges: [], view: null }),
+      readLocal: () => ({ nodes: [node('l1')], edges: [] }),
+    })
+    await restoreOrSeed(seeded.d)
+    expect(seeded.refocuses).toBe(0)
+
+    const empty = deps({
+      readServer: async () => ({ nodes: [], edges: [], view: null }),
       readLocal: () => ({ nodes: [], edges: [] }),
     })
-    await restoreOrSeed(d)
-    expect(views).toEqual([])
+    await restoreOrSeed(empty.d)
+    expect(empty.refocuses).toBe(0)
   })
 
   it('类型暂时不认识也保留节点（热装类型注册晚于恢复，丢节点=用户数据消失）', async () => {

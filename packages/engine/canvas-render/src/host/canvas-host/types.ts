@@ -22,6 +22,8 @@ export interface CanvasSurfaceHandle {
   getVisualMoveSnapshot?: () => { ids: Set<string>; epoch: number }
   setCenter?: (x: number, y: number, zoom?: number) => void
   animateViewport?: (v: { x: number; y: number; zoom: number }, durationMs?: number) => void
+  /** VueFlow 的 d3Zoom 是否已就绪（Pane 的 onMounted 之后才为 true） */
+  viewportReady?: () => boolean
 }
 
 /** CanvasSurface 消费的渲染边最小形状。 */

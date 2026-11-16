@@ -137,6 +137,7 @@ const viewport = useCanvasViewport({
   hostRef,
   surfaceRef,
   persistViewport: () => props.persistViewport,
+  remountSignal: () => theme.nodeEpoch.value,
 })
 const viewportMove = useCanvasViewportMove({
   hostRef,
@@ -144,6 +145,7 @@ const viewportMove = useCanvasViewportMove({
   interaction,
   persistViewport: () => props.persistViewport,
   persist: viewport.persistViewport,
+  onUserMove: viewport.markUserMoved,
   log,
 })
 const keyboard = useCanvasKeyboard({
@@ -165,14 +167,12 @@ viewport.bindViewportRestore()
 useCanvasLifecycle({
   host,
   hostRef,
-  persistViewport: props.persistViewport,
   emitReady: (h) => emit('ready', h),
   emitPluginIssue: (payload) => emit('plugin-issue', payload),
   surfaceReady,
   mountError,
   interactionSettings,
   interaction,
-  savedViewport: viewport.savedViewport,
   nodeEpoch: theme.nodeEpoch,
   syncFromStore,
   syncSelected: selection.syncSelected,

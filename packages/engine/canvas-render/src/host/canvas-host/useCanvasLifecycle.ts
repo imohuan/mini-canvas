@@ -1,24 +1,20 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import type { Ref } from 'vue'
 import type { Disposable } from '@plume-canvas/kernel'
-import { GRAPH_VIEWPORT_KEY } from '@plume-canvas/canvas-data'
 import { applyCanvasInteractionChangeInto, resolveCanvasInteraction } from '../../contracts/canvasInteractionSettings'
 import type { CanvasInteractionSettings } from '../../contracts/canvasInteractionSettings'
 import type { CanvasHostHandle } from '../createPlumeHost'
 import type { CanvasInteractionState } from '../../contracts/interactionContext'
-import type { ViewportState } from '../../viewport/viewportService'
 
 export function useCanvasLifecycle(opts: {
   host: CanvasHostHandle
   hostRef: { value: CanvasHostHandle | undefined }
-  persistViewport: boolean
   emitReady: (host: CanvasHostHandle) => void
   emitPluginIssue: (payload: { name: string; lifecycle: string }) => void
   surfaceReady: Ref<boolean>
   mountError: Ref<string>
   interactionSettings: CanvasInteractionSettings
   interaction: CanvasInteractionState
-  savedViewport: Ref<ViewportState | undefined>
   nodeEpoch: Ref<number>
   syncFromStore: () => void
   syncSelected: () => void
@@ -49,7 +45,6 @@ export function useCanvasLifecycle(opts: {
     mountError,
     interactionSettings,
     interaction,
-    savedViewport,
     nodeEpoch,
   } = opts
 
@@ -189,12 +184,6 @@ export function useCanvasLifecycle(opts: {
       window.addEventListener('blur', opts.resetViewportMoveIfIdle)
       window.addEventListener('visibilitychange', opts.resetViewportMoveIfIdle)
 
-      // 读存档视口(仅需持久化时)：有 → 首次挂载后恢复到停的位置；无 → fitView 基线。
-      // 在 surfaceReady=true(触发 CanvasSurface 挂载)前读好，供 surfaceRef 首次触发的恢复逻辑取用。
-      if (opts.persistViewport) {
-        const vp = await host.save.get<ViewportState>(GRAPH_VIEWPORT_KEY, 'canvas')
-        savedViewport.value = vp
-}
       surfaceReady.value = true
       opts.emitReady(host)
     } catch (err) {
