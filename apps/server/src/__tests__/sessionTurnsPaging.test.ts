@@ -88,4 +88,41 @@ describe('GET /sessions/:id 转录分页', () => {
     expect(b.session.turns).toHaveLength(8)
     expect(b.turnsHaveBefore).toBe(false)
   })
+
+  /**
+   * 回归（用户 2026-11-17 报的「向上滚动查看更早的对话」没反应）：
+   * 一轮里有很多工具调用时，这一页窗口里**一条 user 都没有**；
+   * 旧的「向后对齐到 user」会把起点一路推到页尾，切出空数组 → 前端拉到空批次、
+   * 界面毫无变化，看起来就像滚动没触发。
+   */
+  it('窗口里没有 user 边界 ⇒ 不返回空页，退回最近一条更早的 user', async () => {
+    const longRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'turns-paging-long-'))
+    try {
+      const s2 = new AgentSessionStore(longRoot)
+      await s2.ensure('c1', { id: 's2', title: 't', createdAt: 1, provider: 'p', modelId: 'm' })
+      // u1 + 8 条工具 + a1 = 10 条：最后 4 条全是工具 / 助手，窗口里零 user
+      await s2.appendTurn('c1', 's2', { role: 'user', text: 'u1', ts: 1 })
+      for (let i = 0; i < 8; i++) await s2.appendTurn('c1', 's2', { role: 'tool', text: 't' + i, ts: 2 + i })
+      await s2.appendTurn('c1', 's2', { role: 'assistant', text: 'a1', ts: 20 })
+      const app2 = new Hono()
+      app2.route('/', agentSessionRoutes(s2, fakeRuntime() as never, { dataDir: longRoot, modelContextWindow: async () => undefined } as never))
+
+      const first = (await (await app2.request('/api/agent/canvases/c1/sessions/s2?turnsLimit=4')).json()) as Body
+      expect(first.turnsHaveBefore).toBe(true)
+      const older = (await (await app2.request('/api/agent/canvases/c1/sessions/s2?turnsLimit=4&turnsBefore=4')).json()) as Body
+      expect(older.session.turns.length).toBeGreaterThan(0)
+      // 窗口里没有 user 边界 ⇒ 保持窗口起点（从工具中间切），反正不能是空页
+      expect(older.session.turns[0].role).toBe('tool')
+      expect(older.session.turns).toHaveLength(4)
+      expect(older.session.turns.at(-1)!.text).not.toBe('a1')
+      // 还剩最前面的 2 条：再往前一页就到底
+      expect(older.turnsHaveBefore).toBe(true)
+      const oldest = (await (await app2.request('/api/agent/canvases/c1/sessions/s2?turnsLimit=4&turnsBefore=8')).json()) as Body
+      expect(oldest.session.turns).toHaveLength(2)
+      expect(oldest.session.turns[0].text).toBe('u1')
+      expect(oldest.turnsHaveBefore).toBe(false)
+    } finally {
+      await fs.rm(longRoot, { recursive: true, force: true })
+    }
+  })
 })

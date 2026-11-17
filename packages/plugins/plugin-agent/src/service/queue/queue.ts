@@ -146,12 +146,20 @@ export function createQueueDomain(ctx: AgentServiceContext, deps: AgentServiceDe
       const before = Math.max(0, state.turnsLoaded)
       const full = await api.sessionState(canvasId(), sid, { turnsLimit: TURNS_PAGE, turnsBefore: before })
       const rec = full.session
-      if (Array.isArray(rec.turns) && rec.turns.length) model.loadEarlier(rec.turns)
-      state.turnsLoaded += Array.isArray(rec.turns) ? rec.turns.length : 0
-      state.turnsHaveBefore = full.turnsHaveBefore === true
+      const batch = Array.isArray(rec.turns) ? rec.turns : []
+      if (batch.length) model.loadEarlier(batch)
+      state.turnsLoaded += batch.length
+      /**
+       * 服务端给了**空批次**时必须收手（用户 2026-11-17 报的现象）。
+       * 以前这里只认 `turnsHaveBefore`：一旦后端切页逻辑出错返回空数组，
+       * 界面条数不变、哨兵还在可视区，滚到顶只会不停重发请求，用户看到的是
+       * 「点了/滚了没反应」。空批次 = 没有更多可拉，直接停，别让人误以为还有历史。
+       */
+      state.turnsHaveBefore = batch.length > 0 && full.turnsHaveBefore === true
       sync()
       return state.turnsHaveBefore
     } catch {
+      // 请求失败也别让哨兵一直处于「还有更早」的状态：保留标记，但由 UI 的最小间隔节流
       return false
     } finally {
       state.turnsLoadingEarlier = false

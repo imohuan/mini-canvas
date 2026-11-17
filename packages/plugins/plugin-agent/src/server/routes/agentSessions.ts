@@ -113,21 +113,41 @@ export function agentSessionRoutes(
     const turnsBefore = Math.max(0, Math.floor(Number(c.req.query('turnsBefore') ?? '0')) || 0)
     let turns = session.turns
     const turnsTotal = turns.length
+    /** 这一页之前还有没有更早的转录（按**实际切点**算，见下面的说明） */
+    let haveBefore = false
     if (turnsLimit > 0) {
       const end = Math.max(0, turnsTotal - turnsBefore)
       let start = Math.max(0, end - turnsLimit)
       if (start > 0) {
-        while (start < end && turns[start].role !== 'user') start += 1
+        /**
+         * 切点对齐到 user 边界 —— 但**找不到时必须保留窗口，不能把页切成空的**。
+         *
+         * 旧写法把 start 一路推到 end：一轮里工具调用可能有几十条，这一页窗口里
+         * 一条 user 都没有时，返回**空数组**。前端拿到空批次、条数不变、界面毫无变化
+         * —— 用户 2026-11-17 报的「向上滚动查看更早的对话」没反应就是这个。
+         * 现在前向找不到 user 就保持窗口起点：从工具 / 助手中间切开不会产生孤立占位，
+         * 被跳过的区间会在下一轮（end 更靠前）重新覆盖，不会漏内容。
+         */
+        let boundary = start
+        while (boundary < end && turns[boundary].role !== 'user') boundary += 1
+        if (boundary < end) {
+          start = boundary
+        }
       }
+      // 兜底：窗口非空却切出空页时，退回起点，保证这一页一定有内容。
+      // 同时把「还有没有更早的」改成按**实际切点**算：旧公式拿 turnsBefore 比，
+      // 页首往后对齐时减掉的那几条会被误算成还有更早，前端于是多拉一次。
+      haveBefore = start > 0
       turns = turns.slice(start, end)
     }
+    const turnsHaveBefore = turnsLimit > 0 ? haveBefore : false
     // 队列 / 目标暂停标记 / 流序号一起给：界面刷新后靠这一条恢复全部状态
     const goal = await readGoalForSession(config, p.sessionId!)
     return c.json({
       ok: true,
       session: turnsLimit > 0 ? { ...session, turns } : session,
       turnsTotal,
-      turnsHaveBefore: turnsLimit > 0 ? turnsTotal - turnsBefore > turns.length : false,
+      turnsHaveBefore,
       running: runtime.isRunning(p.canvasId, p.sessionId!),
       approvals: runtime.pendingApprovals(p.canvasId, p.sessionId!),
        queue: await store.getQueue(p.canvasId, p.sessionId!),

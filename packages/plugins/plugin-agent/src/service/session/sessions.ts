@@ -421,7 +421,11 @@ export function createSessionDomain(ctx: AgentServiceContext, deps: AgentService
       const rec = full.session
       model.load(Array.isArray(rec.turns) ? rec.turns : [])
       state.turnsTotal = full.turnsTotal ?? rec.turns.length
-      state.turnsHaveBefore = full.turnsHaveBefore === true
+      /**
+       * 首屏一个字都没有却还标记「有更早」= 永远拉不动（用户 2026-11-17 报的现象）。
+       * 首屏空时不显示那条提示，免得让人一直往上滚。
+       */
+      state.turnsHaveBefore = full.turnsHaveBefore === true && state.turnsTotal > 0
       // 本页装进界面的转录条数（续拉时算 turnsBefore 用 —— UI 视图条数与转录条数
       // 不是一回事，一轮 user 会展开成 tool/thinking 好几条，绝不能拿 model.turns 数）
       state.turnsLoaded = Array.isArray(rec.turns) ? rec.turns.length : 0
