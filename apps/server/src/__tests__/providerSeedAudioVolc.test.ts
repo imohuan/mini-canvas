@@ -89,7 +89,7 @@ describe('seed-audio-volc provider（官方接口）', () => {
     expect(p.icon).toBe('doubao')
   })
 
-  it('没填 API Key 时直接说清楚，不发请求', async () => {
+  it('没填鉴权时直接说清楚（两种控制台都提到），不发请求', async () => {
     const stub = stubFetch()
     try {
       const p = await load('')
@@ -98,8 +98,46 @@ describe('seed-audio-volc provider（官方接口）', () => {
         canvasId: 'c1', nodeId: 'n1', actionId: action.id, prompts: PROMPT, resources: [],
       })
       expect('error' in r).toBe(true)
-      if ('error' in r) expect(r.error).toContain('API Key')
+      if ('error' in r) {
+        expect(r.error).toContain('API Key')
+        expect(r.error).toContain('App ID')
+      }
       expect(stub.calls).toHaveLength(0)
+    } finally {
+      stub.restore()
+    }
+  })
+
+  /**
+   * 旧版控制台鉴权（用户 2026-11-17 给的是一串 App ID 样式的值）：
+   * 官方文档写的是 X-Api-App-Id + X-Api-Access-Key 双头，provider 要能直接用。
+   */
+  it('旧版控制台：App ID + Access Key 走双头，且不发单头 X-Api-Key', async () => {
+    const text = await fs.readFile(path.join(PROVIDERS_DIR, 'seed-audio-volc.js'), 'utf8')
+    const cfg =
+      'const __mcProviderConfig = ' +
+      JSON.stringify({
+        accounts: [{ id: 'main', values: { appId: 'app-1', accessKey: 'acc-1' } }],
+        values: { appId: 'app-1', accessKey: 'acc-1' },
+        byId: { main: { appId: 'app-1', accessKey: 'acc-1' } },
+        defaultId: 'main',
+      }) +
+      ';\n'
+    const stub = stubFetch()
+    try {
+      const mod = (await import(
+        /* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(cfg + text)
+      )) as { default?: Provider }
+      const p = mod.default!
+      const action = p.actions[0]!
+      const r = await p.submit(action, {
+        canvasId: 'c1', nodeId: 'n1', actionId: action.id, prompts: PROMPT, resources: [],
+      })
+      expect('done' in r).toBe(true)
+      const h = stub.calls[0]!.headers
+      expect(h['X-Api-App-Id']).toBe('app-1')
+      expect(h['X-Api-Access-Key']).toBe('acc-1')
+      expect(h['X-Api-Key']).toBeUndefined()
     } finally {
       stub.restore()
     }

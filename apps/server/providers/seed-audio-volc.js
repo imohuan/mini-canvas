@@ -2,7 +2,10 @@
  * 火山引擎（豆包语音）· seed-audio-1.0 音频生成 —— 直连官方接口。
  *
  * 接口：POST https://openspeech.bytedance.com/api/v3/tts/create
- * 鉴权：X-Api-Key（新版控制台的单头鉴权），可选 X-Api-Request-Id 做追踪。
+ * 鉴权（两种控制台都支持）：
+ *   - 新版控制台：X-Api-Key 单头；
+ *   - 旧版控制台：X-Api-App-Id + X-Api-Access-Key 双头。
+ * 可选 X-Api-Request-Id 做追踪（响应头里会带 X-Tt-Logid，用于找客服定位）。
  * 同步返回：{ audio(base64), url(2 小时有效), duration, original_duration, subtitle? }
  *
  * 两种生成方式，可以混用：
@@ -38,9 +41,23 @@ function baseOf(values) {
   return String(b).replace(/\/+$/, '')
 }
 
+/** 新版控制台的 API Key（X-Api-Key） */
 function keyOf(values) {
   if (values && typeof values.apiKey === 'string' && values.apiKey.trim()) return values.apiKey.trim()
   return process.env.VOLC_API_KEY || ''
+}
+
+/** 旧版控制台的 App ID / Access Key（双头鉴权，两个都要） */
+function legacyOf(values) {
+  const appId = (values && typeof values.appId === 'string' && values.appId.trim()) || process.env.VOLC_APP_ID || ''
+  const accessKey =
+    (values && typeof values.accessKey === 'string' && values.accessKey.trim()) || process.env.VOLC_ACCESS_KEY || ''
+  return appId && accessKey ? { appId, accessKey } : null
+}
+
+/** 有没有可用的鉴权（任一一种即可） */
+function hasAuth(values) {
+  return Boolean(keyOf(values) || legacyOf(values))
 }
 
 /** 火山要求带一个请求追踪号；没有内置 uuid 模块就直接拼一个够用的 */
@@ -56,9 +73,12 @@ async function callJson(url, init, timeoutMs, values) {
   const timer = setTimeout(() => ac.abort(), timeoutMs)
   try {
     const key = keyOf(values)
+    const legacy = legacyOf(values)
     const headers = {
       'Content-Type': 'application/json',
       ...(key ? { 'X-Api-Key': key } : {}),
+      // 旧版控制台：App ID + Access Key 双头（与单头同时给也没关系，服务端认哪个都行）
+      ...(legacy ? { 'X-Api-App-Id': legacy.appId, 'X-Api-Access-Key': legacy.accessKey } : {}),
       'X-Api-Request-Id': traceId(),
       ...(init.headers || {}),
     }
@@ -291,7 +311,15 @@ export default {
     },
     {
       key: 'apiKey', label: 'API Key', type: 'secret',
-      description: '火山控制台 → API Key 管理里创建（X-Api-Key），只存在服务端。',
+      description: '新版控制台 → API Key 管理里创建的那串（X-Api-Key）。用旧版控制台就填下面两项。',
+    },
+    {
+      key: 'appId', label: 'App ID（旧版）', type: 'secret',
+      description: '旧版控制台 → 应用管理的 App ID。与下面的 Access Key 一起用，和 API Key 二选一。',
+    },
+    {
+      key: 'accessKey', label: 'Access Key（旧版）', type: 'secret',
+      description: '旧版控制台应用里的 Access Key / Access Token。',
     },
   ],
   actions: [action],
@@ -300,8 +328,11 @@ export default {
     try {
       const values = accountValues(input.values)
       const v = input.values || {}
-      if (!keyOf(values)) {
-        return { error: '还没填火山引擎的 API Key：到「设置 → 平台」里给这个平台填上' }
+      if (!hasAuth(values)) {
+        return {
+          error:
+            '还没填火山的鉴权：新版控制台填 API Key；旧版控制台填 App ID + Access Key（到「设置 → 平台」里填）',
+        }
       }
 
       const { refs, indexById } = collectAudios(input)
