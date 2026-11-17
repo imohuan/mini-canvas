@@ -77,7 +77,7 @@ describe('seed-audio-volc provider（官方接口）', () => {
     expect(deployed.trimEnd()).toBe(src.trimEnd())
   })
 
-  it('导出 id / actions / submit，图标用 doubao', async () => {
+  it('导出 id / actions / submit，图标是豆包官方 SVG', async () => {
     const p = await load()
     expect(p.id).toBe('seed-audio-volc')
     expect(p.actions).toHaveLength(1)
@@ -86,7 +86,10 @@ describe('seed-audio-volc provider（官方接口）', () => {
     expect(a.model).toBe('seed-audio-1.0')
     expect(a.nodeTypes).toEqual(['audio'])
     expect(a.pollTimeoutMs).toBeGreaterThan(0)
-    expect(p.icon).toBe('doubao')
+    // 平台管理列表只认 SVG / 图片地址：写图标名会退回成「火」字兜底（2026-11-17）
+    expect(String(p.icon)).toMatch(/^<svg[\s>]/)
+    expect(String(p.icon)).toContain('viewBox="0 0 24 24"')
+    expect(String(p.icon)).toContain('#1E37FC')
   })
 
   it('没填鉴权时直接说清楚（两种控制台都提到），不发请求', async () => {
