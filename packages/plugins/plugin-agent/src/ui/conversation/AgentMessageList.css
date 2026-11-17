@@ -83,6 +83,47 @@
   white-space: pre-wrap;
 }
 
+/* 用户消息带的图（用户口径 2026-11-17）：
+   ① 图要大一些，不能只剩按钮默认的 32px 小方块；
+   ② 与用户气泡一样**靠右对齐**。
+   为什么写在这里：以前规则放在 AgentComposer 的 scoped 样式里，作用域只到输入组件，
+   消息流里的图片完全拿不到 —— 尺寸和右对齐都不会生效。 */
+.ac-user-images {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  align-self: flex-end;
+  max-width: 100%;
+}
+
+/* 提高一级选择器权重：组件库按钮自带 `rounded-md`（6px），单类名规则会被它盖掉。 */
+.ac-user-images .ac-user-image {
+  width: 200px;
+  height: 200px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+  cursor: zoom-in;
+}
+
+.ac-user-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ac-user-image:hover,
+.ac-user-image:active {
+  background: var(--ui-veil, rgb(255 255 255 / 0.06));
+}
+
 .ac-editing-badge {
   display: inline-flex;
   align-items: center;

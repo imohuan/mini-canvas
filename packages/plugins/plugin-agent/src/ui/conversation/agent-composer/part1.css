@@ -832,33 +832,6 @@
   background: var(--ui-danger, #ef4444);
 }
 
-/* 已发送（在用户气泡里）：按原比例排，点开看大图 */
-
-.ac-user-images {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.ac-user-image {
-  width: 96px;
-  height: 96px;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-  overflow: hidden;
-  background: transparent;
-  cursor: zoom-in;
-}
-
-.ac-user-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
 /* 看大图：铺满面板的遮罩（z-index 要在下拉/浮层之上） */
 
 /* 底圈：整圈淡显（照参考页 opacity .25），提供"盘面"感 */
