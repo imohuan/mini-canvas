@@ -5,7 +5,7 @@
  * 审批卡也是整段 JSON。这里锁住「标题说人话、命令放摘要」的规则。
  */
 import { describe, it, expect } from 'vitest'
-import { approvalDescription, approvalTitle, bareToolName, terminalLineTitle, toolAction, toolLineTitle, toolTitleText } from '../model/toolMeta'
+import { approvalCommand, approvalDescription, approvalTitle, bareToolName, terminalLineTitle, toolAction, toolLineTitle, toolTitleText } from '../model/toolMeta'
 
 describe('工具行标题', () => {
   it('内置工具给人话动作（不是原始工具名）', () => {
@@ -69,19 +69,31 @@ describe('命令执行行标题（不带动作前缀）', () => {
 })
 
 describe('审批文案', () => {
-  it('执行命令：标题说「运行 <命令>？」', () => {
+  it('执行命令：标题只给动作，命令交给独立代码块（用户口径 2026-11-17）', () => {
     const args = JSON.stringify({ cmd: 'echo hello' })
-    expect(approvalTitle('exec_command', args)).toBe('运行 echo hello？')
+    // 标题以前是「运行 echo hello？」—— 命令和按钮挤同一行，被断在单词中间。
+    // 现在标题只回答「要干什么」，命令原文由 approvalCommand 单独提供。
+    expect(approvalTitle('exec_command', args)).toBe('Agent 想运行一条命令')
+    expect(approvalCommand('exec_command', args)).toBe('echo hello')
     expect(approvalDescription('exec_command', args)).toContain('当前项目')
   })
 
-  it('读取 / 写入文件：标题带文件名', () => {
-    expect(approvalTitle('read_file', JSON.stringify({ file_path: 'D:\\a\\b.png' }))).toBe('读取 b.png？')
-    expect(approvalTitle('write_file', JSON.stringify({ path: 'D:\\a\\c.txt' }))).toBe('写入 c.txt？')
+  it('读取 / 写入文件：标题给动作，文件名交给代码块', () => {
+    expect(approvalTitle('read_file', JSON.stringify({ file_path: 'D:\\a\\b.png' }))).toBe('Agent 想读取一个文件')
+    expect(approvalCommand('read_file', JSON.stringify({ file_path: 'D:\\a\\b.png' }))).toBe('D:\\a\\b.png')
+    expect(approvalTitle('write_file', JSON.stringify({ path: 'D:\\a\\c.txt' }))).toBe('Agent 想写入一个文件')
+    expect(approvalCommand('write_file', JSON.stringify({ path: 'D:\\a\\c.txt' }))).toBe('D:\\a\\c.txt')
   })
 
   it('没有命令 / 文件名也给一句人话（不显示 JSON）', () => {
-    expect(approvalTitle('exec_command', '{}')).toBe('运行一条命令？')
-    expect(approvalTitle('mcp__smart__x', 'not json')).toBe('允许调用 x？')
+    expect(approvalTitle('exec_command', '{}')).toBe('Agent 想运行一条命令')
+    expect(approvalCommand('exec_command', '{}')).toBe('')
+    expect(approvalTitle('mcp__smart__x', 'not json')).toBe('Agent 想调用 x')
+  })
+
+  it('标题不含命令原文，且不受命令长度影响', () => {
+    const long = JSON.stringify({ cmd: 'echo ' + 'a'.repeat(400) })
+    expect(approvalTitle('exec_command', long)).toBe('Agent 想运行一条命令')
+    expect(approvalCommand('exec_command', long).length).toBeGreaterThan(400)
   })
 })

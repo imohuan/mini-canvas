@@ -92,20 +92,45 @@ export function terminalLineTitle(name: string, argsText: string | undefined): s
 }
 
 /**
- * 审批标题：能读出命令 / 文件名就说「运行 … / 读取 …」，
- * 读不出来就退回工具的人话名字 —— 不展示一坨 JSON。
+ * 审批标题：只回答「要干什么」，**不带命令 / 文件名**。
+ *
+ * 用户口径（2026-11-17，方案 B）：以前把整条命令拼进标题，长命令和「允许」
+ * 按钮抢同一行，被断成「Firs t 2」。标题改成一句短话，命令原文交给
+ * `approvalCommand` 在独立代码块里换行展示。
  */
-export function approvalTitle(name: string, argsText: string | undefined): string {
+export function approvalTitle(name: string, _argsText?: string | undefined): string {
   const bare = bareToolName(name)
-  const brief = toolBrief(name, argsText)
+  if (bare === 'exec_command' || bare === 'input_command') return 'Agent 想运行一条命令'
+  if (bare === 'read_file') return 'Agent 想读取一个文件'
+  if (bare === 'write_file') return 'Agent 想写入一个文件'
+  if (bare === 'edit_file') return 'Agent 想修改一个文件'
+  const action = toolAction(bare)
+  return action ? 'Agent 想' + action : 'Agent 想调用 ' + (bare || name || '一个工具')
+}
+
+/**
+ * 审批卡里**代码块**展示的原文（命令 / 文件路径 / 空串）。
+ *
+ * 与标题分离的原因：命令可能几百个字符，只有放进独立容器换行才读得清；
+ * 同时标题与按钮不再被它挤变形。
+ */
+export function approvalCommand(name: string, argsText: string | undefined): string {
+  const bare = bareToolName(name)
+  if (!argsText) return ''
+  let a: Record<string, unknown>
+  try {
+    a = JSON.parse(argsText) as Record<string, unknown>
+  } catch {
+    return ''
+  }
+  const one = (v: unknown): string => String(v ?? '').replace(/\r\n?/g, '\n').trim()
   if (bare === 'exec_command' || bare === 'input_command') {
-    return brief ? '运行 ' + brief + '？' : '运行一条命令？'
+    return one(a.cmd ?? a.input ?? a.command)
   }
   if (bare === 'read_file' || bare === 'write_file' || bare === 'edit_file') {
-    return brief ? (bare === 'read_file' ? '读取 ' : bare === 'write_file' ? '写入 ' : '修改 ') + brief + '？' : '操作一个文件？'
+    return one(a.file_path ?? a.path)
   }
-  const action = toolAction(bare)
-  return action ? action + '？' : '允许调用 ' + (bare || name || '工具') + '？'
+  return ''
 }
 
 /** 审批说明：一句人话，告诉用户点允许之后会发生什么 */

@@ -73,6 +73,16 @@ function approvalFor(toolId: string) {
 }
 
 /**
+ * 一组工具里**所有**还在等授权的确认条。
+ *
+ * 用户口径（2026-11-17，方案 B）：确认条要排在折叠容器**外面** —— 分组一收起，
+ * 等待确认的调用就完全看不见了，而这一轮其实卡在那里等人点。
+ */
+function approvalsOf(tools: Array<{ id: string }>): any[] {
+  return tools.map((x) => approvalFor(x.id)).filter(Boolean)
+}
+
+/**
  * 对不上任何工具的老审批（没有 toolCallId / 工具已被清理）：
  * 仍然按原来的位置画一条，别让用户看不见、点不了。
  */
@@ -345,11 +355,14 @@ const pagerMap = pagerByAnchor as unknown as ComputedRef<Map<string, PagerGroup[
                                 :detail="tool.output" class="mt-2" />
                             </TraceCollapsibleContent>
                           </TraceCollapsible>
-                          <AgentConfirmation v-if="approvalFor(tool.id)" :approval="approvalFor(tool.id)!"
-                            @decide="(d) => agent.decide(approvalFor(tool.id)!.id, d)" />
                         </template>
                       </TraceCollapsibleContent>
                     </TraceCollapsible>
+                    <!-- 等授权的确认条：**排在折叠容器外面**（用户口径 2026-11-17 方案 B）。
+                         以前挂在每个工具下面，而那一整段在折叠内容里 —— 分组收起时
+                         这一轮已经卡住等人确认，界面上却什么也没有。 -->
+                    <AgentConfirmation v-for="ap in approvalsOf(row.tools)" :key="ap.id" :approval="ap"
+                      @decide="(d) => agent.decide(ap.id, d)" />
                   </Trace>
                 </template>
 

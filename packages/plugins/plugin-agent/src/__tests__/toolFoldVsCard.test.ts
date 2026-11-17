@@ -44,4 +44,20 @@ describe('工具行分流：卡片只给自带卡片的画布 MCP 工具', () =>
     const head = cardBranch.slice(0, cardBranch.indexOf('</div>'))
     expect(head).not.toContain('ac-tf-summary')
   })
+
+  it('分组分支的授权条在折叠内容之外（用户口径 2026-11-17 方案 B）', () => {
+    // 背景：授权条以前挂在 `v-for="tool in row.tools"` 每一项下面，而这一整段住在
+    // `<TraceCollapsibleContent>` 里 —— 分组一收起，等待确认的调用就完全看不见。
+    // 现在要求：分组内不再出现授权条，授权条排在分组折叠容器**之后**（与它同级）。
+    const groupStart = conversation.indexOf('v-else-if="row.type === \'tools\'"')
+    expect(groupStart).toBeGreaterThanOrEqual(0)
+    const group = conversation.slice(groupStart)
+    const approvalAt = group.indexOf('AgentConfirmation')
+    // 排在最后一个折叠内容收尾之后 = 不在任何折叠层里
+    const lastCollapseClose = group.lastIndexOf('</TraceCollapsibleContent>')
+    expect(lastCollapseClose).toBeGreaterThanOrEqual(0)
+    expect(approvalAt).toBeGreaterThan(lastCollapseClose)
+    // 只渲染一次（不能既在组内留一份、又在外面来一份）
+    expect(group.split('AgentConfirmation').length - 1).toBe(1)
+  })
 })
