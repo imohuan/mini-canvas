@@ -83,6 +83,9 @@ describe('seed-audio-volc provider（官方接口）', () => {
     expect(p.actions).toHaveLength(1)
     const a = p.actions[0]!
     expect(a.id).toBe('seed-audio-volc:generate')
+    // 标题不带「（官方）」后缀（用户 2026-11-17）：平台名已经说明了是火山引擎
+    expect(a.title).toBe('Seed Audio 1.0')
+    expect(a.title).not.toContain('官方')
     expect(a.model).toBe('seed-audio-1.0')
     expect(a.nodeTypes).toEqual(['audio'])
     expect(a.pollTimeoutMs).toBeGreaterThan(0)

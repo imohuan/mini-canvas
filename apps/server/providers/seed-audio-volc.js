@@ -224,7 +224,9 @@ function mimeFor(format) {
 
 const action = {
   id: 'seed-audio-volc:generate',
-  title: 'Seed Audio 1.0（官方）',
+  // 标题里不带「官方」后缀（用户 2026-11-17）：平台那一栏已经写了「火山引擎」，
+  // 再挂括号只会把名字占长，模型列表里还会和 51KIK 那条挤成两行。
+  title: 'Seed Audio 1.0',
   description: '火山引擎直连。写 @音频1 用这段声音，描述里写情绪、语速、场景；纯描述也能生成音效',
   group: '火山引擎 · 音频',
   nodeTypes: ['audio'],
