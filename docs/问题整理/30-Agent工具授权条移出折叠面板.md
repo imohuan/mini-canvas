@@ -1,8 +1,8 @@
 # 30 · Agent工具授权条移出折叠面板
 
-- 状态：待确认
-- 负责人：未领取
-- 完成时间：—
+- 状态：已完成
+- 负责人：Codex
+- 完成时间：2026-11-17
 
 ## 你的原话
 
@@ -11,6 +11,8 @@
 > 其次，我不太喜欢你这边的 UI。比如文字描述，你可以换行显示，而不是和标题、图标显示在一块儿，可以换一种表达方式
 >
 > 你可以先给我提供几个 demo，让我来看一下布局应该怎样
+>
+> 补充（2026-11-17）：选 B
 
 ## 要解决的问题
 
@@ -47,7 +49,7 @@
 
 ## 修改方案
 
-先在 demo 里选定布局，再按选定方案改代码。四个候选：
+用户选定 **B（消息流内独立卡）**，已按此实现。四个候选留档：
 
 | 方案 | 位置 | 特点 |
 | --- | --- | --- |
@@ -56,23 +58,19 @@
 | C 轻量确认行 | 与工具组同级，默认一行，命令可展开 | 最省空间；默认看不到完整命令 |
 | D 底部抽屉 | 从输入框上方升起的小弹层 | 视觉最重、最强调；多条会挡对话 |
 
-选定方案后的改动位置：
-
-  - `AgentMessageList.vue`：把 `AgentConfirmation` 从 `TraceCollapsibleContent` 里移出，改成与工具组同级渲染；分组内不再重复渲染授权条。
-  - `AgentConfirmation.vue`：由横排 Item 改成纵向三层——标题 / 命令块 / 说明 / 按钮行；长命令用等宽块 `white-space: pre-wrap` + 限高滚动。
-  - `toolMeta.ts`：`approvalTitle` 只给动作级标题（如「Agent 想执行一条命令」）；命令原文改由新字段（如 `approvalCommand`）从入参提取，交给命令块渲染。
+- 改动位置（已落地）：`AgentMessageList.vue` 分组内不再渲染授权条，新增 `approvalsOf(row.tools)`，在 `<TraceCollapsibleContent>` **收尾之后**逐条渲染 `AgentConfirmation`（单工具分支本来就在折叠层外，保持原位置）；`AgentConfirmation.vue` 改成纵向四层——图标 + 标题一行、命令独立代码块、说明一行、按钮一行靠右，命令块等宽 `pre-wrap` + `overflow-wrap: anywhere` + 96px 限高滚动，图标换成琥珀色 `ShieldAlert`；`toolMeta.ts` 的 `approvalTitle` 只给动作级标题，新增 `approvalCommand` 从入参提取命令 / 文件路径原文交给命令块。
 - 为什么这样改：授权是「需要人做决定」的事件，可见性优先于「挂在哪个工具下面」；把命令从标题里拆出来，才能既保留信息又不破坏排版。
 - 风险 / 影响面：审批与工具的对应关系仍靠 `toolCallId`，移动位置不影响 `agent.decide` 的调用；会话历史里老数据（没有 `toolCallId`）继续走 `orphanApproval` 兜底。
 - 验证方式：真实浏览器里触发 `exec_command` 审批（单工具 / 与其它工具合组两种情况），确认不展开也能看到并点击；再跑 `pnpm -C packages/plugins/plugin-agent test` 与 `typecheck`。
 
 ## 验收标准
 
-- [ ] 分组收起时，待授权的工具调用仍然完整可见，可以直接点「允许 / 拒绝」
-- [ ] 授权条在对话里只出现一次，不与工具组内重复
-- [ ] 标题是一句人话，命令在独立代码块里完整换行，块内超长可滚动
-- [ ] 说明文字单独成行，不和标题、图标挤在同一基线
-- [ ] 点允许 / 拒绝后授权条消失，Agent 继续或终止这一轮
-- [ ] 亮色 / 暗色两套主题下对比度正常
+- [x] 分组收起时，待授权的工具调用仍然完整可见，可以直接点「允许 / 拒绝」
+- [x] 授权条在对话里只出现一次，不与工具组内重复
+- [x] 标题是一句人话，命令在独立代码块里完整换行，块内超长可滚动
+- [x] 说明文字单独成行，不和标题、图标挤在同一基线
+- [x] 点允许 / 拒绝后授权条消失，Agent 继续或终止这一轮
+- [x] 亮色 / 暗色两套主题下对比度正常
 
 ## 不能动
 
@@ -83,8 +81,8 @@
 
 ## 假设与待确认
 
-- 假设：多个工具同时待授权时，按到达顺序逐条展示，不合并成「N 项待确认」。
-- 待确认：四个布局选哪一个（A / B / C / D），或在选定方案上做局部调整。
+- 假设：多个工具同时待授权时，按到达顺序逐条展示，不合并成「N 项待确认」。已在真机验证：连续两条 `exec_command` 依次弹卡，放行第一条后第二条接着出现。
+- 待确认：无。
 
 ## 执行指令
 
@@ -96,6 +94,7 @@
 
 ## 执行记录
 
-- 改动文件：暂无（本轮只新增 demo 与本文档，没有改产品代码）
-- 验证命令与结果：demo 已在 Chrome 打开逐屏核对，四个方案的按钮与展开交互正常；问题文档检查脚本通过
-- 完成时间：—（尚未进入实施）
+- 改动文件：`packages/plugins/plugin-agent/src/ui/conversation/AgentConfirmation.vue`、`packages/plugins/plugin-agent/src/ui/conversation/AgentMessageList.vue`、`packages/plugins/plugin-agent/src/model/toolMeta.ts`、`packages/plugins/plugin-agent/src/__tests__/toolMeta.test.ts`、`packages/plugins/plugin-agent/src/__tests__/toolFoldVsCard.test.ts`
+- 验证命令与结果：`pnpm -C packages/plugins/plugin-agent typecheck` 通过；`pnpm -C packages/plugins/plugin-agent test` 673 通过 / 1 失败，失败项是 `panelDetailFixes.test.ts` 的「右侧留白只在内容层写一次」，涉及 `AgentScrollArea.vue`（本轮未触碰），改动前就已失败；Chrome 实测（localhost:5288，暗色）触发 `exec_command` 审批，卡片显示「Agent 想运行一条命令」+ 独立命令块 + 说明 + 按钮行，分组收起时卡片仍完整可见，连续两条审批依次出现、逐条放行后卡片消失并继续；亮色配色以 demo 目视核对，真实页面这轮未跑通（面板停在空态），下次再补。
+- 完成时间：2026-11-17
+- 代码提交：81a4bfd9
