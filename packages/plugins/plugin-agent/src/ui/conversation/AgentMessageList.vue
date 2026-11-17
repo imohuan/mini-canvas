@@ -36,7 +36,7 @@ const {
   hintDismissed, dismissHint, SUGGESTIONS, useSuggestion,
   segmentByAnchor, segmentModelLabel, assistantRows, openThinking,
   hasCardView, viewOf, previewToolMedia,
-  toolGroupTitle, toolRowSummary, toolTitle, toolLineTitle, anyToolRunning, thinkingLive, userSegments, displayUserText, onSegClick, segTitle, segClickable,
+  toolGroupTitle, toolRowSummary, toolTitle, toolLineTitle, anyToolRunning, thinkingLive, liveThinkingRow, userSegments, displayUserText, onSegClick, segTitle, segClickable,
   sourcesOf, failureOf, isTerminal,
   openUserBubbles, overflowingUser, toggleUserBubble, setUserBubbleBody, msgTimeText, msgTimeTitle,
   copied, copyMessage, beginEditMessage, hasInlineError, pagerByAnchor, pagerTarget,
@@ -427,7 +427,9 @@ const pagerMap = pagerByAnchor as unknown as ComputedRef<Map<string, PagerGroup[
                 <!-- 加载行（用户口径 2026-11-05）：用 AI Elements 的 Trace 行，
                      与官方 "Researching" 同款 —— 图标转圈 + 文字用 shimmer 动效。
                      只有这一轮还没出正文时才显示（思考块已经在上面时不再叠一行）。 -->
-                <Trace v-if="showPendingOn(t) && !thinkingLive(t)" role="status" aria-live="polite">
+                <!-- 去重条件只看「是否已有一条在跑的思考行」，与有没有正文无关：
+                     以前用 !thinkingLive 会让加载行在某些阶段整行消失（用户 2026-11-17 报时灵时不灵）。 -->
+                <Trace v-if="showPendingOn(t) && !liveThinkingRow(t)" role="status" aria-live="polite">
                   <TraceLine status="running">
                     <TraceIcon><Spinner class="size-4" /></TraceIcon>
                     <TraceTitle>正在思考</TraceTitle>

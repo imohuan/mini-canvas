@@ -245,6 +245,13 @@ export function createQueueDomain(ctx: AgentServiceContext, deps: AgentServiceDe
     adoptQueue(r.queue)
   }
 
+  /** 当前会话 JSON 的文件绝对路径（后台按自己的数据根算，前端只负责复制） */
+  async function sessionJsonPath(): Promise<string> {
+    const sid = currentSessionId()
+    if (!sid) throw new Error('还没有打开对话')
+    return api.sessionJsonPath(canvasId(), sid)
+  }
+
   return {
     currentSessionId,
     retireSendingItemOnUserMessage,
@@ -253,6 +260,7 @@ export function createQueueDomain(ctx: AgentServiceContext, deps: AgentServiceDe
     removeQueueItem,
     reorderQueue,
     loadEarlierTurns,
+    sessionJsonPath,
     closeQueueItem,
     beginEditQueueItem,
     cancelEditQueueItem,

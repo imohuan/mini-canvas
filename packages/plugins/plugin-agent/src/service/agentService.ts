@@ -224,6 +224,7 @@ export function createAgentService(opts: { baseUrl?: string } = {}): AgentServic
     removeQueueItem: queue.removeQueueItem,
     reorderQueue: queue.reorderQueue,
     loadEarlierTurns: queue.loadEarlierTurns,
+    sessionJsonPath: queue.sessionJsonPath,
     closeQueueItem: queue.closeQueueItem,
     beginEditQueueItem: queue.beginEditQueueItem,
     cancelEditQueueItem: queue.cancelEditQueueItem,

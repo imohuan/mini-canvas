@@ -412,6 +412,19 @@ export class AgentApi {
   }
 
   /**
+   * 当前会话 JSON 的文件绝对路径（面板头部「复制 JSON 地址」用）。
+   *
+   * 由后台按它自己的数据根算，前端不去猜 ~/.plume 之类的目录 —— 数据根可以用 -d 改。
+   */
+  async sessionJsonPath(canvasId: string, sessionId: string): Promise<string> {
+    const r = await this.json<{ ok?: boolean; path?: string; error?: string }>(
+      this.sessionPath(canvasId, sessionId) + '/json-path',
+    )
+    if (r.path) return r.path
+    throw new Error(r.error || '取不到会话 JSON 地址')
+  }
+
+  /**
    * 会话全景（设计 §3.2 / §3.3）：转录之外的**运行态与队列**一次拿全。
    *
    * 刷新后靠这一条恢复：history 从 session.turns 来，队列/目标/暂停标记/流序号都在这。

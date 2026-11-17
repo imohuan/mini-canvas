@@ -20,7 +20,7 @@ import type { BranchStore } from '../agent/branchStore.js'
 import { seedForkTrace } from '../agent/traceFork.js'
 import { safeJson } from './agent.js'
 import { readGoalState } from '../agent/goalState.js'
-import { agentRoot, sessionScratchpadPath } from '../agent/agentPaths.js'
+import { agentRoot, canvasSessionFile, sessionScratchpadPath } from '../agent/agentPaths.js'
 import type { AgentPreTurn, GoalRuntimePort } from './agentSessionsShared.js'
 import { guardParams as guardParamsFn, readPrefs as readPrefsFn } from './agentSessionsShared.js'
 import { registerMessageRoute } from './agentSessionsMessages.js'
@@ -187,6 +187,21 @@ export function agentSessionRoutes(
     const message = typeof body?.message === 'string' ? body.message : ''
     await store.setLastError(p.canvasId, p.sessionId!, message || null)
     return c.json({ ok: true })
+  })
+
+  /**
+   * 当前会话 JSON 的**文件地址**（用户口径 2026-11-17：面板头部要能一键复制）。
+   *
+   * 为什么由后台给而不是前端拼：数据根是后台的配置（默认 ~/.plume，也可用 -d 改），
+   * 前端不知道它；路径规则也只该在 agentPaths 里维护一份。
+   * 返回的是这台机器上的绝对路径（与「会话文件在哪」同一真相），前端只负责复制。
+   */
+  app.get('/api/agent/canvases/:canvasId/sessions/:sessionId/json-path', async (c) => {
+    const p = guardParams(c)
+    if (!p.ok) return p.res
+    const session = await store.get(p.canvasId, p.sessionId!)
+    if (!session) return c.json({ ok: false, error: '会话不存在' }, 404)
+    return c.json({ ok: true, path: canvasSessionFile(config.dataDir, p.canvasId, p.sessionId!) })
   })
 
   app.delete('/api/agent/canvases/:canvasId/sessions/:sessionId', async (c) => {

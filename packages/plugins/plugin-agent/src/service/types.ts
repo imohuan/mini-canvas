@@ -327,6 +327,8 @@ export interface AgentService {
   reorderQueue(order: string[]): Promise<void>
   /** 往头部续拉更早的转录（对话分页）。返回头部还有没有更早的 */
   loadEarlierTurns(): Promise<boolean>
+  /** 当前会话 JSON 的文件绝对路径（面板头部「复制 JSON 地址」用） */
+  sessionJsonPath(): Promise<string>
   /** 关闭排队：从队列移除 + 内容返回给调用方回填输入框 */
   closeQueueItem(itemId: string): Promise<{ text: string; images?: string[] } | null>
   /** 开始编辑某条排队消息（内容交给调用方回填输入框） */

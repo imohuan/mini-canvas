@@ -161,6 +161,22 @@ function thinkingLive(t: AgentTurnView): boolean {
   return !assistantRows(t).some((r) => r.type === 'text')
 }
 
+/**
+ * 这一轮此刻是否**已经在显示一条「正在思考」的思考行**。
+ *
+ * 用户口径（2026-11-17）：以前加载行用 `!thinkingLive(t)` 做条件，而 thinkingLive 的定义是
+ * 「在跑 + 还没出正文」。模型不吐思考块时，条件恒为真 ⇒ 加载行被隐藏，界面上什么都没有；
+ * 一旦出了正文，条件又变假 ⇒ 加载行冒出来。用户看到的就是「时灵时不灵」。
+ *
+ * 真正该去重的是**已经有一条在跑的思考行**（它自己就写着「正在思考」），与有没有正文无关。
+ */
+function liveThinkingRow(t: AgentTurnView): boolean {
+  if (!thinkingLive(t)) return false
+  const rows = assistantRows(t)
+  const last = rows[rows.length - 1]
+  return !!last && last.type === 'thinking'
+}
+
 /** 组标题：跑着几个 / 跑完了几个（照参考项目的「N 个工具调用」写法） */
 function toolGroupTitle(tools: ToolCard[]): string {
   const running = tools.filter((x) => !x.settled).length
@@ -283,6 +299,7 @@ return {
   anyToolRunning,
   isThinking,
   thinkingLive,
+  liveThinkingRow,
   openTools,
   toggleTool,
   hasCardView,

@@ -27,7 +27,7 @@
  *   不会因为切换摆法而跳到别的地方（手感与拖浮窗一致）。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { History, MessageSquarePlus, PanelRight, PictureInPicture2, Settings2, SlidersHorizontal, X } from 'lucide-vue-next'
+import { CircleCheck, Copy, History, MessageSquarePlus, PanelRight, PictureInPicture2, Settings2, SlidersHorizontal, X } from 'lucide-vue-next'
 // 面板头部动作按钮与历史下拉从画布 ctx 的 ui 注册表按名取。
 import { SlotHost, broadcastCloseAllDropdowns, useUiComponent } from '@plume-canvas/canvas-render'
 
@@ -36,7 +36,7 @@ const DropdownMenu = useUiComponent('DropdownMenu')
 const DropdownMenuContent = useUiComponent('DropdownMenuContent')
 const DropdownMenuTrigger = useUiComponent('DropdownMenuTrigger')
 import PanelResizeHandle from '../PanelResizeHandle.vue'
-import { useUi } from '../../composables/ui'
+import { readyHost, useUi } from '../../composables/ui'
 
 const ui = useUi()
 const s = ui.state
@@ -57,6 +57,36 @@ function historyText(raw: string, max: number): string {
     .trim()
   return plain.length > max ? plain.slice(0, max) + '…' : plain
 }
+
+/**
+ * 复制「当前对话的 JSON 文件地址」（用户口径 2026-11-17）。
+ *
+ * 地址由后台按它自己的数据根给出（数据根可以被 -d 改，前端猜不出来）。
+ * 成功时按钮短暂打勾，失败用同样的 toast 说明原因 —— 复制不成功又毫无反馈，
+ * 用户只会以为按钮坏了。
+ */
+const jsonCopied = ref(false)
+let jsonCopiedTimer: ReturnType<typeof setTimeout> | null = null
+async function copySessionJsonPath(): Promise<void> {
+  const svc = readyHost.ctx?.tryGet?.<{ sessionJsonPath?: () => Promise<string> }>('agent')
+  if (!svc?.sessionJsonPath) {
+    ui.showToast('会话还没准备好，稍后再试')
+    return
+  }
+  try {
+    const path = await svc.sessionJsonPath()
+    await navigator.clipboard.writeText(path)
+    jsonCopied.value = true
+    if (jsonCopiedTimer) clearTimeout(jsonCopiedTimer)
+    jsonCopiedTimer = setTimeout(() => { jsonCopied.value = false }, 1400)
+    ui.showToast('已复制对话 JSON 地址')
+  } catch (err) {
+    ui.showToast('复制失败：' + (err instanceof Error ? err.message : String(err)))
+  }
+}
+onBeforeUnmount(() => {
+  if (jsonCopiedTimer) clearTimeout(jsonCopiedTimer)
+})
 
 /** 视口尺寸（响应式）：窗口变化时重夹尺寸与坐标，浮窗不会因为缩窗口而跑出屏幕 */
 const vw = ref(window.innerWidth)
@@ -232,6 +262,14 @@ function startCornerResize(e: PointerEvent): void {
         <span class="agent-model" :title="ui.agent.modelLabel ?? '未选择模型'">{{ ui.agent.modelLabel ?? '未选择模型' }}</span>
       </div>
       <div class="agent-actions">
+        <!-- 复制当前对话的 JSON 文件地址（用户口径 2026-11-17：放在头部最左的复制入口）。
+             成功时图标短暂换成对勾，与消息里的「复制」同一套反馈。 -->
+        <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg"
+          :aria-label="jsonCopied ? '已复制 JSON 地址' : '复制对话 JSON 地址'"
+          :title="jsonCopied ? '已复制' : '复制对话 JSON 地址'" @click="copySessionJsonPath">
+          <CircleCheck v-if="jsonCopied" :size="16" class="size-4 is-ok" />
+          <Copy v-else :size="16" class="size-4" />
+        </Button>
         <Button variant="ghost" size="icon-sm" class="agent-icon rounded-lg" aria-label="新建对话"
           @click="ui.newAgentChat()"><MessageSquarePlus :size="16" class="size-4" /></Button>
         <!-- 历史对话：就是**普通的 dropdown**，居中靠它自己的 placement。
@@ -321,6 +359,8 @@ function startCornerResize(e: PointerEvent): void {
 .agent-actions { display: flex; flex: none; align-items: center; gap: 2px; }
 .agent-icon { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; min-width: 28px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ui-ink, #18202b); cursor: pointer; transition: background 0.16s ease; }
 .agent-icon:hover { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }
+/* 复制成功的对勾用主题强调色，与消息气泡里的「复制」反馈一致 */
+.agent-icon .is-ok { color: var(--ui-accent, #0891b2); }
 .agent-content { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 /* 只剩下**内容**样式：外层浮层（定位/边框/底色/圆角/阴影/滚动/点外关闭）由
    dropdown 组件提供 —— 所以这里不再有 position / border / background / shadow。 */
