@@ -156,6 +156,7 @@ export {
   findDuplicate,
   validateConnection,
   typeConnectionDef,
+  nodeConnectionDef,
   resolveTargetInputPort,
   resolveSourceOutputPort,
 } from './connection'

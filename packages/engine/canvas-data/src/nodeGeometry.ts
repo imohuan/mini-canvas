@@ -42,6 +42,20 @@ export interface NodeGeometryChange {
 export interface NodeGeometryService {
   /** 读某节点尺寸；节点不存在或没有尺寸 → `null`（不编造默认值） */
   get(id: string): NodeSize | null
+  /**
+   * 读某节点的**实际尺寸**：自己有 size 就用，没有就跟类型默认值走。
+   *
+   * 画宽高 / 算布局一律用这个（用户 2026-11-18）：图片、视频没画面时故意不放 size，
+   * 好让设置里的默认宽高实时生效。`get()` 保持“只读显式尺寸”的语义，两者别混用。
+   */
+  getEffective(id: string): NodeSize | null
+  /**
+   * 读某节点的**实际尺寸**：自己有 size 就用，没有就跟类型默认值走。
+   *
+   * 画宽高 / 算布局一律用这个（用户 2026-11-18）：图片、视频没画面时故意不放 size，
+   * 好让设置里的默认宽高实时生效。`get()` 保持“只读显式尺寸”的语义，两者别混用。
+   */
+  getEffective(id: string): NodeSize | null
   /** 读绝对矩形（绝对坐标 + 尺寸）；节点不存在或没有尺寸 → `null` */
   getRect(id: string): LayoutRect | null
   /** 全部节点的绝对矩形（只含有尺寸的节点；顺序同 doc） */
@@ -115,6 +129,18 @@ export function createNodeGeometry(doc: DocService): BindableNodeGeometryService
     return { id, x, y, w: node.size.w, h: node.size.h }
   }
 
+  /**
+   * 实际尺寸：自己有 size 就用，没有跟类型默认值走。
+   * 画宽高 / 算布局一律用这个；`get()` 保持“只读显式尺寸”的语义（用户 2026-11-18）。
+   */
+  function getEffective(id: string): NodeSize | null {
+    const node = doc.getNode(id)
+    if (!node) return null
+    if (node.size && node.size.w > 0 && node.size.h > 0) return { w: node.size.w, h: node.size.h }
+    const def = doc.types.get(node.type)?.defaultSize
+    return def ? { w: def.w, h: def.h } : null
+  }
+
   // 节点集合变化（新增/删除/替换/位置/其它 data）也要通知 —— 订阅方据此重算矩形。
   // 尺寸写入会同时在 doc 里广播一次 update，所以这里统一告诉订阅方“这个节点变了”，
   // 由订阅方重读（比在这里比对前后值更省事，也避免漏掉父子关系变化）。
@@ -136,6 +162,7 @@ export function createNodeGeometry(doc: DocService): BindableNodeGeometryService
       const size = doc.getNode(id)?.size
       return size ? { w: size.w, h: size.h } : null
     },
+    getEffective,
     getRect,
     getAllRects() {
       const out: LayoutRect[] = []

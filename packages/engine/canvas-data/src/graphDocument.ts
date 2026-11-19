@@ -24,7 +24,7 @@ import type { HistoryService } from './history'
 import type { SelectionService } from './selection'
 // 连接规则（自连/成环/重复/朝向/类型/容量）的唯一来源：加边守门人在这里落闸，
 // 任何走 graph 的加边都必须过它，插件/宿主/云端都不能另辟蹊径。
-import { validateConnection, typeConnectionDef, pickOverflowEvict } from './canvas/connection'
+import { validateConnection, typeConnectionDef, nodeConnectionDef, pickOverflowEvict } from './canvas/connection'
 import type { InvalidReason } from './canvas/connection'
 import { isTransient } from './transient'
 
@@ -200,7 +200,11 @@ export class GraphDocument implements GraphDocumentService {
   }
 
   updateNode(id: string, patch: Parameters<NodeStoreService['updateNode']>[1]): void {
-    this.history.withRecord(() => this.nodeStore.updateNode(id, patch))
+    this.history.withRecord(() => {
+      this.nodeStore.updateNode(id, patch)
+      // 节点数据一变，端口可能跟着变（如可视化节点换了输出类型）→ 先清掉已经不合规的边
+      this.pruneInvalidEdgesAround([id])
+    })
     this.scheduleCommit()
   }
 
@@ -219,8 +223,61 @@ export class GraphDocument implements GraphDocumentService {
 
   updateNodes(entries: NodePatchEntry[]): void {
     if (entries.length === 0) return
-    this.history.withRecord(() => this.nodeStore.updateNodes(entries))
+    this.history.withRecord(() => {
+      this.nodeStore.updateNodes(entries)
+      this.pruneInvalidEdgesAround(entries.map((e) => e.id))
+    })
     this.scheduleCommit()
+  }
+
+  /**
+   * 把「碰到这些节点」的连线重新校验一遍，删掉已经不合规的。
+   *
+   * 用户 2026-11-17 的口径：可视化节点原来是图片输出、下游连着图片对比；把输出类型改成音频后，
+   * 那条「图片输出 → 图片输入」的线就不成立了 —— 必须**自动断开**，不能留下一条点不动的线。
+   *
+   * 为什么放在数据层、而不是让每个插件自己调：改节点数据有好几条路（界面编辑、MCP 批量写、
+   * 任务脚本回写产物）。放这儿一次，四条路都自动生效，也不会出现「网页端断了、后台还留着」。
+   * 走的是与新建连线**同一套**校验（validateConnection），规则不会漂。
+   *
+   * 边界：只检查碰到这些节点的边；校验用的节点表是当前全量节点（含刚改完的数据）。
+   */
+  private pruneInvalidEdgesAround(nodeIds: readonly string[]): void {
+    const touched = new Set(nodeIds)
+    if (touched.size === 0) return
+    const edges = this.edgeStore.getEdges()
+    const affected = edges.filter((e) => !isTransient(e) && (touched.has(e.source) || touched.has(e.target)))
+    if (affected.length === 0) return
+    const nodes = new Map(this.nodeStore.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
+    const types = this.nodeStore.types
+    const store = this.nodeStore
+    const ctx = {
+      nodes,
+      edges,
+      getTypeConn: (t: string) => typeConnectionDef(types.get(t)),
+      getNodeConn: (nodeId: string) => {
+        const n = store.getNode(nodeId)
+        return nodeConnectionDef(types.get(n?.type ?? ''), n?.data)
+      },
+    }
+    for (const edge of affected) {
+      // 校验时排除这条边的自身端点重复判定（它已经存在，去重规则会误判成 duplicate）
+      const rest = edges.filter((e) => e !== edge)
+      const res = validateConnection(
+        {
+          source: edge.source,
+          sourceHandle: edge.sourceHandle,
+          target: edge.target,
+          targetHandle: edge.targetHandle,
+        },
+        { ...ctx, edges: rest },
+      )
+      if (!res.ok && res.reason === 'duplicate') continue
+      if (!res.ok) {
+        this.edgeStore.removeEdge(edge.id)
+        this.selection.removeEdge(edge.id)
+      }
+    }
   }
 
   removeNodes(ids: string[]): number {
@@ -296,7 +353,7 @@ export class GraphDocument implements GraphDocumentService {
   private pickEvict(input: AddEdgeRequest): string | null {
     if (isTransient({ data: input.data })) return null
     const tgt = this.nodeStore.getNode(input.target)
-    const typeConn = tgt ? typeConnectionDef(this.nodeStore.types.get(tgt.type)) : undefined
+    const typeConn = tgt ? nodeConnectionDef(this.nodeStore.types.get(tgt.type), tgt.data) : undefined
     return pickOverflowEvict({
       typeConn,
       edges: this.edgeStore.getEdges(),
@@ -309,6 +366,7 @@ export class GraphDocument implements GraphDocumentService {
   private validateEdge(input: AddEdgeRequest): { ok: boolean; reason?: InvalidReason } {
     const nodes = new Map(this.nodeStore.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
     const types = this.nodeStore.types
+    const store = this.nodeStore
     const res = validateConnection(
       {
         source: input.source,
@@ -320,6 +378,10 @@ export class GraphDocument implements GraphDocumentService {
         nodes,
         edges: this.edgeStore.getEdges(),
         getTypeConn: (t) => typeConnectionDef(types.get(t)),
+        getNodeConn: (nodeId) => {
+          const n = store.getNode(nodeId)
+          return nodeConnectionDef(types.get(n?.type ?? ''), n?.data)
+        },
       },
     )
     // ValidationResult.reason 的类型含 'ok'，失败分支里它必然是真正的 InvalidReason（排除 'ok' 以便类型收窄）

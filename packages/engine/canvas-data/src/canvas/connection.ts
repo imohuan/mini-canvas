@@ -64,6 +64,14 @@ export interface ValidateContext {
   edges: ExistingEdge[]
   /** 由 nodeStore.types 反查某 type 的连接声明 */
   getTypeConn: (type: string) => NodeConnectionDef | undefined
+  /**
+   * 取某节点的**实际连接声明**（可选）。
+   *
+   * 为什么需要：有的节点类型把输出口交给节点数据决定（CanvasNodeType.outputsFromData，
+   * 典型是可视化节点 —— 这次产出图片、下次产出音频）。这类类型的端口不能只按 type 查，
+   * 必须按「这个节点自己的 data」算。提供本函数时，校验优先用它；不提供则退回 getTypeConn。
+   */
+  getNodeConn?: (nodeId: string) => NodeConnectionDef | undefined
 }
 
 export type InvalidReason =
@@ -192,8 +200,12 @@ export function validateConnection(
   // v1 注：刷新载入时两端节点可能还没进索引——此时放行避免历史边被误判丢。手动拖线两端必在。
   if (!src || !tgt) return allowMissingNodes ? { ok: true, canonical, reason: 'ok' as const } : fail('missing-node')
 
-  const srcConn = ctx.getTypeConn(src.type)
-  const tgtConn = ctx.getTypeConn(tgt.type)
+  /*
+   * 端口声明优先按**节点自己**取（可视化节点这类把输出口交给节点 data 决定的类型）；
+   * 没有提供节点级查询时退回按类型取 —— 两种取法都走同一个 resolve，老类型行为不变。
+   */
+  const srcConn = ctx.getNodeConn?.(src.id) ?? ctx.getTypeConn(src.type)
+  const tgtConn = ctx.getNodeConn?.(tgt.id) ?? ctx.getTypeConn(tgt.type)
 
   // 输出/输入端口能力：type 声明 outputs 存在且非空才算有 source 口；未声明默认都有（BaseNode 人人带 source+target）
   const norm = normalizeConnection(conn)
@@ -312,6 +324,40 @@ export function resolveSourceOutputPort(
 export function typeConnectionDef(def: { inputs?: PortDef[]; outputs?: PortDef[] } | undefined): NodeConnectionDef | undefined {
   if (!def) return undefined
   return def.inputs || def.outputs ? { inputs: def.inputs, outputs: def.outputs } : undefined
+}
+
+/**
+ * 从**节点自己的 data** 反查连接声明（支持 CanvasNodeType.outputsFromData）。
+ *
+ * 为什么单独一支：「输出口由节点数据决定」这件事有三个消费方 —— 数据层建边/校验、
+ * 渲染层画端口、右键菜单筛可连类型。三处各写一遍必然漂移（同一个节点一边显示有口、
+ * 一边拒连），所以判定只在这里写一次。
+ *
+ * 语义：
+ * - 类型声明了 outputsFromData → 用它算；返回空 = 这个节点**没有输出口**（右侧不画口、不许连出）。
+ *   算出来的口**不受静态 outputs 影响**（静态那份被完全接管）。
+ * - 没声明 → 老语义（静态 inputs/outputs；都未声明 = 人人可连，返回 undefined）。
+ */
+export function nodeConnectionDef(
+  def:
+    | {
+        inputs?: PortDef[]
+        outputs?: PortDef[]
+        outputsFromData?: (data: Record<string, unknown>) => PortDef[] | undefined
+      }
+    | undefined,
+  data: Record<string, unknown> | undefined,
+): NodeConnectionDef | undefined {
+  if (!def) return undefined
+  if (!def.outputsFromData) return typeConnectionDef(def)
+  let outputs: PortDef[] | undefined
+  try {
+    outputs = def.outputsFromData(data ?? {}) ?? []
+  } catch {
+    // 作者写的取值函数抛了：当作「没有输出口」，而不是让整张画布的连线崩掉
+    outputs = []
+  }
+  return { inputs: def.inputs, outputs: Array.isArray(outputs) ? outputs : [] }
 }
 
 /** 带 id 的边（"挤出哪条"的决策必须有 id 才能落地） */

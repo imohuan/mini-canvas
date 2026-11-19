@@ -29,6 +29,100 @@ beforeEach(() => {
   vi.useRealTimers()
 })
 
+/**
+ * 用户 2026-11-17：可视化节点的输出类型不写死在类型上，而是放在节点 data 里（uiOutputType）。
+ * 端口要跟着节点走：有值就有输出口，空/不认识就没有；改了类型，旧连线自动断开。
+ */
+describe('GraphDocument —— 输出类型由节点数据决定', () => {
+  /** 造一个可视化节点式的类型：输出类型读 data.kind，空 = 没输出口 */
+  function setup() {
+    const g = makeGraph()
+    g.nodeStore.registerType({
+      type: 'ui',
+      label: 'UI',
+      defaultSize: { w: 10, h: 10 },
+      inputs: [{ port: 'target', acceptsTypes: ['text', 'image', 'video', 'audio'] }],
+      outputsFromData: (data) =>
+        typeof data.kind === 'string' && data.kind ? [{ port: 'source', contentType: data.kind }] : [],
+    })
+    g.nodeStore.registerType({
+      type: 'img',
+      label: 'IMG',
+      defaultSize: { w: 10, h: 10 },
+      inputs: [{ port: 'target', acceptsTypes: ['image'] }],
+      outputs: [{ port: 'source', contentType: 'image' }],
+    })
+    g.nodeStore.registerType({
+      type: 'aud',
+      label: 'AUD',
+      defaultSize: { w: 10, h: 10 },
+      inputs: [{ port: 'target', acceptsTypes: ['audio'] }],
+      outputs: [{ port: 'source', contentType: 'audio' }],
+    })
+    return g
+  }
+
+  it('data 里没有输出类型 → 没有输出口，连线被拒（no-source-port）', () => {
+    const { graph, edgeStore } = setup()
+    const ui = graph.createNode('ui', { x: 0, y: 0 })
+    const img = graph.createNode('img', { x: 100, y: 0 })
+    expect(graph.connectEdge({ source: ui, target: img })).toMatchObject({ status: 'rejected', reason: 'no-source-port' })
+    expect(edgeStore.getEdges()).toHaveLength(0)
+  })
+
+  it('data 里写了 audio → 能连音频节点，连图片节点报类型不匹配', () => {
+    const { graph } = setup()
+    const ui = graph.createNode('ui', { x: 0, y: 0 }, { kind: 'audio' })
+    const aud = graph.createNode('aud', { x: 100, y: 0 })
+    const img = graph.createNode('img', { x: 200, y: 0 })
+    expect(graph.connectEdge({ source: ui, target: aud }).status).toBe('ok')
+    expect(graph.connectEdge({ source: ui, target: img })).toMatchObject({ status: 'rejected', reason: 'type-not-accepted' })
+  })
+
+  it('★ 改类型时自动断开不再匹配的连线（图片 → 音频）', () => {
+    const { graph, edgeStore } = setup()
+    const ui = graph.createNode('ui', { x: 0, y: 0 }, { kind: 'image' })
+    const img = graph.createNode('img', { x: 100, y: 0 })
+    graph.connectEdge({ source: ui, target: img })
+    expect(edgeStore.getEdges()).toHaveLength(1)
+
+    // 同一节点改成音频：原来连到图片节点的那条线不成立了
+    graph.updateNode(ui, { data: { kind: 'audio' } })
+    expect(edgeStore.getEdges()).toHaveLength(0)
+  })
+
+  it('★ 改成空类型 → 输出口消失，连线也断开', () => {
+    const { graph, edgeStore } = setup()
+    const ui = graph.createNode('ui', { x: 0, y: 0 }, { kind: 'image' })
+    const img = graph.createNode('img', { x: 100, y: 0 })
+    graph.connectEdge({ source: ui, target: img })
+    graph.updateNode(ui, { data: { kind: '' } })
+    expect(edgeStore.getEdges()).toHaveLength(0)
+  })
+
+  it('改类型但新类型仍然匹配 → 连线保留（音频 → 音频）', async () => {
+    const { graph, edgeStore } = setup()
+    const ui = graph.createNode('ui', { x: 0, y: 0 }, { kind: 'image' })
+    const aud = graph.createNode('aud', { x: 100, y: 0 })
+    const img = graph.createNode('img', { x: 200, y: 0 })
+    graph.connectEdge({ source: ui, target: img })
+    graph.updateNode(ui, { data: { kind: 'audio' } })
+    expect(edgeStore.getEdges()).toHaveLength(0)
+    graph.connectEdge({ source: ui, target: aud })
+    graph.updateNode(ui, { data: { kind: 'audio' } })
+    expect(edgeStore.getEdges()).toHaveLength(1)
+  })
+
+  it('改别的字段（不出现在端口判定里）不会误删连线', () => {
+    const { graph, edgeStore } = setup()
+    const ui = graph.createNode('ui', { x: 0, y: 0 }, { kind: 'image' })
+    const img = graph.createNode('img', { x: 100, y: 0 })
+    graph.connectEdge({ source: ui, target: img })
+    graph.updateNode(ui, { data: { label: '换个名字' } })
+    expect(edgeStore.getEdges()).toHaveLength(1)
+  })
+})
+
 describe('GraphDocument —— 唯一写入口', () => {
   it('createNode/addEdge 写入 store 并同步触发提交回调(每次变更一次)', () => {
     const commit = vi.fn()

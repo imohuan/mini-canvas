@@ -50,6 +50,10 @@ export interface NodeTypeDef extends NodeDataTypeDef {
   /** 声明式连接约束（api.md §四） */
   inputs?: PortDef[]
   outputs?: PortDef[]
+  /** 输出口按节点自己的 data 现算（见 CanvasNodeType.outputsFromData） */
+  outputsFromData?: (data: Record<string, unknown>) => PortDef[] | undefined
+  /** 对外产出按节点自己的 data 现算（见 CanvasNodeType.producesFromData） */
+  producesFromData?: (data: Record<string, unknown>) => Record<string, import('../dataPorts').DataPortDef> | undefined
   /** 类型图标（opaque 句柄，同 content 语义；缺省 = 不显示图标） */
   icon?: unknown
   /**
@@ -77,6 +81,11 @@ export interface NodeTypeDef extends NodeDataTypeDef {
   transparent?: boolean
   /** 加载态用类型默认尺寸（类型级能力；缺省 false）。透传进 nodeStore 供渲染层读取 —— 媒体型类型（图片/视频）重新生成时按默认宽高显示，不跟着媒体比例变竖。 */
   loadingDefaultSize?: boolean
+  /**
+   * 尺寸由内容决定（类型级能力；缺省 false）。透传进 nodeStore：声明后新建节点**不写** node.size，
+   * 卡片跟随设置里的「默认宽/高」实时变；有画面后由插件按比例写死（用户 2026-11-18）。
+   */
+  sizeFromContent?: boolean
 }
 
 /**
@@ -106,11 +115,14 @@ export function registerNodeType(ctx: PluginScope, def: NodeTypeDef): () => void
     description: def.description,
     inputs: def.inputs,
     outputs: def.outputs,
+    outputsFromData: def.outputsFromData,
+    producesFromData: def.producesFromData,
     resizable: def.resizable,
     resizeRatio: def.resizeRatio,
     frameless: def.frameless,
     transparent: def.transparent,
     loadingDefaultSize: def.loadingDefaultSize,
+    sizeFromContent: def.sizeFromContent,
     produces: def.produces,
     consumes: def.consumes,
   })

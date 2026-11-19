@@ -179,6 +179,47 @@ describe('batchNodes', () => {
     expect(node.data.text).toBe('a')
   })
 
+  /**
+   * 用户 2026-11-17：可视化节点的输出类型放在 data.uiOutputType。改类型后，
+   * 原来连出去、现在不合规的那条线要自动断开 —— AI 经 MCP 改也不能留下脏边。
+   */
+  it('★ 改 uiOutputType 后，自动断掉不再匹配的连线', async () => {
+    await doc.batchNodes({
+      add: [
+        { type: 'ui', id: 'ui1', data: { uiOutputType: 'image' } },
+        { type: 'image', id: 'img1' },
+      ],
+    })
+    await doc.batchEdges({ add: [{ id: 'e1', source: 'ui1', target: 'img1' }] })
+    expect((await doc.read()).edges).toHaveLength(1)
+
+    await doc.batchNodes({ update: [{ id: 'ui1', data: { uiOutputType: 'audio' } }] })
+    expect((await doc.read()).edges).toHaveLength(0)
+  })
+
+  it('★ 输出类型清空后，连线也断开', async () => {
+    await doc.batchNodes({
+      add: [
+        { type: 'ui', id: 'ui1', data: { uiOutputType: 'image' } },
+        { type: 'image', id: 'img1' },
+      ],
+    })
+    await doc.batchEdges({ add: [{ id: 'e1', source: 'ui1', target: 'img1' }] })
+    await doc.batchNodes({ update: [{ id: 'ui1', data: { uiOutputType: '' } }] })
+    expect((await doc.read()).edges).toHaveLength(0)
+  })
+
+  it('只改别的字段时，连线保留', async () => {
+    await doc.batchNodes({
+      add: [
+        { type: 'ui', id: 'ui1', data: { uiOutputType: 'image' } },
+        { type: 'image', id: 'img1' },
+      ],
+    })
+    await doc.batchEdges({ add: [{ id: 'e1', source: 'ui1', target: 'img1' }] })
+    await doc.batchNodes({ update: [{ id: 'ui1', data: { label: '换个名字' } }] })
+    expect((await doc.read()).edges).toHaveLength(1)
+  })
   it('删节点会连带删掉它的连线（不留悬挂边）', async () => {
     await doc.batchNodes({ add: [{ type: 'text', id: 'a' }, { type: 'text', id: 'b' }] })
     await doc.batchEdges({ add: [{ source: 'a', target: 'b' }] })

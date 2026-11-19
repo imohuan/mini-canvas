@@ -30,7 +30,7 @@ import { Selection } from '../selection'
 import { History } from '../history'
 import { GraphDocument } from '../graphDocument'
 import type { GraphEnvelope } from '../graphDocument'
-import { ResourceStore, sanitizeTransientResourceUrls } from '../resourceService'
+import { ResourceStore, sanitizeForeignResourceRefs, sanitizeTransientResourceUrls } from '../resourceService'
 import { createIndexedDbResourceAdapter } from '../storage/indexedDbResourceAdapter'
 import { isResourceAdapter } from '../storage/types'
 import { createSettingsPersist } from '../settingsPersist'
@@ -202,7 +202,13 @@ export function createCanvasBasePlugin(opts: CanvasBaseOptions = {}): CanvasBase
   // commit 回调接收整图信封：宿主把当前节点+边持久化（与 CanvasHost/commands 的 graph/graph-edges 分存一致）。
   const graph = new GraphDocument(nodeStore, edgeStore, selection, history, (envelope) => {
     // 落盘同样滤掉中间态：交互中间态刷新后不该复活。
-    save.set(GRAPH_KEY, sanitizeTransientResourceUrls(envelope.nodes.filter((n) => !isTransient(n))), 'canvas')
+    // 资源归属：媒体地址是本次渲染的副本，指向别的画布 / 外站就删掉；
+    // 引用字段保留，交给打开时的修复流程把字节复制进本画布（现在删会丢掉“去哪儿取”的线索）。
+    const cleaned = sanitizeForeignResourceRefs(
+      sanitizeTransientResourceUrls(envelope.nodes.filter((n) => !isTransient(n))),
+      { isForeign: (v) => resources.isForeign(v) },
+    )
+    save.set(GRAPH_KEY, cleaned.nodes, 'canvas')
     save.set(GRAPH_EDGES_KEY, envelope.edges.filter((e) => !isTransient(e)), 'canvas')
   })
 

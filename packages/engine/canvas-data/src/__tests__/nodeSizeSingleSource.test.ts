@@ -22,6 +22,59 @@ function makeStore(): NodeStore {
   return s
 }
 
+/** 按内容的类型（图片/视频）：建节点不写 size，跟着类型默认值走，等有画面了再写死 */
+function makeContentSizedStore(): NodeStore {
+  const s = new NodeStore()
+  s.registerType({ type: 'image', label: '图片', defaultSize: { w: 320, h: 240 }, sizeFromContent: true })
+  s.registerType({ type: 'text', label: '文本', defaultSize: { w: 100, h: 40 } })
+  return s
+}
+
+describe('sizeFromContent：没画面时跟随类型默认尺寸（用户 2026-11-18）', () => {
+  it('addNode：不写 size（留给默认值，设置面板一改就跟着变）', () => {
+    const s = makeContentSizedStore()
+    const id = s.addNode('image', { x: 0, y: 0 })
+    expect(s.getNode(id)!.size).toBeUndefined()
+    // 实际尺寸仍然可读：走默认值
+    expect(s.effectiveSize(id)).toEqual({ w: 320, h: 240 })
+  })
+
+  it('改类型默认尺寸 → 没有 size 的节点立刻跟着变', () => {
+    const s = makeContentSizedStore()
+    const id = s.addNode('image', { x: 0, y: 0 })
+    s.updateTypeSize('image', { w: 490, h: 310 })
+    expect(s.effectiveSize(id)).toEqual({ w: 490, h: 310 })
+    // 有自己的尺寸的节点不受影响
+    s.updateNode(id, { size: { w: 420, h: 236 } })
+    s.updateTypeSize('image', { w: 600, h: 400 })
+    expect(s.effectiveSize(id)).toEqual({ w: 420, h: 236 })
+  })
+
+  it('addNodes / replaceAll 同样不补 size', () => {
+    const s = makeContentSizedStore()
+    s.addNodes([{ type: 'image', position: { x: 0, y: 0 } }])
+    expect(s.getNodes()[0].size).toBeUndefined()
+    s.replaceAll([{ id: '9', type: 'image', position: { x: 0, y: 0 }, data: {} } as never])
+    expect(s.getNode('9')!.size).toBeUndefined()
+    expect(s.effectiveSize('9')).toEqual({ w: 320, h: 240 })
+  })
+
+  it('没声明 sizeFromContent 的类型保持原样（新建即写死默认尺寸）', () => {
+    const s = makeContentSizedStore()
+    const id = s.addNode('text', { x: 0, y: 0 })
+    expect(s.getNode(id)!.size).toEqual({ w: 100, h: 40 })
+  })
+
+  it('写 0 / 负数 → 当成“清掉自己的尺寸”（回到跟默认走）', () => {
+    const s = makeContentSizedStore()
+    const id = s.addNode('image', { x: 0, y: 0 })
+    s.updateNode(id, { size: { w: 420, h: 236 } })
+    s.updateNode(id, { size: { w: 0, h: 0 } })
+    expect(s.getNode(id)!.size).toBeUndefined()
+    expect(s.effectiveSize(id)).toEqual({ w: 320, h: 240 })
+  })
+})
+
 describe('nodeSizePatch：唯一写法', () => {
   it('只给 size', () => {
     expect(nodeSizePatch(700, 300)).toEqual({ size: { w: 700, h: 300 } })

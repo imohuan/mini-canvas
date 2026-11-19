@@ -30,6 +30,13 @@ export interface CanvasNode {
   size?: { w: number; h: number }
 }
 
+/** 尺寸是否「有自己的一份」：只有正有限数才算（0 / 负数 = 没写，跟默认走） */
+function isRealSize(v: unknown): v is { w: number; h: number } {
+  const s = v as { w?: unknown; h?: unknown } | null
+  return !!s && typeof s.w === 'number' && typeof s.h === 'number' &&
+    Number.isFinite(s.w) && Number.isFinite(s.h) && s.w > 0 && s.h > 0
+}
+
 /** addNodes 的单条输入：除 type/position 外均可选（id 缺省自动分配） */
 export interface AddNodeInput {
   type: string
@@ -120,6 +127,20 @@ export interface CanvasNodeType {
   /** 声明式连接约束：target 输入/源类型/端口条数；缺省 = 人人可 source→target 连 */
   inputs?: PortDef[]
   outputs?: PortDef[]
+  /**
+   * 输出口由**节点自己的数据**决定（类型级可选项）。
+   *
+   * 为什么需要它（用户 2026-11-17 提的）：可视化节点的界面是 Agent 现写的，
+   * 这次可能产出图片、下次可能产出 mp3 —— 端口要是按类型写死，改界面就得改插件源码，
+   * 而且会出现「节点里明明是音频，端口却声明成图片」。
+   *
+   * 声明了本字段的类型：`outputs` 一律**由这个函数按节点 data 算出**（静态声明不再参与）。
+   * 返回 undefined / null / 空串 = **这个节点没有输出口**（右侧不画端口、也不许连出）。
+   * 没声明本字段的类型：保持老语义（看静态 outputs，未声明 = 默认有口）。
+   *
+   * 约定：返回的 contentType 必须是内核认识的词表（image / video / audio / text …）。
+   */
+  outputsFromData?: (data: Record<string, unknown>) => PortDef[] | undefined
   /** 节点类型图标（opaque 句柄：SVG 字符串或 Vue 组件；内核不解析）。菜单"新建节点"与节点标题共用。 */
   icon?: unknown
   /**
@@ -197,8 +218,27 @@ export interface CanvasNodeType {
    * 所以生成失败/取消时原图与尺寸都原样还在（删图删尺寸的写法会把用户作品弄丢）。
    */
   loadingDefaultSize?: boolean
+  /**
+   * 尺寸由内容决定（类型级能力；缺省 false）。用户 2026-11-18 拍板。
+   *
+   * 声明它的类型（图片 / 视频）：**新建节点时不写 `node.size`**，卡片按 `defaultSize` 画。
+   * 于是设置面板改「默认宽/高」时，还没画面的节点会**立刻**跟着变；
+   * 一旦有真实画面（上传 / 截图 / 生成），插件按画面比例写死 `size`，从此不再跟默认走。
+   *
+   * 没声明的类型（文本 / 音频 / 分组…）保持原行为：建节点就把默认尺寸写死。
+   */
+  sizeFromContent?: boolean
   /** 数据契约：本节点对外产出的槽（只做声明与校验；读取走 upstream 能力） */
   produces?: Record<string, import('./canvas/dataPorts').DataPortDef>
+  /**
+   * 对外产出的槽**按节点自己的 data 现算**（与 outputsFromData 同一条思路）。
+   *
+   * 可视化节点用它：这次算出一段音频、下次画一张图 —— 「我产出的是什么」写在节点数据里，
+   * 下游的 upstream 能力要按这个节点读，而不是按类型写死。
+   * 返回空对象 = 这个节点不产出任何东西（下游读不到）。
+   * 未声明本字段 → 用静态 produces（老语义）。
+   */
+  producesFromData?: (data: Record<string, unknown>) => Record<string, import('./canvas/dataPorts').DataPortDef> | undefined
   /** 数据契约：本节点从上游读取的槽 */
   consumes?: Record<string, import('./canvas/dataPorts').DataPortDef>
 }
@@ -234,6 +274,16 @@ export interface NodeStoreService {
   nextTypeName(type: string): string
   /** 所有节点 */
   getNodes(): CanvasNode[]
+  /**
+   * 读某节点的**实际尺寸**：自己有就用，没有就跟类型默认值走。
+   *
+   * 为什么单独给一个读口（用户 2026-11-18）：图片/视频这类「尺寸由内容决定」的类型，
+   * 没画面时故意不写 size（好让设置里的默认宽高实时生效）。凡是画宽高、算布局的地方
+   * 都必须用这个读口，否则会读到空值、或者各自兜一个硬编码数字。
+   *
+   * 节点不存在 / 类型未注册且没有尺寸 → `{ w: 0, h: 0 }`。
+   */
+  effectiveSize(id: string): { w: number; h: number }
   /** 深拷贝快照（P1-10：安全只读——返回与内部引用隔离的副本，外部改动不污染 store） */
   getSnapshot(): CanvasNode[]
   /** 按 type 在指定坐标建一个节点，返回短 id（如 '1'） */
@@ -375,6 +425,15 @@ export class NodeStore implements NodeStoreService {
     return [...this.nodes.values()]
   }
 
+  /** 实际尺寸：自己有就用，没有跟类型默认值走（见 NodeStoreService.effectiveSize） */
+  effectiveSize(id: string): { w: number; h: number } {
+    const node = this.nodes.get(id)
+    if (!node) return { w: 0, h: 0 }
+    if (isRealSize(node.size)) return { w: node.size.w, h: node.size.h }
+    const def = this.types.get(node.type)?.defaultSize
+    return def ? { w: def.w, h: def.h } : { w: 0, h: 0 }
+  }
+
   getSnapshot(): CanvasNode[] {
     return JSON.parse(JSON.stringify([...this.nodes.values()])) as CanvasNode[]
   }
@@ -386,13 +445,16 @@ export class NodeStore implements NodeStoreService {
     }
     const id = this.createNodeId()
     // 尺寸只存 node.size：新节点一律落下类型默认尺寸（用户 2026-11-14：不再有“缺尺寸靠回退”）。
-    this.nodes.set(id, {
+    // 例外：sizeFromContent 的类型（图片/视频）**不写**，好让设置里的默认宽高实时生效；
+    // 有画面之后由插件按比例写死（用户 2026-11-18）。
+    const node: CanvasNode = {
       id,
       type,
       position,
       data: { label: this.nextDefaultName(def) },
-      size: { w: def.defaultSize.w, h: def.defaultSize.h },
-    })
+    }
+    if (def.sizeFromContent !== true) node.size = { w: def.defaultSize.w, h: def.defaultSize.h }
+    this.nodes.set(id, node)
     this.notify('add', id)
     return id
   }
@@ -427,9 +489,12 @@ export class NodeStore implements NodeStoreService {
         data,
         ...(input.parentId !== undefined ? { parentId: input.parentId } : {}),
         // 尺寸只存 node.size；没显式给就用类型默认尺寸（与 addNode 同一条规矩）。
-        size: input.size !== undefined
-          ? { ...input.size }
-          : { ...this.types.get(input.type)!.defaultSize },
+        // sizeFromContent 的类型没显式给就**不写**，跟着默认值走（见 addNode 注释）。
+        ...(input.size !== undefined
+          ? { size: { ...input.size } }
+          : this.types.get(input.type)!.sizeFromContent === true
+            ? {}
+            : { size: { ...this.types.get(input.type)!.defaultSize } }),
       }
       this.nodes.set(id, node)
       // 显式数字 id（复制粘贴 / AI 后台 / 云端合并进来的）也把计数器抬起来：
@@ -493,7 +558,9 @@ export class NodeStore implements NodeStoreService {
     }
     let sizeChanged = false
     if ('size' in patch) {
-      if (patch.size === undefined) {
+      // 显式清尺寸，或写了 0 / 负数 → 都当成“这个节点不再有自己的尺寸”，回到跟随默认。
+      // 用户 2026-11-18：这样“0 或 -1 表示用默认值”这件事有一个统一的写法。
+      if (patch.size === undefined || !isRealSize(patch.size)) {
         if (node.size !== undefined) sizeChanged = true
         delete node.size
       } else if (node.size?.w !== patch.size.w || node.size?.h !== patch.size.h) {
@@ -548,9 +615,14 @@ export class NodeStore implements NodeStoreService {
     const migrated = nodes.map((n) => {
       const data = n.data ? { ...n.data } : {}
       const next: CanvasNode = { ...n, data }
-      if (next.size === undefined) {
-        const def = this.types.get(next.type)?.defaultSize
-        if (def) next.size = { w: def.w, h: def.h }
+      // 没有自己的尺寸（含 0 / 负数）：普通类型补成类型默认尺寸；sizeFromContent 的类型
+      // 保持“没尺寸”，好让设置里的默认宽高继续实时生效（见 addNode 注释）。
+      if (!isRealSize(next.size)) {
+        delete next.size
+        const typeDef = this.types.get(next.type)
+        if (typeDef && typeDef.sizeFromContent !== true) {
+          next.size = { w: typeDef.defaultSize.w, h: typeDef.defaultSize.h }
+        }
       }
       return next
     })

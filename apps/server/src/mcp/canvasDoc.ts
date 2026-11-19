@@ -618,9 +618,68 @@ export class CanvasDocument {
       result.updated.push(u.id)
     }
 
+    // 改过输出类型的节点：把已经不合规的连线断掉（与网页端同一口径）
+    const outputTypeTouched = ups
+      .filter((u) => u.data !== undefined && Object.prototype.hasOwnProperty.call(u.data, 'uiOutputType'))
+      .map((u) => u.id)
+    edges = this.pruneEdgesForOutputType(kept, edges, outputTypeTouched)
+
     await this.commitGraph({ nodes: kept, edges })
     result.deleted = dels.filter((id) => existing.has(id))
     return result
+  }
+
+  /**
+   * 输出类型改过之后，把**已经不合规**的连线断掉。
+   *
+   * 用户 2026-11-17 的口径：可视化节点原来输出图片、下游连着图片节点；把 uiOutputType 改成
+   * 音频后，那条线就不成立了 —— 必须自动断开，不能留一条点不动的线。
+   *
+   * 为什么后台也要有一份：网页端在 GraphDocument 里做（updateNode 后自动 prune），
+   * 但 AI 经 MCP、任务脚本经增量口写节点时**不经过网页端**。只做一边的话，
+   * 「网页上连着的时候 AI 改了类型」会留下一条脏边，直到用户刷新才被前端清掉。
+   *
+   * 规则刻意只有一条、且与前端同一口径：只有 `type === 'ui'` 的节点，输出类型读
+   * `data.uiOutputType`（image / video / audio / text）；空或认不出 = 没有输出口。
+   * 上游输入口收这些类型；下游输入口如果声明了能收哪些类型（这里没有类型注册表，
+   * 只能按已知的四类节点判断），不匹配就删边。
+   */
+  private pruneEdgesForOutputType(nodes: CanvasNode[], edges: CanvasEdge[], changed: readonly string[]): CanvasEdge[] {
+    if (changed.length === 0) return edges
+    const touched = new Set(changed)
+    const kindOf = (n: CanvasNode | undefined): string | undefined => {
+      if (!n) return undefined
+      if (n.type === 'ui') {
+        const raw = n.data?.uiOutputType
+        const v = typeof raw === 'string' ? raw.trim().toLowerCase() : ''
+        return v === 'image' || v === 'video' || v === 'audio' || v === 'text' ? v : undefined
+      }
+      return n.type === 'image' || n.type === 'video' || n.type === 'audio' || n.type === 'text' ? n.type : undefined
+    }
+    /** 该节点输入口收哪些类型（未列出的类型 = 不限制，按收所有处理） */
+    const acceptsOf = (n: CanvasNode | undefined): string[] | undefined => {
+      if (!n) return undefined
+      if (n.type === 'image') return ['image']
+      if (n.type === 'video') return ['video']
+      if (n.type === 'text') return ['text']
+      // 音频节点收 text / audio / video（与 plugin-node-audio 的声明一致）
+      if (n.type === 'audio') return ['text', 'audio', 'video']
+      return undefined
+    }
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    return edges.filter((e) => {
+      // 只看碰到被改节点的边；别的边一律原样保留
+      if (!touched.has(e.source) && !touched.has(e.target)) return true
+      const src = byId.get(e.source)
+      const tgt = byId.get(e.target)
+      if (!src || !tgt) return true
+      const kind = kindOf(src)
+      // 源没有输出口 → 连不出去
+      if (!kind) return false
+      const accepts = acceptsOf(tgt)
+      if (!accepts) return true
+      return accepts.includes(kind)
+    })
   }
 
   /**
