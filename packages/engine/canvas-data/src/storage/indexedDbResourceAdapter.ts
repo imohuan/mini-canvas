@@ -69,6 +69,11 @@ export function createIndexedDbResourceAdapter(): ResourceAdapter | undefined {
     id: 'indexeddb-resource',
     capability,
 
+    /** 本地资源库的取件码就是本画布的（单机模式没有画布文件夹之分，值一律 `res-`） */
+    ownsResource(ref: string): boolean {
+      return /^res-/.test(ref)
+    },
+
     async putResource(blob: Blob, opts: ResourcePutOptions = {}): Promise<string> {
       // 调用方指定了 ref 就用它（名字可推算的资源靠这个"先查有没有、没有才造"）；
       // 没给或名字太长（IndexedDB 键没有硬上限，但太长的键不利于诊断）才自命名。

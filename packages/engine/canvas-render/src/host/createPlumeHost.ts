@@ -25,7 +25,7 @@ import {
   GRAPH_EDGES_KEY,
   GRAPH_KEY,
 } from '@plume-canvas/canvas-data'
-import { restoreNodeMediaUrls } from '@plume-canvas/canvas-data'
+import { adoptNodeResources, restoreNodeMediaUrls } from '@plume-canvas/canvas-data'
 import { registerStandardCapabilities } from '../renderPlugin'
 import type {
   CanvasEdge,
@@ -396,7 +396,23 @@ export async function createPlumeHost(opts: PlumeOptions = {}): Promise<{
     // 找不到资源时删掉失效地址，避免挂载媒体元素后触发控制台 ERR_FILE_NOT_FOUND。
     // 判定收在 canvas-data 的 restoreNodeMediaUrls（视频/图片/全景各写哪个字段有单一来源）。
     await restoreNodeMediaUrls(nodes, async (resourceId, kind) => resources.restore?.(resourceId, kind))
-    nodeStore.replaceAll(nodes)
+    // 存量修复：老画布可能引用别的画布 / 外站。把字节复制进本画布，换成自己的引用；
+    // 修不好的清掉字段并汇总提示 —— 画布就是文件夹，不能继续指向别人的目录。
+    const adopted = await adoptNodeResources(nodes, {
+      isForeign: (v) => resources.isForeign(v),
+      adopt: (v, o) => resources.adopt(v, o),
+      normalize: (v) => resources.normalizeRef(v),
+    })
+    if (adopted.adopted > 0) {
+      // 落盘一份修好的图：下次打开不必再搬一遍。
+      save.set(GRAPH_KEY, adopted.nodes, 'canvas')
+    }
+    if (adopted.failed.length > 0) {
+      const notify = ctx.tryGet<{ error?: (m: string) => void; warning?: (m: string) => void }>('notify')
+      notify?.warning?.('有 ' + adopted.failed.length + ' 个资源无法迁入本画布，已显示为空')
+      console.warn('[resources] 有资源无法迁入本画布：', adopted.failed)
+    }
+    nodeStore.replaceAll(adopted.nodes)
     edgeStore.replaceAll(restoreEdges ?? [])
   } else if (opts.seedDefault) {
     const seeded = opts.seedDefault()

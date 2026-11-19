@@ -45,6 +45,18 @@ export interface ResourceAdapter {
   readonly id: string
   readonly capability: StorageAdapterCapability
   /**
+   * 这个引用是不是**本画布自己的**资源。
+   *
+   * 画布就是文件夹：节点里只允许出现本画布的资源引用。云端按引用里的画布 id 判断，
+   * 本地资源库认 `res-` 前缀。认不出 / 不是本画布 → false。
+   */
+  ownsResource?(ref: string): boolean
+  /**
+   * 把一个**本画布的**值规范成持久引用（旧同源 URL → 逻辑 ID）。
+   * 不是本画布的 → undefined（调用方按外来资源处理）。
+   */
+  normalizeRef?(ref: string): string | undefined
+  /**
    * 存一段二进制，返回**持久引用**（写进节点 data 的 `resourceId`）。
    *
    * 回**持久引用**：云端是同源 URL（`/api/canvases/<画布id>/resources/<哈希>`），

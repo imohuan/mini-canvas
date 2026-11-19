@@ -51,6 +51,22 @@ export interface ResourceService {
   /** 等待资源字节写入持久化存储。 */
   flush?(id: string): Promise<void>
   /**
+   * 这个引用是不是**本画布自己的**资源（画布就是文件夹，节点只许引用自己的东西）。
+   * 后端没提供判断时按 `false` 处理 —— 宁可多复制一次，也不要留下跨画布的引用。
+   */
+  owns(ref: string): boolean
+  /** 这个值是不是别人的资源地址（别的画布 / 外站）。用于保存前清理与打开时修复。 */
+  isForeign(value: string): boolean
+  /** 本画布的旧同源 URL → 持久引用；不是本画布 → undefined */
+  normalizeRef(value: string): string | undefined
+  /**
+   * 把一份**外来**资源收进本画布：取字节 → `put()` → 返回本画布的持久引用。
+   *
+   * 已经是本画布资源 → 原样返回；取不到字节（外链失效 / 跨域）→ undefined，
+   * 由调用方明确提示，绝不把外来地址写进节点。
+   */
+  adopt(refOrUrl: string, opts?: ResourceAdoptOptions): Promise<string | undefined>
+  /**
    * 存一份资源字节，返回**持久引用**（写进节点 data 的 `resourceId`）。
    *
    * 这是上传/生成的统一入口：本地会进 IndexedDB，云端会传到画布文件夹 —— 由当前
@@ -90,6 +106,16 @@ export interface ResourceService {
   restore?(id: string, kind?: string): Promise<string | undefined>
 }
 
+/** `adopt` 的可选参数 */
+export interface ResourceAdoptOptions {
+  /** 资源种类（决定后端落盘扩展名 / 分类） */
+  kind?: string
+  /** 原始文件名 */
+  name?: string
+  /** 取字节（默认 fetch；测试注入假货）。返回 undefined = 取不到 */
+  fetchBytes?: (url: string) => Promise<Blob | undefined>
+}
+
 const RESOURCE_URL_FIELDS = [
   "imageUrl", "videoUrl", "audioUrl", "posterUrl", "thumbUrl", "maskUrl",
   "panoUrl", "leftImageUrl", "rightImageUrl",
@@ -120,6 +146,173 @@ export function sanitizeTransientResourceUrls<T extends { data?: Record<string, 
     }
     return { ...node, data: next }
   })
+}
+
+/** 节点 data 里存**资源引用**的字段（主引用与派生引用） */
+export const RESOURCE_REF_FIELDS = ['resourceId', 'frameResourceId', 'leftResourceId', 'rightResourceId'] as const
+
+/**
+ * 保存前的资源归属清理：**画布就是文件夹**，节点里不许出现别人的地址。
+ *
+ * 做两件事：
+ * 1. 媒体地址字段（`imageUrl` 等）指向别的画布 / 外站 → 删掉（地址只是本次渲染的副本，删了不丢字节）；
+ * 2. 引用字段（`resourceId` 等）指向别的画布 → **保留**并记进返回值，交给打开时的修复流程
+ *    先取字节、复制进本画布。现在就删会连“去哪儿取字节”的线索也一起丢掉。
+ *
+ * 已经是本画布的资源、本地 `res-`、`blob:`/`data:` 都不动（后两者由 sanitizeTransientResourceUrls 处理）。
+ */
+export function sanitizeForeignResourceRefs<T extends { id?: string; data?: Record<string, unknown> }>(
+  nodes: T[],
+  opts: { isForeign(value: string): boolean },
+): { nodes: T[]; foreign: Array<{ id: string; field: string; value: string }> } {
+  const foreign: Array<{ id: string; field: string; value: string }> = []
+  const out = nodes.map((node) => {
+    const data = node.data
+    if (!data) return node
+    const next = { ...data }
+    for (const key of RESOURCE_URL_FIELDS) {
+      const value = next[key]
+      if (typeof value !== 'string' || !value) continue
+    // 只保留**临时地址**（渲染时会重建）；能长期取回的资源一律以 resourceId 为准，
+    // 地址不再当第二份真相落盘 —— 它可能指向别的画布 / 外站，是跨画布引用的入口。
+    if (typeof next.resourceId === 'string' && next.resourceId) {
+      delete next[key]
+      continue
+    }
+      if (/^(blob:|data:)/i.test(value)) continue
+      if (!opts.isForeign(value)) continue
+      delete next[key]
+    }
+    for (const key of RESOURCE_REF_FIELDS) {
+      const value = next[key]
+      if (typeof value !== 'string' || !value) continue
+      if (!opts.isForeign(value)) continue
+      foreign.push({ id: String(node.id ?? ''), field: key, value })
+    }
+    return { ...node, data: next }
+  })
+  return { nodes: out, foreign }
+}
+
+/** 媒体地址字段 → 它对应的引用字段（修复时把字节收进来，写回哪个 ID） */
+const URL_FIELD_TO_REF: Record<string, string> = {
+  imageUrl: 'resourceId',
+  videoUrl: 'resourceId',
+  audioUrl: 'resourceId',
+  panoUrl: 'resourceId',
+  posterUrl: 'resourceId',
+  thumbUrl: 'resourceId',
+  maskUrl: 'resourceId',
+  leftImageUrl: 'leftResourceId',
+  rightImageUrl: 'rightResourceId',
+}
+
+/** 某节点类型的主资源种类（决定后端落盘扩展名） */
+function mediaKindOf(nodeType: string | undefined, field: string): string {
+  if (field === 'videoUrl' || nodeType === 'video') return 'video'
+  if (field === 'audioUrl' || nodeType === 'audio') return 'audio'
+  return 'image'
+}
+
+export interface AdoptNodeResourcesResult<T> {
+  nodes: T[]
+  /** 成功迁进本画布的引用数 */
+  adopted: number
+  /** 迁不进来的（外链失效 / 跨域 / 后端不可用） */
+  failed: Array<{ id: string; field: string; value: string }>
+}
+
+/**
+ * 打开画布时的存量修复：把**外来**资源（别的画布 / 外站）复制进本画布。
+ *
+ * 只处理“确实需要搬”的值：已经是本画布的、`blob:`/`data:` 都不动。
+ * 搬成功的引用换成新 ID；搬失败的清掉那个字段（地址字段一并删），
+ * 由调用方汇总提示 —— 宁可显示空态，也不继续指向别人的文件夹。
+ *
+ * 这是“画布就是文件夹”的兜底：新写入由 adopt 拦住，老数据靠这里收口。
+ */
+export async function adoptNodeResources<T extends { id?: string; type?: string; data?: Record<string, unknown> }>(
+  nodes: T[],
+  port: {
+    isForeign(value: string): boolean
+    adopt(value: string, opts?: ResourceAdoptOptions): Promise<string | undefined>
+    /** 本画布的值规范成持久引用（旧同源 URL → 逻辑 ID）；可选 */
+    normalize?(value: string): string | undefined
+  },
+): Promise<AdoptNodeResourcesResult<T>> {
+  let adopted = 0
+  const failed: Array<{ id: string; field: string; value: string }> = []
+  const out: T[] = []
+  for (const node of nodes) {
+    const data = node.data
+    if (!data) {
+      out.push(node)
+      continue
+    }
+    const next: Record<string, unknown> = { ...data }
+    const id = String(node.id ?? '')
+
+    // ① 引用字段：先搬引用（它才是长期正身）
+    for (const field of RESOURCE_REF_FIELDS) {
+      const value = next[field]
+      if (typeof value !== 'string' || !value) continue
+      if (!port.isForeign(value)) {
+        // 本画布的旧同源 URL 也升级成持久引用（地址不当第二份真相）
+        const normalized = port.normalize?.(value)
+        if (normalized && normalized !== value) {
+          next[field] = normalized
+          adopted += 1
+        }
+        continue
+      }
+      const made = await port.adopt(value, { kind: mediaKindOf(node.type, field) })
+      if (made) {
+        next[field] = made
+        adopted += 1
+      } else {
+        delete next[field]
+        failed.push({ id, field, value })
+      }
+    }
+
+    // ② 媒体地址字段：没有可用引用时，用地址里的字节补一个；有引用就只把外来地址删掉
+    for (const key of RESOURCE_URL_FIELDS) {
+      const value = next[key]
+      if (typeof value !== 'string' || !value) continue
+      const refField = URL_FIELD_TO_REF[key] ?? 'resourceId'
+      const existing = next[refField]
+      if (!port.isForeign(value)) {
+        // 本画布的地址：有可用引用就删掉地址；没有就把地址升级成引用
+        const normalized = port.normalize?.(value)
+        if (typeof existing === 'string' && existing && !port.isForeign(existing)) {
+          delete next[key]
+          continue
+        }
+        if (normalized) {
+          next[refField] = normalized
+          delete next[key]
+          adopted += 1
+        }
+        continue
+      }
+      if (typeof existing === 'string' && existing && !port.isForeign(existing)) {
+        delete next[key]
+        continue
+      }
+      const made = await port.adopt(value, { kind: mediaKindOf(node.type, key) })
+      if (made) {
+        next[refField] = made
+        delete next[key]
+        adopted += 1
+      } else {
+        delete next[key]
+        failed.push({ id, field: key, value })
+      }
+    }
+
+    out.push({ ...node, data: next })
+  }
+  return { nodes: out, adopted, failed }
 }
 
 /** 各类节点的媒体 URL 字段（恢复资源时该写回哪个键）。判据与节点自身一致：node.type 优先。 */
@@ -231,6 +424,107 @@ export class ResourceStore implements ResourceService {
   /** 当前资源后端（每次现取 —— 见构造函数说明） */
   private adapter(): ResourceAdapter | undefined {
     return this.backendResolver()
+  }
+
+  /**
+   * 引用是否属于本画布。
+   *
+   * 后端提供了 `ownsResource` 就问它（云端按画布 id、本地认 `res-`）；
+   * 没提供时一律当“不是本画布的” —— 宁可多复制一份，也不让跨画布引用漏进节点。
+   */
+  owns(ref: string): boolean {
+    if (!ref) return false
+    const adapter = this.adapter()
+    // 没有资源后端（极简宿主 / 单测）时，本地取件码 `res-` 仍算本机的 —— 它本来就产自这个浏览器。
+    if (!adapter?.ownsResource) return /^res-/.test(ref)
+    try {
+      return adapter.ownsResource(ref)
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * 这个值是不是**别人的**资源地址（别的画布、外站）。
+   *
+   * 只判“看起来是资源”的值；普通路径 / 空串 / 临时地址返回 false，交给调用方另行处理。
+   * 画布 URL 会先剥掉协议与域名，按里面的画布 id 判断 —— 同源绝对地址不能当成外站。
+   */
+  isForeign(value: string): boolean {
+    const v = (value ?? '').trim()
+    if (!v || /^(blob:|data:)/i.test(v)) return false
+    const canvasUrl = /(?:^https?:\/\/[^/]+)?\/api\/canvases\/([A-Za-z0-9_-]{1,64})\/resources\/([^/?#]+)$/.exec(v)
+    if (canvasUrl) return !this.owns(canvasUrl[1] + '/' + canvasUrl[2])
+    if (/^https?:\/\//i.test(v)) return true
+    // 资产库自己的文件（`/api/assets/files/...`）：画布不能引用它，
+    // 否则删掉那条资产，画布里的图就没了。要用就先复制进本画布。
+    if (/^\/api\/assets\/files\//i.test(v)) return true
+    if (/^res-/.test(v)) return !this.owns(v)
+    // 云端逻辑 ID：`<画布id>/<内容哈希|槽位名>`
+    if (/^[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_.-]+$/.test(v)) {
+      return !this.owns(v)
+    }
+    return false
+  }
+
+  /** 本画布的值规范成持久引用：后端给了 `normalizeRef` 就问它，其余原样返回。 */
+  normalizeRef(value: string): string | undefined {
+    const v = (value ?? '').trim()
+    if (!v) return undefined
+    const adapter = this.adapter()
+    if (adapter?.normalizeRef) {
+      try {
+        return adapter.normalizeRef(v)
+      } catch {
+        return undefined
+      }
+    }
+    return this.owns(v) ? v : undefined
+  }
+
+  /**
+   * 把外来资源收进本画布（粘贴、拖资产库、导入包、生成产物写回都走这里）。
+   *
+   * 三种输入：本画布引用（原样返回）、能解析出显示地址的引用（先 resolve 再取字节）、
+   * 能直接请求的地址（直接取字节）。取不到字节返回 undefined，绝不猜。
+   */
+  async adopt(refOrUrl: string, opts: ResourceAdoptOptions = {}): Promise<string | undefined> {
+    const ref = (refOrUrl ?? '').trim()
+    if (!ref) return undefined
+    // 已经是本画布的东西：不重复存字节（视频可能几十 MB）
+    if (this.owns(ref)) {
+      // 旧同源 URL 顺手升级成持久引用（地址只是渲染副本，别当第二份真相）
+      return this.normalizeRef(ref) ?? ref
+    }
+    let url: string | undefined
+    if (/^(https?:|\/api\/|data:|blob:)/i.test(ref)) {
+      url = ref
+    } else {
+      // 逻辑 ID / 本地取件码：先换成能取字节的地址
+      try {
+        url = await this.resolve(ref)
+      } catch {
+        url = undefined
+      }
+    }
+    if (!url) return undefined
+    let blob: Blob | undefined
+    try {
+      blob = opts.fetchBytes
+        ? await opts.fetchBytes(url)
+        : await fetch(url).then((r) => (r.ok ? r.blob() : undefined))
+    } catch {
+      blob = undefined
+    }
+    if (!blob) return undefined
+    try {
+      return await this.put(blob, {
+        ...(opts.kind ? { kind: opts.kind } : {}),
+        ...(opts.name ? { name: opts.name } : {}),
+      })
+    } catch {
+      return undefined
+    }
   }
 
   /**

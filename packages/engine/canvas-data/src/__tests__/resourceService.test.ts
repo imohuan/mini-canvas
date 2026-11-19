@@ -3,6 +3,8 @@ import {
   ResourceStore,
   type ResourceUrlBackend,
   sanitizeTransientResourceUrls,
+  sanitizeForeignResourceRefs,
+  adoptNodeResources,
   mediaUrlFieldsOf,
   restoreNodeMediaUrls,
 } from '../resourceService'
@@ -178,5 +180,139 @@ describe('ResourceStore 资源生命周期', () => {
       expect(ref).toBe('img-c-t3')
       expect(rs.alive('img-c-t3')).toBe(true)
     })
+  })
+})
+
+/** 带画布作用域的内存后端（模拟云端：`<画布id>/<哈希>`） */
+function scopedAdapter(canvasId: string): ResourceAdapter {
+  const blobs = new Map<string, Blob>()
+  let seq = 0
+  return {
+    id: 'scoped',
+    capability: {},
+    ownsResource: (ref) => ref.startsWith(canvasId + '/') || ref.startsWith('/api/canvases/' + canvasId + '/resources/'),
+    normalizeRef: (ref) => {
+      const marker = '/api/canvases/' + canvasId + '/resources/'
+      if (ref.startsWith(marker)) return canvasId + '/' + ref.slice(marker.length)
+      return ref.startsWith(canvasId + '/') ? ref : undefined
+    },
+    async putResource(blob) {
+      seq += 1
+      const ref = canvasId + '/hash' + seq
+      blobs.set(ref, blob)
+      return ref
+    },
+    async resolveResource(ref) {
+      return blobs.has(ref) ? '/api/canvases/' + ref : undefined
+    },
+    async removeResource(ref) { blobs.delete(ref) },
+  }
+}
+
+describe('资源归属：画布就是文件夹', () => {
+  it('owns 只认本画布的引用；后端没给判断时认本地取件码', () => {
+    const scoped = new ResourceStore(() => scopedAdapter('a'), { revokeUrl() {} })
+    expect(scoped.owns('a/hash1')).toBe(true)
+    expect(scoped.owns('b/hash1')).toBe(false)
+    const bare = new ResourceStore(() => memoryResourceAdapter(), { revokeUrl() {} })
+    // 后端没给判断：本地取件码仍认（它产自本浏览器），别的画布 ID 一律不认
+    expect(bare.owns('res-1')).toBe(true)
+    expect(bare.owns('b/hash1')).toBe(false)
+    // 完全没有资源后端时，本地取件码仍认定为本机（单测 / 极简宿主）
+    const noAdapter = new ResourceStore(undefined, { revokeUrl() {} })
+    expect(noAdapter.owns('res-1')).toBe(true)
+    expect(noAdapter.owns('b/hash1')).toBe(false)
+  })
+
+  it('isForeign 认别的画布、外站与别的本地引用，放过临时地址', () => {
+    const rs = new ResourceStore(() => scopedAdapter('a'), { revokeUrl() {} })
+    expect(rs.isForeign('/api/canvases/b/resources/hash1.png')).toBe(true)
+    expect(rs.isForeign('http://localhost:9000/files/x.png')).toBe(true)
+    expect(rs.isForeign('b/hash1.png')).toBe(true)
+    // 同源绝对地址但属于本画布：不算外站
+    expect(rs.isForeign('http://localhost:8865/api/canvases/a/resources/hash1.png')).toBe(false)
+    expect(rs.isForeign('/api/canvases/a/resources/hash1.png')).toBe(false)
+    expect(rs.isForeign('a/hash1.png')).toBe(false)
+    // 资产库文件也算画布外：画布不能指向资产库（删掉资产画布就破图）
+    expect(rs.isForeign('/api/assets/files/abc.png')).toBe(true)
+    expect(rs.isForeign('blob:xyz')).toBe(false)
+    expect(rs.isForeign('data:image/png;base64,AAAA')).toBe(false)
+  })
+
+  it('adopt：本画布引用原样返回；外来字节复制进来后换成新引用', async () => {
+    const adapter = scopedAdapter('a')
+    const rs = new ResourceStore(() => adapter, { revokeUrl() {} })
+    // 本画布的旧同源 URL → 升级成持久引用（地址不当第二份真相）
+    expect(await rs.adopt('/api/canvases/a/resources/hash1.png')).toBe('a/hash1.png')
+    const made = await rs.adopt('https://cdn.example.com/x.png', {
+      kind: 'image',
+      fetchBytes: async () => new Blob([new Uint8Array([1])], { type: 'image/png' }),
+    })
+    expect(made).toBe('a/hash1')
+  })
+
+  it('adopt：取不到字节返回 undefined（绝不写一个打不开的引用）', async () => {
+    const rs = new ResourceStore(() => scopedAdapter('a'), { revokeUrl() {} })
+    expect(await rs.adopt('https://cdn.example.com/gone.png', { fetchBytes: async () => undefined })).toBeUndefined()
+  })
+})
+
+describe('保存清理与打开修复', () => {
+  const isForeign = (v: string) => /^https?:\/\//.test(v) || /^\/api\/canvases\/b\//.test(v) || v.startsWith('b/')
+
+  it('有 resourceId 时不再保留地址字段（地址是副本，不是第二份真相）', () => {
+    const got = sanitizeForeignResourceRefs(
+      [{ id: '1', data: { resourceId: 'a/hash1', imageUrl: '/api/canvases/a/resources/hash1.png', label: 'x' } }],
+      { isForeign },
+    )
+    expect(got.nodes[0].data).toEqual({ resourceId: 'a/hash1', label: 'x' })
+    expect(got.foreign).toHaveLength(0)
+  })
+
+  it('外来地址删掉；外来引用保留并单独记下来待修复', () => {
+    const got = sanitizeForeignResourceRefs(
+      [{ id: '1', data: { imageUrl: '/api/canvases/b/resources/hash2.png' } },
+       { id: '2', data: { resourceId: 'b/hash3.png' } }],
+      { isForeign },
+    )
+    expect(got.nodes[0].data.imageUrl).toBeUndefined()
+    expect(got.nodes[1].data.resourceId).toBe('b/hash3.png')
+    expect(got.foreign).toEqual([{ id: '2', field: 'resourceId', value: 'b/hash3.png' }])
+  })
+
+  it('打开时把外来引用复制进本画布，失败则清掉并报告', async () => {
+    const got = await adoptNodeResources(
+      [
+        { id: '1', type: 'image', data: { resourceId: 'b/hash1' } },
+        { id: '2', type: 'video', data: { resourceId: 'b/hash2' } },
+      ],
+      {
+        isForeign: (v: string) => v.startsWith('b/'),
+        adopt: async (v) => (v === 'b/hash1' ? 'a/new1' : undefined),
+      },
+    )
+    expect(got.nodes[0].data.resourceId).toBe('a/new1')
+    expect(got.nodes[1].data.resourceId).toBeUndefined()
+    expect(got.adopted).toBe(1)
+    expect(got.failed).toEqual([{ id: '2', field: 'resourceId', value: 'b/hash2' }])
+  })
+
+  it('打开时把本画布的旧地址升级成引用（地址只是副本，不落存档）', async () => {
+    const got = await adoptNodeResources(
+      [
+        { id: '1', type: 'image', data: { imageUrl: '/api/canvases/a/resources/hash1.png' } },
+        { id: '2', type: 'video', data: { resourceId: 'a/hash2.mp4', videoUrl: '/api/canvases/a/resources/hash2.mp4' } },
+      ],
+      {
+        isForeign: (v: string) => v.startsWith('b/'),
+        adopt: async () => undefined,
+        normalize: (v: string) => {
+          const m = /^\/api\/canvases\/a\/resources\/(.+)$/.exec(v)
+          return m ? 'a/' + m[1] : (v.startsWith('a/') ? v : undefined)
+        },
+      },
+    )
+    expect(got.nodes[0].data).toEqual({ resourceId: 'a/hash1.png' })
+    expect(got.nodes[1].data).toEqual({ resourceId: 'a/hash2.mp4' })
   })
 })
