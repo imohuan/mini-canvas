@@ -176,7 +176,6 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
   }
   ui.add("settingsRow", ShadcnSettingsRow, { id: "default" })
   ui.add("settingsSection", ShadcnSettingsSection, { id: "default" })
-
   const navIcons = ctx.registryOf<unknown>("settings/navIcon")
   for (const [group, icon] of SETTINGS_NAV_ICON_NAMES) {
     navIcons.add(group, icon, { id: "default" })

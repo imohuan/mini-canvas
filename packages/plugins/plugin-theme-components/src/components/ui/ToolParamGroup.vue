@@ -16,12 +16,19 @@
  *
  * 依赖方向：只 import 内核 ToolParamDef 类型 + 本包自家 UI 组件，不反向依赖节点插件。
  */
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import type { ToolParamDef } from '@plume-canvas/kernel'
-import { Popover, PopoverContent, PopoverTrigger, ScrollArea } from '@plume-canvas/ui-kit'
+import { Popover, PopoverContent, PopoverTrigger, ScrollArea, usePopupGroup } from '@plume-canvas/ui-kit'
 import ToolParamField from './ToolParamField.vue'
 import ToolParamHint from './ToolParamHint.vue'
 import { drawsOwnTitle, resolveInlineSoleSelect } from './paramKind'
+
+/**
+ * 参数面板里的下拉不该把面板关掉（用户 2026-11-18）。
+ *
+ * 插槽内容不属于外层 Popover 的子孙，provide 的链是断的，只能靠分组认亲。
+ */
+usePopupGroup()
 
 const props = withDefaults(
   defineProps<{
@@ -30,10 +37,17 @@ const props = withDefaults(
     disabled?: boolean
     /** 参数都没值时的占位文案 */
     placeholder?: string
+    /**
+     * 外部指定的标题（用户 2026-11-17）。
+     *
+     * 底栏让 provider 用 selectLabel 算标题（例如带当前档位的花费）。
+     * 给了它就用它；**同时不再铺成单个下拉** —— 那个形态没有标题位，会把它吞掉。
+     */
+    title?: string
     /** id 前缀（同一面板多份时保证 label/for 唯一） */
     idPrefix?: string
   }>(),
-  { params: () => [], values: () => ({}), disabled: false, placeholder: '默认参数', idPrefix: 'tpg' },
+  { params: () => [], values: () => ({}), disabled: false, placeholder: '默认参数', idPrefix: 'tpg', title: '' },
 )
 
 const emit = defineEmits<{
@@ -66,7 +80,11 @@ const blocks = computed(() => props.params ?? [])
  * 判定在 `paramKind.ts` 的纯函数里（可单测）：恰好一项 + 是内置下拉 + 不是长名单大类。
  * 命中时宿主（底栏）那格不再出现「参数摘要按钮」，直接就是一个和左边模型下拉并排的下拉。
  */
-const inlineParam = computed(() => resolveInlineSoleSelect(props.params ?? []))
+const inlineParam = computed(() => {
+  // 有自定义标题时必须走摘要按钮：单个下拉那种形态没有标题位，标题会被吞掉
+  if ((props.title ?? '').trim() !== '') return undefined
+  return resolveInlineSoleSelect(props.params ?? [])
+})
 
 /** 每项当前值的显示文案（有 options 就用 option 的 label，否则原样字符串化） */
 function labelOf(p: ToolParamDef): string {
@@ -103,6 +121,100 @@ const summary = computed(() => {
   if (changed.length <= 2) return changed.join(' · ')
   return changed.slice(0, 2).join(' · ') + ' +' + (changed.length - 2)
 })
+
+/**
+ * 触发器上真正显示的标题：外部给的 title 优先（用户 2026-11-17）。
+ *
+ * 底栏用它显示 provider 算出来的花费；没给就是原来的摘要，表现完全不变。
+ */
+const triggerTitle = computed(() => {
+  const custom = (props.title ?? '').trim()
+  return custom !== '' ? custom : summary.value
+})
+
+/**
+ * 这次「点外面」是不是其实点在面板 / 二级浮层里（用户 2026-11-18）。
+ *
+ * 二级浮层（Select / DropdownMenu）会 portal 到 body，不在面板 DOM 树内，
+ * 所以除了 .tpg-popover 本身，还要认浮层内容那几个 data-slot。
+ *
+ * 判在内层 → preventDefault，外层 Popover 保持打开；
+ * 点画布空白 → 不拦，交给 Popover 正常关闭。
+ */
+function isInsidePanel(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  const inside =
+    Boolean(target.closest('.tpg-popover')) ||
+    Boolean(
+      target.closest(
+        '[data-slot="popover-content"], [data-slot="dropdown-menu-content"], [data-slot="select-content"], [role="listbox"], [role="menu"]',
+      ),
+    )
+  return inside
+}
+
+/**
+ * 最近一次按下鼠标时，起点是不是在面板（含它弹出的二级浮层）里。
+ *
+ * 为什么需要记起点（用户 2026-11-18 的第三步）：在面板内部空白处点一下，
+ * 内层下拉会收起、焦点随之掉到画布节点上。此时 focus-outside 的事件目标
+ * 是画布节点（vue-flow__node），光看「目标在不在面板里」必然判成外部，
+ * 于是外层参数面板跟着一起被关掉。
+ *
+ * 鼠标按下的那一下目标才是真实意图：起点在面板里 → 这一下属于面板内部操作。
+ * 300ms 宽限足够覆盖 pointerdown → focusout 这条链。
+ */
+let lastPanelPointerAt = 0
+function onPanelPointerDown(ev: PointerEvent): void {
+  // 起点在面板外 → 立刻作废这次「面板内操作」的记录，
+  // 这样紧接着点画布空白能马上把面板关掉，不会被上一条 300ms 窗口误拦。
+  lastPanelPointerAt = isInsidePanel(ev.target) ? performance.now() : 0
+}
+const pressedInsidePanel = (): boolean => performance.now() - lastPanelPointerAt < 300
+
+/**
+ * 点面板里的二级下拉时不要关面板（用户 2026-11-18 报的 BUG）。
+ *
+ * 三个事件都要拦：interact（指针 + 焦点合集）、pointer-down，以及 focus-outside。
+ * 判据是「这次操作起点在面板里」，而不是「事件目标在面板里」：
+ * 收起内层下拉时焦点会跳到画布节点上，目标不在面板里，但操作确实发生在面板内。
+ *
+ * 注意监听器必须挂在 PopoverContent 上：Reka 只由 Content 发这几个事件，
+ * 挂在 Popover 根组件上等于没挂（之前就是这个错，所以怎么改都没效果）。
+ */
+function onOutside(e: Event): void {
+  /**
+   * 焦点事件**一律不关面板**（用户 2026-11-18 第三次复现后的定论）。
+   *
+   * 实测链条：参数面板里开了内层下拉 → 再点它的触发器收起 → 焦点先回触发器、
+   * 再甩到输入框（ProseMirror），外层收到 focus-outside，而事件目标已经是编辑器。
+   * 试过用「起点在面板里」「焦点在面板里」「内层浮层还开着」来判断，
+   * 都会在焦点被组件库移走的那一帧失效，所以这里直接不看目标。
+   *
+   * 为什么这样安全：参数面板本身是非模态的，用户在里面改参数时焦点本来就该能
+   * 自由移动（输入框、下拉、滚动条）。真正表示「点了外面」的是 pointer-down-outside
+   * 和 interact-outside，那两条仍按目标判断 —— 点画布空白照样会正常关闭。
+   */
+  /*
+   * 注意事件名带命名空间：实测是 `dismissableLayer.focusOutside`（不是 focusoutside）。
+   * 之前写成全等比较，永远不成立，于是"焦点事件不关面板"这条根本没生效
+   * —— 这就是这个问题反复复现三次的真正原因。
+   */
+  if (/focus.?outside$/i.test(e.type)) {
+    e.preventDefault()
+    return
+  }
+  if (isInsidePanel(e.target) || pressedInsidePanel()) e.preventDefault()
+}
+
+// 用捕获阶段挂在 document 上：内层下拉收起时它的 pointerdown 可能被
+// 别的图层先消费掉，冒泡到面板时已经来不及记「起点」了。
+onMounted(() => {
+  document.addEventListener('pointerdown', onPanelPointerDown, true)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onPanelPointerDown, true)
+})
 </script>
 
 <template>
@@ -137,28 +249,36 @@ const summary = computed(() => {
 
     按钮的开启态视觉改用 Popover 透传的 slot 状态（`data-state`），不需要我们自己维护变量。
   -->
+  <!--
+    点面板里的二级下拉时**不要关面板**（用户 2026-11-18 报的 BUG：
+    「点同一个下拉的 trigger，第二次点击会把整个菜单关掉」）。
+
+    外层是 Popover，内层的 Select / DropdownMenu 会 portal 到 body，
+    于是那次点击在 Popover 看来就是「点了外面」。这里在 interact-outside 里拦下：
+    只要点击目标还在面板里、或在任一层浮层内容里，就不关闭。
+  -->
   <Popover v-else>
-    <PopoverTrigger as-child>
+          <PopoverTrigger as-child>
       <button
         type="button"
         class="tpg-trigger"
         :disabled="disabled"
         aria-haspopup="dialog"
-        :title="summary || placeholder"
+        :aria-label="triggerTitle || placeholder"
       >
         <span class="tpg-glyph" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="6" width="18" height="12" rx="2" />
           </svg>
         </span>
-        <span class="tpg-text">{{ summary || placeholder }}</span>
+        <span class="tpg-text">{{ triggerTitle || placeholder }}</span>
         <span class="tpg-arrow" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 9l6 6 6-6" />
           </svg>
         </span>
       </button>
-    </PopoverTrigger>
+          </PopoverTrigger>
 
     <!--
       统一定位：左对齐（align="start"）+ 向下（side="bottom"），与底栏/provider 面板同一口径。
@@ -170,7 +290,11 @@ const summary = computed(() => {
       side="bottom"
       :side-offset="4"
       :collision-padding="12"
+      data-tpg-build="v3"
       class="tpg-popover tpg-menu-body tpg-menu-body--blocks"
+      @interact-outside="onOutside"
+      @pointer-down-outside="onOutside"
+      @focus-outside="onOutside"
     >
       <!--
         内容用 shadcn ScrollArea 滚动（用户 2026-11-08）：滚动条贴面板最右侧。

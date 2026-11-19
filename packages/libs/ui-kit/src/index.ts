@@ -50,6 +50,7 @@ export {
   popupSubSideOffset,
 } from './theme/popup/popupConfig'
 export type { PopupKind } from './theme/popup/popupConfig'
+export { usePopupGroup } from './theme/popup/exclusive'
 
 /**
  * 组件配置：全局默认值（size / 箭头 / 间距 / 外推量）的唯一入口。

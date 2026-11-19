@@ -14,7 +14,7 @@
  * 依赖方向：本组件只认内核的 ToolParamDef 类型（纯类型 import）+ 本包自家 UI 组件，
  * 不反向依赖任何节点插件。
  */
-import { computed, type Component } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, type Component } from 'vue'
 import type { ToolParamDef } from '@plume-canvas/kernel'
 import {
   Input,
@@ -116,9 +116,58 @@ function onNumber(e: Event): void {
   emit('update:modelValue', Number.isFinite(n) ? n : raw)
 }
 
-function onText(e: Event): void {
-  emit('update:modelValue', (e.target as HTMLInputElement).value)
+/**
+ * 文本输入的本地草稿（用户 2026-11-18 报「输入英文严重卡顿」）。
+ *
+ * 根因：每按一个键都 emit 回上游 → 上游把参数对象整个换新 → 底栏重算价格、
+ * 重算宽度、落盘节点数据 → 这一整条链跑完才轮到下一个按键，于是打一个字要等一会儿。
+ *
+ * 做法：输入框先只改本地 draft（纯外观，不触发上游），停止输入 250ms 后再回写。
+ * - 外部值变化（切动作、套预设）时把 draft 同步过来，界面上不会显示旧字；
+ * - 失焦 / 回车立刻提交，不会出现「刚打完就切走、值丢了」。
+ */
+const textDraft = ref(String(props.modelValue ?? ''))
+let textTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(
+  () => props.modelValue,
+  (v) => {
+    // 正在输入时不要用上游值覆盖本地草稿（否则每 250ms 回写会打断连续输入）
+    if (textTimer) return
+    textDraft.value = String(v ?? '')
+  },
+)
+
+function commitText(): void {
+  if (textTimer) {
+    clearTimeout(textTimer)
+    textTimer = null
+  }
+  emit('update:modelValue', textDraft.value)
 }
+
+function onText(e: Event): void {
+  textDraft.value = (e.target as HTMLInputElement).value
+  if (textTimer) clearTimeout(textTimer)
+  textTimer = setTimeout(() => {
+    textTimer = null
+    emit('update:modelValue', textDraft.value)
+  }, 250)
+}
+
+/**
+ * 卸载时把还没提交的草稿交出去。
+ *
+ * 场景：用户打完字立刻切动作 / 关面板 —— 防抖还没到点，那个值就丢了。
+ * 有未提交草稿才 emit，没有就什么都不做（不要在卸载时凭空发一个值）。
+ */
+onBeforeUnmount(() => {
+  if (textTimer) {
+    clearTimeout(textTimer)
+    textTimer = null
+    emit('update:modelValue', textDraft.value)
+  }
+})
 
 function onBool(value: boolean): void {
   emit('update:modelValue', value)
@@ -150,7 +199,6 @@ const selectLabel = computed(() => {
 })
 
 const boolValue = computed(() => props.modelValue === true)
-const textValue = computed(() => String(props.modelValue ?? ''))
 const numberValue = computed(() => {
   const n = Number(props.modelValue)
   return Number.isFinite(n) ? n : 0
@@ -258,18 +306,25 @@ const sliderHint = computed(() => (props.hideHint ? '' : hintText.value))
     @update:model-value="onSlider"
   />
 
-  <!-- 基础控件：数值（无范围）/ 文本 -->
+  <!--
+    基础控件：数值（无范围）/ 文本。
+
+    文本输入必须用双向绑定（:model-value + @update:model-value），不能只传 :value：
+    组件库的 Input 内部走 useVModel(passive)，只传 value 时它会先把内部值清空再用我们的
+    值兜底 —— 实测首屏显示为空（用户 2026-11-18：切到某个动作后输入框空白）。
+  -->
   <Input
     v-else
     :id="inputId"
     class="tpf-input"
     :type="base === 'number' ? 'number' : 'text'"
-    :value="base === 'number' ? numberValue : textValue"
+    :model-value="base === 'number' ? numberValue : textDraft"
     :placeholder="param.placeholder || param.label || param.key"
     :disabled="disabled"
     :aria-label="param.label || param.key"
-    @change="base === 'number' ? onNumber($event) : onText($event)"
+    @change="base === 'number' ? onNumber($event) : commitText()"
     @input="base === 'number' ? undefined : onText($event)"
+    @blur="base === 'number' ? undefined : commitText()"
   />
 
   <!-- 说明行：位置判定见上面 showHintBelow（下拉走列表顶部那一行） -->

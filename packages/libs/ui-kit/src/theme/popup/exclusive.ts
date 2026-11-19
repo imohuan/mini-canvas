@@ -25,6 +25,19 @@ const openEntries = new Set<OpenEntry>()
 /** 浮层链：谁在谁里面打开的。用来豁免祖先，不让子浮层关掉父浮层。 */
 const POPUP_CHAIN_KEY = Symbol('plume-canvas:popup-chain')
 
+/**
+ * 浮层分组（用户 2026-11-18 的「点内层下拉第二次整个面板消失」）。
+ *
+ * 为什么需要：链是靠 provide/inject 往下传的，而**插槽内容不属于外层组件的子孙**。
+ * ToolParamGroup 把参数控件放在 <Popover> 的默认插槽里，那些 Select 的组件父级是
+ * ToolParamGroup 而不是 Popover，inject 拿不到 Popover 提供的链 —— 于是内层下拉
+ * 认为自己没有父级，打开时把参数面板一起关掉。
+ *
+ * 分组避开这条断链：面板的宿主组件自己 provide 一个组 token，外层浮层和内层浮层
+ * 都会带上它。同组浮层不互相关闭（面板 + 它里面的下拉本就该同时存在）。
+ */
+const GROUP_FLAG = 'plumeCanvasGroup'
+
 /** 打开自己：先关掉其它还开着的浮层，再登记自己。 */
 export function claimExclusive(entry: OpenEntry): void {
   /*
@@ -39,11 +52,38 @@ export function claimExclusive(entry: OpenEntry): void {
     if (other === entry) continue
     // 自己是从它里面弹出来的（比如参数面板里的下拉）→ 不关父级
     if (entry.chain.includes(other.token)) continue
+    // 同一组里的浮层（面板 + 面板里的下拉）→ 也不关，链在这里是断的
+    if (samePopupGroup(entry.chain, other.chain)) continue
     // 先摘再关：close() 是异步生效的（open=false 下一帧才走 watch），
     // 立刻摘掉可以避免同一次 claim 里重复关同一个浮层。
     openEntries.delete(other)
     other.close()
   }
+}
+
+function isGroupToken(token: object): boolean {
+  return (token as Record<string, unknown>)[GROUP_FLAG] === true
+}
+
+/**
+ * 两条浮层链是否属于同一组。
+ *
+ * 链是从 provide/inject 一路攒下来的祖先集合；只要有一条链里的组 token 出现在
+ * 另一条链里，就说明它们是「同一个面板里的一家人」，可以同时打开。
+ */
+export function samePopupGroup(a: readonly object[], b: readonly object[]): boolean {
+  return a.some((token) => isGroupToken(token) && b.includes(token))
+}
+
+/**
+ * 给「面板 + 面板里的下拉」划一个组。在**持有浮层内容的那个组件**里调用。
+ *
+ * 组 token 会并进这条组件子树下的浮层链，内部的 Popover / Select / DropdownMenu
+ * 都会带上它，彼此不再互相关闭。
+ */
+export function usePopupGroup(): void {
+  const parentChain = inject<object[]>(POPUP_CHAIN_KEY, [])
+  provide(POPUP_CHAIN_KEY, [...parentChain, { [GROUP_FLAG]: true }])
 }
 
 /** 关闭自己：从登记表摘掉（幂等）。 */
