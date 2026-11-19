@@ -116,7 +116,11 @@ x-admin-token: <64 位 hex>
   监听所有网卡之后，本机浏览器打开 `127.0.0.1` 是最常见的写法，漏了它会只回一句
   「请求来源不受信任」，看不出是白名单少了本机回环；
 - 带 `Origin` 时必须同源，或在 `--trusted-origin` / `PLUME_TRUSTED_ORIGINS` 里；
-- `Sec-Fetch-Site: cross-site` 一律拒绝；
+- `Sec-Fetch-Site: cross-site` 一律拒绝；**只有一个例外**：画布资源的只读媒体显示
+  （`GET/HEAD /api/canvases/<id>/resources/<name>`，且 `Sec-Fetch-Dest` 是 image / audio / video）。
+  可视化节点的沙箱 iframe 是不透明源，`<audio src>` / `<img src>` 都会被标成 cross-site，
+  不放行这一种的话，节点里算出来的音频永远是「无法播放媒体」。脚本自己发的 `fetch`
+  不带这些 dest，照样被拒；
 - `Origin: null`（沙箱 iframe）一律拒绝。
 
 为什么 `Origin: null` 不能放行：不透明源永远报 `cross-site`，而且任何网页都能自己造一个

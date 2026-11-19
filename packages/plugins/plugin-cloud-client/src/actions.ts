@@ -44,6 +44,10 @@ export interface BarActionLike {
    * 底栏取消按钮据此显示 —— 不能取消的动作不给点了没反应的按钮。
    */
   cancellable?: boolean
+  /** 下拉标题由 provider 算（要问后台 /api/actions/labels）；不标就不发请求 */
+  hasSelectLabel?: boolean
+  /** 发送按钮文案由 provider 算（同上） */
+  hasSendLabel?: boolean
   run?: (...args: never[]) => unknown
   resume?: (...args: never[]) => unknown
   onCancel?: (...args: never[]) => unknown
@@ -77,6 +81,14 @@ export function toBarAction(
     ? { providerIcon: def.providerIcon }
     : {}),
   ...(def.cancellable === true ? { cancellable: true } : {}),
+  /*
+   * 文案函数的**存在标记**（用户 2026-11-17）。
+   *
+   * provider 的函数过不了 JSON，后台只下发 hasSelectLabel / hasSendLabel；
+   * 底栏看到标记才去问 /api/actions/labels。不标就一个请求都不发。
+   */
+  ...(def.hasSelectLabel === true ? { hasSelectLabel: true } : {}),
+  ...(def.hasSendLabel === true ? { hasSendLabel: true } : {}),
   }
   /*
    * 多账号：清单必须原样带下去（用户 2026-11-10 反馈「二级菜单还没做」）。

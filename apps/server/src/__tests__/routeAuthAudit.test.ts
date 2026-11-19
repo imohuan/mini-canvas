@@ -91,6 +91,10 @@ describe('鉴权分类体检', () => {
       /^(POST|PUT|PATCH|DELETE) \/api\/(assets|asset-folders)\b/,
       // 历史白名单：资产 / 项目 / 历史 / KV 的写接口这一版仍靠来源边界（已知取舍）。
       /^(POST|PUT|PATCH|DELETE) \/api\/(projects|history|kv)\b/,
+      // 动作文案（下拉标题 / 发送按钮里的价格）：只读计算，等于「算一下这段字是什么」。
+      // 不建任务、不读写文件、不扣费，所以与 GET /api/actions 同级公开；
+      // 真正的执行入口 /api/jobs 仍要令牌。
+      /^POST \/api\/actions\/labels$/,
       /^PUT \/api\/canvases\/\S+$/, // 整画布保存：历史取舍，靠来源边界
       /^PUT \/api\/canvases\/\S+\/view$/,
     ]

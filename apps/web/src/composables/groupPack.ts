@@ -41,13 +41,28 @@ export interface GroupPackEdge {
 /** 包内容（带格式标记与版本号：以后改结构时能明确拒绝旧包，而不是悄悄少画东西） */
 export interface GroupPack {
   format: 'plume-group'
-  version: 1
+  /** v1 = 只有节点/边；v2 = 额外带 `media`（资源字节跟着包走） */
+  version: 1 | 2
   /** 显示名（根的 label） */
   name: string
   /** 根组节点在原画布里的 id（重建时换成新 id） */
   rootId: string
   nodes: GroupPackNode[]
   edges: GroupPackEdge[]
+  /** v2：组里用到的资源字节（导入时重新上传到当前画布，换成本画布的引用） */
+  media?: GroupPackMedia[]
+}
+
+/** 包内的一份资源 */
+export interface GroupPackMedia {
+  /** 包内编号（节点 data 里写 `pack:<id>` 引用它） */
+  id: string
+  /** 资源种类（image / video / audio） */
+  kind: string
+  name?: string
+  mime?: string
+  /** 字节（base64）。包是单个 JSON 文件，拖一次就能带走全部素材 */
+  bytesBase64: string
 }
 
 export interface BuildGroupPackInput {
@@ -145,12 +160,113 @@ export function buildGroupPack(input: BuildGroupPackInput): GroupPack | null {
   }
 }
 
+/** 节点 data 里允许出现资源引用的字段（与 canvas-data 的 RESOURCE_REF_FIELDS 同口径） */
+export const GROUP_RESOURCE_REF_FIELDS = ['resourceId', 'frameResourceId', 'leftResourceId', 'rightResourceId'] as const
+
+/** 节点 data 里的媒体地址字段（这些只是渲染副本，打包时不带） */
+const GROUP_MEDIA_URL_FIELDS = [
+  'imageUrl', 'videoUrl', 'audioUrl', 'posterUrl', 'thumbUrl', 'maskUrl',
+  'panoUrl', 'leftImageUrl', 'rightImageUrl',
+] as const
+
+/** 节点自己的资源种类（决定资源落到后端的扩展名 / 分类） */
+export function groupMediaKindOf(node: { type?: string; data?: Record<string, unknown> }): string {
+  if (node.type === 'video') return 'video'
+  if (node.type === 'audio') return 'audio'
+  return 'image'
+}
+
+/** 节点上要打包的资源引用（按字段顺序去重；`pack:` 前缀是旧包内的引用，不重复收） */
+export function groupResourceRefsOf(node: { data?: Record<string, unknown> }): string[] {
+  const out: string[] = []
+  for (const field of GROUP_RESOURCE_REF_FIELDS) {
+    const value = node.data?.[field]
+    if (typeof value !== 'string' || !value || value.startsWith('pack:')) continue
+    if (!out.includes(value)) out.push(value)
+  }
+  return out
+}
+
+/**
+ * 把组里用到的资源字节收进包（v2）。
+ *
+ * 只收**这个组自己的节点**引用到的资源；节点的 `resourceId` 换成包内编号 `pack:<id>`，
+ * 显示地址字段删掉 —— 包不携带任何画布地址，导入时一律重新 `put()` 到当前画布。
+ *
+ * @param fetchBytes 取字节（宿主给：`resources.adopt` 之后按引用取文件）；返回 undefined 表示取不到
+ * @returns 打好的包，以及没能收进来的资源（调用方要明确提示，不静默生成坏包）
+ */
+export async function attachGroupMedia(
+  pack: GroupPack,
+  opts: {
+    /** 取某引用对应的字节；取不到返回 undefined */
+    fetchBytes: (resourceId: string, kind: string) => Promise<Blob | undefined>
+  },
+): Promise<{ pack: GroupPack; missing: Array<{ nodeId: string; resourceId: string }> }> {
+  const media = new Map<string, GroupPackMedia>()
+  const missing: Array<{ nodeId: string; resourceId: string }> = []
+  // 同一个资源被多个节点引用时只打一份（视频可能几十 MB）
+  const idOf = new Map<string, string>()
+  const nodes: GroupPackNode[] = []
+  for (const node of pack.nodes) {
+    const data: Record<string, unknown> = { ...node.data }
+    for (const field of GROUP_MEDIA_URL_FIELDS) delete data[field]
+    for (const field of GROUP_RESOURCE_REF_FIELDS) {
+      const ref = data[field]
+      if (typeof ref !== 'string' || !ref || ref.startsWith('pack:')) continue
+      let packId = idOf.get(ref)
+      if (!packId) {
+        const kind = groupMediaKindOf(node)
+        const blob = await opts.fetchBytes(ref, kind)
+        if (!blob) {
+          missing.push({ nodeId: node.id, resourceId: ref })
+          delete data[field]
+          continue
+        }
+        packId = 'm' + (media.size + 1)
+        media.set(packId, {
+          id: packId,
+          kind,
+          bytesBase64: await blobToBase64(blob),
+          ...(blob.type ? { mime: blob.type } : {}),
+        })
+        idOf.set(ref, packId)
+      }
+      data[field] = 'pack:' + packId
+    }
+    nodes.push({ ...node, data })
+  }
+  return {
+    pack: { ...pack, version: 2, nodes, media: [...media.values()] },
+    missing,
+  }
+}
+
+/** Blob → base64（不依赖 Buffer；浏览器与 Node 都成立） */
+export async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return typeof btoa === 'function' ? btoa(bin) : ''
+}
+
+/** base64 → Blob */
+export function base64ToBlob(base64: string, mime?: string): Blob {
+  const bin = typeof atob === 'function' ? atob(base64) : ''
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new Blob([bytes as unknown as BlobPart], mime ? { type: mime } : {})
+}
+
 /** 解析一个分组包；结构不对 / 版本不认识 → 抛错（调用方提示用户，不静默建半个组） */
 export function parseGroupPack(raw: unknown): GroupPack {
   const o = raw as Partial<GroupPack> | null
   if (!o || typeof o !== 'object') throw new Error('分组包内容不是对象')
   if (o.format !== 'plume-group') throw new Error('不是分组包')
-  if (o.version !== 1) throw new Error('分组包版本不支持：' + String(o.version))
+  if (o.version !== 1 && o.version !== 2) throw new Error('分组包版本不支持：' + String(o.version))
   if (typeof o.rootId !== 'string' || !o.rootId) throw new Error('分组包缺少根节点')
   if (!Array.isArray(o.nodes) || !o.nodes.length) throw new Error('分组包里没有节点')
   const nodes: GroupPackNode[] = o.nodes.map((n) => {
@@ -181,12 +297,33 @@ export function parseGroupPack(raw: unknown): GroupPack {
     }))
   return {
     format: 'plume-group',
-    version: 1,
+    version: o.version === 2 ? 2 : 1,
     name: typeof o.name === 'string' && o.name ? o.name : '分组',
     rootId: o.rootId,
     nodes,
     edges,
+    ...(o.version === 2 ? { media: parseGroupMedia(o.media) } : {}),
   }
+}
+
+/** 解析包里的资源表；结构不对的条目丢掉（不让一个坏条目把整包毁掉） */
+function parseGroupMedia(raw: unknown): GroupPackMedia[] {
+  if (!Array.isArray(raw)) return []
+  const out: GroupPackMedia[] = []
+  for (const item of raw) {
+    const m = item as Partial<GroupPackMedia> | null
+    if (!m || typeof m !== 'object') continue
+    if (typeof m.id !== 'string' || !m.id) continue
+    if (typeof m.bytesBase64 !== 'string' || !m.bytesBase64) continue
+    out.push({
+      id: m.id,
+      kind: typeof m.kind === 'string' && m.kind ? m.kind : 'image',
+      ...(typeof m.name === 'string' && m.name ? { name: m.name } : {}),
+      ...(typeof m.mime === 'string' && m.mime ? { mime: m.mime } : {}),
+      bytesBase64: m.bytesBase64,
+    })
+  }
+  return out
 }
 
 export interface PlacedGroupNode {

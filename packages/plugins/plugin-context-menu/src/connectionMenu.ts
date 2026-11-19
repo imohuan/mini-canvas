@@ -201,8 +201,10 @@ export function filterConnectableTypes(input: {
   types: readonly MenuNodeTypeLike[]
   edges: readonly ExistingEdge[]
   getTypeConn: (type: string) => NodeConnectionDef | undefined
+  /** 源节点自己的连接声明（可视化节点的输出口由节点数据决定时，光有 type 不够） */
+  getSourceConn?: () => NodeConnectionDef | undefined
 }): MenuNodeTypeLike[] {
-  const { fact, sourceNodeType, types, edges, getTypeConn } = input
+  const { fact, sourceNodeType, types, edges, getTypeConn, getSourceConn } = input
   const reverse = fact.sourceHandle === 'target'
   return types.filter((candidate) => {
     const nodes = new Map<string, { id: string; type: string }>([
@@ -212,6 +214,9 @@ export function filterConnectableTypes(input: {
     const conn = reverse
       ? { source: PENDING_NODE_ID, target: fact.sourceNodeId }
       : { source: fact.sourceNodeId, target: PENDING_NODE_ID }
-    return validateConnection(conn, { nodes, edges: [...edges], getTypeConn }).ok
+    // 源节点按它自己的 data 取口；待建的那个候选节点还没数据，只能按类型取
+    const nodeConn = (id: string): NodeConnectionDef | undefined =>
+      id === fact.sourceNodeId ? (getSourceConn?.() ?? getTypeConn(sourceNodeType ?? '')) : getTypeConn(candidate.type)
+    return validateConnection(conn, { nodes, edges: [...edges], getTypeConn, getNodeConn: nodeConn }).ok
   })
 }

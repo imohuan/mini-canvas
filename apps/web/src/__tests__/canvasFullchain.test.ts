@@ -162,7 +162,9 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
       const text = host.ctx.get<TextNodeService>('text')
       const img = host.ctx.get<ImageNodeService>('image')
       text.addTextNode({ x: 0, y: 0 })
-      img.addImageNode({ x: 50, y: 50 }, 'http://x/img.png')
+      // 不带 resourceId 的 data URL 是旧存档里“唯一一份字节”，允许保留；
+      // 第三方 http 地址会被保存清理删掉（画布就是文件夹，见资源归属规则）。
+      img.addImageNode({ x: 50, y: 50 }, 'data:image/png;base64,AAAA')
       text.editText('1', '标题还在') // 此刻 nodeStore 已含两节点 → 整体落盘
       await host.save.flush()
       host.stop()
@@ -177,7 +179,7 @@ describe('M1(浏览器) image 插件 + removeNode + 两节点持久化', () => {
       expect(textNode.type).toBe('text')
       expect(textNode.data.text).toBe('标题还在')
       expect(imageNode.type).toBe('image')
-      expect(imageNode.data.imageUrl).toBe('http://x/img.png')
+      expect(imageNode.data.imageUrl).toBe('data:image/png;base64,AAAA')
       host.stop()
     }
   })
@@ -431,6 +433,21 @@ describe('撤销后刷新闭环（P0-2 完整证据）', () => {
     const h2 = await boot({ adapter: storage })
     expect(h2.nodeStore.getNodes()).toHaveLength(2)
     h2.stop()
+  })
+
+  it('保存后节点不留第三方地址（画布就是文件夹）', async () => {
+    const storage = new MemoryStorageAdapter()
+    const host = await boot({ adapter: storage })
+    const img = host.ctx.get<ImageNodeService>('image')
+    img.addImageNode({ x: 0, y: 0 }, 'https://cdn.example.com/a.png')
+    await host.save.flush()
+
+    const saved = (await storage.get<CanvasNode[]>('canvas:graph')) ?? []
+    const data = saved.find((n) => n.type === 'image')!.data
+    // 没有 resourceId 的 dataURL 可以留（字节唯一一份）；外站地址不能留。
+    expect(JSON.stringify(saved)).not.toContain('cdn.example.com')
+    expect(data.imageUrl).toBeUndefined()
+    host.stop()
   })
 })
 

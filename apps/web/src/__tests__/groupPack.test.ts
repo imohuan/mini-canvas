@@ -9,7 +9,10 @@
  *   ③ 根名字跟着画布去重，子节点名字保持原样。
  */
 import { describe, expect, it } from 'vitest'
-import { buildGroupPack, hydrateGroupPackMedia, parseGroupPack, planGroupPlacement } from '../composables/groupPack'
+import {
+  attachGroupMedia, base64ToBlob, buildGroupPack, hydrateGroupPackMedia,
+  parseGroupPack, planGroupPlacement,
+} from '../composables/groupPack'
 
 const node = (id: string, type: string, x: number, y: number, extra: Record<string, unknown> = {}, parentId?: string) => ({
   id,
@@ -133,5 +136,103 @@ describe('分组包：结构校验与媒体补水', () => {
     const got = await hydrateGroupPackMedia(pack, async (id) => (id === 'r1' ? '/new.mp4' : undefined))
     expect(got.nodes[1]!.data.videoUrl).toBe('/new.mp4')
     expect(got.nodes[2]!.data.audioUrl).toBeUndefined()
+  })
+})
+
+describe('分组包 v2：资源跟着包走', () => {
+  it('★ 资源字节进 media，节点引用换成 pack:<id>，地址字段不带', async () => {
+    const pack = {
+      format: 'plume-group' as const,
+      version: 1 as const,
+      name: '组',
+      rootId: 'g',
+      nodes: [
+        { id: 'g', type: 'group', position: { x: 0, y: 0 }, data: { nodeType: 'group' } },
+        { id: 'i', type: 'image', position: { x: 1, y: 1 }, data: { resourceId: 'a/hash1.png', imageUrl: '/api/canvases/a/resources/hash1.png' }, parentId: 'g' },
+        { id: 'v', type: 'video', position: { x: 2, y: 2 }, data: { resourceId: 'a/hash2.mp4', videoUrl: '/api/canvases/a/resources/hash2.mp4' }, parentId: 'g' },
+      ],
+      edges: [],
+    }
+    const got = await attachGroupMedia(pack, {
+      fetchBytes: async (ref) => new Blob([ref], { type: ref.endsWith('.mp4') ? 'video/mp4' : 'image/png' }),
+    })
+    expect(got.missing).toHaveLength(0)
+    expect(got.pack.version).toBe(2)
+    expect(got.pack.media).toHaveLength(2)
+    const img = got.pack.nodes.find((n) => n.id === 'i')!
+    expect(img.data.resourceId).toMatch(/^pack:m\d+$/)
+    expect(img.data.imageUrl).toBeUndefined()
+    expect(got.pack.nodes.find((n) => n.id === 'v')!.data.videoUrl).toBeUndefined()
+    // 包内没有任何画布地址
+    expect(JSON.stringify(got.pack)).not.toContain('/api/canvases/')
+  })
+
+  it('★ 同一资源被多个节点引用只打一份', async () => {
+    let calls = 0
+    const pack = {
+      format: 'plume-group' as const,
+      version: 1 as const,
+      name: '组',
+      rootId: 'g',
+      nodes: [
+        { id: 'g', type: 'group', position: { x: 0, y: 0 }, data: { nodeType: 'group' } },
+        { id: 'a', type: 'image', position: { x: 1, y: 1 }, data: { resourceId: 'a/same.png' }, parentId: 'g' },
+        { id: 'b', type: 'image', position: { x: 2, y: 2 }, data: { resourceId: 'a/same.png' }, parentId: 'g' },
+      ],
+      edges: [],
+    }
+    const got = await attachGroupMedia(pack, {
+      fetchBytes: async () => { calls += 1; return new Blob(['x']) },
+    })
+    expect(calls).toBe(1)
+    expect(got.pack.media).toHaveLength(1)
+    expect(got.pack.nodes[1]!.data.resourceId).toBe(got.pack.nodes[2]!.data.resourceId)
+  })
+
+  it('★ 取不到字节 → 记进 missing 并摘掉引用（不留一个指向别处的坏节点）', async () => {
+    const pack = {
+      format: 'plume-group' as const,
+      version: 1 as const,
+      name: '组',
+      rootId: 'g',
+      nodes: [
+        { id: 'g', type: 'group', position: { x: 0, y: 0 }, data: { nodeType: 'group' } },
+        { id: 'a', type: 'image', position: { x: 1, y: 1 }, data: { resourceId: 'a/gone.png' }, parentId: 'g' },
+      ],
+      edges: [],
+    }
+    const got = await attachGroupMedia(pack, { fetchBytes: async () => undefined })
+    expect(got.missing).toEqual([{ nodeId: 'a', resourceId: 'a/gone.png' }])
+    expect(got.pack.nodes[1]!.data.resourceId).toBeUndefined()
+  })
+
+  it('v2 包能解析回 media；字节编解码可往返', async () => {
+    const blob = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
+    const pack = {
+      format: 'plume-group' as const,
+      version: 1 as const,
+      name: '组',
+      rootId: 'g',
+      nodes: [{ id: 'g', type: 'group', position: { x: 0, y: 0 }, data: { nodeType: 'group' } }],
+      edges: [],
+    }
+    const got = await attachGroupMedia({ ...pack, nodes: [...pack.nodes, { id: 'i', type: 'image', position: { x: 1, y: 1 }, data: { resourceId: 'a/x.png' }, parentId: 'g' }] }, {
+      fetchBytes: async () => blob,
+    })
+    const back = parseGroupPack(JSON.parse(JSON.stringify(got.pack)))
+    expect(back.version).toBe(2)
+    expect(back.media?.[0]?.bytesBase64).toBeTruthy()
+    const decoded = base64ToBlob(back.media![0]!.bytesBase64, back.media![0]!.mime)
+    expect(Array.from(new Uint8Array(await decoded.arrayBuffer()))).toEqual([1, 2, 3])
+  })
+
+  it('v1 旧包仍能解析（没有 media）', () => {
+    const back = parseGroupPack({
+      format: 'plume-group', version: 1, name: '旧组', rootId: 'g',
+      nodes: [{ id: 'g', type: 'group', position: { x: 0, y: 0 }, data: { nodeType: 'group' } }],
+      edges: [],
+    })
+    expect(back.version).toBe(1)
+    expect(back.media).toBeUndefined()
   })
 })

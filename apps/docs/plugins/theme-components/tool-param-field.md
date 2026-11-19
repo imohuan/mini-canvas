@@ -39,6 +39,30 @@ import ThemeKitDemo from '../../.vitepress/theme/demos/ThemeKitDemo.vue'
 > `speed` / `model` / `speaker` / `format` 等 11 个语义 kind 已删除 —— 它们画出来的东西
 > 和基础控件完全一样，留着等于同一个 UI 有两个入口。写这些旧名字不会报错，只是不起作用。
 
+### 平台作者怎么选：select 还是 grid
+
+一条实用经验（用户 2026-11-18）：**选项不超过 4 个就用 `type: 'grid'`**，
+超过才用 `select`。
+
+为什么：2~4 个选项铺成一行宫格，全部档位一眼看完、点一下就选完，比「点开下拉 → 扫一眼 →
+再点一次」少一步；而 5 个以上的选项铺成一行会每格太窄（或被迫折行占两行高度），
+下拉反而更干净。
+
+```js
+// 文件：<数据根>/providers/apimart.js —— 四种实际用法
+const resolutionField = { key: 'resolution', label: '分辨率', type: 'grid', default: '1k', columns: 3,
+  options: [{ label: '1K', value: '1k' }, { label: '2K', value: '2k' }, { label: '4K', value: '4k' }] },
+const backgroundField = { key: 'background', label: '背景', type: 'grid', default: '', columns: 3,
+  options: [{ label: '默认', value: '' }, { label: '透明', value: 'transparent' }, { label: '不透明', value: 'opaque' }] },
+const moderationField = { key: 'moderation', label: '审核强度', type: 'grid', default: 'low', columns: 2,
+  options: [{ label: '低（默认）', value: 'low' }, { label: '自动', value: 'auto' }] },
+const qualityField = { key: 'quality', label: '质量', type: 'select', default: 'medium',   // 6 项 → 下拉
+  options: [/* 低 中 高 极高 最高 自动 */] },
+```
+
+只有**一个** select 参数、且它不是比例网格时，整个参数会直接铺在底栏上不套面板
+（见 `resolveInlineSoleSelect`）；多个参数才收进「参数」下拉的面板里。
+
 ## Props
 
 | 字段 | 类型 | 缺省 | 说明 |

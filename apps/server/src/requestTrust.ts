@@ -52,6 +52,33 @@ function inScope(pathname: string): boolean {
   return pathname.startsWith('/api/') || pathname === '/mcp' || pathname.startsWith('/mcp?')
 }
 
+/** 只读媒体请求（`<img>` / `<video>` / `<audio>` 的 src） */
+const MEDIA_FETCH_DESTS = new Set(['image', 'audio', 'video'])
+
+/**
+ * 画布资源里「浏览器只是把它显示出来」的那一类读取。
+ *
+ * 为什么必须单独放行（用户 2026-11-17 实测）：可视化节点的界面住在不透明源的
+ * `sandbox="allow-scripts"` iframe 里，它里面的 `<audio src>` / `<video src>` / `<img src>`
+ * 会被浏览器标成 `Sec-Fetch-Site: cross-site`，于是连「读一张图」都被来源边界 403 掉 ——
+ * 节点里算出来的音频明明已经写回画布，播放器却永远显示「无法播放媒体」。
+ *
+ * 边界为什么还能守住：
+ *   - 只认 **GET / HEAD**，且只认 `/api/canvases/<id>/resources/<name>` 这一种路径；
+ *   - 只认浏览器标成 image / audio / video 的请求（脚本自己发的 fetch 不会带这几个 dest，
+ *     照样被拒）；
+ *   - 这些资源本来就是**公开可读**的（见 adminAuth.ts 的说明：GET/HEAD 永远不要令牌），
+ *     放行只等于允许别的页面把它**显示**出来，读不到响应内容，也改不了任何东西。
+ *   - 画布 id 是随机串，猜不到别人的画布。
+ */
+function isMediaResourceRead(req: TrustRequestLike): boolean {
+  const method = req.method.toUpperCase()
+  if (method !== 'GET' && method !== 'HEAD') return false
+  const dest = (req.header('sec-fetch-dest') ?? '').trim().toLowerCase()
+  if (!MEDIA_FETCH_DESTS.has(dest)) return false
+  return /^\/api\/canvases\/[^/]+\/resources\/[^/]+$/.test(req.path)
+}
+
 export function checkRequestTrust(req: TrustRequestLike, opts: RequestTrustOptions): TrustResult {
   const method = req.method.toUpperCase()
   if (method === 'OPTIONS') return { ok: true }
@@ -65,7 +92,10 @@ export function checkRequestTrust(req: TrustRequestLike, opts: RequestTrustOptio
 
   const fetchSite = (req.header('sec-fetch-site') ?? '').trim().toLowerCase()
   if (fetchSite === 'cross-site') {
-    return { ok: false, reason: 'cross-site' }
+    // 唯一的例外：画布资源的只读媒体显示（沙箱节点里的 <img>/<audio>/<video>）。
+    // 其余一律拒 —— 这条不能放宽成「所有 GET」，否则跨站页面能把画布数据读走。
+    if (!isMediaResourceRead(req)) return { ok: false, reason: 'cross-site' }
+    return { ok: true }
   }
 
   const rawOrigin = req.header('origin')

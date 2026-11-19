@@ -132,13 +132,17 @@ describe('设置页面覆盖度（真实内核 + 真实插件）', () => {
     ctx.stop()
   })
 
-  it('生成控制栏的尺寸（宽度 / 输入框高度）也出现在「布局」分类下', async () => {
+  it('生成控制栏的尺寸（宽度 / 输入框高度 / AI 按钮个数）也出现在「布局」分类下', async () => {
     const ctx = await bootWithSettings()
     const settings = ctx.get<SettingsLike>('settings')
     // 同一二级块「控制栏」里既有贴边距离，也有尺寸 —— 都属于"控制栏的布局"
     expect(settings.groups()).toContain('布局/控制栏')
-    expect(settings.get('panelImageWidth')).toBe(660)
-    expect(settings.get('panelTextWidth')).toBe(520)
+    // 宽度只有一份全局配置（用户 2026-11-18：图片/文本两栏没必要分开）
+    expect(settings.get('panelWidth')).toBe(720)
+    expect(settings.has('panelImageWidth')).toBe(false)
+    expect(settings.has('panelTextWidth')).toBe(false)
+    // AI 按钮折叠阈值：超过它就收进「更多」菜单
+    expect(settings.get('panelAiVisibleCount')).toBe(2)
     expect(settings.get('panelEditorMinHeight')).toBe(64)
     expect(settings.get('panelEditorMaxHeight')).toBe(220)
     ctx.stop()

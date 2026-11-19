@@ -85,12 +85,16 @@ const MEDIA_URL_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
 export async function restoreMediaUrls(
   nodes: Array<{ type?: string; data?: Record<string, unknown> }>,
   restore: (resourceId: string, kind: string) => Promise<string | undefined>,
+  owns?: (resourceId: string) => boolean,
 ): Promise<number> {
   let restored = 0
   for (const node of nodes) {
     const data = node.data
     const resourceId = typeof data?.resourceId === 'string' ? data.resourceId : undefined
     if (!resourceId || !data) continue
+    // 画布就是文件夹：别的画布的引用不在这里补地址，交给打开时的 adopt 修复
+    // （补了也只会是一条指向别人目录的地址，正好是这次要禁止的东西）。
+    if (owns && !owns(resourceId)) continue
     const declared = MEDIA_URL_FIELDS_BY_TYPE[String(node.type ?? '')]
     const fields = declared
       ? [...declared]
@@ -104,6 +108,7 @@ export async function restoreMediaUrls(
     const kind = node.type === 'video' ? 'video' : 'image'
     const url = await restore(resourceId, kind)
     for (const k of pending) {
+      // 这里写的是**本次会话的显示副本**；落盘前会被资源归属清理删掉（只留 resourceId）。
       if (url) data[k] = url
       else delete data[k]
     }

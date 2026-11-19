@@ -33,7 +33,14 @@ export function inlineAssetHeaders(contentType: string): Record<string, string> 
     'content-type': contentType,
     'content-security-policy': INLINE_ASSET_CSP,
     'x-content-type-options': 'nosniff',
-    // 不让浏览器把这份响应缓存成「可执行文档」的旧版本
-    'cross-origin-resource-policy': 'same-site',
+    /*
+     * 不能写 `same-site`：可视化节点里的生成页面跑在**不透明源**（`Origin: null`）的
+     * iframe 里，按 CORP 规则它和后台既不同源、也不被算作同一个 site —— 于是
+     * `<audio src>` / `<video src>` 直接报「无法播放媒体」（用户 2026-11-17 实测：
+     * 静音裁剪节点出来的音频播不出来，同一地址在普通标签页里能播）。
+     * 这里用 `cross-origin`：它本来就只是给别的网页读、不涉及凭据，真正挡住脚本执行
+     * 的是上面的 CSP sandbox + nosniff。
+     */
+    'cross-origin-resource-policy': 'cross-origin',
   }
 }

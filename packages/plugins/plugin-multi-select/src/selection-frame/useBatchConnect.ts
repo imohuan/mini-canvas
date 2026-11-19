@@ -5,7 +5,7 @@ import {
   resolveFeedback,
   type CanvasRenderContext,
 } from '@plume-canvas/canvas-render'
-import { typeConnectionDef, validateConnection } from '@plume-canvas/canvas-data'
+import { typeConnectionDef, nodeConnectionDef, validateConnection } from '@plume-canvas/canvas-data'
 import {
   buildBatchGuideLines,
   markGuideLines,
@@ -22,6 +22,8 @@ interface BatchDeps {
   layout: () => CanvasRenderContext['ctx']['view'] | undefined
   nodeStore: () => {
     getNodes(): Array<{ id: string; type: string }>
+    /** 取单个节点（拿 data 用：端口可能由节点数据决定） */
+    getNode?(id: string): { id: string; type: string; data?: Record<string, unknown> } | undefined
     types: ReadonlyMap<string, Parameters<typeof typeConnectionDef>[0]>
   }
   edgeStore: () => { getEdges(): Array<{ id: string; source: string; target: string; sourceHandle?: string; targetHandle?: string }> } | undefined
@@ -113,9 +115,18 @@ export function useBatchConnect(input: BatchDeps) {
     const reasonFor = (source: string, target: string): string => {
       const store = input.nodeStore()
       const nodes = new Map(store.getNodes().map((n) => [n.id, { id: n.id, type: n.type }]))
+      const nodeConn = (id: string) => {
+        const n = store.getNode?.(id)
+        return nodeConnectionDef(store.types.get(n?.type ?? ''), n?.data)
+      }
       const res = validateConnection(
         { source, sourceHandle: 'source', target, targetHandle: 'target' },
-        { nodes, edges: input.edgeStore()?.getEdges() ?? [], getTypeConn: (t) => typeConnectionDef(store.types.get(t)) },
+        {
+          nodes,
+          edges: input.edgeStore()?.getEdges() ?? [],
+          getTypeConn: (t) => typeConnectionDef(store.types.get(t)),
+          getNodeConn: nodeConn,
+        },
       )
       return res.ok ? '' : reasonTextFrom(res.reason)
     }
@@ -214,6 +225,10 @@ export function useBatchConnect(input: BatchDeps) {
         nodes,
         edges: [...(input.edgeStore()?.getEdges() ?? []), ...planned],
         getTypeConn: (t) => typeConnectionDef(store.types.get(t)),
+        getNodeConn: (id: string) => {
+          const n = store.getNode?.(id)
+          return nodeConnectionDef(store.types.get(n?.type ?? ''), n?.data)
+        },
       },
     )
     return res.ok

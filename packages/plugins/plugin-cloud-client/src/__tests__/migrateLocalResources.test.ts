@@ -27,7 +27,7 @@ function fakeApi(): { api: CloudApi; uploads: Array<{ name: string; size: number
 }
 
 describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
-  it('本地引用 → 取字节 → 传云端 → 换成资源 URL 写进该类型的媒体字段', async () => {
+  it('本地引用 → 取字节 → 传云端 → 只写本画布的逻辑 ID（地址不落存档）', async () => {
     const { api, uploads } = fakeApi()
     const local = {
       async resolveResource(ref: string) {
@@ -37,9 +37,9 @@ describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
     const nodes = [{ id: 'n1', type: 'image', data: { resourceId: 'res-1-local', imageUrl: 'blob:old' } }]
     const out = (await migrateLocalResources(nodes, local, api)) as Array<{ data: Record<string, unknown> }>
     expect(uploads).toHaveLength(1)
-    expect(out[0].data.imageUrl).toBe('/api/canvases/default/resources/abc123.png')
-    // 主字段：逻辑 ID（带画布作用域）。地址只是迁移期副本。
+    // 画布就是文件夹：节点里只留本画布的引用；地址是渲染副本，不落存档。
     expect(out[0].data.resourceId).toBe('default/abc123.png')
+    expect(out[0].data.imageUrl).toBeUndefined()
   })
 
   it('已是云端引用（资源 URL）→ 不重复上传', async () => {
@@ -56,8 +56,9 @@ describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
     const { api, uploads } = fakeApi()
     const local = { async resolveResource() { return undefined } }
     const nodes = [{ id: 'n1', type: 'image', data: { resourceId: 'default/abc123.png' } }]
-    await migrateLocalResources(nodes, local, api)
+    const out = (await migrateLocalResources(nodes, local, api)) as Array<{ data: Record<string, unknown> }>
     expect(uploads).toHaveLength(0)
+    expect(out[0].data.resourceId).toBe('default/abc123.png')
   })
 
   it('别的画布的资源 URL → 不算「已上传」，照常走本地迁移（只认本画布前缀）', async () => {
@@ -68,16 +69,17 @@ describe('migrateLocalResources：首次上云把本地资源搬上去', () => {
     ]
     const out = (await migrateLocalResources(nodes, local, api)) as Array<{ data: Record<string, unknown> }>
     expect(uploads).toHaveLength(1)
-    expect(out[0].data.imageUrl).toBe('/api/canvases/default/resources/abc123.png')
+    expect(out[0].data.resourceId).toBe('default/abc123.png')
+    expect(out[0].data.imageUrl).toBeUndefined()
   })
 
-  it('取不到字节 → 原样保留（不因一张图失败把整次迁移搞崩）', async () => {
+  it('取不到字节 → 不留外来的 blob 地址（画布不指向别人的东西）', async () => {
     const { api, uploads } = fakeApi()
     const local = { async resolveResource() { return undefined } }
     const nodes = [{ id: 'n1', type: 'image', data: { resourceId: 'res-gone', imageUrl: 'blob:x' } }]
     const out = (await migrateLocalResources(nodes, local, api)) as Array<{ data: Record<string, unknown> }>
     expect(uploads).toHaveLength(0)
-    expect(out[0].data.imageUrl).toBe('blob:x')
+    expect(out[0].data.imageUrl).toBeUndefined()
   })
 
   it('同一张图被多个节点引用 → 只传一次', async () => {

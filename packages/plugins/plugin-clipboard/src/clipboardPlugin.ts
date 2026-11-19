@@ -299,14 +299,33 @@ class ClipboardServiceImpl extends Service implements ClipboardService {
    * 这样贴出来的节点当场就能显示，不会先白一下再补图。地址重建失败（资源不在）就保持原值。
    */
   private async prepareSnapshotMedia(snap: ClipboardSnapshot): Promise<void> {
-    const resources = this.ctx.tryGet('resources')
+    const resources = this.ctx.tryGet<{
+      resolve(ref: string): Promise<string | undefined>
+      adopt?(ref: string, opts?: { kind?: string; name?: string }): Promise<string | undefined>
+      owns?(ref: string): boolean
+    }>('resources')
     if (!resources) return
     for (const node of snap.nodes) {
       const resourceId = node.data.resourceId
       if (typeof resourceId !== 'string' || resourceId.length === 0) continue
       const fields = pendingMediaRestoreFields(node)
+      /**
+       * ★ 画布就是文件夹：粘贴进来的节点可能引用**别的画布**（复制时那张）。
+       * 先把字节复制进当前画布、换成当前画布的引用；换不到就清掉引用，不留跨画布指向。
+       */
+      const owned = resources.owns ? resources.owns(resourceId) : true
+      const adopted = owned || !resources.adopt
+        ? undefined
+        : await resources.adopt(resourceId, { kind: node.type === 'video' ? 'video' : node.type === 'audio' ? 'audio' : 'image' })
+      const ref = adopted ?? (owned ? resourceId : '')
+      if (!ref) {
+        delete node.data.resourceId
+        for (const key of fields) delete node.data[key]
+        continue
+      }
+      if (adopted) node.data.resourceId = adopted
       if (fields.length === 0) continue
-      const url = await resources.resolve(resourceId)
+      const url = await resources.resolve(ref)
       if (!url) continue
       // 直接就地改**快照**（不是已落盘的节点）：随后的 pasteSnapshot 会把这份 data 一并带进新节点。
       // 就地改安全 —— 快照是快照（coerceClipboardSnapshot 已深拷贝过，与剪贴板/外部对象不共享）。

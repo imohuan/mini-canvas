@@ -164,52 +164,97 @@ export async function migrateLocalResources(
   canvasIdArg: string = CANVAS_ID,
 ): Promise<unknown[]> {
   const cloudResource = createCloudResourceAdapter(api, canvasIdArg)
+  const resourceIdPrefix = canvasIdArg + '/'
+  /** 已经是本画布资源（旧 URL 或新逻辑 ID）：重复上云不再动 */
+  const ownedByCanvas = (ref: string): boolean =>
+    ref.startsWith('/api/canvases/' + canvasIdArg + '/resources/') ||
+    ref.startsWith(resourceIdPrefix)
   /** 本画布的资源地址前缀：用它认出"已经传过的图"，避免重复上云时又传一遍 */
   const resourceUrlPrefix = '/api/canvases/' + canvasIdArg + '/resources/'
-  /** 本画布逻辑 ID 的前缀（新形态）：`<画布id>/<哈希>` */
-  const resourceIdPrefix = canvasIdArg + '/'
   const uploaded = new Map<string, string>()
   const out: unknown[] = []
   for (const node of nodes) {
     const data = node.data
     const ref = typeof data?.resourceId === 'string' ? data.resourceId : undefined
-    if (!data || !ref || !localAdapter?.resolveResource) {
+    if (!data) {
       out.push(node)
       continue
     }
-    // 已是本画布的资源（旧 URL 或新逻辑 ID，重复上云）→ 不动。
-    // 认不出的话首次上云会把已上传的图再传一遍。
-    if (ref.startsWith(resourceUrlPrefix) || ref.startsWith(resourceIdPrefix)) {
+    /*
+     * 画布就是文件夹：**地址字段一律不当真相**。
+     * 首次上云时节点里可能只剩 imageUrl（旧存档）或只有一个外来地址：
+     * 先把能用的那份（引用优先，其次地址）收进本画布，再让地址字段离开节点。
+     */
+    const legacyUrl = (MEDIA_FIELDS_BY_TYPE[String(node.type ?? '')] ?? [])
+      .map((f) => (typeof data[f] === 'string' ? (data[f] as string) : ''))
+      .find((v) => v.length > 0)
+    const source = ref && ref.length > 0 ? ref : (legacyUrl ?? '')
+    if (!source || ownedByCanvas(source)) {
+      // 已是本画布的东西：地址字段清掉（只留引用）。旧同源 URL 顺手升级成逻辑 ID。
+      const next: Record<string, unknown> = { ...data }
+      const fields = MEDIA_FIELDS_BY_TYPE[String(node.type ?? '')] ?? []
+      if (source.startsWith(resourceUrlPrefix)) {
+        // `/api/canvases/<id>/resources/<hash>` → `<id>/<hash>`
+        next.resourceId = resourceIdPrefix + source.slice(resourceUrlPrefix.length)
+      } else if (ref) {
+        next.resourceId = ref
+      } else if (source.startsWith(resourceUrlPrefix)) {
+        // 没有引用、地址又属于本画布：升级成引用，地址不当第二份真相
+        next.resourceId = resourceIdPrefix + source.slice(resourceUrlPrefix.length)
+      }
+      if (next.resourceId) for (const f of fields) delete next[f]
+      out.push({ ...node, data: next })
+      continue
+    }
+    if (!localAdapter?.resolveResource) {
       out.push(node)
       continue
     }
-    let cloudRef = uploaded.get(ref)
+    const cacheKey = source
+    let cloudRef = uploaded.get(cacheKey)
     if (cloudRef === undefined) {
       try {
-        const localUrl = await localAdapter.resolveResource(ref)
+        // 引用优先；只有地址（旧存档）时直接拿地址取字节
+        const localUrl = ref && ref.length > 0
+          ? await localAdapter.resolveResource(ref)
+          : source
         const blob = localUrl ? await urlToBlob(localUrl) : undefined
         cloudRef = blob ? await cloudResource.putResource!(blob, { kind: 'image' }) : ''
       } catch {
         cloudRef = ''
       }
-      uploaded.set(ref, cloudRef)
+      uploaded.set(cacheKey, cloudRef)
     }
     if (!cloudRef) {
-      out.push(node)
+      // 搬不过来：地址字段不能留着（那正是外来地址的来源），只保留引用给打开时修复
+      const fields = MEDIA_FIELDS_BY_TYPE[String(node.type ?? '')] ?? ['imageUrl']
+      const next: Record<string, unknown> = { ...data }
+      for (const f of fields) delete next[f]
+      out.push({ ...node, data: next })
       continue
     }
-    // resourceId 写逻辑 ID；媒体字段写迁移期地址（与数据层的 mediaUrlFieldsOf 同口径）。
-    // 地址由 ID 直接拼出 —— 刚上传成功，不必再 HEAD 一次。
-    const cloudUrl = resourceUrlPrefix + cloudRef.slice(resourceIdPrefix.length)
+    /*
+     * 只写**本画布的引用**。
+     *
+     * 地址字段是本次渲染的副本：迁移期写它会让跨画布地址继续留在存档里，
+     * 正是「一张画布引用另一张画布」的来源。渲染侧本来就会按引用现取。
+     */
     const fields = MEDIA_FIELDS_BY_TYPE[String(node.type ?? '')] ?? ['imageUrl']
     const next: Record<string, unknown> = { ...data, resourceId: cloudRef }
-    for (const f of fields) next[f] = cloudUrl
+    for (const f of fields) delete next[f]
     out.push({ ...node, data: next })
   }
   return out
 }
 
 /** 各节点类型该把资源引用写进哪个字段（与 canvas-data 的 mediaUrlFieldsOf 同口径） */
+/** 这个引用是不是**指定画布**的资源（逻辑 ID 或旧同源 URL 两种形态） */
+function isOwnCanvasResource(ref: string, canvasIdArg: string): boolean {
+  if (!ref) return false
+  if (ref.startsWith('/api/canvases/' + canvasIdArg + '/resources/')) return true
+  return ref.startsWith(canvasIdArg + '/')
+}
+
 const MEDIA_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
   image: ['imageUrl'],
   video: ['videoUrl'],
@@ -546,6 +591,7 @@ export function onCanvasReady(ctx: Context): void | (() => void) {
           await restoreMediaUrlsList(
             nodes as Array<{ type?: string; data?: Record<string, unknown> }>,
             (resourceId, kind) => resources.restore!(resourceId, kind),
+            (resourceId) => isOwnCanvasResource(resourceId, CID),
           )
         },
         pushLocal: async (nodes, edges) => {

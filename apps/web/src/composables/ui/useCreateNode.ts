@@ -1,7 +1,10 @@
 import { nextTick } from 'vue'
 import { SAMPLE_IMAGE_URL } from '../../assembly'
 import { importPack, isNodePackFile, resolvePackBase, VERSION_SEP } from '../nodePack'
-import { GROUP_PACK_EXT, GROUP_PACK_KIND, hydrateGroupPackMedia, parseGroupPack, planGroupPlacement } from '../groupPack'
+import {
+  GROUP_PACK_EXT, GROUP_PACK_KIND, base64ToBlob, groupResourceRefsOf,
+  hydrateGroupPackMedia, parseGroupPack, planGroupPlacement,
+} from '../groupPack'
 import { uniqueLabel } from '../nodeLabel'
 import { assetKindOf } from '../assetModel'
 import type { UiState } from './createUiState'
@@ -55,6 +58,36 @@ export function createCreateNodeScope(
   function nodeTypeOfAsset(asset: { kind?: string; assetKind?: string }): 'image' | 'video' | 'audio' | null {
     const kind = assetKindOf(asset)
     return kind === 'image' || kind === 'video' || kind === 'audio' ? kind : null
+  }
+
+  /** 资源服务的最小用面（画布就是文件夹：外来资源先复制进本画布） */
+  type ResourcePort = {
+    adopt(refOrUrl: string, opts?: { kind?: string; name?: string }): Promise<string | undefined>
+    resolve(ref: string): Promise<string | undefined>
+  }
+
+  /**
+   * 把一份资产收进**当前画布**：返回本画布引用 + 本次可显示地址。
+   *
+   * 取不到（外链失效 / 跨域 / 后端不可用）→ undefined，调用方退回原地址并明确提示。
+   * 资产库自己的地址（`/api/assets/files/...`）也算外来资源 —— 画布不能指向资产库，
+   * 否则删掉那条资产，画布里的图就没了。
+   */
+  async function adoptAssetResource(
+    kind: 'image' | 'video' | 'audio',
+    url: string,
+    name?: string,
+  ): Promise<{ resourceId: string; url?: string } | undefined> {
+    const resources = hostCtx()?.tryGet?.<ResourcePort>('resources')
+    if (!resources?.adopt) return undefined
+    try {
+      const resourceId = await resources?.adopt(url, { kind, ...(name ? { name } : {}) })
+      if (!resourceId) return undefined
+      const display = await resources?.resolve(resourceId)
+      return display ? { resourceId, url: display } : { resourceId }
+    } catch {
+      return undefined
+    }
   }
 
   /** 建节点时的落点：优先用调用方给的 flow 坐标（拖拽落点），否则按已有节点数级联错开 */
@@ -160,6 +193,17 @@ export function createCreateNodeScope(
     const ctx = hostCtx()
     const position = spawnPosition(atFlow)
     let newId: unknown
+    /**
+     * ★ 画布就是文件夹：从资产库拿来的地址先复制进**本画布**，拿到本画布的引用再建节点。
+     *
+     * 不这么做的话，节点会一直指向资产库（`/api/assets/files/...`）或原来那张画布，
+     * 表现出来就是「一张画布引用了另一张画布的资源」。取不到字节时退回原地址，
+     * 由保存清理与打开修复兜住（不静默丢节点）。
+     */
+    const adopted = await adoptAssetResource(type, asset.url, asset.name)
+    const playableUrl = adopted?.url || asset.url
+    // 收不进本画布（外链失效 / 跨域）：明确说一句，不留一个指向外面的节点
+    if (!adopted) showToast('这个资源无法复制进本画布，画布数据里不会保留它的外部地址')
     if (type === 'image') {
       /**
        * 图片：先量真实宽高再建节点（与视频同一条口径）。
@@ -169,13 +213,16 @@ export function createCreateNodeScope(
        */
       const imageSvc = ctx?.get<{ addImageNodeWithSize?: (p: { x: number; y: number }, url: string, name?: string) => Promise<string> }>('image')
       if (imageSvc?.addImageNodeWithSize) {
-        newId = await imageSvc.addImageNodeWithSize(position, asset.url, asset.name)
+        newId = await (imageSvc.addImageNodeWithSize as unknown as (
+          p: { x: number; y: number }, url: string, name?: string, resourceId?: string,
+        ) => Promise<string>)(position, playableUrl, asset.name, adopted?.resourceId)
       } else {
         if (!target?.command) return null
         newId = target.command.execute('command:create-node', {
           type: 'image',
           position,
-          imageUrl: asset.url,
+          imageUrl: playableUrl,
+          ...(adopted?.resourceId ? { resourceId: adopted.resourceId } : {}),
           ...(asset.name ? { name: asset.name } : {}),
         })
       }
@@ -183,11 +230,13 @@ export function createCreateNodeScope(
       // video / audio：走插件服务（服务名与节点类型同名；插件没装 → undefined → 明确反馈）
       const svc = ctx?.get<{
         addVideoNode?: (p: { x: number; y: number }, url?: string) => string
-        addVideoNodeWithMeta?: (p: { x: number; y: number }, url: string, name?: string) => Promise<string>
+        addVideoNodeWithMeta?: (p: { x: number; y: number }, url: string, name?: string, resourceId?: string) => Promise<string>
         addAudioNode?: (p: { x: number; y: number }, url?: string) => string
+        addAudioNodeWithMeta?: (p: { x: number; y: number }, url: string, name?: string, resourceId?: string) => string
       }>(type)
-      if (type === 'video' && svc?.addVideoNodeWithMeta) newId = await svc.addVideoNodeWithMeta(position, asset.url, asset.name)
+      if (type === 'video' && svc?.addVideoNodeWithMeta) newId = await svc.addVideoNodeWithMeta(position, playableUrl, asset.name, adopted?.resourceId)
       else if (type === 'video' && svc?.addVideoNode) newId = svc.addVideoNode(position, asset.url)
+      else if (type === 'audio' && svc?.addAudioNodeWithMeta) newId = svc.addAudioNodeWithMeta(position, playableUrl, asset.name, adopted?.resourceId)
       else if (type === 'audio' && svc?.addAudioNode) newId = svc.addAudioNode(position, asset.url)
       else {
         showToast('「' + type + '」节点插件未启用，无法添加')
@@ -445,10 +494,84 @@ export function createCreateNodeScope(
     // 组里的图片/视频若是「按 resourceId 存的」（本地 IndexedDB / 云端画布资源），
     // 收藏时抄下来的是**原画布**的引用；换一张画布后必须先按本机资源服务换一次地址，
     // 否则拖回来是一组空白卡片。换不到就保留原字段（至少不比不补更差）。
-    const resources = ctx.tryGet?.<{ resolve(ref: string): Promise<string | undefined> }>('resources')
+    const resources = ctx.tryGet?.<{
+      resolve(ref: string): Promise<string | undefined>
+      put?(blob: Blob, opts?: { kind?: string; name?: string }): Promise<string>
+      adopt?(ref: string, opts?: { kind?: string; name?: string }): Promise<string | undefined>
+    }>('resources')
+    /*
+     * ★ 先解包里的资源：每个 `pack:<id>` 重新上传到**当前画布**，换成当前画布的引用。
+     * 包装的是字节，不是别的画布的地址 —— 导入后才能自包含。
+     */
+    let incoming = pack
+    if (pack.media?.length) {
+      const made = new Map<string, string>()
+      let lost = 0
+      for (const m of pack.media) {
+        if (!resources?.put) { lost += 1; continue }
+        try {
+          const ref = await resources.put(base64ToBlob(m.bytesBase64, m.mime), {
+            kind: m.kind, ...(m.name ? { name: m.name } : {}),
+          })
+          made.set(m.id, ref)
+        } catch {
+          lost += 1
+        }
+      }
+      incoming = {
+        ...pack,
+        nodes: pack.nodes.map((n) => {
+          const data: Record<string, unknown> = { ...n.data }
+          for (const field of ['resourceId', 'frameResourceId', 'leftResourceId', 'rightResourceId']) {
+            const v = data[field]
+            if (typeof v !== 'string' || !v.startsWith('pack:')) continue
+            const next = made.get(v.slice('pack:'.length))
+            if (next) data[field] = next
+            else delete data[field]
+          }
+          return { ...n, data }
+        }),
+      }
+      if (lost > 0) showToast('这一组里有 ' + lost + ' 个资源没能存进本画布')
+    }
+    // 旧包（v1）没有 media：把其中借来的引用尽量复制进本画布（复制不了的会由保存清理兜住）
+    const borrowed = incoming.nodes.some((n) => groupResourceRefsOf(n).length > 0)
+    if (borrowed && resources?.adopt) {
+      const nodes = []
+      let lost = 0
+      for (const n of incoming.nodes) {
+        const data: Record<string, unknown> = { ...n.data }
+        for (const field of ['resourceId', 'frameResourceId', 'leftResourceId', 'rightResourceId']) {
+          const v = data[field]
+          if (typeof v !== 'string' || !v) continue
+          const next = await resources.adopt(v, { kind: n.type === 'video' ? 'video' : n.type === 'audio' ? 'audio' : 'image' })
+          if (next) data[field] = next
+          else { delete data[field]; lost += 1 }
+        }
+        // 只有地址、没有引用的旧节点：也要把字节收进来、换成引用（地址不当第二份真相）
+        const refField = 'resourceId'
+        if (!data[refField]) {
+          const urlKey = n.type === 'video' ? 'videoUrl' : n.type === 'audio' ? 'audioUrl' : 'imageUrl'
+          const url = data[urlKey]
+          if (typeof url === 'string' && url) {
+            const next = await resources.adopt(url, { kind: n.type === 'video' ? 'video' : n.type === 'audio' ? 'audio' : 'image' })
+            if (next) {
+              data[refField] = next
+              delete data[urlKey]
+            } else {
+              delete data[urlKey]
+              lost += 1
+            }
+          }
+        }
+        nodes.push({ ...n, data })
+      }
+      incoming = { ...incoming, nodes }
+      if (lost > 0) showToast('这一组里有 ' + lost + ' 个旧资源无法迁入本画布')
+    }
     const hydrated = resources?.resolve
-      ? await hydrateGroupPackMedia(pack, (id) => resources.resolve(id))
-      : pack
+      ? await hydrateGroupPackMedia(incoming, (id) => resources.resolve(id))
+      : incoming
 
     const doc = ctx.get<{
       nextNodeId(): string
@@ -578,17 +701,26 @@ export function createCreateNodeScope(
         const target = canvasHost()
         if (!target?.command) continue
         const pos = { x: 80 + (created % 5) * 48, y: 80 + Math.floor(created / 5) * 60 }
+        // 批量添加同样先把资源收进本画布：不能让节点指向资产库或别的画布
+        const adopted = await adoptAssetResource('image', a.url, a.name)
         const newId = target.command.execute('command:create-node', {
           type: 'image',
           position: pos,
-          imageUrl: a.url,
+          imageUrl: adopted?.url || a.url,
+          ...(adopted?.resourceId ? { resourceId: adopted.resourceId } : {}),
           ...(a.name ? { name: a.name } : {}),
         })
         if (typeof newId === 'string' && newId) { newIds.push(newId); created++ }
       } else if (kind === 'video' || kind === 'audio') {
         const svc = hostCtx()?.get<{ addVideoNode?: (p: { x: number; y: number }, url?: string) => string; addAudioNode?: (p: { x: number; y: number }, url?: string) => string }>(kind)
         const pos = { x: 80 + (created % 5) * 48, y: 80 + Math.floor(created / 5) * 60 }
-        const newId = kind === 'video' ? svc?.addVideoNode?.(pos, a.url) : svc?.addAudioNode?.(pos, a.url)
+        const adopted = await adoptAssetResource(kind, a.url, a.name)
+        const newId = kind === 'video' ? svc?.addVideoNode?.(pos, adopted?.url || a.url) : svc?.addAudioNode?.(pos, adopted?.url || a.url)
+        // 引用写进节点（地址只留给本次渲染；刷新后按引用重建）
+        if (newId && adopted?.resourceId) {
+          hostCtx()?.get<{ updateNode(id: string, patch: { data: Record<string, unknown> }): void }>('doc')
+            ?.updateNode(newId, { data: { resourceId: adopted.resourceId } })
+        }
         if (newId) { newIds.push(newId); created++ }
       }
       // other 类型跳过（没有对应节点实现），不算失败也不打断

@@ -88,6 +88,34 @@ describe('checkRequestTrust', () => {
     }), OPTS)).toEqual({ ok: false, reason: 'cross-site' })
   })
 
+  /**
+   * 用户 2026-11-17 实测：可视化节点的沙箱 iframe（不透明源）里 `<audio src>` 永远播不出来，
+   * 因为浏览器给这类请求标 `Sec-Fetch-Site: cross-site` + `Sec-Fetch-Dest: audio`。
+   * 只放行「画布资源的只读媒体显示」这一种，别的一律照旧拒。
+   */
+  it('跨站媒体显示：只放行画布资源的只读 GET / HEAD', () => {
+    const media = (path: string, dest: string, method = 'GET') =>
+      checkRequestTrust(
+        req(method, path, {
+          host: '127.0.0.1:8865',
+          'sec-fetch-site': 'cross-site',
+          'sec-fetch-dest': dest,
+        }),
+        OPTS,
+      )
+    expect(media('/api/canvases/c1/resources/a.mp3', 'audio').ok).toBe(true)
+    expect(media('/api/canvases/c1/resources/a.png', 'image').ok).toBe(true)
+    expect(media('/api/canvases/c1/resources/a.mp4', 'video', 'HEAD').ok).toBe(true)
+
+    // 脚本自己发的 fetch（dest 是 empty）照样拒：不能靠它读画布数据
+    expect(media('/api/canvases/c1/resources/a.mp3', 'empty').ok).toBe(false)
+    // 画布数据接口不在此列
+    expect(media('/api/canvases/c1', 'image').ok).toBe(false)
+    expect(media('/api/canvases/c1/nodes', 'image').ok).toBe(false)
+    // 写方法不在此列
+    expect(media('/api/canvases/c1/resources/a.mp3', 'audio', 'POST').ok).toBe(false)
+  })
+
   it('OPTIONS 直接放行（预检不带令牌，也不带 Host 之外的信任信息）', () => {
     expect(checkRequestTrust(req('OPTIONS', '/api/task/call', { origin: 'null' }), OPTS).ok).toBe(true)
   })

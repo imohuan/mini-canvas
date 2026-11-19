@@ -73,9 +73,31 @@ export function slotUrlOf(canvasId: string, ref: string): string | undefined {
 
 export function createCloudResourceAdapter(api: CloudApi, canvasId: string = CANVAS_ID): ResourceAdapter {
   const capability: StorageAdapterCapability = { list: false, transactional: false, offline: false }
+  /** 本画布的持久引用（逻辑 ID）；不是本画布 → undefined */
+  const ownRefOf = (ref: string): string | undefined => {
+    if (!ref) return undefined
+    const logical = resourceIdFromUrl(ref) ?? ref
+    const parsed = parseCloudResourceId(logical)
+    return parsed !== undefined && parsed.canvasId === canvasId ? logical : undefined
+  }
   return {
     id: 'cloud-resource',
     capability,
+
+    /**
+     * 只认**本画布**的资源。
+     *
+     * 画布就是文件夹：别的画布的文件即使能请求到，也不算本画布的。
+     * 旧同源 URL 也按 URL 里的画布 id 判断，不放过跨画布地址。
+     */
+    ownsResource(ref: string): boolean {
+      return ownRefOf(ref) !== undefined
+    },
+
+    /** 本画布的旧同源 URL → 逻辑 ID；不是本画布 → undefined */
+    normalizeRef(ref: string): string | undefined {
+      return ownRefOf(ref)
+    },
 
     /** 传字节 → 服务端按内容哈希落文件 → 回**逻辑 ID** `<canvasId>/<hashName>` */
     async putResource(blob: Blob, opts: ResourcePutOptions = {}): Promise<string> {
@@ -145,4 +167,11 @@ export function createCloudResourceAdapter(api: CloudApi, canvasId: string = CAN
      */
     async removeResource() {},
   }
+}
+
+/** 旧同源资源地址 → 逻辑 ID（认 `/api/canvases/<id>/resources/<名字>`） */
+function resourceIdFromUrl(ref: string): string | undefined {
+  const m = /^\/api\/canvases\/([A-Za-z0-9_-]{1,64})\/resources\/([^/?#]+)$/.exec(ref)
+  if (!m) return undefined
+  return m[1] + '/' + m[2]
 }

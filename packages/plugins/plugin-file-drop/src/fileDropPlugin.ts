@@ -250,6 +250,7 @@ export class FileDropServiceImpl extends Service implements FileDropService {
     const resources = this.ctx.tryGet<{
       put(b: Blob, o?: { kind?: string; name?: string }): Promise<string>
       resolve(ref: string): Promise<string | undefined>
+      owns?(ref: string): boolean
     }>('resources')
     if (!resources) return undefined
     // 防御：宿主给的服务形状可能不全（老宿主 / 测试替身只有 put）——

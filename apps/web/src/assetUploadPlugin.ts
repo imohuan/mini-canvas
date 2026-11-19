@@ -26,8 +26,10 @@ import { assetKindOf } from './composables/assetModel'
 import {
   GROUP_PACK_EXT,
   GROUP_PACK_KIND,
+  attachGroupMedia,
   buildGroupPack,
   isGroupNodeLike,
+  groupMediaKindOf,
 } from './composables/groupPack'
 
 export const name = 'ui-asset-upload'
@@ -50,6 +52,15 @@ interface CtxLike {
   commands: { register(req: Record<string, unknown>): { dispose?: () => void } }
   selectionRegion?: { attach(req: Record<string, unknown>): unknown }
   get<T>(key: string): T
+}
+
+/** 取可选服务：没装 / 取服务本身抛错都当作“没有”，不影响收藏主流程 */
+function safeGet<T>(ctx: CtxLike, name: string): T | undefined {
+  try {
+    return (ctx.get<T | undefined>(name) ?? undefined) as T | undefined
+  } catch {
+    return undefined
+  }
 }
 
 export const uiAssetUploadPlugin: PluginModule = {
@@ -305,8 +316,57 @@ export function registerAssetCommands(scope: unknown): Array<{ dispose?: () => v
           useUi().showToast('这个节点不是分组，无法收藏成节点组')
           return
         }
-        const name = (pack.name || '节点组') + GROUP_PACK_EXT
-        const file = new File([JSON.stringify(pack, null, 2)], name, { type: 'application/x-plume-group' })
+        /*
+         * ★ 资源跟着包走：先按引用取字节装进 media，再写文件。
+         *
+         * 画布就是文件夹 —— 包里只带**字节**和包内编号，绝不带别的画布地址。
+         * 取不到字节的资源会从节点上摘掉，并明确告诉用户（不静默生成一个坏包）。
+         */
+        const resources = safeGet<{
+          resolve(ref: string): Promise<string | undefined>
+          put?(blob: Blob, opts?: { kind?: string; name?: string }): Promise<string>
+          adopt?(ref: string, opts?: { kind?: string; name?: string }): Promise<string | undefined>
+          owns?(ref: string): boolean
+        }>(ctx, 'resources')
+        // 先把借来的引用收进本画布（收藏也遵守“只引用自己的资源”）
+        let prepared = pack
+        if (resources?.adopt) {
+          let lost = 0
+          const patchedNodes = []
+          for (const n of pack.nodes) {
+            const data: Record<string, unknown> = { ...n.data }
+            for (const field of ['resourceId', 'frameResourceId', 'leftResourceId', 'rightResourceId']) {
+              const v = data[field]
+              if (typeof v !== 'string' || !v || v.startsWith('pack:')) continue
+              if (resources.owns?.(v)) continue
+              const next = await resources.adopt(v, { kind: groupMediaKindOf(n) })
+              if (next) data[field] = next
+              else { delete data[field]; lost += 1 }
+            }
+            patchedNodes.push({ ...n, data })
+          }
+          prepared = { ...pack, nodes: patchedNodes }
+          if (lost > 0) useUi().showToast('有 ' + lost + ' 个资源无法读取，已从这一组里摘掉')
+        }
+        const attached = await attachGroupMedia(prepared, {
+          fetchBytes: async (resourceId, kind) => {
+            if (!resources?.resolve) return undefined
+            try {
+              const url = await resources.resolve(resourceId)
+              if (!url) return undefined
+              const res = await fetch(url)
+              return res.ok ? await res.blob() : undefined
+            } catch {
+              return undefined
+            }
+          },
+        })
+        if (attached.missing.length > 0) {
+          useUi().showToast('有 ' + attached.missing.length + ' 个资源没能打包，节点会显示为空')
+        }
+        const packed = attached.pack
+        const name = (packed.name || '节点组') + GROUP_PACK_EXT
+        const file = new File([JSON.stringify(packed, null, 2)], name, { type: 'application/x-plume-group' })
         const folderId = await ensureAssetFolder(useUi(), '节点组库')
         queueUploads([{ name: file.name, file, tags: ['节点组'], ...(folderId ? { folderId } : {}) }])
       } catch (err) {

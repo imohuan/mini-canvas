@@ -103,6 +103,92 @@ export const config = [
 `type` 六选一：`string` / `text` / `number` / `boolean` / `select` / `secret`。
 设置页按这个数组画控件，平台作者不用写任何前端代码。
 
+## 平台的三个可选能力：自算文案、走代理、多账号
+
+### 动作文案钩子：selectLabel / sendLabel
+
+动作上可以给两个**函数**，让平台自己决定「界面显示什么字」（用户 2026-11-17）：
+
+| 钩子 | 显示在哪 | 典型用法 |
+| --- | --- | --- |
+| `selectLabel(input)` | 参数下拉的标题 | 当前档位，如 `1:1 · 4K` |
+| `sendLabel(input)` | 发送按钮内（图标右侧） | 本次花费，如 `¥0.33` |
+
+`input` 里有 `values`（当前参数值）与 `resources`（素材计数），可以用来查价格表、
+读配置。函数在**后台执行**，前端只拿到最终字符串（函数过不了 JSON，见
+`apps/server/src/routes/actionLabels.ts`）。返回空串 = 回落默认表现。
+
+```js
+// 文件：<数据根>/providers/apimart.js（makeAction 里的两条动作各写一份）
+selectLabel(input) {
+  const v = input.values || {}
+  return String(v.size || '1:1') + ' · ' + String(v.resolution || '1k').toUpperCase()
+},
+sendLabel(input) {
+  const p = priceOf(input.values || {})
+  return p.cny > 0 ? '¥' + p.cny.toFixed(2) : '—'
+},
+```
+
+后台路由：`POST /api/actions/labels`，请求体 `{ items: [{ actionId, values, resources }] }`，
+返回 `{ ok, items: [{ actionId, selectLabel?, sendLabel? }] }`。单个动作抛错只影响自己那一条。
+
+### 计价参考：APIMart 的积分 → 人民币折算
+
+平台按积分扣费，但用户按人民币结算（用户 2026-11-18 要求「统一以人民币为准」）。
+`apimart.js` 的做法可以直接抄：
+
+| 项 | 值 | 来源 |
+| --- | --- | --- |
+| 积分口径 | 10 积分 = 1 美元 | 平台定价页 |
+| 汇率 | `usdToCny` 配置项，默认 7.0 | 「平台」页可改，按当期汇率填 |
+| 手续费 | `feeRate` 配置项，默认 0.03（3%） | 覆盖充值/支付渠道成本 |
+| 显示 | `¥x.xx`（< 10 元两位小数，更大一位） | `fmtCny` |
+
+`价格(人民币) = 积分 ÷ 10 × 汇率 × (1 + 手续费)`。汇率写成配置而不是写死：
+汇率天天变，写死会出现「显示价 ≠ 实际扣款」。
+
+### 代理：本机解析错误时的逃生口
+
+有些网络环境会把 API 域名解析到错误的 IP（实测把 `api.apimart.ai` 解析成了
+Facebook 网段，直连必超时）。平台可以声明一个 `proxyUrl` 配置项：
+
+```js
+{ key: 'proxyUrl', label: '代理地址', type: 'string',
+  placeholder: 'http://127.0.0.1:7900',
+  description: '可选。HTTP 代理地址。留空 = 直连。' }
+```
+
+- **留空 = 直连**，行为与不写这项完全一样；填了才走代理。
+- 只支持 **HTTP 代理**（Clash / v2ray 常见形态）：先 `CONNECT` 建隧道，再在隧道里跑 TLS。
+  实现见 `apimart.js` 的 `proxyFetch`（Node 内置 http/https/tls，运行环境没有 undici 包，
+  用不了 `ProxyAgent`）。
+- **踩坑记录（2026-11-18）**：隧道里发请求必须显式补 `Host` 头。用 `createConnection`
+  时 Node 不知道目标主机，`Host` 会默认成 `localhost`，Cloudflare 校验不过直接回
+  403 Forbidden（HTML）。表现为界面报「返回的不是 JSON（HTTP 403）」。
+  修复：`if (!headers.Host) headers.Host = host`。
+- 参考图下载这类**取素材**的请求也要走同一条代理，否则出图会卡在「读取参考素材失败」。
+- 排查连通性**用免费的接口**（如 `GET /v1/models`），不要用计费的生成接口反复试 ——
+  每次都会真实扣费。
+
+## UI 提示（悬停说明）用哪个组件
+
+给底栏 / 面板上的按钮写悬停说明时，分两种情况（用户 2026-11-18 口径：
+「不要用浏览器默认的 title 提示」）：
+
+| 场景 | 用什么 | 原因 |
+| --- | --- | --- |
+| 普通 icon 按钮（不触发其它浮层） | shadcn `Tooltip`（`useUiComponent` 取件，`TooltipProvider + Tooltip + TooltipTrigger as-child + TooltipContent`） | 项目统一的提示样式，可两行（标题 + 描述），不延迟半秒 |
+| 按钮同时是 `DropdownMenuTrigger` / `PopoverTrigger` | **不包 Tooltip** | 两个浮层抢同一个锚点，菜单会被定位到屏幕外（2026-11-02、2026-11-18 两次实测：菜单 y=-760 看不见）；此时把说明写进菜单内的 `DropdownMenuLabel` / 行内文字，或用 `title` 兜底 |
+
+`DropdownMenuContent` 里的菜单项需要悬停说明时，`TooltipTrigger as-child` 包住**行内容元素**
+（不是菜单项本身），`TooltipContent side="right"`；菜单开合不受影响，实测可用。
+
+嵌套浮层防误关：面板里再开二级下拉时，关闭内层会把焦点甩给编辑器，外层收到
+`focus-outside`（真实事件名是 `dismissableLayer.focusOutside`，带命名空间前缀）。
+面板宿主在 `focus-outside` 上 `preventDefault()` 即可保住外层（见
+`ToolParamGroup.vue` 的 `onOutside`）—— 只拦 pointer 那一支挡不住焦点链。
+
 ## 平台怎么读到填进去的值
 
 装载器会在你的源码前注入常量 `__mcProviderConfig`：

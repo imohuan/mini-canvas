@@ -67,6 +67,10 @@ export interface StorageAdapter {
 export interface ResourceAdapter {
   readonly id: string
   readonly capability: StorageAdapterCapability
+  /** 这个引用是不是**本画布自己的**资源（画布就是文件夹；别的画布的不算） */
+  ownsResource?(ref: string): boolean
+  /** 本画布的旧同源 URL → 持久引用；不是本画布 → undefined */
+  normalizeRef?(ref: string): string | undefined
   putResource(blob: Blob, opts: ResourcePutOptions): Promise<string>
   resolveResource(ref: string): Promise<string | undefined>
   removeResource(ref: string): Promise<void>

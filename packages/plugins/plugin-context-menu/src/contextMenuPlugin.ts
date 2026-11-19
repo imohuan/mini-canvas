@@ -21,7 +21,7 @@ import type { ConfigSchema, Context, PluginModule } from '@plume-canvas/plugin-s
 import type { DocService, SelectionService } from '@plume-canvas/canvas-data'
 import type { CommandService } from '@plume-canvas/kernel'
 import type { CanvasActions } from '@plume-canvas/canvas-data'
-import { isTransient, typeConnectionDef } from '@plume-canvas/canvas-data'
+import { isTransient, typeConnectionDef, nodeConnectionDef } from '@plume-canvas/canvas-data'
 import { RenderEvents, nodeShellSlot, type ConnectionDropPayload } from '@plume-canvas/canvas-render'
 import ContextMenu from './ContextMenu.vue'
 import ConnectionMenuContent from './ConnectionMenuContent.vue'
@@ -269,6 +269,11 @@ export function apply(ctx: Context): void {
       // 容量/重复判定只看正式边：中间态边（占位连线）不参与，否则自己的占位边会把候选全滤掉
       edges: doc.getEdges().filter((e) => !isTransient(e)),
       getTypeConn: (type) => typeConnectionDef(doc.types.get(type)),
+      // 源节点的输出口可能由它自己的数据决定（可视化节点的输出类型）
+      getSourceConn: () => {
+        const src = doc.getNode(fact.sourceNodeId)
+        return nodeConnectionDef(doc.types.get(src?.type ?? ''), src?.data)
+      },
     })
     const items = enrichMenuItems(buildConnectionMenuItems(candidates))
     // 上一次的临时态先清掉（重复拖线不会堆叠）

@@ -136,10 +136,9 @@ export async function writeVideoResult(
   if (!url) return
   try {
     const local = await localizeUrl(url, { resources: deps.resources, ...(deps.fetchBytes ? { fetchBytes: deps.fetchBytes } : {}), kind: 'video' })
+    // 只写本画布的引用：地址是渲染副本，写进节点会让“别人目录的地址”继续留在存档里。
     const data: Record<string, unknown> = {}
     if (local.resourceId) data.resourceId = local.resourceId
-    // 迁移期兼容：VideoContent 已优先按 resourceId 现取，但导出 / 预览等读取方还认地址。
-    if (local.url) data.videoUrl = local.url
     if (Object.keys(data).length > 0) doc.updateNode?.(nodeId, { data })
   } catch (err) {
     console.warn('[cloud-client] 视频产物地址不可用，保留节点原值：', err)
@@ -159,8 +158,6 @@ export async function writeAudioResult(
     const local = await localizeUrl(url, { resources: deps.resources, ...(deps.fetchBytes ? { fetchBytes: deps.fetchBytes } : {}), kind: 'audio' })
     const data: Record<string, unknown> = {}
     if (local.resourceId) data.resourceId = local.resourceId
-    // 迁移期兼容：AudioContent 目前仍只读 audioUrl。
-    if (local.url) data.audioUrl = local.url
     const name = (local.url ?? '').split('/').pop() ?? ''
     if (name) data.audioName = name
     if (Object.keys(data).length > 0) doc.updateNode?.(nodeId, { data })
