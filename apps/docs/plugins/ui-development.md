@@ -93,6 +93,10 @@ function save(): void {
 （`packages/plugins/plugin-theme-components/src/styles/scrollbars.css`）：细、低对比、
 悬停才变亮，亮暗主题各一套。
 
+可视化节点里由 Agent 现写的 HTML 住在**独立文档**（`sandbox` iframe）里，主题插件那份
+全局滚动条进不去。所以可视化插件在外壳样式（`plugin-node-ui/src/uiData.ts` 的 `SHELL_STYLE`）
+里自己补了一份同样的细滚动条，颜色按当前亮/暗主题写进 `--ui-scroll-thumb`。
+
 ```vue
 <!-- 文件：apps/web/src/components/MyPanel.vue -->
 <template>

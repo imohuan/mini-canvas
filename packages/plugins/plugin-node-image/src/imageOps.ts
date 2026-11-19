@@ -206,7 +206,8 @@ export function createImageOps(svc: ServiceGetter): ImageOpsContext {
       doc()?.updateNode(nodeId, size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }),
     // 派生尺寸：有 runtime 写口就用它（落盘、不进历史）；极简宿主没有该口时退回普通写。
     writeMeasured: (nodeId, data, size) => {
-      const patch = size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }
+      // size 键恒在：undefined = 清掉显式尺寸（回退跟默认走）；漏掉这个键就清不掉了。
+      const patch = { data, size: size !== undefined ? { w: size.w, h: size.h } : undefined }
       const d = doc()
       if (d?.updateNodeRuntime) d.updateNodeRuntime(nodeId, patch)
       else d?.updateNode(nodeId, patch)

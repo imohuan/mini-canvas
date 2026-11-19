@@ -171,10 +171,10 @@ const {
 
 /** 读写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
 const ops = createVideoOps(ctx)
-/** 节点尺寸唯一来源（nodeGeometry → node.size） */
-const nodeGeometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+/** 节点实际尺寸唯一来源（nodeGeometry.getEffective → node.size ?? 类型默认） */
+const nodeGeometry = ctx.tryGet<{ getEffective(id: string): { w: number; h: number } | null }>('nodeGeometry')
 function currentNodeSize(): { w: number; h: number } | null {
-  return nodeGeometry?.get(props.id) ?? null
+  return nodeGeometry?.getEffective(props.id) ?? null
 }
 
 /** 裁剪中显示完整画面；平时按裁框取景（这是"裁剪"在视觉上落地的唯一一处） */

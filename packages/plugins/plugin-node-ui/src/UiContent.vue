@@ -28,7 +28,13 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
-import { buildPalette, buildSrcdoc, normalizeUpstream, type PaletteToken, type UpstreamItem } from './uiData'
+import {
+  buildPalette,
+  buildSrcdoc,
+  normalizeUpstream,
+  type PaletteToken,
+  type UpstreamItem,
+} from './uiData'
 import { THEME_COLOR_TOKENS } from '@plume-canvas/canvas-render'
 import { normalizeManualValues } from './uiValues'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
@@ -161,6 +167,7 @@ const upstream = computed<UpstreamItem[]>(() => {
   }
   return normalizeUpstream(raw)
 })
+
 
 /** 画布主题色板（亮/暗两套）——只提供，用不用由生成的界面自己决定 */
 const palette = computed(() =>
@@ -529,10 +536,11 @@ const hint = computed(() => {
    */
 }
 
-/* 交互态：给一圈内描边，让用户知道"现在点进去的是里面那个界面" */
-.ui-node.is-interactive {
-  box-shadow: inset 0 0 0 2px var(--ui-accent, #0891b2);
-}
+/*
+ * 交互态**不画边框**（用户 2026-11-17 明确要求删掉那圈青蓝描边）。
+ * 这个类名保留：调用方（和样式调试）还在用 `is-interactive` 判断“现在点的是节点里面的界面”，
+ * 只是不再有任何视觉表达。
+ */
 
 .ui-empty {
   width: 100%;

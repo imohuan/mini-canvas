@@ -1,5 +1,7 @@
 export type UiOutputField = 'videoUrl' | 'audioUrl' | 'text' | 'imageUrl'
 
+import { outputTypeForName } from '../uiData'
+
 /** 按产物名字认类型（与原 UiContent 的 applyOutput 同一套映射）。 */
 export function outputFieldForName(name: string): UiOutputField {
   const ext = (name.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
@@ -29,7 +31,8 @@ export function useUiOutput(options: UseUiOutputOptions) {
   function applyOutput(url: string, name: string, text?: string): string {
     const field = outputFieldForName(name)
     const bust = url.indexOf('?') >= 0 ? '&v=' : '?v='
-    const patch: Record<string, unknown> = { uiOutputUrl: url }
+    // 产物一落地就把输出类型定下来：右侧端口的类型与「能不能连到下游」都跟着它走
+    const patch: Record<string, unknown> = { uiOutputUrl: url, uiOutputType: outputTypeForName(name) }
     if (field === 'text') {
       if (text !== undefined) patch.text = text
     } else {

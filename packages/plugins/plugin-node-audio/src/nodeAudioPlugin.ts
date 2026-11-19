@@ -37,6 +37,11 @@ export const AUDIO_NODE_TYPE = 'audio'
 export interface AudioNodeService {
   /** 放一个音频节点；audioUrl 可给初始音频（URL / dataURL / objectURL），不给则显示占位 */
   addAudioNode(position: { x: number; y: number }, audioUrl?: string): string
+  /**
+   * 放一个**带持久引用**的音频节点：地址只用于本次渲染，长期正身是 resourceId。
+   * 资产库拖入 / 复制粘贴走这条，保证节点指向本画布。
+   */
+  addAudioNodeWithMeta(position: { x: number; y: number }, audioUrl: string, name?: string, resourceId?: string): string
   /** 放一个由持久资源引用承载的音频节点（只写 resourceId，不写播放地址） */
   addAudioNodeFromResource(position: { x: number; y: number }, resourceId: string): string
 }
@@ -60,6 +65,15 @@ export class AudioService extends Service implements AudioNodeService {
     return doc.transaction('add-audio-node', (tx) =>
       tx.createNode(AUDIO_NODE_TYPE, position, audioUrl ? { audioUrl } : {}),
     )
+  }
+
+  addAudioNodeWithMeta(position: { x: number; y: number }, audioUrl: string, name?: string, resourceId?: string): string {
+    const doc = this.ctx.get<DocService>('doc')
+    const data: Record<string, unknown> = {}
+    if (audioUrl) data.audioUrl = audioUrl
+    if (name) data.audioName = name
+    if (resourceId) data.resourceId = resourceId
+    return doc.transaction('add-audio-node', (tx) => tx.createNode(AUDIO_NODE_TYPE, position, data))
   }
 
   /** 按持久引用建音频节点：节点里只有 resourceId（播放地址由内容组件 resolve） */

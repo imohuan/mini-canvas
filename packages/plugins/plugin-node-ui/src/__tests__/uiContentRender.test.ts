@@ -17,6 +17,8 @@ import { renderToString } from 'vue/server-renderer'
 import { RENDER_CONTEXT_KEY, type CanvasRenderContext } from '@plume-canvas/canvas-render'
 import { RegistryImpl } from '@plume-canvas/kernel'
 import UiContent from '../UiContent.vue'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 /** 最小渲染上下文：UiContent 要用 ctx.tryGet('doc'/'settings'/'selection') */
 function renderCtx(doc?: Record<string, unknown>): CanvasRenderContext {
@@ -82,6 +84,18 @@ describe('可视化节点内容：默认不让 iframe 吃掉鼠标事件', () =>
     expect(html).toContain('<iframe')
     expect(html).toContain('sandbox="allow-scripts"')
     expect(html).not.toContain('allow-same-origin')
+  })
+
+  /**
+   * 用户 2026-11-17 截图：选中并双击进入交互后，节点内容区多了一圈青蓝色描边。
+   * 那是本组件 `.ui-node.is-interactive` 的 `box-shadow`；删掉后交互态不再有任何边框。
+   */
+  it('★ 交互态不画边框（is-interactive 不再带 box-shadow）', () => {
+    const src = readFileSync(fileURLToPath(new URL('../UiContent.vue', import.meta.url)), 'utf8')
+    const css = src.slice(src.indexOf('<style'))
+    expect(css).toContain('is-interactive')
+    const rule = css.slice(css.indexOf('.ui-node.is-interactive'))
+    expect(rule.slice(0, 400)).not.toContain('box-shadow')
   })
 
   it('数据在 iframe 之前注入：生成物一执行就读得到（不靠握手时序）', async () => {

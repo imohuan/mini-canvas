@@ -155,6 +155,59 @@ export function normalizeUpstream(raw: unknown): UpstreamItem[] {
 const CN_KIND: Record<string, string> = { image: '图片', video: '视频', audio: '音频', text: '文本' }
 
 /**
+ * 可视化节点的**输出类型**：存在节点自己的 data 里，决定右侧有没有端口、能连到谁。
+ *
+ * 用户口径（2026-11-17）：不要按节点类型写死 —— 这个节点的界面是 Agent 现写的，
+ * 这次产出图片、下次可能产出 mp3。所以输出类型是**每个节点一份配置**：
+ * - image / video / audio / text → 右侧有输出口，类型就是它；
+ * - 空串 / null / 不认识的词 → **没有输出口**（右侧不画口，也不许连出）。
+ *
+ * 与产物的关系：产物写回时（save / 任务脚本 ctx.save）按扩展名自动填一次，
+ * 页面也可以用 CanvasUI.setOutputType(...) 主动声明。
+ */
+export const UI_OUTPUT_TYPE_KEY = 'uiOutputType'
+
+/** 输出类型词表（顺序即菜单顺序）；不在表里 = 无输出 */
+export const UI_OUTPUT_TYPES = ['image', 'video', 'audio', 'text'] as const
+export type UiOutputType = (typeof UI_OUTPUT_TYPES)[number]
+
+/** 读节点 data 里的输出类型；空 / 不认识 → undefined（= 无输出口） */
+export function readOutputType(data: Record<string, unknown> | undefined): UiOutputType | undefined {
+  const raw = data?.[UI_OUTPUT_TYPE_KEY]
+  if (typeof raw !== 'string') return undefined
+  const v = raw.trim().toLowerCase()
+  return (UI_OUTPUT_TYPES as readonly string[]).includes(v) ? (v as UiOutputType) : undefined
+}
+
+/**
+ * 解析节点**实际**的输出类型（端口与产物都用它）。
+ *
+ * 与 readOutputType 的差别只有一条，专为老节点：**字段完全不存在**、但已经有产物地址
+ * （uiOutputUrl）时，按产物扩展名推断一次。
+ *
+ * 为什么要这一步：规则是「配置决定端口」，而这个字段是 2026-11-17 才加的 ——
+ * 「首尾静音裁剪」这类节点当时已经算出了 mp3，但没有这一项。严格按「不存在 = 无输出」
+ * 会让它们**突然失去右侧端口**，用户看到的是一条原本能连的线没了。
+ * 注意：字段**存在**但为空 / null / 不认识，仍然是无输出（用户明确要的规则）；
+ * 只有字段从未写过才推断。
+ */
+export function resolveOutputType(data: Record<string, unknown> | undefined): UiOutputType | undefined {
+  if (!data) return undefined
+  if (data[UI_OUTPUT_TYPE_KEY] !== undefined) return readOutputType(data)
+  const url = typeof data.uiOutputUrl === 'string' ? data.uiOutputUrl : ''
+  return url ? outputTypeForName(url) : undefined
+}
+
+/** 产物文件名的扩展名 → 输出类型（与宿主写字段、任务脚本 ctx.save 的那张表同源） */
+export function outputTypeForName(name: string): UiOutputType {
+  const ext = (String(name).match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
+  if (ext === 'mp4' || ext === 'webm' || ext === 'mov') return 'video'
+  if (ext === 'mp3' || ext === 'wav' || ext === 'ogg' || ext === 'm4a') return 'audio'
+  if (ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv') return 'text'
+  return 'image'
+}
+
+/**
  * 画布接口速查（写进提示词，让 AI 真的能动手而不用猜）。
  *
  * 为什么要有这份：用户的口径是「提示词写得好，它就能直接请求后台」。光说"你可以调接口"
@@ -434,6 +487,10 @@ export function buildPalette(
       textMuted: '#6b7280', // 主题色白名单: 同上
       textFaint: '#9ca3af', // 主题色白名单: 同上
       border: '#e5e7eb', // 主题色白名单: 同上
+      // 滚动条（与宿主 plugin-theme-components 的细滚动条同一档灰度）：节点里的界面是独立文档，
+      // 拿不到宿主的 --ui-scroll-thumb，只能把值跟着色板一起送进去。
+      scrollThumb: 'rgb(0 0 0 / 0.2)', // 主题色白名单: 跨沙箱边界送给生成物
+      scrollThumbHover: 'rgb(0 0 0 / 0.32)', // 主题色白名单: 同上
     },
     dark: {
       background: '#16181d', // 主题色白名单: 同上，暗色那一套
@@ -442,6 +499,8 @@ export function buildPalette(
       textMuted: '#9ca3af', // 主题色白名单: 同上
       textFaint: '#6b7280', // 主题色白名单: 同上
       border: '#2c2f36', // 主题色白名单: 同上
+      scrollThumb: 'rgb(255 255 255 / 0.16)', // 主题色白名单: 同上，暗色那一套
+      scrollThumbHover: 'rgb(255 255 255 / 0.26)', // 主题色白名单: 同上
     },
   }
   return { light: { ...structural.light, ...light }, dark: { ...structural.dark, ...dark } }
@@ -585,6 +644,14 @@ export function buildUiBridge(): string {
   // 都是**这个节点的参数**，都会出现在 __CANVAS_INPUTS__ 里。
   //
   '    setInputs: function(params){ post({ __canvasUi: 1, type: ' + S + 'state' + S + ', state: params }); },',
+  // ── 声明输出类型（右侧端口）────────────────────────────────────
+  // 用户 2026-11-17：输出类型是这个节点自己的配置，不是类型写死的。
+  // 传 image/video/audio/text 就有对应的输出口；传空 / null 就没有输出口。
+  // 不调用也没关系：产物一落地（save / task 的 ctx.save）会自动按扩展名补上。
+  '    setOutputType: function(type){',
+  '      var v = (type === null || type === undefined) ? ' + S + "" + S + ' : String(type).toLowerCase();',
+  '      post({ __canvasUi: 1, type: ' + S + 'output-type' + S + ', value: v });',
+  '    },',
   // ── 参数变了，就一个监听 ────────────────────────────────────────
   // 对界面来说永远是同一件事：**这个节点的参数变了，照着重画**。
   // 不拆成 onUpstream / onState 那些 —— 那些都是同一个东西的不同叫法。
@@ -620,10 +687,15 @@ export function buildUiBridge(): string {
     // subscribe=true 时宿主订阅 SSE，用 task-event 把日志/进度转回来，终局走 task-result。
     '    task: function(name, methods, args, opts){',
     '      opts = opts || {};',
-    '      var wantEvents = !!(opts.onLog || opts.onProgress) && opts.wait !== true;',
+    // 回调名两种都认：onLog / onProgress 是手册里的写法，log / progress 是凭直觉写的。
+    // 只认前者的话，写成 log 的界面既不会订阅事件、也拿不到终局结果 —— 最后只看到
+    // 一句“Cannot read properties of undefined”（用户 2026-11-17 实测：静音裁剪节点）。
+    '      var onLog = opts.onLog || opts.log;',
+    '      var onProgress = opts.onProgress || opts.progress;',
+    '      var wantEvents = !!(onLog || onProgress) && opts.wait !== true;',
     '      var onEvent = function(ev){',
-    '        if (ev.type === ' + S + 'log' + S + ' && opts.onLog) opts.onLog(ev.line);',
-    '        else if (ev.type === ' + S + 'progress' + S + ' && opts.onProgress) opts.onProgress(ev.value);',
+    '        if (ev.type === ' + S + 'log' + S + ' && onLog) onLog(ev.line);',
+    '        else if (ev.type === ' + S + 'progress' + S + ' && onProgress) onProgress(ev.value);',
     '      };',
     '      var body = { name: String(name), methods: String(methods), args: args || [],',
     '        wait: opts.wait === true, subscribe: wantEvents };',
@@ -631,6 +703,13 @@ export function buildUiBridge(): string {
     '      return call(' + S + 'task' + S + ', body, hooks).then(function(j){',
     '        if (j.state === ' + S + 'cancelled' + S + ') return j;',
     '        if (j.ok === false) throw new Error(j.error || ' + S + '脚本跑失败了' + S + ');',
+    // 既没订阅、又没等结果时后台只回 state: running。别再让调用方拿着半截回包去猜：
+    // 明确说清楚缺什么，比一句 undefined 的报错有用得多。
+    '        if (j.state === ' + S + 'running' + S + ' && j.result === undefined) {',
+    '          var err = new Error(' + S + '后台还在跑，但这次没订阅进度：传 opts.log / opts.progress，或用 opts.wait: true 等结果' + S + ');',
+    '          err.runId = j.runId;',
+    '          throw err;',
+    '        }',
     '        return j;',
     '      });',
     '    },',
@@ -683,6 +762,20 @@ export const SHELL_STYLE = [
   "html[data-theme='light'] body { color: #374151; background: transparent; }", // 主题色白名单: iframe 是不透明源，取不到宿主主题变量（见下方说明）
   "html[data-theme='dark'] body { color: #d1d5db; background: transparent; }", // 主题色白名单: 同上，暗色那一套
   '* { box-sizing: border-box; }',
+  /**
+   * 滚动条：与宿主同一个观感（细、低对比）。
+   *
+   * 为什么必须在**这里**写：生成页住在 `sandbox` iframe 里，是独立文档 ——
+   * 宿主主题插件（plugin-theme-components/styles/scrollbars.css）的 `*::-webkit-scrollbar`
+   * 进不来。不写的话节点里就是浏览器默认的 15px 粗滚动条，比画布其它地方大一倍
+   * （用户 2026-11-17 截图指出）。颜色用下面注入的 --ui-scroll-thumb 变量，跟着亮/暗色走。
+   */
+  '* { scrollbar-width: thin; scrollbar-color: var(--ui-scroll-thumb, rgb(128 128 128 / 0.45)) transparent; }',
+  '*::-webkit-scrollbar { width: 6px; height: 6px; }',
+  '*::-webkit-scrollbar-track { background: transparent; }',
+  '*::-webkit-scrollbar-thumb { border-radius: 6px; background: var(--ui-scroll-thumb, rgb(128 128 128 / 0.45)); }',
+  '*::-webkit-scrollbar-thumb:hover { background: var(--ui-scroll-thumb-hover, rgb(128 128 128 / 0.65)); }',
+  '*::-webkit-scrollbar-corner { background: transparent; }',
 ].join('\n')
 
 /**
@@ -782,11 +875,24 @@ export function buildSrcdoc(
   if (options.allowNetwork && options.extraOrigins) allow.push(...options.extraOrigins)
   const csp = buildCsp(allow)
 
+  /*
+   * 滚动条颜色跟着主题走：壳里的 CSS 用的是 --ui-scroll-thumb / --ui-scroll-thumb-hover，
+   * 但这两个变量的值来自宿主主题，跨不过沙箱边界 —— 所以按当前亮/暗色值写进根元素。
+   * 拿不到色板（生成时没给）就什么都不写，CSS 里那两处 var() 有兜底色。
+   */
+  const themeColors = options.palette?.[theme]
+  const scrollVars =
+    themeColors && themeColors.scrollThumb
+      ? '<style>:root{--ui-scroll-thumb:' + themeColors.scrollThumb + ';' +
+        '--ui-scroll-thumb-hover:' + (themeColors.scrollThumbHover || themeColors.scrollThumb) + ';}</style>'
+      : ''
+
   const head =
     '<meta charset="utf-8">' +
     '<meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
     (baseUrl ? '<base href="' + baseUrl + '">' : '') +
     '<style>' + SHELL_STYLE + '</style>' +
+    scrollVars +
     bootstrap +
     // 助手（window.CanvasUI）：页面用它把「状态」与「产物」交出来，不必自己记 postMessage 协议。
     buildUiBridge()

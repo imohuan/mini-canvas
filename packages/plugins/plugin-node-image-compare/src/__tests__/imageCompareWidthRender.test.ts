@@ -46,10 +46,10 @@ function renderCtx(): CanvasRenderContext {
               },
             }
           : name === 'nodeGeometry'
-            ? { get: (id: string) => sizes[id] ?? null }
+            ? { getEffective: (id: string) => sizes[id] ?? null }
             : undefined,
       tryGet: (name: string) =>
-        name === 'nodeGeometry' ? { get: (id: string) => sizes[id] ?? null } : undefined,
+        name === 'nodeGeometry' ? { getEffective: (id: string) => sizes[id] ?? null } : undefined,
       // 极简 ui 目录：空态回落组件自身的一行灰字
       registryOf: () => new RegistryImpl(),
     },

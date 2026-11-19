@@ -153,7 +153,9 @@ export const BOOTSTRAP = [
   "          : ext === \".txt\" || ext === \".md\" || ext === \".json\" || ext === \".csv\" ? \"text\" : \"imageUrl\"",
   // 槽位地址不变（一个节点一份文件），字段里带 ?v= 让下游知道"内容换了，重新取"
   "        const versioned = j.url + (j.url.indexOf(\"?\") >= 0 ? \"&v=\" : \"?v=\") + Date.now()",
-  "        const patch = { uiOutputUrl: j.url }",
+  // 输出类型跟着产物走：右侧端口的类型与「能连到谁」都读它（用户 2026-11-17）。
+  "        const patch = { uiOutputUrl: j.url, uiOutputType: field === \"videoUrl\" ? \"video\"",
+  "          : field === \"audioUrl\" ? \"audio\" : field === \"text\" ? \"text\" : \"image\" }",
   // 文本给的是**正文**（下游 data.text 的约定就是内容，不是地址 —— 文本节点一直如此）。
   // 交字节也认得出来：按 UTF-8 解一次（把地址当正文写进去更糟）。
   "        if (field === \"text\") patch.text = typeof data === \"string\" ? data : new TextDecoder().decode(bytes)",

@@ -28,7 +28,7 @@ function renderCtx(
   const services: Record<string, unknown> = {
     text: { editText: () => {} },
     // 尺寸唯一来源：nodeGeometry → node.size
-    nodeGeometry: { get: () => size },
+    nodeGeometry: { getEffective: () => size },
     ...(settings ? { settings: { ...settings, onChange: () => ({ dispose: () => {} }) } } : {}),
   }
   return {

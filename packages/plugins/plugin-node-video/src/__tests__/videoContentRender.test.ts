@@ -46,8 +46,8 @@ function renderCtx(selectedIds: string[] = []): CanvasRenderContext {
   const services: Record<string, unknown> = {
     nodeStore: { getNode: () => undefined, getNodes: () => [] },
     graph: { updateNode: () => {} },
-    // 尺寸唯一来源：nodeGeometry → node.size
-    nodeGeometry: { get: () => ({ w: 480, h: 320 }) },
+    // 尺寸唯一来源：nodeGeometry.getEffective → node.size ?? 类型默认
+    nodeGeometry: { getEffective: () => ({ w: 480, h: 320 }) },
     command: { execute: () => undefined },
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
     selection: {

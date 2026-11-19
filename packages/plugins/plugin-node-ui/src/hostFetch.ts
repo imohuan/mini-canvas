@@ -101,7 +101,16 @@ async function httpError(res: Response, what: string): Promise<Error> {
     /* 读不到正文就只报状态码 */
   }
   const tail = detail.trim() ? '：' + detail.trim().slice(0, 300) : ''
-  if (res.status === 403) return new Error('后台拒绝（403）' + tail + '。请检查管理令牌。')
+  if (res.status === 403) {
+    /*
+     * 403 有两种原因，提示必须分开（用户 2026-11-17 截图：界面已经改成登录面板了，
+     * 这里却还在让人「检查管理令牌」，等于把人引到一条已经删掉的路上）。
+     */
+    const hint = /登录/.test(detail)
+      ? '请先在 cloud-client 的登录面板输入密码后重试。'
+      : '请检查登录状态（或后台的 x-admin-token 恢复通道）。'
+    return new Error('后台拒绝（403）' + tail + '。' + hint)
+  }
   return new Error(what + '失败（' + res.status + '）' + tail)
 }
 
@@ -146,7 +155,17 @@ function frameEvent(frame: string): TaskEvent | undefined {
  */
 export function createHostProxy(options: HostProxyOptions): HostProxy {
   const base = options.baseUrl.replace(/\/+$/, '')
-  const fetchImpl = options.fetchImpl ?? fetch
+  /**
+   * 唯一请求出口：一律带登录凭据。
+   *
+   * dev 下页面在 5288、后台在 8865，是**跨源**请求；登录态在 HttpOnly cookie 里，
+   * 浏览器对跨源 fetch 默认不带 cookie（`credentials: 'same-origin'`）。少这一项，
+   * 后台看到的永远是「没登录」，节点里点任何按钮都是 403（用户 2026-11-17 实测：
+   * 首尾静音裁剪点「裁剪并输出」报 403）。同源托管时带上也无害。
+   */
+  const rawFetch = options.fetchImpl ?? fetch
+  const fetchImpl: typeof fetch = (input, init) =>
+    rawFetch(input as never, { ...(init ?? {}), credentials: init?.credentials ?? 'include' } as RequestInit)
 
   function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
     const headers = withAdminToken(extra)
@@ -167,9 +186,10 @@ export function createHostProxy(options: HostProxyOptions): HostProxy {
   }
 
   async function task(body: TaskRequest, onEvent?: (event: TaskEvent) => void): Promise<TaskResult> {
-    const res = await fetchImpl(base + '/api/task/call', {
+      const res = await fetchImpl(base + '/api/task/call', {
       method: 'POST',
       headers: authHeaders({ 'content-type': 'application/json' }),
+        credentials: 'include',
       body: JSON.stringify({
         type: 'call',
         name: String(body.name),

@@ -27,7 +27,7 @@
  */
 import { Service, type Context, type ConfigSchema, bindTypeDefaultSize, type PluginModule } from '@plume-canvas/plugin-sdk'
 import type { DocService } from '@plume-canvas/canvas-data'
-import { extractHtml, normalizeInputs, normalizeUpstream, type UiInputDecl } from './uiData'
+import { extractHtml, normalizeInputs, normalizeUpstream, resolveOutputType, type UiInputDecl } from './uiData'
 import DebugBadge from './DebugBadge.vue'
 import { fetchBackendOrigin } from './uiOrigin'
 import { currentCanvasId, readUiConfig, resolveBaseUrl } from './uiConfig'
@@ -41,6 +41,13 @@ export const UI_NODE_TYPE = 'ui'
 export const UI_DATA_KEYS = {
   /** 节点里渲染的 HTML（内容本体，由 Agent 写入） */
   html: 'uiHtml',
+  /**
+   * 这个节点对外产出什么（image / video / audio / text）。
+   *
+   * 它决定**右侧有没有输出口**、能连到哪些下游 —— 不是按类型写死的（用户 2026-11-17）：
+   * 同一个可视化节点这次算音频、下次画图片，改这一项就行。空 / 不认识的词 = 没有输出口。
+   */
+  outputType: 'uiOutputType',
   /** 写入时间（展示"什么时候画的"） */
   at: 'uiGeneratedAt',
   /** 是谁写的（'agent' / 'mcp' / 'user'，排查用） */
@@ -204,14 +211,17 @@ export function apply(ctx: Context) {
     // 没有边框就与画布背景分不出来。边框由共享外壳 BaseNode 画，本插件不自己画框。
     resizable: true,
     // 输入口收一切素材（文本/图片/视频/音频都能连进来当数据源）。
-    // 输出口声明为**图片**：这个节点可以把页面里的画面导出成图给下游用
-    // （典型用法：连到图片对比 / 图片生成，当参考图）。
     //
-    // 为什么改成有输出（2026-10-13 用户实测需求）：原来是 outputs: []（纯展示、终端节点），
-    // 于是它连不到下游 —— 端口是**类型级**声明，改 HTML 改不出来这个口，必须改这里。
-    // 用默认字段 contentType: 'image'，与下游 image-compare 的 acceptsTypes: ['image'] 对得上。
+    // 输出口**不按类型写死**：由每个节点自己的 data.uiOutputType 决定（用户 2026-11-17）。
+    // 同一个可视化节点，这次算出一段 mp3、下次画一张图 —— 端口跟着节点数据走：
+    //   · outputsFromData 返回空 = 这个节点没有输出口（右侧不画口、不许连出）；
+    //   · 返回对应类型 = 有口，且只能连到收这种类型的下游。
+    // 改类型后旧连线由数据层自动断开（GraphDocument.pruneInvalidEdgesAround）。
     inputs: [{ port: 'target', acceptsTypes: ['text', 'image', 'video', 'audio'] }],
-    outputs: [{ port: 'source', contentType: 'image' }],
+    outputsFromData: (data) => {
+      const kind = resolveOutputType(data)
+      return kind ? [{ port: 'source', contentType: kind }] : []
+    },
     // 数据契约：本节点读上游的图片/视频/音频/文本（字段由各产出方声明；
     // 这里只声明"我要读这些 kind"，具体读哪个字段走 upstream 能力）。
     consumes: {
@@ -219,6 +229,15 @@ export function apply(ctx: Context) {
       video: { kind: 'video', refField: 'resourceId' },
       audio: { kind: 'audio', refField: 'resourceId' },
       text: { kind: 'text', valueField: 'text' },
+    },
+    // 对外产出：让下游（`upstream.media(...)` / `upstream.ofType(...)`）真的读得到这里的产物。
+    // 槽按类型分开声明：只有当前 uiOutputType 对应的那一槽会命中 —— 文本读 data.text，
+    // 其它读 uiOutputUrl（产物地址）。没有输出类型时整表为空（下游什么都没读到）。
+    producesFromData: (data) => {
+      const kind = resolveOutputType(data)
+      if (!kind) return {}
+      if (kind === 'text') return { text: { kind: 'text', valueField: 'text' } }
+      return { [kind]: { kind, externalUrlField: 'uiOutputUrl' } }
     },
     in: UiContent,
     /**

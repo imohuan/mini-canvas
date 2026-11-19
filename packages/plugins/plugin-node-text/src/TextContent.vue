@@ -258,10 +258,10 @@ watch(inputEl, (el) => {
 })
 // 估算用内容盒尺寸：**node.size**（经 nodeGeometry 服务）减掉内边距。
 // 只用于 ResizeObserver 报到之前的首帧估算；尺寸只有一个来源，不再读 data 镜像。
-const nodeGeometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+const nodeGeometry = ctx.tryGet<{ getEffective(id: string): { w: number; h: number } | null }>('nodeGeometry')
 const boxHint = computed(() => {
   void props.data
-  const size = nodeGeometry?.get(props.id)
+  const size = nodeGeometry?.getEffective(props.id)
   return {
     width: Math.max(finiteOr(size?.w, 300) - CONTENT_PADDING * 2, 0),
     height: Math.max(finiteOr(size?.h, 200) - CONTENT_PADDING * 2, 0),

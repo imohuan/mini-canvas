@@ -28,9 +28,9 @@ const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
 const { ctx, flow, visibleNodes } = useCanvasRender()
 
-/** 节点尺寸唯一来源（nodeGeometry → node.size）；null = 还没尺寸 */
+/** 节点实际尺寸唯一来源（nodeGeometry.getEffective → node.size ?? 类型默认） */
 function currentNodeSize(): { w: number; h: number } | null {
-  return ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')?.get(props.id) ?? null
+  return ctx.tryGet<{ getEffective(id: string): { w: number; h: number } | null }>('nodeGeometry')?.getEffective(props.id) ?? null
 }
 /** 默认主题的统一空状态（按名取；极简宿主没装主题时回落本组件的一行灰字） */
 const NodeEmptyState = useUiComponent('nodeEmptyState')
@@ -267,6 +267,12 @@ function positiveNum(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null
 }
 
+/** 节点有没有**显式** size（node.size 存在且为正数；默认值兜底不算） */
+function hasExplicitSize(): boolean {
+  const size = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')?.get(props.id)
+  return size !== null && size !== undefined
+}
+
 /**
  * 挂载时补算尺寸 —— **必须等挂载这一帧过去再写**（nextTick），不能同步写在 onMounted 里。
  *
@@ -282,10 +288,19 @@ function positiveNum(v: unknown): number | null {
  */
 onMounted(() => {
   void nextTick(() => {
-    // 已知宽高：**按图片比例对齐卡片**（缺尺寸的补上，比例写歪的纠正）。
-    // 图片节点不支持手动 resize（resizable:false），卡片尺寸本就该由画面比例决定，
-    // 所以这里不看“有没有 size”，只看“size 和图片比例对不对”。
+    // **有画面才对齐卡片**（有 imageWidth/Height 时按比例纠正 node.size）。
+    // 没画面的空节点：size 应该是空的（跟默认走）。旧版本曾把默认值写死进 size，
+    // 这里把那份写死的尺寸清掉 —— 修完这条，改设置里的默认宽高它就实时跟随了
+    // （用户 2026-11-18）。有图节点不受影响（走下面 hasImage 分支）。
     // 必须放在 nextTick 里：挂载当帧的写入会被丢掉（见上面那段实测说明）。
+    const hasImage = positiveNum(props.data?.imageWidth) !== null && positiveNum(props.data?.imageHeight) !== null
+    if (!hasImage) {
+      // 只在有显式 size 时清（getEffective ≠ null 可能是默认值兜底，不能拿来判断）
+      if (hasExplicitSize()) {
+        ops.writeMeasured(props.id, ops.read(props.id) ?? props.data, undefined)
+      }
+      return
+    }
     syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.(), currentNodeSize()))
     const w = positiveNum(props.data?.imageWidth)
     const h = positiveNum(props.data?.imageHeight)
@@ -293,12 +308,14 @@ onMounted(() => {
   })
 })
 watch(imageUrl, (url) => {
-  // 换图：按新图比例对齐卡片（幂等：算出来与当前一致就一次都不写）
-  syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.(), currentNodeSize()))
-  if (!url) return
-  const w = positiveNum(props.data?.imageWidth)
-  const h = positiveNum(props.data?.imageHeight)
-  if (w !== null && h !== null) applyMeasured(w, h)
+  // 换图：**有画面才对齐**（空节点不动 size，跟默认走 —— 用户 2026-11-18）
+  if (positiveNum(props.data?.imageWidth) !== null && positiveNum(props.data?.imageHeight) !== null) {
+    syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.(), currentNodeSize()))
+    if (!url) return
+    const w = positiveNum(props.data?.imageWidth)
+    const h = positiveNum(props.data?.imageHeight)
+    if (w !== null && h !== null) applyMeasured(w, h)
+  }
 })
 
 // 节点被删/卸载时清掉编辑态，避免共享态留下幽灵 id

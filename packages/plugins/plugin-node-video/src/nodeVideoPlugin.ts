@@ -69,7 +69,13 @@ export interface VideoNodeService {
    * 要等内容组件拿到元数据才纠正 —— 用户看到的是「先留一圈黑边再跳一下」。
    * 资源面板拖入走这条路（拖入的地址本来就能直接读元数据）。
    */
-  addVideoNodeWithMeta(position: { x: number; y: number }, videoUrl: string, name?: string): Promise<string>
+  addVideoNodeWithMeta(
+    position: { x: number; y: number },
+    videoUrl: string,
+    name?: string,
+    /** 本画布的持久引用（与地址一起写；地址只是本次渲染的副本） */
+    resourceId?: string,
+  ): Promise<string>
   /** 换掉某节点的视频；空串 = 清空回到占位态 */
   setVideoUrl(id: string, videoUrl: string): void
   /** 删除节点（走图唯一写入口，连带清边、可撤销、自动落盘） */
@@ -139,13 +145,18 @@ export class VideoService extends Service implements VideoNodeService {
    * 带真实宽高建视频节点：元数据读到就一并写 width/height + 卡片尺寸；
    * 读不到（跨域 / 解码失败）就退回只写地址 —— 绝不猜一个尺寸。
    */
-  async addVideoNodeWithMeta(position: { x: number; y: number }, videoUrl: string, name?: string): Promise<string> {
+  async addVideoNodeWithMeta(
+    position: { x: number; y: number },
+    videoUrl: string,
+    name?: string,
+    resourceId?: string,
+  ): Promise<string> {
     if (!videoUrl) return this.addVideoNode(position)
     // 资产库里给的是**资源引用**（res-… / 画布资源路径）时先换成能直接播放的地址再读元数据；
     // 读不到也照样建节点，只是退回默认尺寸 —— 拖入的动作不能因为读不了元数据就失败。
     const playable = (await resolveVideoSrc(this.ctx, { videoUrl })) || videoUrl
     const meta = await this.transform.readMeta(playable).catch(() => null)
-    const data: Record<string, unknown> = { videoUrl }
+    const data: Record<string, unknown> = { videoUrl, ...(resourceId ? { resourceId } : {}) }
     if (name) data.videoName = name
     let size: { w: number; h: number } | undefined
     if (meta && meta.width > 0 && meta.height > 0) {
@@ -393,6 +404,9 @@ export function apply(ctx: Context) {
     titleExtra: videoTitleExtra,
     // 尺寸与 v1 NODE_SIZES.video 同：一点元数据都读不到时的兜底
     size: { w: 480, h: 320 },
+    // 尺寸由画面比例决定（用户 2026-11-18）：新建时不写 size，卡片跟着设置里的
+    // 「默认宽/默认高」实时变；有画面后按比例写死。没画面的节点用 getEffective 读默认值。
+    sizeFromContent: true,
     inputs: [{ port: 'target', acceptsTypes: ['text', 'audio', 'image', 'video'] }],
     outputs: [{ port: 'source', contentType: 'video' }],
     // 不支持拖拽改尺寸：显式声明 false（与 v1 VideoNodePlugin 的 `resizable: false` 一致）。
@@ -433,10 +447,10 @@ export function apply(ctx: Context) {
     }>('doc')
     if (!doc) return
     const limits = readVideoFitLimits(ctx)
-    const geometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+    const geometry = ctx.tryGet<{ getEffective(id: string): { w: number; h: number } | null }>('nodeGeometry')
     for (const node of doc.getNodes()) {
       if (node.type !== VIDEO_NODE_TYPE) continue
-      const patch = followedVideoCardSizePatch(node.data, limits, geometry?.get(node.id) ?? null)
+      const patch = followedVideoCardSizePatch(node.data, limits, geometry?.getEffective(node.id) ?? null)
       if (!patch) continue
       if (doc.updateNodeRuntime) doc.updateNodeRuntime(node.id, { size: patch.size })
       else doc.updateNode?.(node.id, { size: patch.size })

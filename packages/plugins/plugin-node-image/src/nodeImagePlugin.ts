@@ -52,7 +52,13 @@ export interface ImageNodeService {
    * 要等 `<img>` 加载完才纠正 —— 用户看到的是「先留一圈白边再跳一下」。
    * 资产拖入走这条路（地址本来就能直接量）。
    */
-  addImageNodeWithSize(position: { x: number; y: number }, imageUrl: string, name?: string): Promise<string>
+  addImageNodeWithSize(
+    position: { x: number; y: number },
+    imageUrl: string,
+    name?: string,
+    /** 本画布的持久引用（与地址一起写；地址只是本次渲染的副本） */
+    resourceId?: string,
+  ): Promise<string>
   /** 删除节点并落盘 */
   removeNode(id: string): void
 }
@@ -116,11 +122,17 @@ export class ImageService extends Service implements ImageNodeService {
    * 带真实宽高建图片节点：量到尺寸就一并写 imageWidth/Height + 卡片尺寸；
    * 量不到（跨域 / 解码失败）就退回只写地址 —— 绝不猜一个尺寸。
    */
-  async addImageNodeWithSize(position: { x: number; y: number }, imageUrl: string, name?: string): Promise<string> {
+  async addImageNodeWithSize(
+    position: { x: number; y: number },
+    imageUrl: string,
+    name?: string,
+    /** 本画布的持久引用：与地址一起写，长期正身是它（地址只是本次渲染的副本） */
+    resourceId?: string,
+  ): Promise<string> {
     if (!imageUrl) return this.addImageNode(position, '')
     const playable = (await resolveImageSrc(this.ctx, { imageUrl })) || imageUrl
     const size = await readImageSize(playable).catch(() => null)
-    const data: Record<string, unknown> = { imageUrl }
+    const data: Record<string, unknown> = { imageUrl, ...(resourceId ? { resourceId } : {}) }
     if (name) data.imageName = name
     let card: { w: number; h: number } | undefined
     if (size && size.width > 0 && size.height > 0) {
@@ -329,6 +341,9 @@ export function apply(ctx: Context) {
     // 拖柄会把用户配的显示宽度上限顶掉。图片节点一律不出现 resize。
     resizable: false,
     size: { w: 320, h: 240 },
+    // 尺寸由画面比例决定（用户 2026-11-18）：新建时不写 size，卡片跟着设置里的
+    // 「默认宽/默认高」实时变；有画面后按比例写死。没画面的节点用 getEffective 读默认值。
+    sizeFromContent: true,
     // 不声明 capacity = **不限条数**：图片节点可以同时接多个上游素材（文生图 / 多图参考）。
     // 以前这里写 capacity:1 把它限成一条，用户实测报的「图片输入端口分明可以添加多条连接线」就是它。
     // 视频也收：截图就是“视频 → 新图片”这条连线（media.addNode 给了 sourceNodeId 会自动连边）。
@@ -399,10 +414,10 @@ export function apply(ctx: Context) {
     }>('doc')
     if (!doc) return
     const limits = readImageFitLimits(ctx)
-      const geometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+      const geometry = ctx.tryGet<{ getEffective(id: string): { w: number; h: number } | null }>('nodeGeometry')
     for (const node of doc.getNodes()) {
       if (node.type !== 'image') continue
-        const patch = followedCardSizePatch(node.data, limits, geometry?.get(node.id) ?? null)
+        const patch = followedCardSizePatch(node.data, limits, geometry?.getEffective(node.id) ?? null)
       if (!patch) continue
       if (doc.updateNodeRuntime) doc.updateNodeRuntime(node.id, { size: patch.size })
       else doc.updateNode?.(node.id, { size: patch.size })

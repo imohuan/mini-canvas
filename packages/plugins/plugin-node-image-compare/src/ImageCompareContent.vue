@@ -104,9 +104,9 @@ const hasTwo = computed(() => !!leftImage.value && !!rightImage.value)
  * 上游**图片节点的显示尺寸**：只从 nodeGeometry 服务读 node.size。
  * 对比窗口对齐的是用户在画布上看到的宽高，不是原始像素。
  */
-const nodeGeometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+const nodeGeometry = ctx.tryGet<{ getEffective(id: string): { w: number; h: number } | null }>('nodeGeometry')
 function upstreamCardSize(nodeId: string): { w: unknown; h: unknown } {
-  const size = nodeGeometry?.get(nodeId)
+  const size = nodeGeometry?.getEffective(nodeId)
   return { w: size?.w, h: size?.h }
 }
 
@@ -119,7 +119,7 @@ function upstreamCardSize(nodeId: string): { w: unknown; h: unknown } {
  */
 function syncFollowSize(): void {
   const target = resolveFollowSize(sources.value, upstreamCardSize)
-  const selfSize = nodeGeometry?.get(props.id) ?? null
+  const selfSize = nodeGeometry?.getEffective(props.id) ?? null
   const patch = compareFollowPatch(target, props.data, selfSize)
   if (!patch) return
   ctx

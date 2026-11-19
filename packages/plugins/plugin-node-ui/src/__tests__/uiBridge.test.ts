@@ -124,6 +124,21 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
   })
 
   /**
+   * 用户 2026-11-17 实测：节点里写的是 `{ log, progress }`（手册之外的直觉写法）。
+   * 旧实现只认 onLog / onProgress → 既不订阅事件，也不等结果，只回 state: "running"，
+   * 页面读自己的字段就成了「Cannot read properties of undefined」。
+   */
+  it('★ opts.log / opts.progress 也认（与 onLog / onProgress 等价）', () => {
+    expect(js).toContain('opts.onLog || opts.log')
+    expect(js).toContain('opts.onProgress || opts.progress')
+  })
+
+  it('★ 既没订阅也没等结果时，报一句能看懂的话（不把 running 丢给调用方）', () => {
+    expect(js).toContain("j.state === 'running'")
+    expect(js).toContain('opts.wait: true')
+  })
+
+  /**
    * 旧版 task 的 opts.signal 只有一个语义：**不再等这次调用**（resolve 成 cancelled），
    * 不替调用方去杀后台进程（真要杀得自己调 cancel）。改了实现也要保住这条。
    */

@@ -128,6 +128,7 @@ export function useUiDebugWindow(options: UseUiDebugWindowOptions) {
         method: 'POST',
         headers: withAdminToken({ 'content-type': 'application/json' }),
         body: JSON.stringify({ session: inv.session, nodeId: options.nodeId, canvasId: options.canvasId }),
+        credentials: 'include',
       })
       console.log('[ui-debug] 回执后台: status=' + res.status, 'baseUrl=' + options.baseUrl())
     } catch (err) {
@@ -205,6 +206,7 @@ export function useUiDebugWindow(options: UseUiDebugWindowOptions) {
         method: 'POST',
         headers: withAdminToken({ 'content-type': 'application/json' }),
         body: sig,
+        credentials: 'include',
       })
       const json = (await res.json().catch(() => ({}))) as { ok?: unknown; urls?: { html?: unknown }; error?: unknown }
       if (!res.ok || json.ok !== true) {

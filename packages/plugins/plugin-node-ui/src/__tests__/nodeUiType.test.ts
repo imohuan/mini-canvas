@@ -43,4 +43,28 @@ describe('可视化节点类型声明', () => {
     expect(def?.frameless).toBeFalsy()
     ctx.stop()
   })
+
+  /**
+   * 用户 2026-11-17：输出类型**不能按节点类型写死**。同一个可视化节点这次算音频、
+   * 下次画图片，右侧端口要跟着节点自己的 data.uiOutputType 走。
+   */
+  it('★ 输出口由节点数据的 uiOutputType 决定；没有/不认识就没有输出口', async () => {
+    const ctx = boot()
+    await ctx.start()
+    const def = ctx.get<DocService>('doc').types.get(UI_NODE_TYPE)
+    expect(def?.outputsFromData).toBeTypeOf('function')
+    const outputsOf = (data: Record<string, unknown>) => def!.outputsFromData!(data) ?? []
+    expect(outputsOf({})).toEqual([])
+    expect(outputsOf({ uiOutputType: '' })).toEqual([])
+    expect(outputsOf({ uiOutputType: 'nonsense' })).toEqual([])
+    expect(outputsOf({ uiOutputType: null })).toEqual([])
+    expect(outputsOf({ uiOutputType: 'audio' })).toEqual([{ port: 'source', contentType: 'audio' }])
+    expect(outputsOf({ uiOutputType: 'image' })).toEqual([{ port: 'source', contentType: 'image' }])
+    // 老节点兼容：字段从没写过、但已有产物 → 按产物扩展名推断一次（否则会突然失去端口）
+    expect(outputsOf({ uiOutputUrl: '/api/x/trimmed.mp3' })).toEqual([{ port: 'source', contentType: 'audio' }])
+    expect(outputsOf({ uiOutputUrl: '/api/x/a.png' })).toEqual([{ port: 'source', contentType: 'image' }])
+    // 但显式清空（字段存在且为空）= 真的没有输出口
+    expect(outputsOf({ uiOutputType: '', uiOutputUrl: '/api/x/a.png' })).toEqual([])
+    ctx.stop()
+  })
 })

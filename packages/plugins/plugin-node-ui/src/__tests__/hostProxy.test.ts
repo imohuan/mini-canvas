@@ -76,6 +76,13 @@ describe('宿主代发 · save', () => {
 })
 
 describe('宿主代发 · 管理令牌', () => {
+  it('★ 跨源直连后台也带登录凭据（5288 → 8865，缺了就是“登录了还 403”）', async () => {
+    const calls: Call[] = []
+    const proxy = proxyWith(calls, () => jsonResponse({ ok: true, runId: 'r1', state: 'done' }))
+    await proxy.task({ name: 'trim-silence', methods: 'trim', args: [], wait: true })
+    expect(calls[0].init?.credentials).toBe('include')
+  })
+
   it('每条请求都带 x-admin-token（save / task / cancel / 调试）', async () => {
     const calls: Call[] = []
     const proxy = proxyWith(calls, (url) => {
@@ -99,12 +106,14 @@ describe('宿主代发 · 管理令牌', () => {
     }
   })
 
-  it('403 抛出可读错误：带后台原文并提示检查令牌', async () => {
+  it('403 抛出可读错误：带后台原文，并指向登录面板（不再提“管理令牌”）', async () => {
     const calls: Call[] = []
-    const proxy = proxyWith(calls, () => jsonResponse({ ok: false, error: '缺少管理令牌' }, 403))
+    const proxy = proxyWith(calls, () =>
+      jsonResponse({ ok: false, error: '需要登录：请在 cloud-client 的登录面板输入密码' }, 403),
+    )
     await expect(proxy.save(new Blob(['x']), 'x.png')).rejects.toThrow(/403/)
-    await expect(proxy.save(new Blob(['x']), 'x.png')).rejects.toThrow(/缺少管理令牌/)
-    await expect(proxy.save(new Blob(['x']), 'x.png')).rejects.toThrow(/管理令牌/)
+    await expect(proxy.save(new Blob(['x']), 'x.png')).rejects.toThrow(/登录面板/)
+    await expect(proxy.save(new Blob(['x']), 'x.png')).rejects.not.toThrow(/管理令牌/)
   })
 
   it('404 / 非 JSON 回包也说人话（不会变成 Unexpected token）', async () => {

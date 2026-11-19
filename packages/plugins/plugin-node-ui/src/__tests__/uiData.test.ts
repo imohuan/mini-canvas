@@ -267,6 +267,31 @@ describe('组装渲染文档', () => {
     expect(doc).toContain('connect-src \'none\'')
   })
 
+  /**
+   * 用户 2026-11-17 截图：节点里面的滚动条比画布其它地方粗一倍。
+   * 生成页是独立文档，宿主主题那套细滚动条进不来，必须由外壳样式补上。
+   */
+  it('★ 外壳样式带细滚动条（宿主主题进不了沙箱，不写就是浏览器默认粗条）', () => {
+    const doc = buildSrcdoc('<div>x</div>', inputs, upstream)
+    expect(doc).toContain('scrollbar-width: thin')
+    expect(doc).toContain('::-webkit-scrollbar { width: 6px; height: 6px; }')
+    expect(doc).toContain('::-webkit-scrollbar-thumb')
+  })
+
+  it('★ 滚动条颜色跟当前主题走（拿色板时按亮/暗两套写进根元素）', () => {
+    const palette = {
+      light: { scrollThumb: 'rgb(0 0 0 / 0.2)', scrollThumbHover: 'rgb(0 0 0 / 0.32)' },
+      dark: { scrollThumb: 'rgb(255 255 255 / 0.16)', scrollThumbHover: 'rgb(255 255 255 / 0.26)' },
+    }
+    const dark = buildSrcdoc('<div>x</div>', inputs, upstream, { theme: 'dark', palette })
+    expect(dark).toContain('--ui-scroll-thumb:rgb(255 255 255 / 0.16)')
+    expect(dark).toContain('--ui-scroll-thumb-hover:rgb(255 255 255 / 0.26)')
+    const light = buildSrcdoc('<div>x</div>', inputs, upstream, { theme: 'light', palette })
+    expect(light).toContain('--ui-scroll-thumb:rgb(0 0 0 / 0.2)')
+    // 没给色板时不硬塞变量，交给 CSS 里的兜底色
+    expect(buildSrcdoc('<div>x</div>', inputs, upstream)).not.toContain('--ui-scroll-thumb:')
+  })
+
   it('允许联网时：CSP 只放行后台，别的源仍然连不上', () => {
     const doc = buildSrcdoc('<div>x</div>', inputs, upstream, {
       baseUrl: 'http://localhost:8865',

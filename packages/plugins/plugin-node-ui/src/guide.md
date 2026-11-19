@@ -168,6 +168,8 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
   CanvasUI.onChange(fn)            ← **这个节点的参数变了** → 照着重画
   CanvasUI.save(data, "名字.ext")   ← 交**产物**（图 / 视频 / 音频 / 文本）
   CanvasUI.task(脚本, 函数, 参数, opts)  ← 叫后台干活（自动带节点信息）
+     opts.log / opts.progress 收实时输出；opts.wait: true 直接把结果等回来
+     （只要结果、不要过程时写 wait: true；长任务写 log/progress 订阅着看）
   CanvasUI.cancel(runId)           ← 取消一次后台调用
 
 **只有两样东西：上游、参数。没有第三个概念。**

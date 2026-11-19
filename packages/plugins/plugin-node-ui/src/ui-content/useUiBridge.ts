@@ -1,6 +1,6 @@
 import { ref, watch, type Ref } from 'vue'
 import type { UpstreamItem } from '../uiData'
-import { toCloneableState } from '../uiData'
+import { outputTypeForName, toCloneableState } from '../uiData'
 import type { UiOutputField } from './useUiOutput'
 import { outputFieldForName } from './useUiOutput'
 
@@ -34,6 +34,7 @@ interface CanvasUiMessage extends Record<string, unknown> {
   wait?: unknown
   subscribe?: unknown
   methods?: unknown
+  value?: unknown
 }
 
 /** 页面交上来的参数去版本号再比（与原 UiContent 的防循环逻辑一致） */
@@ -115,7 +116,8 @@ export function useUiBridge(options: UseUiBridgeOptions) {
         const bust = url.indexOf('?') >= 0 ? '&v=' : '?v='
         const versioned = url + bust + Date.now()
         const field: UiOutputField = outputFieldForName(url)
-        const patch: Record<string, unknown> = { uiOutputUrl: url }
+        // 产物落地即定输出类型（右侧端口类型跟着它走）
+        const patch: Record<string, unknown> = { uiOutputUrl: url, uiOutputType: outputTypeForName(url) }
         if (field === 'text') {
           if (typeof m.text === 'string') patch.text = m.text
         } else {
@@ -125,6 +127,11 @@ export function useUiBridge(options: UseUiBridgeOptions) {
         const cur = (options.nodeData()?.[field] as string | undefined) ?? ''
         if (field !== 'text' && cur.split('?')[0] === url.split('?')[0]) return
         doc.updateNodeRuntime(options.nodeId, { data: patch })
+      } else if (m.type === 'output-type') {
+        // 页面自己声明「我产出的是什么」：右侧端口与可连对象立刻跟着变，
+        // 原来连出去的线如果不匹配，由数据层自动断开（GraphDocument 负责）。
+        const v = typeof m.value === 'string' ? m.value.trim().toLowerCase() : ''
+        doc.updateNode(options.nodeId, { data: { uiOutputType: v } })
       }
     } catch {
       // 节点可能已被删掉：静默跳过（不该因为一次上报把页面搞崩）
