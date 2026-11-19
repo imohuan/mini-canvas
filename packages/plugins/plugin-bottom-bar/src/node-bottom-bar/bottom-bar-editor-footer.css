@@ -474,24 +474,64 @@
 .nb-bottom {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-end;
+  /*
+   * 默认**不折行**：能不能同排由 JS 算好后加 .is-stacked 决定（用户 2026-11-18）。
+   *
+   * 从前这里写 flex-wrap: wrap，于是是否折行由浏览器按当下的 min-width 自己判；
+   * 那些 min-width 是上一帧算出来的，改宽一次就互相追着变 ——
+   * 结果就是用户截图里「明明放得下却换行」。
+   */
+  flex-wrap: nowrap;
+  gap: 6px 8px;
   margin-top: auto;
   min-height: 36px;
+}
+/*
+ * 只有当 JS 判定「一行放不下」时才允许右侧换到第二行。
+ * 这条类名是唯一的换行开关，写死在这里、别处不要再加 wrap。
+ */
+.nb-bottom.is-stacked {
+  flex-wrap: wrap;
+}
+.nb-bottom.is-stacked .nb-actions {
+  flex-basis: 100%;
 }
 .nb-selects {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
-  flex: 1 1 auto;
+  /*
+   * 240 是「@ + 模型 + 参数」能读清的底线。
+   *
+   * 从前是 flex: 1 1 auto 且右侧按钮区 flex:none —— 右侧按钮一多，
+   * 左侧被一路压到 0，模型名只剩省略号（用户实测截图）。
+   * 给一个 flex-basis 底线后，放不下时 .nb-bottom 会整体折行，
+   * 而不是把左边挤没。
+   */
+  flex: 1 1 240px;
+  margin-right: auto;
+  /*
+   * 左组的下限（用户 2026-11-17）。
+   *
+   * 由 JS 按「@ + 模型底线 + 参数所需」算好写进 --nb-selects-min。
+   * 有了它，右侧按钮多到放不下时只会**换行**，不会把模型名压成「GPT Imag…」。
+   */
+  min-width: var(--nb-selects-min, 240px);
+  /* 左组内部不折行：两格的宽由 JS 给死（min = max），不需要浏览器再分配 */
+  flex-wrap: nowrap;
 }
 .nb-divider {
   flex: none;
-  width: 1px;
-  height: 14px;
-  margin: 0 2px;
-  background: var(--ui-line, #e2e5ea);
+  /*
+   * 两个下拉之间的竖线（用户 2026-11-18：「右侧有一个间隔，这是干啥的」）。
+   *
+   * 它只是一根装饰线，却把「模型 / 参数」读成两块互不相干的东西，
+   * 还占了 5px 宽度、让预算更难算。两个下拉本来就用图标 + 省略号区分得很清楚，
+   * 直接去掉；保留 .nb-divider 元素与 display:none 是为了不动模板结构。
+   */
+  display: none;
 }
 .nb-field {
   flex: none;
@@ -509,6 +549,16 @@
   min-width: 0;
   /* 上限由 JS 按「整行可用宽 − 右侧按钮区」算好写进 --nb-model-max（用户 2026-11-16） */
   max-width: var(--nb-model-max, 220px);
+  /* 模型名再挤也要读得出是哪个模型（用户 2026-11-17：被压成「GPT Ima…」） */
+  min-width: var(--nb-model-min, 0px);
+  /*
+   * 不再被 flex 压缩（用户 2026-11-17）。
+   *
+   * 从前是 flex: none（不压缩）+ 内容宽；现在宽由 JS 给死（min = max），
+   * 再允许压缩的话 flex 会把 203px 压到 120px —— 模型名跟着被裁。
+   * 放不下时交给 .nb-selects / .nb-bottom 换行，这是唯一会「变高不变形」的解法。
+   */
+  flex: 0 0 auto;
 }
 /*
  * 模型触发器（DropdownMenuTrigger 里的 Button，用户 2026-11-06）：
@@ -820,10 +870,28 @@
  */
 .nb-field--params {
   flex: 0 1 auto;
-  min-width: 0;
+  /*
+   * 下限由 JS 按「provider 给的标题要占多宽」写进 --nb-param-min（用户 2026-11-17）。
+   *
+   * 从前是 0：模型名一长就把参数那格压到 83px，「1.17积分」末尾被裁。
+   * 现在给它一个真实所需的下限，超出的部分从模型那格扣（模型名自带省略号）。
+   */
+  min-width: var(--nb-param-min, 0px);
   /* 上限同样是按可用空间算的（用户 2026-11-16），不再写死 240 */
   max-width: var(--nb-param-max, 240px);
+  /* 与模型那格同理：宽由 JS 定死，不许 flex 再压（压了就少一个字） */
+  flex: 0 0 auto;
 }
+/*
+ * 两格都按「自己的文字宽」要空间：放不下时由 .nb-selects 换行（用户 2026-11-17）。
+ *
+ * 只在**换行之后**才允许拉满整行，这样窄屏是两个完整下拉上下叠，
+ * 宽屏仍是一行两个 —— 不会出现谁被压成「GPT Ima…」。
+ */
+/*
+ * 保留可压缩：空间够时仍在同一行（用户 2026-11-17 要的默认表现），
+ * 真正决定「压不压得动」的是 JS 给的下限（--nb-param-min / --nb-model-max）。
+ */
 /* 触发器按内容宽（不拉满），与模型下拉之间保持一个分隔线；箭头仍在文字右侧 */
 .nb-field--params .tpg-root {
   width: auto;
@@ -860,7 +928,76 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  flex: none;
+  /*
+   * AI 按钮可以有很多个（用户自定义清单）。这一组允许压缩、允许在组内折行，
+   * 但字形按钮本身不缩小：挤不下就换到下一行，绝不叠到字数 / 发送按钮上。
+   */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  /* AI 按钮超过配置个数会折进「更多」菜单，所以这一组不需要自己换行 */
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+/* 「更多 AI 功能」触发器：与其它 AI 图标按钮同尺寸，不要额外留白 */
+.nb-ai-more {
+  color: var(--ui-ink-dim, #6b7280);
+}
+/* 折叠菜单里的图标：22px，和触发器上的图标同一套线性 SVG */
+.nb-ai-more-menu .nb-model-badge svg,
+.nb-ai-more-menu .nb-model-badge img {
+  width: 18px;
+  height: 18px;
+}
+/*
+ * AI 按钮的提示气泡（用户 2026-11-18）。
+ *
+ * 内容分两行：第一行按钮名，第二行描述。描述允许换行并限宽，
+ * 长句不会把气泡撑到屏幕外；视觉（底色 / 圆角 / 字号）仍由 shadcn
+ * TooltipContent 负责，这里只排两行的结构。
+ */
+.nb-tip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 260px;
+  white-space: normal;
+}
+.nb-tip-title {
+  font-weight: 600;
+}
+.nb-tip-desc {
+  opacity: 0.78;
+  line-height: 1.4;
+}
+/*
+ * 「更多 AI 功能」菜单的标题与说明（用户 2026-11-18：展开后一列光秃秃的图标）。
+ */
+.nb-ai-more-title {
+  color: var(--ui-ink-mute, #8c95a3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+/*
+ * 「更多 AI 功能」的菜单行：只留图标 + 名字（用户 2026-11-18）。
+ *
+ * 描述改走悬停气泡。以前把描述排在同一行，名字和描述互相挤，
+ * 两边都只剩「阿…」「sda fsad fasd阿…」，谁都读不全。
+ * 名字必须能完整显示：允许它占满整行，超长才省略。
+ */
+.nb-ai-more-menu .nb-ai-more-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.nb-ai-more-menu .nb-ai-more-item .nb-model-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .nb-count {
   font-size: 13px;
@@ -893,6 +1030,35 @@
   background: var(--ui-primary-bg, #1f2937);
   color: var(--ui-primary-ink, #fff);
   transition: background-color 0.18s ease-out, transform 0.15s ease-out;
+}
+/*
+ * 发送按钮带文字时（用户 2026-11-17）：图标 + 花费，例如「0.65积分」。
+ *
+ * 宽度交给内容：文字短就窄，文字长就宽，但**有上限**——
+ * 上限用 min(内容, 40% 行宽)，免得一条长价格把左边两个下拉吃掉。
+ * 文字本身超出时用省略号，不会把按钮撑出底栏。
+ */
+.nb-run.has-text {
+  width: auto;
+  min-width: 32px;
+  max-width: 168px;
+  padding: 0 9px 0 8px;
+  gap: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.nb-send-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+  /* 与图标在同一基线上，不要被按钮的行高顶歪 */
+  line-height: 1;
 }
 .nb-run:hover:not(:disabled) {
   background: var(--ui-primary-bg-hover, #111827);

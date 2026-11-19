@@ -43,6 +43,15 @@ export function actionsRoutes(
          * 不能取消的动作就不该给用户一个点了没反应的按钮。
          */
         const cancellable = typeof a.cancel === 'function' || typeof p.cancel === 'function'
+        /**
+         * 这条动作要不要走「文案接口」（用户 2026-11-17）。
+         *
+         * provider 的 selectLabel / sendLabel 是函数，JSON 传不过去；
+         * 前端只需要知道「该不该问后台要这段字」，真值由 /api/actions/labels 算。
+         * 都为 false 时前端一个请求都不发。
+         */
+        const hasSelectLabel = typeof a.selectLabel === 'function'
+        const hasSendLabel = typeof a.sendLabel === 'function'
         out.push({
           ...a,
           // 动作自带的执行函数不过线（前端不认识、也不该认识）
@@ -50,6 +59,10 @@ export function actionsRoutes(
           poll: undefined,
           cancel: undefined,
           resume: undefined,
+          selectLabel: undefined,
+          sendLabel: undefined,
+          ...(hasSelectLabel ? { hasSelectLabel: true } : {}),
+          ...(hasSendLabel ? { hasSendLabel: true } : {}),
           cancellable,
           ...(icon ? { providerIcon: icon } : {}),
           ...(accounts.length > 1

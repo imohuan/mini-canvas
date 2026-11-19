@@ -36,6 +36,8 @@ function makeUi(): unknown {
   const field = new RegistryImpl<unknown>()
   for (const n of [
     'Button', 'DropdownMenu', 'DropdownMenuTrigger', 'DropdownMenuContent',
+    // 触发器外面包了 shadcn Tooltip（用户 2026-11-18 要求不用原生 title）
+    'Tooltip', 'TooltipProvider', 'TooltipTrigger', 'TooltipContent',
   ]) field.add(n, stub(n), { id: 'test' })
   field.add('agentChoicePicker', AgentChoicePickerStub, { id: 'test' })
   return field

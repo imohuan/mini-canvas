@@ -18,6 +18,24 @@ export interface ParamOption {
 }
 
 /**
+ * 一条下拉标题 / 发送按钮文案的计算入参（provider 的可选渲染函数用它）。
+ *
+ * 为什么是**数据**而不是函数：动作声明要能过 JSON 送到前端。
+ */
+export interface ActionTextInput {
+  /** 这条动作的 id */
+  actionId: string
+  /** 用户当前选的全部参数值（键 = ActionParam.key） */
+  values: Record<string, unknown>
+  /** 每个参数的当前显示文案（有 options 用 label，否则原样），键 = ActionParam.key */
+  labels: Record<string, string>
+  /** 已按「只显示改过默认值的」规则拼好的摘要（默认表现就是它） */
+  summary: string
+  /** 上游连进来的素材条数（按 kind 分） */
+  resources: { image: number; video: number; audio: number; text: number }
+}
+
+/**
  * 动作参数声明。
  *
  * `kind` 是**语义类型**（比例 / 时长 / 音色…），前端据此挑对应的控件；
@@ -144,6 +162,20 @@ export interface ActionDef {
   cancel?: (taskId: string, ctx: ActionRunContext) => Promise<void> | void
   /** 刷新后接着查（有服务端任务号的动作才有意义） */
   resume?: (taskId: string, ctx: ActionRunContext) => Promise<ProviderPollResult>
+  /**
+   * 这条动作在**参数下拉**上显示什么（用户 2026-11-17）。
+   *
+   * 不给就回落默认摘要（「只显示改过默认值的参数」）。给了就由 provider 决定标题，
+   * 例如把当前档位的花费写进去。返回空串 = 用默认。
+   */
+  selectLabel?: (input: ActionTextInput) => string
+  /**
+   * 这条动作在**发送按钮**里显示什么（用户 2026-11-17）。
+   *
+   * 关键词是「花费」：返回「0.65积分」这类短文案，直接画在按钮内的图标右边。
+   * 返回空串 = 按钮只显示图标。
+   */
+  sendLabel?: (input: ActionTextInput) => string
   /** provider 可以塞自己的东西；内核与前端都不读 */
   [k: string]: unknown
 }

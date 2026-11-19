@@ -67,3 +67,24 @@ export function paramSummary(input: SummaryInput): string {
   if (changed.length <= MAX_PARTS) return changed.join(' · ')
   return changed.slice(0, MAX_PARTS).join(' · ') + ' +' + (changed.length - MAX_PARTS)
 }
+
+/**
+ * 每个参数当前值的显示文案（键 = 参数的 key）。
+ *
+ * 用途（用户 2026-11-17）：provider 的可选 selectLabel / sendLabel 要按「用户实际选了什么」
+ * 算花费，光给原始 value 不够 —— provider 拿到的是 high，界面上写的是「超清」。
+ * 这里给的就是界面那份 label，provider 不必自己再映射一遍。
+ */
+export function paramLabelMap(input: {
+  fields: ReadonlyArray<SummaryField>
+  values: Record<string, unknown>
+}): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const f of input.fields ?? []) {
+    const v = input.values?.[f.key]
+    if (v === undefined || v === null || v === '') continue
+    out[f.key] = valueLabel(f, v)
+  }
+  return out
+}
+

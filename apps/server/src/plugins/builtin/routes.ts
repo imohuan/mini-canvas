@@ -14,6 +14,7 @@ import type { PluginModule, PluginScope } from '@plume-canvas/kernel'
 import { eventsRoutes } from '../../routes/events.js'
 import { canvasesRoutes } from '../../routes/canvases.js'
 import { actionsRoutes } from '../../routes/actions.js'
+import { actionLabelsRoutes } from '../../routes/actionLabels.js'
 import { jobsRoutes } from '../../routes/jobs.js'
 import { historyRoutes } from '../../routes/history.js'
 import { kvRoutes } from '../../routes/kv.js'
@@ -220,6 +221,9 @@ export const actionsPlugin: PluginModule = {
         return admin ? admin.accountsOf(id) : []
       }),
     )
+    // 动作文案（下拉标题 / 发送按钮里的价格）：provider 声明了函数，由后台执行后下发字符串。
+    // 只读计算，不建任务、不写文件，因此与清单接口同级（GET/POST 都无需令牌）。
+    ctx.routes.adopt(actionLabelsRoutes(need<ProviderRegistry>(ctx, S.providerRegistry)))
   },
 }
 

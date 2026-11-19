@@ -21,6 +21,7 @@ import { bottomBarTagSpecFor, toToolResources } from './panelSource'
 import { promptSegmentsFromDoc } from './promptSegments'
 import HtmlPanelFrame from './node-bottom-bar/HtmlPanelFrame.vue'
 import { readRunState } from './runState'
+import { paramSummary as paramSummaryOf } from './node-bottom-bar/paramSummary'
 import { exitReference, referenceActive, referenceOwner, selectionEpoch, toggleReference as toggleReferenceMode } from './referenceMode'
 import { resolveBottomBarShown } from './bottomBarOverlay'
 import { invalidRefHint, type RefTile } from './refTiles'
@@ -56,6 +57,8 @@ import {
   useBottomBarTagMenu,
   useCtrlResourceDrag,
   useBarNudge,
+  useActionLabels,
+  countResourcesByKind,
   type BottomBarEditorHandle,
 } from './node-bottom-bar'
 
@@ -67,7 +70,8 @@ const Button = useUiComponent('Button')
 const visible = useSoleNodeSelected(props.id)
 const metrics = useGenPanelMetrics()
 const panelStyle = computed<Record<string, string>>(() => ({
-  width: metrics.value.imageWidth + 'px',
+  // 宽度全局一份（用户 2026-11-18）：所有节点类型的底栏同宽
+  width: metrics.value.panelWidth + 'px',
 }))
 
 /**
@@ -645,6 +649,23 @@ const aiApi = useBottomBarAiActions({
 })
 const { aiRunningId, aiPhase, aiEditorLocked, aiError, aiButtons, runAiAction } = aiApi
 
+// —— 动作文案（参数下拉标题 / 发送按钮里的花费）——
+//
+// 用户 2026-11-17：「下拉里直接显示当前花费」「发送按钮做成图标+文本」。
+// 文案由 provider 的 selectLabel / sendLabel 算，函数过不了 JSON，
+// 所以这里只问后台要字符串；provider 没声明的动作一个请求都不发。
+const actionLabelApi = useActionLabels({
+  ctx,
+  currentAction,
+  paramDefs,
+  values,
+  summary: computed(() =>
+    paramSummaryOf({ fields: paramDefs.value, values: values.value ?? {}, placeholder: '参数' }),
+  ),
+  resourceCounts: computed(() => countResourcesByKind(shownMaterials.value)),
+})
+const { selectLabel: actionSelectLabel, sendLabel: actionSendLabel } = actionLabelApi
+
 // —— 最左侧 @ 按钮 ——
 function insertAt(): void {
   editorComponentRef.value?.insertText?.('@')
@@ -782,16 +803,15 @@ onBeforeUnmount(() => {
         @clear-invalid="clearInvalidRefs"
       />
 
-      <Button variant="ghost" size="icon-sm"
-        class="nb-expand nb-icon-btn"
-        type="button"
-        :title="expanded ? '收起为浮动底栏' : '展开为大窗口'"
-        :aria-label="expanded ? '收起' : '展开'"
-        :aria-expanded="expanded"
-        @click.stop="expanded = !expanded"
-      >
-        <span aria-hidden="true" v-html="expanded ? ICON_COLLAPSE : ICON_EXPAND" />
-      </Button>
+            <Button variant="ghost" size="icon-sm"
+              class="nb-expand nb-icon-btn"
+              type="button"
+              :aria-label="expanded ? '收起' : '展开'"
+              :aria-expanded="expanded"
+              @click.stop="expanded = !expanded"
+            >
+              <span aria-hidden="true" v-html="expanded ? ICON_COLLAPSE : ICON_EXPAND" />
+            </Button>
 
       <BottomBarCardList
         :ref-tiles="refTiles"
@@ -922,6 +942,9 @@ onBeforeUnmount(() => {
         :current-action-title="currentAction?.title ?? ''"
         :icon-warn="ICON_WARN"
         :icon-send="ICON_SEND"
+        :param-label="actionSelectLabel"
+        :send-label="actionSendLabel"
+        :ai-visible-count="metrics.aiVisibleCount"
         :action-options="actionOptions"
         :has-model-picker="useAgentModelsEffective || choicePickerAvailable"
         @action-picked="onActionPicked"

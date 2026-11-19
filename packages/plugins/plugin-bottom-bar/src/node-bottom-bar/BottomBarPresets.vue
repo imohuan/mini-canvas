@@ -499,24 +499,23 @@ function labelOfAction(id: string): string {
 
 <template>
   <Popover v-model:open="open">
-    <PopoverTrigger as-child>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        class="nb-icon-btn nbp-trigger"
-        :class="{ 'is-active': open }"
-        type="button"
-        :disabled="disabled"
-        title="预设提示词"
-        aria-label="预设提示词"
-        aria-haspopup="dialog"
-        :aria-expanded="open"
-        data-testid="bar-presets"
-        @click.stop
-      >
-        <span aria-hidden="true" v-html="ICON_BOOKMARK" />
-      </Button>
-    </PopoverTrigger>
+          <PopoverTrigger as-child>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="nb-icon-btn nbp-trigger"
+              :class="{ 'is-active': open }"
+              type="button"
+              :disabled="disabled"
+              aria-label="预设提示词"
+              aria-haspopup="dialog"
+              :aria-expanded="open"
+              data-testid="bar-presets"
+              @click.stop
+            >
+              <span aria-hidden="true" v-html="ICON_BOOKMARK" />
+            </Button>
+          </PopoverTrigger>
 
     <!--
       新建弹窗打开时**整块卸载**面板（用户 2026-11-07 截图：弹窗被面板压住）。

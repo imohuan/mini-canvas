@@ -41,4 +41,21 @@ describe('底栏下拉宽度预算', () => {
     expect(Number.isFinite(b.modelMax)).toBe(true)
     expect(Number.isFinite(b.paramMax)).toBe(true)
   })
+
+  /**
+   * 用户 2026-11-17 实测：@ 按钮与两条分隔线没被扣掉时，.nb-selects 的内容宽
+   * 比它拿到的宽多出约 50px，参数那格末尾（「1.17积分」）被裁掉一半。
+   */
+  it('扣掉固定件（@ + 分隔线）后再分给两个下拉', () => {
+    const base = selectsBudget({ rowWidth: 640, actionsWidth: 120, gap: 8 })
+    const withFixed = selectsBudget({ rowWidth: 640, actionsWidth: 120, fixedWidth: 50, gap: 8 })
+    expect(withFixed.modelMax + withFixed.paramMax).toBeLessThan(base.modelMax + base.paramMax)
+    expect(withFixed.modelMax + withFixed.paramMax + 50 + 120 + 16).toBeLessThanOrEqual(640)
+  })
+
+  it('固定件扣完没空间时也不返回 0 / 负数', () => {
+    const b = selectsBudget({ rowWidth: 200, actionsWidth: 150, fixedWidth: 90, gap: 8 })
+    expect(b.modelMax).toBeGreaterThan(0)
+    expect(b.paramMax).toBeGreaterThan(0)
+  })
 })

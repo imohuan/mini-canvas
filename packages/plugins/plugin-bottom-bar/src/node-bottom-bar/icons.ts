@@ -29,3 +29,12 @@ export const ICON_AT =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></svg>'
 export const ICON_SEND =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>'
+
+/**
+ * 「更多 AI 功能」按钮：三个点。
+ *
+ * 用它而不是「+N」文字：底栏其它 AI 按钮都是图标，文字会显得大小不一
+ * （用户 2026-11-18 反馈 AI 按钮组要保持一致的视觉节奏）。
+ */
+export const ICON_AI_MORE =
+  '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>'

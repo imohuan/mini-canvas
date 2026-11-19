@@ -16,8 +16,22 @@ export interface SelectsBudgetInput {
   rowWidth: number
   /** 右侧按钮区实际占用的宽度（.nb-actions，含字数、发送按钮） */
   actionsWidth: number
+  /**
+   * 行内**不由两个下拉分享**的固定宽度：@ 按钮、两条分隔线、它们之间的 gap。
+   *
+   * 用户 2026-11-17 实测：不扣这一项时，.nb-selects 的内容宽比它拿到的宽多 50px，
+   * 参数那格末尾（「1.17积分」）就被裁掉了。
+   */
+  fixedWidth?: number
   /** 行内 gap（.nb-bottom 的 gap）与两个下拉之间的分隔线等固定消耗 */
   gap?: number
+  /**
+   * 参数那格分到多少比例（默认 0.42）。
+   *
+   * provider 可以把花费写进参数标题，那段字比模型名更能帮用户判断，
+   * 于是给它多一点（用户 2026-11-17：价格被裁掉一半）。
+   */
+  paramWeight?: number
 }
 
 export interface SelectsBudget {
@@ -27,8 +41,14 @@ export interface SelectsBudget {
   paramMax: number
 }
 
-/** 模型下拉的上下限：小于 96 只剩图标，大于 280 又挤掉参数 */
-const MODEL_MIN = 96
+/**
+ * 模型下拉的上下限。
+ *
+ * 96 是「能认出是哪个模型」的底线；再往下只剩图标，认不出。
+ * 用户 2026-11-17 的截图里模型名被压到 107px —— 已经到这个底线附近，
+ * 所以再多给参数那格，就只能从「已超出底线」的部分拿。
+ */
+const MODEL_MIN = 104
 const MODEL_MAX = 280
 /** 参数下拉的上下限：小于 72 连「MP3」都放不下，大于 240 就太长 */
 const PARAM_MIN = 72
@@ -47,13 +67,15 @@ export function selectsBudget(input: SelectsBudgetInput): SelectsBudget {
   const gap = Number.isFinite(input.gap) ? Math.max(0, input.gap as number) : 8
   const row = Number.isFinite(input.rowWidth) ? Math.max(0, input.rowWidth) : 0
   const actions = Number.isFinite(input.actionsWidth) ? Math.max(0, input.actionsWidth) : 0
+  const fixed = Number.isFinite(input.fixedWidth) ? Math.max(0, input.fixedWidth as number) : 0
 
-  // 扣掉右侧按钮区、两处 gap（分隔线两侧各一个）与最左侧 @ 按钮占的位置
-  const free = Math.max(0, row - actions - gap * 2)
+  // 扣掉右侧按钮区、「@ + 分隔线」这些固定件，再给两处 gap 留位置
+  const free = Math.max(0, row - actions - fixed - gap * 2)
   if (free <= 0) return { modelMax: MODEL_MIN, paramMax: PARAM_MIN }
 
-  // 模型名通常比参数摘要长（「seed-audio-1.0 · 音频生成」对「MP3」），给它多一点
-  let modelMax = clamp(free * 0.58, MODEL_MIN, MODEL_MAX)
+  const weight = Number.isFinite(input.paramWeight) ? Math.min(0.7, Math.max(0.25, input.paramWeight as number)) : 0.42
+  // 模型名通常比参数摘要长，默认多给它一点；provider 带价格时可调高参数占比
+  let modelMax = clamp(free * (1 - weight), MODEL_MIN, MODEL_MAX)
   let paramMax = clamp(free - modelMax - gap, PARAM_MIN, PARAM_MAX)
 
   // 空间实在不够时，两个一起收，别让某一个吃掉另一个的全部空间

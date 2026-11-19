@@ -165,26 +165,25 @@ function pickAccount(itemId: string, accountId: string): void {
   <span class="nb-choice-wrap">
   <DropdownMenu v-model:open="open">
     <DropdownMenuTrigger as-child>
-      <Button
-        variant="ghost"
-        size="sm"
-        class="nb-action-select nb-model-trigger"
-        :class="{ 'has-account': Boolean(accountName) }"
-        type="button"
-        :disabled="disabled"
-        :aria-expanded="open"
-        :title="triggerTitle"
-        :aria-label="triggerTitle"
-      >
-        <span v-if="triggerIcon" class="nb-model-badge" :data-tone="triggerIcon.tone"
-          aria-hidden="true" v-html="triggerIcon.svg" />
-        <span class="nb-model-trigger-label">{{ triggerLabel }}</span>
-        <span v-if="accountName" class="nb-account-chip">· {{ accountName }}</span>
-        <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-          stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="nb-action-select nb-model-trigger"
+              :class="{ 'has-account': Boolean(accountName) }"
+              type="button"
+              :disabled="disabled"
+              :aria-expanded="open"
+              :aria-label="triggerTitle"
+            >
+              <span v-if="triggerIcon" class="nb-model-badge" :data-tone="triggerIcon.tone"
+                aria-hidden="true" v-html="triggerIcon.svg" />
+              <span class="nb-model-trigger-label">{{ triggerLabel }}</span>
+              <span v-if="accountName" class="nb-account-chip">· {{ accountName }}</span>
+              <svg class="nb-model-trigger-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent
       align="start"
