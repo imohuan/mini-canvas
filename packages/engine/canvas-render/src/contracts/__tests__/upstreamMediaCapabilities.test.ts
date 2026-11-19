@@ -99,6 +99,41 @@ function mediaOf(
 }
 
 describe('upstream 能力：一层与无限向上', () => {
+  /**
+   * 用户 2026-11-17：可视化节点的输出类型写在节点 data 里（uiOutputType）。
+   * 下游读上游时要按**这个节点**算产出，而不是按类型写死 —— 否则音频下游永远读不到。
+   */
+  it('★ 产出按节点 data 现算：没有输出类型读不到，有就能按 kind 读到', () => {
+    // 同一个文件里其它用例共用 TYPES；这里加上 'ui'，跑完删掉，避免污染后续断言
+    TYPES.set('ui', {
+      producesFromData: (data: Record<string, unknown>) => {
+        const kind = typeof data.uiOutputType === 'string' ? data.uiOutputType : ''
+        if (!kind) return {}
+        if (kind === 'text') return { text: { kind: 'text', valueField: 'text' } }
+        return { [kind]: { kind, externalUrlField: 'uiOutputUrl' } }
+      },
+    })
+    const restore = (): void => {
+      ;(TYPES as unknown as Map<string, unknown>).delete('ui')
+    }
+    try {
+      const nodes = [
+        { id: 'ui', type: 'ui', data: { uiOutputType: 'audio', uiOutputUrl: '/api/x.mp3' } },
+        { id: 'out', type: 'output' },
+      ]
+      const up = upstreamOf(nodes, [{ source: 'ui', target: 'out' }], { id: 'out', type: 'output' })
+      expect(up.nodes()[0]!.outputs).toEqual({ audio: '/api/x.mp3' })
+      expect(up.ofType('audio').map((n) => n.id)).toEqual(['ui'])
+      expect(up.ofType('image')).toEqual([])
+
+      // 没有输出类型：什么都不产出（下游读不到）
+      nodes[0]!.data = { uiOutputUrl: '/api/x.mp3' }
+      const up2 = upstreamOf(nodes, [{ source: 'ui', target: 'out' }], { id: 'out', type: 'output' })
+      expect(up2.nodes()[0]!.outputs).toEqual({})
+    } finally {
+      restore()
+    }
+  })
   it('nodes() 只给直接上游；UpstreamNode 还能继续向上', () => {
     const nodes = [
       { id: 'a', type: 'image', data: { resourceId: 'res-a' } },

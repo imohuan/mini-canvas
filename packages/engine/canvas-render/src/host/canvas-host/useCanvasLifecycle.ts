@@ -72,6 +72,12 @@ export function useCanvasLifecycle(opts: {
         settingsStore.onChange((key, value) => {
           // 原地写回（引用不变，Vue 响应式可感知 → VueFlow 绑定实时跟随）
           applyCanvasInteractionChangeInto(interactionSettings, key, value)
+          // 类型默认尺寸变化（图片/视频「默认宽/高」）→ 立即重灌渲染态：
+          // 没有 size 的节点（sizeFromContent 类型）画的就是默认值，
+          // 不重灌的话 VueFlow 外层宽高要等下一次别的变化才跟上（用户 2026-11-18）。
+          if (/^(image|video)Default(Width|Height)$/.test(key)) {
+            opts.syncNodesFromStore()
+          }
           // 可见剔除配置变化 → 立即重算集合并重灌（不等下一次视口变化，否则关掉剔除画面不恢复）
           if (key === 'visibleCullEnabled' || key === 'visibleCullBuffer' || key === 'cullCompactShells') {
             opts.refreshCull()

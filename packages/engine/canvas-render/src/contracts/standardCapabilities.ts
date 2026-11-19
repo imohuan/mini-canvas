@@ -275,6 +275,8 @@ interface UpstreamDocEdge {
 
 interface UpstreamTypeDef {
   produces?: Record<string, DataPortDef>
+  /** 产出槽按节点自己的 data 现算（可视化节点的输出类型）；返回空对象 = 不产出 */
+  producesFromData?: (data: Record<string, unknown>) => Record<string, DataPortDef> | undefined
   consumes?: Record<string, DataPortDef>
   /** 节点没有自己的尺寸时用的默认尺寸（落点算法据此算新节点外框） */
   defaultSize?: { w: number; h: number }
@@ -421,8 +423,19 @@ export function createUpstreamCapability(
   }
 
   /** 某节点类型的 produces 表（没注册类型 = 空） */
-  const producesOf = (snap: UpstreamSnapshot, node: UpstreamDocNode): Record<string, DataPortDef> =>
-    snap.doc?.types?.get(node.type)?.produces ?? {}
+  const producesOf = (snap: UpstreamSnapshot, node: UpstreamDocNode): Record<string, DataPortDef> => {
+    const def = snap.doc?.types?.get(node.type)
+    if (!def) return {}
+    // 产出按这个节点自己的数据算（可视化节点的输出类型存在 data 里）
+    if (def.producesFromData) {
+      try {
+        return def.producesFromData(node.data ?? {}) ?? {}
+      } catch {
+        return {}
+      }
+    }
+    return def.produces ?? {}
+  }
 
   const makeNode = (snap: UpstreamSnapshot, node: UpstreamDocNode): UpstreamNode => {
     const outputs: Record<string, unknown> = {}

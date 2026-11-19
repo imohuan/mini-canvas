@@ -135,9 +135,9 @@ function renderNode(
     },
   })
   const ctx = renderCtx(registry, settings, opts)
-  // 尺寸唯一来源是 nodeGeometry → node.size；测试桩按 opts 给
+  // 尺寸唯一来源是 nodeGeometry.getEffective → node.size ?? 类型默认；测试桩按 opts 给
   ;(ctx.ctx as unknown as { get(n: string): unknown }).get = ((orig) => (n: string) =>
-    n === 'nodeGeometry' ? { get: () => opts.nodeSize ?? null } : orig(n))(
+    n === 'nodeGeometry' ? { getEffective: () => opts.nodeSize ?? null } : orig(n))(
     (ctx.ctx as unknown as { get(n: string): unknown }).get,
   )
   ;(ctx.ctx as unknown as { tryGet(n: string): unknown }).tryGet = (ctx.ctx as unknown as { get(n: string): unknown }).get

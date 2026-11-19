@@ -61,7 +61,8 @@ const {
   resizeHandleScale,
 } = appearance
 
-const cap = useNodeCapability(props.type)
+// 端口要跟着**这个节点**的数据走：可视化节点的输出类型存在 data 里（改了就要立刻变）
+const cap = useNodeCapability(props.type, () => props.data)
 const showTargetHandle = cap.hasTarget
 const showSourceHandle = cap.hasSource
 
@@ -70,10 +71,10 @@ const showSourceHandle = cap.hasSource
  * `props.data` 在每次 store 通知时都会换成新对象，所以以它为响应式锚 ——
  * 尺寸变化（包括生成中临时改 size）都能及时反映到卡片上。
  */
-const geometry = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')
+const geometry = ctx.tryGet<{ getEffective(id: string): { w: number; h: number } | null }>('nodeGeometry')
 const nodeSize = computed(() => {
   void props.data
-  return geometry?.get(props.id) ?? null
+  return geometry?.getEffective(props.id) ?? null
 })
 
 const cardSize = useNodeCardSize({

@@ -95,12 +95,27 @@ export const DEFAULT_THEME_LAYOUT = RENDER_LAYOUT;
  * 与 DEFAULT_THEME_LAYOUT 同属「布局/控制栏」：贴边距离管"离节点多远"，这里管"多大"。
  */
 export const DEFAULT_THEME_PANEL = {
-  panelImageWidth: 660,
-  panelTextWidth: 520,
+  /**
+   * 生成控制栏宽度（px）——**全局一份**（用户 2026-11-18）。
+   *
+   * 原来分成「图片生成栏宽度 / 文本生成栏宽度」两栏配置，但两者版式完全相同，
+   * 用户觉得没必要分开：直接一个宽度，所有节点类型的底栏都用它。
+   * 老的 panelImageWidth / panelTextWidth 仍然认（见 nodeLayoutSettings 的回落），
+   * 只是设置面板里不再出现。
+   */
+  panelWidth: 720,
   panelEditorMinHeight: 64,
   /** 生成栏输入框最小宽度（px）：面板再窄也不窄过它，放不下就换行 */
   panelEditorMinWidth: 240,
   panelEditorMaxHeight: 220,
+  /**
+   * 底栏最多直接显示几个 AI 按钮（用户 2026-11-18）。
+   *
+   * 底栏 AI 按钮是一份可自定义的清单，可能有很多个。直接平铺会把
+   * 「字数 + 发送」挤到第二行；所以只显示前 N 个，其余收进「更多」下拉。
+   * 2 = 默认：大多数动作只有「翻译 / 提示词优化」两颗。
+   */
+  panelAiVisibleCount: 2,
 } as const;
 
 /** 吸附带配置默认值（字段名 = canvas-render SnapZoneConfig，直接可作 :snap-zone-visual 注入） */

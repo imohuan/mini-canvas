@@ -50,17 +50,14 @@ export class NodeLayoutService implements NodeLayoutContract {
   }
 
   /**
-   * 取某节点尺寸：只读 `node.size`。
-   * 没有 size 的节点（孤儿/未注册类型）回落到类型默认尺寸；再没有返回 {0,0}。
+   * 取某节点的**实际尺寸**：`node.size` 有就用，没有跟类型默认值走。
+   *
+   * 图片/视频这类「尺寸由内容决定」的类型，没画面时故意不写 size ——
+   * 这样设置面板改默认宽高时它们能实时跟着变（用户 2026-11-18）。
    * 实测值不参与计算，见文件头。
    */
   nodeSize(id: string): { w: number; h: number } {
-    const node = this.store.getNode(id)
-    if (!node) return { w: 0, h: 0 }
-    if (node.size) return { ...node.size }
-    const def = this.store.types.get(node.type)
-    if (def?.defaultSize) return { ...def.defaultSize }
-    return { w: 0, h: 0 }
+    return this.store.effectiveSize(id)
   }
 
   /** 绝对坐标（累加父链 position）。无父即自身 position。 */

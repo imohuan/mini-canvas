@@ -157,54 +157,67 @@ describe('resolveNodeSlotStyle（插槽定位层整份样式）', () => {
 })
 
 describe('resolveGenPanelMetrics（生成控制栏尺寸，纯函数）', () => {
-  it('读到配置就用配置值', () => {
-    expect(
-      resolveGenPanelMetrics(
-        cfg({
-          panelImageWidth: 700,
-          panelTextWidth: 480,
-          panelEditorMinWidth: 300,
-          panelEditorMinHeight: 80,
-          panelEditorMaxHeight: 300,
-        }),
-      ),
-    ).toEqual({ imageWidth: 700, textWidth: 480, editorMinWidth: 300, editorMinHeight: 80, editorMaxHeight: 300 })
+  it('读全局宽度 panelWidth：三项同步（用户 2026-11-18）', () => {
+    const m = resolveGenPanelMetrics(
+      cfg({
+        panelWidth: 820,
+        panelEditorMinWidth: 300,
+        panelEditorMinHeight: 80,
+        panelEditorMaxHeight: 300,
+      }),
+    )
+    expect(m.panelWidth).toBe(820)
+    // 旧字段作为别名跟着走，避免仍在读 imageWidth / textWidth 的调用方拿到旧值
+    expect(m.imageWidth).toBe(820)
+    expect(m.textWidth).toBe(820)
+    expect(m).toMatchObject({ editorMinWidth: 300, editorMinHeight: 80, editorMaxHeight: 300 })
   })
 
-  it('没配置 → 回落默认（图片 660 / 文本 520 / 输入框 64~220）', () => {
+  it('没配置 → 回落默认', () => {
     expect(resolveGenPanelMetrics(cfg({}))).toEqual(DEFAULT_GEN_PANEL_METRICS)
     expect(resolveGenPanelMetrics(() => undefined)).toEqual(DEFAULT_GEN_PANEL_METRICS)
   })
 
-  it('非法/非正值回落默认（宽度 0 或负数会让面板消失）', () => {
-    for (const bad of [0, -100, Number.NaN, Number.POSITIVE_INFINITY, '700', null, {}]) {
-      expect(resolveGenPanelMetrics(cfg({ panelImageWidth: bad })).imageWidth).toBe(
-        DEFAULT_GEN_PANEL_METRICS.imageWidth,
-      )
-    }
+  /**
+   * 兼容：老用户配过「图片生成栏宽度 / 文本生成栏宽度」，升级后不能让值凭空消失。
+   * 优先级 panelWidth > panelImageWidth > panelTextWidth > 默认。
+   */
+  it('老的两项仍然认（优先图片，其次文本）', () => {
+    const legacy = resolveGenPanelMetrics(cfg({ panelImageWidth: 700, panelTextWidth: 480 }))
+    expect(legacy.panelWidth).toBe(700)
+    const onlyText = resolveGenPanelMetrics(cfg({ panelTextWidth: 480 }))
+    expect(onlyText.panelWidth).toBe(480)
   })
 
-  it('一项非法不影响另一项', () => {
-    const m = resolveGenPanelMetrics(cfg({ panelImageWidth: 'x', panelTextWidth: 480 }))
-    expect(m.imageWidth).toBe(DEFAULT_GEN_PANEL_METRICS.imageWidth)
-    expect(m.textWidth).toBe(480)
+  it('新键优先于老键', () => {
+    const m = resolveGenPanelMetrics(cfg({ panelWidth: 900, panelImageWidth: 700 }))
+    expect(m.panelWidth).toBe(900)
+  })
+
+  it('非法/非正值回落默认（宽度 0 或负数会让面板消失）', () => {
+    for (const bad of [0, -100, Number.NaN, Number.POSITIVE_INFINITY, '700', null, {}]) {
+      expect(resolveGenPanelMetrics(cfg({ panelWidth: bad })).panelWidth).toBe(
+        DEFAULT_GEN_PANEL_METRICS.panelWidth,
+      )
+    }
   })
 })
 
 describe('applyGenPanelMetricChange（改设置就生效）', () => {
   const base = { ...DEFAULT_GEN_PANEL_METRICS }
 
-  it('认识四个键，各自只改自己那项', () => {
-    expect(applyGenPanelMetricChange(base, 'panelImageWidth', 800).imageWidth).toBe(800)
-    expect(applyGenPanelMetricChange(base, 'panelTextWidth', 400).textWidth).toBe(400)
+  it('三个宽度键都改同一份宽度，其余项各自独立', () => {
+    expect(applyGenPanelMetricChange(base, 'panelWidth', 800).panelWidth).toBe(800)
+    // 老键也生效，并且三项保持一致
+    const legacy = applyGenPanelMetricChange(base, 'panelImageWidth', 760)
+    expect(legacy).toMatchObject({ panelWidth: 760, imageWidth: 760, textWidth: 760 })
     expect(applyGenPanelMetricChange(base, 'panelEditorMinHeight', 90).editorMinHeight).toBe(90)
     expect(applyGenPanelMetricChange(base, 'panelEditorMaxHeight', 360).editorMaxHeight).toBe(360)
     expect(applyGenPanelMetricChange(base, 'panelEditorMinWidth', 320).editorMinWidth).toBe(320)
   })
 
-  it('改一项不动其它项', () => {
+  it('改宽度不动输入框那几项', () => {
     const next = applyGenPanelMetricChange(base, 'panelImageWidth', 800)
-    expect(next.textWidth).toBe(base.textWidth)
     expect(next.editorMinHeight).toBe(base.editorMinHeight)
   })
 
@@ -214,8 +227,8 @@ describe('applyGenPanelMetricChange（改设置就生效）', () => {
   })
 
   it('改动值非法 → 该项回落默认', () => {
-    expect(applyGenPanelMetricChange(base, 'panelImageWidth', -1).imageWidth).toBe(
-      DEFAULT_GEN_PANEL_METRICS.imageWidth,
+    expect(applyGenPanelMetricChange(base, 'panelWidth', -1).panelWidth).toBe(
+      DEFAULT_GEN_PANEL_METRICS.panelWidth,
     )
   })
 

@@ -156,11 +156,12 @@ export function nodesFromStore(
     }
     // size → style 像素尺寸：VueFlow 用它布局父容器/边界。
     //
-    // 尺寸唯一来源是 `node.size`（用户 2026-11-14 拍板）。以前这里还有一条“图片/视频生成中
-    // 临时投影类型默认尺寸（横屏）”的旁路 —— 同一个节点出现两个宽高，布局与卡片必然打架；
-    // 现在生成中也按 size 显示，进度盖在原卡片上，产物回来时插件用 nodeGeometry 改 size。
-    const styleSize = n.size
-    if (styleSize) out.style = { width: styleSize.w + 'px', height: styleSize.h + 'px' }
+    // 尺寸唯一来源是 `node.size`，没有就取类型默认值（`effectiveSize`）。图片/视频没画面时
+    // 故意不写 size，这样设置里改默认宽高时它们能**立刻**跟着变（用户 2026-11-18）。
+    const styleSize = store.effectiveSize(n.id)
+    if (styleSize.w > 0 && styleSize.h > 0) {
+      out.style = { width: styleSize.w + 'px', height: styleSize.h + 'px' }
+    }
     // 中间态节点（如拖线落空白时的菜单卡）—— 必须在 VueFlow 维度隔离：
     //   draggable/selectable/deletable 全关 → pane click 的 removeSelectedElements 摸不到它、
     //   不会拖动、不会进 VueFlow 内部选中集。判定读内核通用契约，不认识具体插件。

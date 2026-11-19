@@ -35,8 +35,8 @@ function renderNode(
   const refOf = (v: unknown) => ({ value: v })
   const services: Record<string, unknown> = {
     doc: { types: typeTable(loadingDefaultSize), getNode: () => undefined, updateNode: () => {} },
-    // 尺寸唯一来源：nodeGeometry → node.size
-    nodeGeometry: { get: () => size },
+    // 尺寸唯一来源：nodeGeometry.getEffective → node.size ?? 类型默认
+    nodeGeometry: { getEffective: () => size },
     settings: { get: () => undefined, onChange: () => ({ dispose: () => {} }) },
     selection: { ids: new Set<string>(), has: () => false, onChange: () => () => {} },
   }

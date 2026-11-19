@@ -15,7 +15,14 @@
 import { computed } from "vue";
 import { useCanvasRender } from "@plume-canvas/canvas-render";
 
-export function useNodeCapability(type: string) {
+/**
+ * 该类型的端口能力。
+ *
+ * `data` 是可选的：只有「端口由节点数据决定」的类型（CanvasNodeType.outputsFromData，
+ * 典型是可视化节点）才需要传 —— 同一个类型的不同节点可以一个有输出口、一个没有。
+ * 不传时维持旧语义（只看类型声明），所有存量调用点行为不变。
+ */
+export function useNodeCapability(type: string, data?: () => Record<string, unknown> | undefined) {
   const { ctx } = useCanvasRender();
   // 5c：nodeStore 老服务名已下线，类型表从 doc 门面读（同一份数据，只读投影）。
   // T05：服务名已在 canvas-data 集中登记类型（T03），不必再手写 ctx.get<DocService>。
@@ -30,7 +37,10 @@ export function useNodeCapability(type: string) {
 
   /** 该 type 是否有输出(source)能力 */
   const hasSource = computed(() => {
-    const outputs = nodeDef.value?.outputs;
+    const def = nodeDef.value;
+    // 端口交给节点数据决定时，必须按**这个节点**的数据算（空 = 没有输出口）
+    if (def?.outputsFromData) return (def.outputsFromData(data?.() ?? {}) ?? []).length > 0;
+    const outputs = def?.outputs;
     return !outputs || outputs.length > 0;
   });
 

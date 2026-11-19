@@ -36,9 +36,17 @@ export const DEFAULT_TOOLBAR_OFFSETS: NodeToolbarOffsets = Object.freeze({
  * 用户要求"布局相关的配置要能在设置页面里调"，故与贴边距离同处一室。
  */
 export interface GenPanelMetrics {
-  /** 图片节点生成面板宽度 */
+  /**
+   * 生成控制栏宽度（px）——所有节点类型通用（用户 2026-11-18）。
+   *
+   * 从前分成 imageWidth / textWidth 两项配置，但底栏版式完全相同，
+   * 用户要求「直接全局通用宽度就行」。老键仍认（见 resolveGenPanelMetrics），
+   * 这里保留两个只读别名，避免下游插件改动面过大。
+   */
+  panelWidth: number
+  /** 旧字段：等于 panelWidth（兼容仍在读 imageWidth 的调用方） */
   imageWidth: number
-  /** 文本节点生成面板宽度 */
+  /** 旧字段：等于 panelWidth（兼容仍在读 textWidth 的调用方） */
   textWidth: number
   /** 输入框最小宽度（面板再窄也不窄过它，放不下就换行而不是压成一条） */
   editorMinWidth: number
@@ -46,15 +54,24 @@ export interface GenPanelMetrics {
   editorMinHeight: number
   /** 文本输入框最大高度（内容多时内部滚动，面板不被撑爆） */
   editorMaxHeight: number
+  /**
+   * 底栏最多直接显示几个 AI 按钮（用户 2026-11-18）。
+   *
+   * AI 按钮是一份可自定义清单，可能有很多个；超出的收进「更多」下拉，
+   * 避免把「字数 + 发送」挤到第二行。
+   */
+  aiVisibleCount: number
 }
 
 /** 与 theme-default Config 同值（读不到配置时的回落；也是"视觉默认值"的单一出处） */
 export const DEFAULT_GEN_PANEL_METRICS: GenPanelMetrics = Object.freeze({
-  imageWidth: 660,
-  textWidth: 520,
+  panelWidth: 720,
+  imageWidth: 720,
+  textWidth: 720,
   editorMinWidth: 240,
   editorMinHeight: 64,
   editorMaxHeight: 220,
+  aiVisibleCount: 2,
 })
 
 /** settings 服务的最小形状（只需要"读一个键 + 订阅变化"） */
@@ -102,14 +119,36 @@ function toPx(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
 }
 
+/**
+ * 把任意取值收敛成「个数」：允许 0（= 全部折叠），小数向下取整，非法值回落默认。
+ *
+ * 与 toPx 分开写：像素值不能 ≤ 0，而个数 0 是合法且有意义的（用户 2026-11-18）。
+ */
+function toCount(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback
+}
+
 /** 从配置读取器解析生成面板尺寸（纯函数，Node 可单测） */
 export function resolveGenPanelMetrics(get: (key: string) => unknown): GenPanelMetrics {
+  /*
+   * 宽度只有一份（用户 2026-11-18）：panelWidth。
+   *
+   * 老配置仍然认：用户之前调过「图片生成栏宽度 / 文本生成栏宽度」，升级后那些值
+   * 不该凭空丢掉 —— 依次回落到 panelImageWidth、panelTextWidth，最后才是默认值。
+   * 三者都没有时才用默认 720。
+   */
+  const width = toPx(
+    get('panelWidth'),
+    toPx(get('panelImageWidth'), toPx(get('panelTextWidth'), DEFAULT_GEN_PANEL_METRICS.panelWidth)),
+  )
   return {
-    imageWidth: toPx(get('panelImageWidth'), DEFAULT_GEN_PANEL_METRICS.imageWidth),
-    textWidth: toPx(get('panelTextWidth'), DEFAULT_GEN_PANEL_METRICS.textWidth),
+    panelWidth: width,
+    imageWidth: width,
+    textWidth: width,
     editorMinWidth: toPx(get('panelEditorMinWidth'), DEFAULT_GEN_PANEL_METRICS.editorMinWidth),
     editorMinHeight: toPx(get('panelEditorMinHeight'), DEFAULT_GEN_PANEL_METRICS.editorMinHeight),
     editorMaxHeight: toPx(get('panelEditorMaxHeight'), DEFAULT_GEN_PANEL_METRICS.editorMaxHeight),
+    aiVisibleCount: toCount(get('panelAiVisibleCount'), DEFAULT_GEN_PANEL_METRICS.aiVisibleCount),
   }
 }
 
@@ -120,16 +159,28 @@ export function applyGenPanelMetricChange(
   value: unknown,
 ): GenPanelMetrics {
   switch (key) {
+    /*
+     * 三个键都改同一份宽度（用户 2026-11-18）：
+     * panelWidth 是新的全局项；panelImageWidth / panelTextWidth 是旧设置项，
+     * 用户升级后仍可能从旧配置里读到它们，改它们也应当生效（并保持三项一致）。
+     */
+    case 'panelWidth': {
+      const w = toPx(value, DEFAULT_GEN_PANEL_METRICS.panelWidth)
+      return { ...current, panelWidth: w, imageWidth: w, textWidth: w }
+    }
     case 'panelImageWidth':
-      return { ...current, imageWidth: toPx(value, DEFAULT_GEN_PANEL_METRICS.imageWidth) }
-    case 'panelTextWidth':
-      return { ...current, textWidth: toPx(value, DEFAULT_GEN_PANEL_METRICS.textWidth) }
+    case 'panelTextWidth': {
+      const w = toPx(value, DEFAULT_GEN_PANEL_METRICS.panelWidth)
+      return { ...current, panelWidth: w, imageWidth: w, textWidth: w }
+    }
     case 'panelEditorMinWidth':
       return { ...current, editorMinWidth: toPx(value, DEFAULT_GEN_PANEL_METRICS.editorMinWidth) }
     case 'panelEditorMinHeight':
       return { ...current, editorMinHeight: toPx(value, DEFAULT_GEN_PANEL_METRICS.editorMinHeight) }
     case 'panelEditorMaxHeight':
       return { ...current, editorMaxHeight: toPx(value, DEFAULT_GEN_PANEL_METRICS.editorMaxHeight) }
+    case 'panelAiVisibleCount':
+      return { ...current, aiVisibleCount: toCount(value, DEFAULT_GEN_PANEL_METRICS.aiVisibleCount) }
     default:
       return current
   }

@@ -1,6 +1,6 @@
 import { shallowRef } from 'vue'
 import type { Connection } from '@vue-flow/core'
-import { validateConnection, typeConnectionDef, type ValidationResult } from '@plume-canvas/canvas-data'
+import { validateConnection, typeConnectionDef, nodeConnectionDef, type ValidationResult } from '@plume-canvas/canvas-data'
 import { beginConnection, endConnection, createConnectionState } from '../connectionState'
 import { RenderEvents } from '../renderEvents'
 import { reasonText as reasonTextFrom } from '../../connection/reasonText'
@@ -74,7 +74,16 @@ export function useCanvasConnections(opts: {
     }
     const res = validateConnection(
       { source, sourceHandle: sourceHandle ?? undefined, target, targetHandle: targetHandle ?? undefined },
-      { nodes: map, edges: opts.edges(), getTypeConn: (t) => typeConnectionDef(h.nodeStore.types.get(t)) },
+      {
+        nodes: map,
+        edges: opts.edges(),
+        getTypeConn: (t) => typeConnectionDef(h.nodeStore.types.get(t)),
+        // 端口可能由节点数据决定（可视化节点的输出类型）→ 拖线反馈必须按同一个节点来判
+        getNodeConn: (id) => {
+          const n = h.nodeStore.getNode(id)
+          return nodeConnectionDef(h.nodeStore.types.get(n?.type ?? ''), n?.data)
+        },
+      },
     )
     if (!res.ok) opts.log.warn(`checkConnection ${source}→${target} 非法:${res.reason}`)
     return res

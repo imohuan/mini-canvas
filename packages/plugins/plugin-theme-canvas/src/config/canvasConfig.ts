@@ -247,26 +247,22 @@ export const CanvasConfig: ConfigSchema = {
       "节点底部控制栏离卡片下边的距离（px）。调大=往外挪得更远，调小=更贴近节点。",
   },
   // —— 布局：生成控制栏的尺寸（宽度 / 输入框高度）——
-  panelImageWidth: {
+  /**
+   * 生成控制栏宽度：**全局一份**（用户 2026-11-18）。
+   *
+   * 「当前只有图片栏和文本栏的生成栏宽度控制，我觉得没有必要，直接全局通用宽度就行」。
+   * 图片 / 文本 / 视频 / 音频的底栏都是同一套版式，分两项只会让人两边各调一次。
+   */
+  panelWidth: {
     type: "number",
-    default: DEFAULT_THEME_PANEL.panelImageWidth,
-    min: 320,
-    max: 1200,
-    step: 10,
-    label: "图片生成栏宽度",
-    group: "布局/控制栏",
-    description:
-      "图片节点底部生成控制栏的宽度（px）。里面是输入框 + 模型/参数/模板下拉 + 发送按钮。",
-  },
-  panelTextWidth: {
-    type: "number",
-    default: DEFAULT_THEME_PANEL.panelTextWidth,
+    default: DEFAULT_THEME_PANEL.panelWidth,
     min: 280,
     max: 1200,
     step: 10,
-    label: "文本生成栏宽度",
+    label: "生成栏宽度",
     group: "布局/控制栏",
-    description: "文本节点底部生成控制栏的宽度（px）。版式与图片同款，只是默认窄一些。",
+    description:
+      "节点底部生成控制栏的宽度（px），所有节点类型通用。里面是输入框 + 模型/参数下拉 + AI 按钮 + 发送按钮。",
   },
   panelEditorMinHeight: {
     type: "number",
@@ -300,6 +296,22 @@ export const CanvasConfig: ConfigSchema = {
     group: "布局/控制栏",
     description:
       "生成控制栏输入框的最大高度（px）。写长了在框内滚动，不会把面板撑得很大。",
+  },
+  /**
+   * 底栏 AI 按钮的折叠阈值（用户 2026-11-18）。
+   *
+   * 「如果超过 2 个 ai 底栏按钮你就直接折叠」—— 默认 2，可在这里调。
+   */
+  panelAiVisibleCount: {
+    type: "number",
+    default: DEFAULT_THEME_PANEL.panelAiVisibleCount,
+    min: 0,
+    max: 8,
+    step: 1,
+    label: "底栏 AI 按钮显示个数",
+    group: "布局/控制栏",
+    description:
+      "底栏最多直接显示几个 AI 按钮（翻译 / 提示词优化等）。超出的收进「更多」下拉，避免把发送按钮挤到第二行。0 = 全部折叠。",
   },
   // —— 文本 LOD：文本节点内容的三级缩略（full 全文 → condensed 首行 → icon 缩略占位）——
   textLodIconZoom: {
