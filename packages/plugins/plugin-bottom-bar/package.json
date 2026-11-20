@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-bottom-bar",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "plume": {
     "title": "底部状态栏",

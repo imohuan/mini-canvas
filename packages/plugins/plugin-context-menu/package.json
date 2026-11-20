@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-context-menu",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "plume": {
     "title": "右键菜单",
@@ -23,13 +23,7 @@
     "typecheck:vue": "vue-tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@plume-canvas/plugin-sdk": "workspace:*",
-    "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/kernel": "workspace:*"
-  },
   "peerDependencies": {
-    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.34"
   },
   "devDependencies": {

@@ -1,15 +1,12 @@
 {
   "name": "@plume-canvas/plugin-clipboard",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "plume": {
     "title": "复制粘贴",
     "description": "Ctrl/Cmd+C/V/X/D",
     "pluginName": "clipboard",
-    "builtin": true,
-    "web": {
-      "entry": "dist/web.js"
-    }
+    "builtin": true
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
