@@ -988,8 +988,10 @@ export function createPluginManagerService(
       if (!res.ok) return null
       const json = (await res.json()) as {
         ok?: boolean
-        report?: { plugins?: Array<{ pkg: string; latest: string }> }
+        report?: { checkedAt?: string | null; plugins?: Array<{ pkg: string; latest: string }> }
       }
+      // 服务端从没算过报告（checkedAt null）→ 视为「没有数据」，让调用方走 browse 回退
+      if (!json.report?.checkedAt) return null
       const list = json.report?.plugins ?? []
       const out: Record<string, string> = {}
       for (const p of list) out[p.pkg] = p.latest

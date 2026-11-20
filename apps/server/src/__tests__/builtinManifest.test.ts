@@ -20,6 +20,16 @@ afterEach(async () => {
 })
 
 describe('readBuiltinManifest', () => {
+  it('gen 脚本产物形状：键是 npm 包名（防键形态漂移）', async () => {
+    await fs.writeFile(path.join(dir, 'builtin-manifest.json'), JSON.stringify({
+      plugins: { '@plume-canvas/plugin-agent': 'latest' },
+    }))
+    const m = await readBuiltinManifest(dir)
+    const keys = Object.keys(m.plugins)
+    expect(keys.every((k) => /^@[a-z0-9-]+\//.test(k) || /^[a-z0-9-]+$/.test(k))).toBe(true)
+    expect(m.plugins['@plume-canvas/plugin-agent']).toBe('latest')
+  })
+
   it('读到 plugins 段并解析成对象', async () => {
     await fs.writeFile(path.join(dir, 'builtin-manifest.json'), JSON.stringify({
       plugins: { 'plugin-agent': 'latest', 'plugin-node-text': '0.1.0' },

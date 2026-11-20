@@ -56,8 +56,18 @@ export interface UpdateChecker {
 export function compareVersions(a: string, b: string): number {
   const parse = (v: string) => {
     const [core, ...suffix] = v.split("-")
-    const nums = core.split(".").map((s) => parseInt(s, 10))
-    return { nums, hasSuffix: suffix.length > 0 }
+    const nums = core.split(".").map((s) => {
+      const n = parseInt(s, 10)
+      return Number.isNaN(n) ? 0 : n  // 坏段按 0，不按「大于一切」（防坏版本号误判「无更新」）
+    })
+    // 预发布段拆成点分段逐个比（1.0.0-beta.1 < 1.0.0-beta.2）；纯数字段转数字比。
+    // 注意 suffix 为空时 join 是空串，''.split('.') 会得到 ['']（一个空段）——
+    // 必须显式给空数组，否则「无预发布」被当成「有一个空段」，与 1.0.0-beta 判等。
+    const pre = suffix.length === 0 ? [] : suffix.join("-").split(".").map((s) => {
+      const n = parseInt(s, 10)
+      return Number.isNaN(n) ? s : n
+    })
+    return { nums, pre }
   }
   const pa = parse(a)
   const pb = parse(b)
@@ -67,8 +77,18 @@ export function compareVersions(a: string, b: string): number {
     const nb = pb.nums[i] ?? 0
     if (na !== nb) return na < nb ? -1 : 1
   }
-  // 数字段相同：有后缀的小于无后缀
-  if (pa.hasSuffix !== pb.hasSuffix) return pa.hasSuffix ? -1 : 1
+  // 数字段相同：有预发布的小于无预发布的（1.0.0-beta < 1.0.0）
+  if (pa.pre.length !== pb.pre.length) return pa.pre.length > pb.pre.length ? -1 : 1
+  for (let i = 0; i < pa.pre.length; i++) {
+    const xa = pa.pre[i]
+    const xb = pb.pre[i]
+    if (xa === xb) continue
+    const numA = typeof xa === 'number'
+    const numB = typeof xb === 'number'
+    // 数字段 < 字符串段（semver 规则）；同为数字或同为字符串直接比
+    if (numA !== numB) return numA ? -1 : 1
+    return (xa as number) < (xb as number) ? -1 : 1
+  }
   return 0
 }
 
@@ -84,7 +104,14 @@ export function createUpdateChecker(opts: UpdateCheckerOptions): UpdateChecker {
   async function checkAll(): Promise<UpdateReport> {
     const report: UpdateReport = { plugins: [], checkedAt: new Date().toISOString() }
     const installed = await readInstalled(opts.installedRecordFile)
-    const builtinSet = new Set(Object.keys(opts.builtinManifest.plugins))
+    // builtin-manifest 的键是 npm 包名；老版本清单可能是目录名 —— 两种都认，
+    // 比对时包名与「去 scope 的目录名」都查一遍。
+    const builtinSet = new Set(
+      Object.keys(opts.builtinManifest.plugins).flatMap((k) => {
+        const dirName = k.replace(/^@[^/]+\//, '')
+        return [k, dirName]
+      }),
+    )
 
     // 并发查所有已装插件 + server 自身；单个失败跳过（网络抖动不该炸整个检查）
     const targets: Array<{ name: string; local: string; builtin: boolean }> = [

@@ -54,10 +54,15 @@ export async function runBootstrap(opts: BootstrapOptions): Promise<BootstrapRes
     const destDir = path.join(pluginsDir, dirNameOf(pkgName))
     try {
       const pkgJsonPath = path.join(destDir, "package.json")
-      const existing = JSON.parse(await fs.readFile(pkgJsonPath, "utf8")) as { name?: string }
+      const existing = JSON.parse(await fs.readFile(pkgJsonPath, "utf8")) as { name?: string; version?: string }
       if (existing.name === pkgName) {
-        result.skipped.push(pkgName)
-        continue
+        // manifest 指定 latest → 本地有就跳过（更新由 checker 提示、用户手动装）；
+        // manifest 指定具体版本 → 版本一致才跳过，旧版由清单驱动升级。
+        const upToDate = wantVersion === "latest" || existing.version === wantVersion
+        if (upToDate) {
+          result.skipped.push(pkgName)
+          continue
+        }
       }
     } catch { /* 没有或坏 → 走安装 */ }
 

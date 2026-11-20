@@ -20,11 +20,13 @@ if (dirs.length === 0) {
   process.exit(1)
 }
 
+
+// 键用 npm 包名（bootstrap 拿它直接 packument）；目录名 = 去 scope 前缀（与 pluginRoots 一致）。
 const manifest = {
-  plugins: Object.fromEntries(dirs.map((d) => [d, "latest"])),
+  plugins: Object.fromEntries(dirs.map((d) => ["@plume-canvas/" + d, "latest"])),
 }
 
-await mkdir(path.join(SERVER_ROOT, "dist"), { recursive: true })
-const out = path.join(SERVER_ROOT, "dist", "builtin-manifest.json")
+// 写到包根（package.json files 里列的就是这个位置；发布包自带，dev 下 gen 一次即可）
+const out = path.join(SERVER_ROOT, "builtin-manifest.json")
 await writeFile(out, JSON.stringify(manifest, null, 2) + "\n")
-console.log(`[ ok ] builtin-manifest.json（${dirs.length} 个内置插件）→ dist/`)
+console.log(`[ ok ] builtin-manifest.json（${dirs.length} 个内置插件）→ 包根`)

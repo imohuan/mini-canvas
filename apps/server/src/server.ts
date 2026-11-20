@@ -597,32 +597,43 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     const { Hono } = await import('hono')
     const updates = new Hono()
     const reportFile = path.join(dataDir, 'update-report.json')
+    /** 重算并落盘更新报告（手动 refresh 与 30 分钟定时共用） */
+    const refreshReport = async (): Promise<unknown> => {
+      const { createUpdateChecker } = await import('./updater/checker.js')
+      const { readBuiltinManifest } = await import('./updater/builtinManifest.js')
+      const client = createNpmClient()
+      const manifest = await readBuiltinManifest(PACKAGE_ROOT)
+      // 当前 server 版本：读本包 package.json（与 cli 的 readVersion 同源）
+      let currentVersion = '0.0.0'
+      try {
+        const pj = JSON.parse(await fs.readFile(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')) as { version?: string }
+        currentVersion = pj.version ?? '0.0.0'
+      } catch { /* 读不到用默认 */ }
+      const checker = createUpdateChecker({
+        npmClient: client,
+        installedRecordFile: path.join(pluginsDir, '.npm-installed.json'),
+        serverPkgName: '@plume-canvas/cloud-server',
+        currentServerVersion: currentVersion,
+        builtinManifest: manifest,
+      })
+      const report = await checker.checkAll()
+      await fs.mkdir(dataDir, { recursive: true })
+      await fs.writeFile(reportFile, JSON.stringify(report, null, 2), 'utf8')
+      return report
+    }
+    // 30 分钟定时检查（设计口径：启动时一次 + 每半小时一次）。失败只 warn，定时器不中断。
+    const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000
+    const updateTimer = setInterval(() => {
+      void refreshReport().catch((err) => console.warn('[updates] 定时检查失败：' + (err instanceof Error ? err.message : String(err))))
+    }, UPDATE_CHECK_INTERVAL_MS)
+    updateTimer.unref()  // 不阻止进程退出
     const readReport = async (): Promise<unknown> => {
       try { return JSON.parse(await fs.readFile(reportFile, 'utf8')) } catch { return { plugins: [], checkedAt: null } }
     }
     updates.get('/api/updates', async (c) => c.json({ ok: true, report: await readReport() }))
     updates.post('/api/updates/refresh', async (c) => {
       try {
-        const { createUpdateChecker } = await import('./updater/checker.js')
-        const { readBuiltinManifest } = await import('./updater/builtinManifest.js')
-        const client = createNpmClient()
-        const manifest = await readBuiltinManifest(PACKAGE_ROOT)
-        // 当前 server 版本：读本包 package.json（与 cli 的 readVersion 同源）
-        let currentVersion = '0.0.0'
-        try {
-          const pj = JSON.parse(await fs.readFile(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')) as { version?: string }
-          currentVersion = pj.version ?? '0.0.0'
-        } catch { /* 读不到用默认 */ }
-        const checker = createUpdateChecker({
-          npmClient: client,
-          installedRecordFile: path.join(pluginsDir, '.npm-installed.json'),
-          serverPkgName: '@plume-canvas/cloud-server',
-          currentServerVersion: currentVersion,
-          builtinManifest: manifest,
-        })
-        const report = await checker.checkAll()
-        await fs.mkdir(dataDir, { recursive: true })
-        await fs.writeFile(reportFile, JSON.stringify(report, null, 2), 'utf8')
+        const report = await refreshReport()
         return c.json({ ok: true, report })
       } catch (err) {
         return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)

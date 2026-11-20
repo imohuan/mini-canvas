@@ -23,7 +23,12 @@ describe('compareVersions', () => {
   it('1.2.0 < 1.3.0', () => expect(compareVersions('1.2.0', '1.3.0')).toBe(-1))
   it('1.0.0 = 1.0.0', () => expect(compareVersions('1.0.0', '1.0.0')).toBe(0))
   it('2.0.0 > 1.9.9', () => expect(compareVersions('2.0.0', '1.9.9')).toBe(1))
-  it('1.0.0-beta 与 1.0.0（有后缀按小处理）', () => expect(compareVersions('1.0.0-beta', '1.0.0')).toBe(-1))
+  it('1.0.0-beta 与 1.0.0（有后缀按小处理）', () => {
+    const r = compareVersions('1.0.0-beta', '1.0.0')
+    expect(r).toBe(-1)
+  })
+  it('1.0.0-beta.1 < 1.0.0-beta.2（预发布段逐段比）', () => expect(compareVersions('1.0.0-beta.1', '1.0.0-beta.2')).toBe(-1))
+  it('坏版本号 abc 与 0.0.1（NaN 兜底按 0，不误判「大于一切」）', () => expect(compareVersions('abc', '0.0.1')).toBe(-1))
 })
 
 /** 假 npmClient：packument 恒返回 latest=2.0.0 */

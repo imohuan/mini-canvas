@@ -1,0 +1,28 @@
+{
+  "plugins": {
+    "@plume-canvas/plugin-theme-components": "latest",
+    "@plume-canvas/plugin-theme-canvas": "latest",
+    "@plume-canvas/plugin-manager": "latest",
+    "@plume-canvas/plugin-agent": "latest",
+    "@plume-canvas/plugin-node-ui": "latest",
+    "@plume-canvas/plugin-bottom-bar": "latest",
+    "@plume-canvas/plugin-node-text": "latest",
+    "@plume-canvas/plugin-node-image": "latest",
+    "@plume-canvas/plugin-node-video": "latest",
+    "@plume-canvas/plugin-node-audio": "latest",
+    "@plume-canvas/plugin-node-3d-preview": "latest",
+    "@plume-canvas/plugin-node-rotate": "latest",
+    "@plume-canvas/plugin-image-grid-split": "latest",
+    "@plume-canvas/plugin-clipboard": "latest",
+    "@plume-canvas/plugin-context-menu": "latest",
+    "@plume-canvas/plugin-file-drop": "latest",
+    "@plume-canvas/plugin-group": "latest",
+    "@plume-canvas/plugin-multi-select": "latest",
+    "@plume-canvas/plugin-edge-cutting": "latest",
+    "@plume-canvas/plugin-style-library": "latest",
+    "@plume-canvas/plugin-shortcut-manager": "latest",
+    "@plume-canvas/plugin-mini-map": "latest",
+    "@plume-canvas/plugin-auto-layout": "latest",
+    "@plume-canvas/plugin-cloud-client": "latest"
+  }
+}
