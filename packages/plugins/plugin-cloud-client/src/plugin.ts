@@ -259,6 +259,8 @@ const MEDIA_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
   image: ['imageUrl'],
   video: ['videoUrl'],
   audio: ['audioUrl'],
+  // 可视化节点的产物地址在 uiOutputUrl；漏了它会「上云后产物地址留在存档里 / 恢复不出图」
+  ui: ['uiOutputUrl'],
   panorama: ['panoUrl'],
   '3d-preview': ['imageUrl'],
   'image-compare': ['leftImageUrl', 'rightImageUrl'],

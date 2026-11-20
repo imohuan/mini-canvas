@@ -25,7 +25,7 @@ import {
 import { themeComponentsPlugin } from '@plume-canvas/plugin-theme-components'
 import { pluginBottomBar } from '@plume-canvas/plugin-bottom-bar'
 import SettingsSchemaField from '../../../../packages/plugins/plugin-theme-components/src/components/settings/SettingsSchemaField.vue'
-import PromptActionSettings from '@plume-canvas/plugin-bottom-bar/PromptActionSettings.vue'
+import BottomBarAiSettings from '@plume-canvas/plugin-bottom-bar/BottomBarAiSettings.vue'
 
 /** 与宿主同形的真内核（底栏的 inject 依赖都在） */
 async function boot(): Promise<Context> {
@@ -85,36 +85,46 @@ beforeAll(async () => {
 })
 
 describe('底栏设置页：Config 真的进了设置、界面真的画得出来', () => {
-  it('「常规/底栏」分组存在，且带后面的 Config 字段', () => {
+  it('「集成/底栏 AI 工具」分组存在，且带后面的 Config 字段', () => {
     const settings = ctx.get<{ groups(): string[]; has(k: string): boolean; get(k: string): unknown }>('settings')
-    expect(settings.groups()).toContain('常规/底栏')
+    expect(settings.groups()).toContain('集成/底栏 AI 工具')
     expect(settings.get('bottomBarAiRetries')).toBe(3)
     // 用户口径 2026-10-27：底栏不再自己配地址，直接用 Agent 插件那份
     expect(settings.has('bottomBarAiBaseUrl')).toBe(false)
   })
 
-  it('自绘页是 append 模式（不顶掉同组的 schema 字段）', () => {
-    // ⚠️ occupants 在**插件作用域**的 ctx.slots 上；ctx.get('slots') 拿到的是内核 SlotRegistry
-    //（只有 list/add/remove，没有 occupants）。设置面板消费的正是前者（ctx.slots）。
-    const slots = ctx.slots as unknown as { occupants(slot: string): Array<{ id: string; meta?: { mode?: string } }> }
-    const occ = slots.occupants('settingsGroup/常规/底栏')
-    expect(occ.map((o) => o.id)).toContain('bottom-bar/prompt-actions')
-    expect(occ.find((o) => o.id === 'bottom-bar/prompt-actions')?.meta?.mode).toBe('append')
+  it('整页挂在「集成 → 底栏 AI 工具」，位于智能助手下面、平台上面', () => {
+    // 用户 2026-11-20：从布局最下面搬到智能助手与平台之间
+    const menu = ctx.get<{
+      resolve(groups: readonly string[]): {
+        navs: Array<{ id: string; title: string; page?: unknown; position: number }>
+      }
+    }>('settingsMenu')
+    const view = menu.resolve(ctx.get<{ groups(): string[] }>('settings').groups())
+    const titles = view.navs.map((n) => n.title)
+    const ai = view.navs.find((n) => n.id === 'nav/integration/bottom-bar-ai')
+    expect(ai, '底栏 AI 工具 nav 未注册').toBeTruthy()
+    expect(ai!.page).toBeTruthy()
+    const agentAt = titles.indexOf('智能助手')
+    const aiAt = titles.indexOf('底栏 AI 工具')
+    expect(aiAt).toBe(agentAt + 1)
   })
 
   it('schema 字段渲染成真实控件（失败重试轮数，默认 3）', async () => {
-    const html = await render(SettingsSchemaField as Component, { group: '常规/底栏', fieldKey: 'bottomBarAiRetries', settings: ctx.get('settings') }, ctx)
+    const html = await render(SettingsSchemaField as Component, { group: '集成/底栏 AI 工具', fieldKey: 'bottomBarAiRetries', settings: ctx.get('settings') }, ctx)
     expect(html).toContain('AI 失败重试')
     // number 字段是精度滑块（role=slider），不是 <input>：按真实控件断言
     expect(html).toContain('role="slider"')
     expect(html).toContain('aria-valuenow="3"')
   })
 
-  it('AI 按钮清单那张表渲染出来（标题 / 名称 / 模板 / 变量提示）', async () => {
-    const html = await render(PromptActionSettings as Component, {}, ctx)
+  it('AI 工具页渲染出来（按钮清单 / 通用模型 / 内置默认）', async () => {
+    const html = await render(BottomBarAiSettings as Component, {}, ctx)
     expect(html).toContain('底栏 AI 按钮')
-    expect(html).toContain('提示词模板')
-    expect(html).toContain('{{prompt}}')
+    expect(html).toContain('通用模型')
+    // 不允许把字段列表铺在页面外面：用户 2026-11-20 明确要求整页搬到集成菜单下
+    const slots = ctx.slots as unknown as { occupants(slot: string): Array<{ id: string }> }
+    expect(slots.occupants('settingsGroup/集成/底栏 AI 工具')).toHaveLength(0)
     // 首屏就摆内置默认（不是空表 + 「配置加载中」—— 那正是用户反馈「看不到配置」的观感）
     expect(html).toContain('翻译')
     expect(html).toContain('提示词优化')

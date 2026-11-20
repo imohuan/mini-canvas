@@ -238,6 +238,8 @@ function onImgLoad(e: Event): void {
  * 幂等（measuredCardSizePatch 会判断），所以反复触发也不会来回写。
  */
 function applyMeasured(width: number, height: number): void {
+  // 「生成中 + 开关打开」时卡片要停在默认尺寸：这时别按（旧）画面比例写回尺寸。
+  if (loadingResetActive()) return
   const patch = measuredCardSizePatch(props.data, width, height, ops.fitLimits?.(), currentNodeSize())
   if (!patch) return
   const current = ops.read(props.id) ?? props.data
@@ -257,6 +259,8 @@ function applyMeasured(width: number, height: number): void {
  */
 function syncCardSize(patch: CardSizePatch | null): void {
   if (!patch) return
+  // 生成中（开关打开）保持默认尺寸，不被旧画面比例拉回去
+  if (loadingResetActive()) return
   // 只写正式尺寸 size；卡片镜像由 nodeStore 自动补齐（读回当前 data 保留其它字段）
   // 这是按图片比例补算的派生尺寸，不是用户拖拽：走 measured 写入，不占撤销栈。
   ops.writeMeasured(props.id, ops.read(props.id) ?? props.data, patch.size)
@@ -272,6 +276,51 @@ function hasExplicitSize(): boolean {
   const size = ctx.tryGet<{ get(id: string): { w: number; h: number } | null }>('nodeGeometry')?.get(props.id)
   return size !== null && size !== undefined
 }
+
+/**
+ * 生成期间是否「回到默认尺寸」（设置项 imageLoadingResetSize，用户 2026-11-19）。
+ *
+ * 打开：点生成立刻清掉本节点的显式 size → 卡片按设置里的默认宽/高显示（横平竖直）；
+ *      跑完不论是成功（按新图比例写回）还是失败（按原图比例写回 / 无图则继续跟默认），
+ *      都由下面的「有画面才对齐」收口。
+ * 关闭：生成期间保持上一次的尺寸，只在原尺寸上盖一层加载动画（竖图就竖着加载）。
+ */
+function resetSizeOnLoadingEnabled(): boolean {
+  // 真实宿主 ctx 有 tryGet；极简测试桩只有 get —— 两种都认，缺服务时当作关闭
+  const scope = ctx as unknown as {
+    tryGet?<T>(name: string): T
+    get?<T>(name: string): T
+  }
+  const settings =
+    (typeof scope.tryGet === 'function' ? scope.tryGet<{ get(key: string): unknown }>('settings') : undefined) ??
+    scope.get?.<{ get(key: string): unknown }>('settings')
+  return settings?.get?.('imageLoadingResetSize') === true
+}
+
+/** 当前是否处在「生成中 + 开关打开」——此时卡片应当按默认尺寸显示，别再按画面比例写回。 */
+function loadingResetActive(): boolean {
+  const status = (props.data?.runState as { status?: unknown } | undefined)?.status
+  return status === 'running' && resetSizeOnLoadingEnabled()
+}
+
+watch(
+  () => (props.data?.runState as { status?: unknown } | undefined)?.status,
+  (status) => {
+    if (!resetSizeOnLoadingEnabled()) return
+    if (status === 'running') {
+      if (!hasExplicitSize()) return
+      // 只清尺寸，不动 data（原图、原分辨率的元数据都留着，跑完还能按它恢复）
+      ops.writeMeasured(props.id, ops.read(props.id) ?? props.data, undefined)
+      return
+    }
+    // 跑完（成功 / 失败 / 取消）：有画面就按画面比例重新写回尺寸，
+    // 免得「生成失败后卡片一直停在默认尺寸」。新图由 imageUrl 的 watch 负责。
+    const w = positiveNum(props.data?.imageWidth)
+    const h = positiveNum(props.data?.imageHeight)
+    if (w !== null && h !== null) applyMeasured(w, h)
+  },
+  { immediate: true },
+)
 
 /**
  * 挂载时补算尺寸 —— **必须等挂载这一帧过去再写**（nextTick），不能同步写在 onMounted 里。
@@ -301,6 +350,8 @@ onMounted(() => {
       }
       return
     }
+    // 生成中（开关打开）：挂载后就该停在默认尺寸，别按旧画面比例写回
+    if (loadingResetActive()) return
     syncCardSize(followedCardSizePatch(props.data, ops.fitLimits?.(), currentNodeSize()))
     const w = positiveNum(props.data?.imageWidth)
     const h = positiveNum(props.data?.imageHeight)

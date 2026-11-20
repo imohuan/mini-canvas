@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { chunkIds, createJobsWatcher, frameOf, type RunningNodeLike } from '../jobsWatcher'
+import { chunkIds, createJobsWatcher, frameOf, resourceRefFromUrl, uiOutputTypeForName, type RunningNodeLike } from '../jobsWatcher'
 import type { ServerJob } from '../apiTypes'
 
 function job(over: Partial<ServerJob> = {}): ServerJob {
@@ -151,6 +151,84 @@ describe('jobsWatcher：一条定时器管整张画布', () => {
     await createJobsWatcher(h.deps).tick()
     expect(h.runtime[0]!.data.runState).toMatchObject({ status: 'done', progress: 100 })
     expect(h.results[0]!.data).toEqual({ imageUrl: '/x.png' })
+  })
+
+  /**
+   * 用户实测 2026-11-20：节点上已有旧图（带旧 resourceId）时，SSE 断着只补 imageUrl，
+   * 画面仍然按旧引用显示旧图，保存时地址还被清理删掉 —— 新图整份丢失。
+   */
+  it('终态：同源产物地址同时写 resourceId，并顶掉旧引用', async () => {
+    const url = '/api/canvases/default/resources/181b08e5281278b6.jpeg'
+    const nodes = [
+      node({ data: { resourceId: 'default/9903b5c80e4f3a3d.png', runState: { status: 'running', taskId: 'j1', actionId: 'a:1' } } }),
+    ]
+    const h = harness(nodes)
+    h.deps.fetchJobs = async () => ({ j1: job({ status: 'done', result: { ok: true, urls: [url] } }) })
+    await createJobsWatcher(h.deps).tick()
+    expect(h.results[0]!.data).toEqual({ imageUrl: url, resourceId: 'default/181b08e5281278b6.jpeg' })
+  })
+
+  /** 后台随结果给出的引用是权威值：地址被重写 / 走别的域名时也不该影响引用 */
+  it('终态：优先采用后台给出的 result.resourceId', async () => {
+    const url = '/api/canvases/default/resources/aaaa1111.png'
+    const nodes = [node()]
+    const h = harness(nodes)
+    h.deps.fetchJobs = async () => ({
+      j1: job({ status: 'done', result: { ok: true, urls: [url], resourceId: 'default/bbbb2222.png' } }),
+    })
+    await createJobsWatcher(h.deps).tick()
+    expect(h.results[0]!.data).toEqual({ imageUrl: url, resourceId: 'default/bbbb2222.png' })
+  })
+
+  it('终态：地址与引用都已一致 → 不重复写盘', async () => {
+    const url = '/api/canvases/default/resources/abc.png'
+    const nodes = [
+      node({
+        data: {
+          imageUrl: url,
+          resourceId: 'default/abc.png',
+          runState: { status: 'running', taskId: 'j1', actionId: 'a:1' },
+        },
+      }),
+    ]
+    const h = harness(nodes)
+    h.deps.fetchJobs = async () => ({ j1: job({ status: 'done', result: { ok: true, urls: [url] } }) })
+    await createJobsWatcher(h.deps).tick()
+    expect(h.results).toHaveLength(0)
+  })
+
+  it('resourceRefFromUrl：只认本画布资源地址，外链不猜', () => {
+    expect(resourceRefFromUrl('/api/canvases/c1/resources/abc.png')).toBe('c1/abc.png')
+    expect(resourceRefFromUrl('http://x/api/canvases/c1/resources/abc.png')).toBeUndefined()
+    expect(resourceRefFromUrl('/api/assets/files/abc.png')).toBeUndefined()
+  })
+
+  /**
+   * 兜底这条路也要把 UI 节点的产物类型写上：只补地址不补 uiOutputType 的话，
+   * 节点「有产物但右侧没有输出端口」，下游连不上。
+   */
+  it('UI 节点终态：同时补 uiOutputUrl / uiOutputType / resourceId', async () => {
+    const url = '/api/canvases/default/resources/abc.mp4'
+    const nodes = [
+      node({ nodeType: 'ui', data: { runState: { status: 'running', taskId: 'j1', actionId: 'a:1' } } }),
+    ]
+    const h = harness(nodes)
+    h.deps.fetchJobs = async () => ({ j1: job({ status: 'done', result: { ok: true, urls: [url] } }) })
+    await createJobsWatcher(h.deps).tick()
+    expect(h.results[0]!.data).toEqual({
+      uiOutputUrl: url,
+      resourceId: 'default/abc.mp4',
+      uiOutputType: 'video',
+    })
+  })
+
+  it('uiOutputTypeForName：与后台/节点插件同一套后缀口径', () => {
+    expect(uiOutputTypeForName('a.mp4')).toBe('video')
+    expect(uiOutputTypeForName('a.wav')).toBe('audio')
+    expect(uiOutputTypeForName('a.md')).toBe('text')
+    expect(uiOutputTypeForName('a.png')).toBe('image')
+    // 认不出后缀时与节点插件同一兜底（当图片）：宁可多一个图片端口，也不要「有产物却没端口」
+    expect(uiOutputTypeForName('a.bin')).toBe('image')
   })
 
   it('后台说没这个任务 → 收敛成失败（别让卡片永远转）', async () => {

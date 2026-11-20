@@ -44,7 +44,17 @@ function pngBytes(w: number, h: number): Uint8Array {
 }
 
 /** 造一套依赖：真 doc（写临时目录）+ 指定行为的假 provider */
-async function setup(provider: Provider, opts: { interval?: number; timeoutMs?: number; artifact?: Uint8Array; action?: ActionDef } = {}) {
+async function setup(
+  provider: Provider,
+  opts: {
+    interval?: number
+    timeoutMs?: number
+    artifact?: Uint8Array
+    /** 按产物地址给不同字节（多产物用例要能造出内容不同的几张图） */
+    artifacts?: (url: string) => Uint8Array | undefined
+    action?: ActionDef
+  } = {},
+) {
   const action = opts.action ?? ACTION
   const doc = new CanvasDocument(new CanvasStore(root), new CanvasResourceStore(root))
   const registry = new ProviderRegistry()
@@ -57,7 +67,8 @@ async function setup(provider: Provider, opts: { interval?: number; timeoutMs?: 
     history,
     resolveResourceUrl: async (canvasId, ref) => '/api/canvases/' + canvasId + '/resources/' + ref.replace('res:', ''),
     // 假取字节：测试里不去连真地址（产物地址都是编的），给一小段假 PNG 字节即可
-    fetchArtifact: async () => opts.artifact ?? new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+    fetchArtifact: async (url) =>
+      opts.artifacts?.(url) ?? opts.artifact ?? new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
     now: () => clock,
     // 假睡眠：不动真时间，但推进假时钟（否则超时判断永远为假）
     sleep: async (ms) => {
@@ -145,6 +156,378 @@ describe('下单', () => {
     expect(hist[0]?.urls?.[0]).toBe(node.data?.imageUrl)
     const rsUrls = (node.data?.runState as { urls?: string[] } | undefined)?.urls
     expect(String(rsUrls?.[0] ?? '')).toMatch(/^\/api\/canvases\/default\/resources\//)
+  })
+
+  /**
+   * 用户实测 2026-11-20（图片 17）：节点上本来有旧图（带 resourceId），重新生成后
+   * 画布上还是旧图 —— 后台只写了 imageUrl，旧 resourceId 没换；而图片组件优先按
+   * resourceId 现取、保存时又会把 imageUrl 当冗余地址删掉，于是新图整份丢掉。
+   *
+   * 锁住：产物落地时 resourceId 必须跟着换成新资源，旧地址也要被顶掉。
+   */
+  it('已有旧图的节点重新生成 → resourceId 换成新资源（不能只写 imageUrl）', async () => {
+    const p: Provider = {
+      id: 'p', actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() { return { status: 'done', urls: ['http://localhost:8033/api/resources/images/doubao/new-abc.jpeg'] } },
+    }
+    const { doc, tasks } = await setup(p, { artifact: pngBytes(512, 512) })
+    // 先放一张旧图（与线上那张 图片 17 一样：旧 resourceId + 旧 imageUrl）
+    await doc.batchNodes({
+      update: [{ id: 'n1', data: { resourceId: 'default/old.png', imageUrl: '/api/canvases/default/resources/old.png' } }],
+    })
+    const job = await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })
+    expect('error' in job).toBe(false)
+    await waitFor(() => tasks.getJob((job as { id: string }).id)?.status === 'done')
+    const node = (await doc.read()).nodes.find((n) => n.id === 'n1')!
+    expect(node.data?.resourceId).toMatch(/^default\/[0-9a-f]+\.jpeg$/)
+    // 旧图不能被留成第二份真相
+    expect(node.data?.resourceId).not.toBe('default/old.png')
+    expect(String(node.data?.imageUrl)).toContain(String(node.data?.resourceId).replace('default/', ''))
+  })
+
+  /**
+   * 字段按**目标节点自己的类型**选（用户口径 2026-11-20：不管生成哪种类型，都必须设 resourceId）。
+   * 可视化节点（type=ui）的产物地址在 uiOutputUrl —— 只按动作声明猜 imageUrl 的话，
+   * UI 节点会「任务成功但卡片空着」。
+   */
+  it('可视化节点接生成任务 → 写 uiOutputUrl + uiOutputType，并设 resourceId', async () => {
+    const p: Provider = {
+      id: 'p', actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() { return { status: 'done', urls: ['http://localhost:8033/api/resources/images/doubao/ui-out.png'] } },
+    }
+    const { doc, tasks } = await setup(p, { artifact: pngBytes(64, 64) })
+    // 把节点改成可视化节点（同一个 id，任务仍写它）：先删再建，不能放同一批
+    await doc.batchNodes({ delete: ['n1'] })
+    await doc.batchNodes({ add: [{ type: 'ui', id: 'n1' }] })
+    const job = await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })
+    expect('error' in job).toBe(false)
+    await waitFor(() => tasks.getJob((job as { id: string }).id)?.status === 'done')
+    const node = (await doc.read()).nodes.find((n) => n.id === 'n1')!
+    expect(node.data?.resourceId).toMatch(/^default\/[0-9a-f]+\.png$/)
+    expect(String(node.data?.uiOutputUrl)).toMatch(/^\/api\/canvases\/default\/resources\//)
+    expect(node.data?.uiOutputType).toBe('image')
+    // 地址就是引用的投影，不是另写一份
+    expect(node.data?.uiOutputUrl).toContain(String(node.data?.resourceId).replace('default/', ''))
+  })
+
+  it('任务结果带回引用（前端不必从地址反推）', async () => {
+    const p: Provider = {
+      id: 'p', actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() { return { status: 'done', urls: ['https://x/1.png'] } },
+    }
+    const { tasks } = await setup(p, { artifact: pngBytes(8, 8) })
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    await waitFor(() => tasks.getJob(job.id)?.status === 'done')
+    expect(tasks.getJob(job.id)?.result?.resourceId).toMatch(/^default\/[0-9a-f]+\.png$/)
+  })
+
+  /**
+   * 多产物（用户口径 2026-11-20）：豆包一次回多张时，只显示第一张是 bug。
+   * 期望：第 1 张写原节点，其余每张各建一个图片节点，并复制原节点的入边与底栏参数。
+   */
+  it('一次回 3 张 → 原节点放第 1 张，另外各建一个节点（复制入边 + 底栏参数）', async () => {
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() {
+        return {
+          status: 'done',
+          urls: [
+            'http://localhost:8033/api/resources/images/doubao/a.png',
+            'http://localhost:8033/api/resources/images/doubao/b.png',
+            'http://localhost:8033/api/resources/images/doubao/c.png',
+          ],
+        }
+      },
+    }
+    // 三张必须是不同字节（内容哈希不同），否则会被当成同一张图去重
+    const sizes: Record<string, number> = { 'a.png': 64, 'b.png': 96, 'c.png': 128 }
+    const { doc, tasks } = await setup(p, {
+      artifacts: (url) => pngBytes(sizes[url.split('/').pop() ?? ''] ?? 64, 64),
+    })
+    // 原节点带上底栏配置，并连一个上游参考图（新节点要把这条边也复制过去）
+    await doc.batchNodes({
+      update: [{
+        id: 'n1',
+        data: { barValues: { ratio: '16:9', actionId: ACTION.id }, barPrompt: '一只猫' },
+      }],
+    })
+    await doc.batchNodes({ add: [{ type: 'image', id: 'ref' }] })
+    await doc.batchEdges({ add: [{ source: 'ref', target: 'n1' }] })
+
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(job.id)?.status === 'done')).toBe(true)
+
+    const snap = await doc.read()
+    // 原节点 + 2 个新节点（参考图节点另算）
+    const images = snap.nodes.filter((n) => n.type === 'image' && n.id !== 'ref')
+    expect(images).toHaveLength(3)
+    // 每张图都有自己的资源，不是三份都指第一张
+    const refs = images.map((n) => String(n.data?.resourceId))
+    expect(new Set(refs).size).toBe(3)
+    // 地址是引用的投影：每条地址都指向自己的那份资源
+    for (const n of images) {
+      expect(String(n.data?.imageUrl)).toContain(String(n.data?.resourceId).replace('default/', ''))
+    }
+
+    // 新节点抄了底栏参数（点开就是同一个模型同一套参数），并且已经是 done
+    for (const extra of images.slice(1)) {
+      expect(extra.data?.barValues).toEqual({ ratio: '16:9', actionId: ACTION.id })
+      expect(extra.data?.barPrompt).toBe('一只猫')
+      expect((extra.data?.runState as { status?: string })?.status).toBe('done')
+      // 不带 taskId：否则前端对账会把它当成原任务再写一遍
+      expect((extra.data?.runState as { taskId?: string })?.taskId).toBeUndefined()
+      // 尺寸按各自那张图量
+      expect(typeof extra.data?.imageWidth).toBe('number')
+      // 入边复制：每个新节点都连着同一个上游参考图
+      expect(snap.edges.some((e) => e.target === extra.id && e.source === 'ref')).toBe(true)
+    }
+    // 摆在原节点右侧，不重叠
+    const originX = snap.nodes.find((n) => n.id === 'n1')!.position.x
+    for (const extra of images.slice(1)) expect(extra.position.x).toBeGreaterThan(originX)
+
+    // 历史与 runState 都是完整的一组同源地址（缩略图才打得开）
+    const hist = await new HistoryStore(root).readAll('default')
+    expect(hist[0]?.urls).toHaveLength(3)
+    for (const u of hist[0]!.urls!) expect(u).toMatch(/^\/api\/canvases\/default\/resources\//)
+  })
+
+  /** 同一张图重复返回（内容哈希一样）只建一个节点，避免画出两个一模一样的节点 */
+  it('重复返回同一张图 → 只建一个节点', async () => {
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() {
+        return {
+          status: 'done',
+          urls: [
+            'http://localhost:8033/api/resources/images/doubao/a.png',
+            'http://localhost:8033/api/resources/images/doubao/a-copy.png',
+          ],
+        }
+      },
+    }
+    // 两个地址给同一份字节 → 内容哈希相同
+    const { doc, tasks } = await setup(p, { artifact: pngBytes(32, 32) })
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(job.id)?.status === 'done')).toBe(true)
+    expect((await doc.read()).nodes.filter((n) => n.type === 'image')).toHaveLength(1)
+  })
+
+  /**
+   * 同一个节点第二次生成（用户实测 2026-11-20）：第一批 4 个节点已经在右边了，
+   * 第二批不能再压在它们身上 —— 看起来会像"没生成出来"。
+   */
+  it('同一节点再生成一批 → 新节点避开上一批的位置', async () => {
+    let round = 0
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() {
+        round += 1
+        const n = round * 100
+        return {
+          status: 'done',
+          urls: [
+            'https://x/a' + n + '.png',
+            'https://x/b' + n + '.png',
+          ],
+        }
+      },
+    }
+    const { doc, tasks } = await setup(p, { artifacts: (url) => pngBytes(url.includes('a') ? 64 : 96, 64) })
+    const first = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(first.id)?.status === 'done')).toBe(true)
+    const second = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(second.id)?.status === 'done')).toBe(true)
+
+    const images = (await doc.read()).nodes.filter((n) => n.type === 'image')
+    expect(images).toHaveLength(3)
+    // 任何两个节点的位置都不能几乎重合
+    for (const a of images) {
+      for (const b of images) {
+        if (a.id === b.id) continue
+        const sameX = Math.abs(a.position.x - b.position.x) < 100
+        const sameY = Math.abs(a.position.y - b.position.y) < 100
+        expect(sameX && sameY).toBe(false)
+      }
+    }
+  })
+
+  /**
+   * 同一行里有竖图 / 横图混着（用户实测截到过重叠）：
+   * 以前按每个节点自己的高度算 y，矮的会往上浮、压住上一行；现在按「这一行最高的那张」算行高。
+   * 这里造一批 3:4 竖图 + 一张 4:3 横图，断言同一行的 y 完全相同、两行之间不重叠。
+   */
+  it('竖图横图混排 → 同一行对齐、两行不重叠', async () => {
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() {
+        return {
+          status: 'done',
+          urls: ['https://x/1.png', 'https://x/2.png', 'https://x/3.png', 'https://x/4.png', 'https://x/5.png'],
+        }
+      },
+    }
+    // 1、2、4 是三张竖图（320×426），3 是横图（320×240）
+    const shapes: Record<string, [number, number]> = {
+      '1.png': [320, 426],
+      '2.png': [320, 426],
+      '3.png': [320, 240],
+      '4.png': [320, 426],
+      '5.png': [320, 426],
+    }
+    const { doc, tasks } = await setup(p, {
+      artifacts: (url) => {
+        const name = url.split('/').pop() ?? ''
+        const [w, h] = shapes[name] ?? [320, 240]
+        // 三张竖图尺寸一样，要补一点不同的字节，否则会被当成同一张图去重
+        const bytes = pngBytes(w, h)
+        const out = new Uint8Array(bytes.length + 1)
+        out.set(bytes, 0)
+        out[bytes.length] = (name.charCodeAt(0) % 97) + 1
+        return out
+      },
+    })
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(job.id)?.status === 'done')).toBe(true)
+
+    const extras = (await doc.read()).nodes.filter((n) => n.type === 'image' && n.id !== 'n1')
+    // 5 张 → 第 1 张进原节点，其余 4 张分两行（一行 3 个）
+    expect(extras).toHaveLength(4)
+    // 第一行（前两张）y 必须一致：不能一张高一张矮就错开
+    expect(extras[0]!.position.y).toBe(extras[1]!.position.y)
+    // 第二行（第 4 个）在第一行下面，且留出足够距离（第一行最高那张 426 高）
+    expect(extras[3]!.position.y).toBeGreaterThanOrEqual(extras[0]!.position.y + 400)
+    expect(extras[0]!.position.y).toBe(extras[2]!.position.y)
+  })
+
+  /**
+   * 横向宽图（用户实测 2026-11-20：1296×500 的图卡片比 320 宽）：
+   * 以前按固定列宽摆，它会压住右边那张；现在按 fitMediaCard 同一套规则算出卡片宽高，
+   * 逐列累加摆放，并把尺寸直接写进节点。
+   */
+  it('横向宽图 → 卡片按图片比例算宽，不压住右边的节点', async () => {
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() {
+        return { status: 'done', urls: ['https://x/wide.png', 'https://x/next.png', 'https://x/third.png'] }
+      },
+    }
+    // wide.png 是 1296×500（卡片宽约 429）；next.png / third.png 是 320×320（卡片 320）
+    const shapes: Record<string, [number, number]> = { 'wide.png': [1296, 500], 'next.png': [320, 320] }
+    const { doc, tasks } = await setup(p, {
+      artifacts: (url) => {
+        const name = url.split('/').pop() ?? ''
+        const [w, h] = shapes[name] ?? [320, 320]
+        // 三张里有两张尺寸一样，补一点字节差异，否则会被当成同一张去重
+        const bytes = pngBytes(w, h)
+        const out = new Uint8Array(bytes.length + 1)
+        out.set(bytes, 0)
+        out[bytes.length] = (name.charCodeAt(0) % 97) + 1
+        return out
+      },
+    })
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(job.id)?.status === 'done')).toBe(true)
+
+    const images = (await doc.read()).nodes.filter((n) => n.type === 'image')
+    expect(images).toHaveLength(3)
+    const [origin, wide] = images
+    // 摆放按真实卡片尺寸推：宽图卡片按 420 上限算宽（1296×500 → 420×162 附近），
+    // 右边那张的 x 必须在宽图右边界 + 间距之后，而不是固定列宽的 808。
+    expect(wide!.position.x).toBeGreaterThan(400)
+    expect(wide!.position.x).toBeGreaterThanOrEqual(origin!.position.x + (origin!.size?.w ?? 320) + 48)
+    const third = images[2]
+    if (third) expect(third.position.x).toBeGreaterThanOrEqual(wide!.position.x + (wide!.size?.w ?? 320) + 48)
+  })
+
+  /**
+   * 用户实测 2026-11-20（截图：图片 19/20 跑到了原节点右下角）：
+   * 宽图卡片 420 宽，旧避让用「左上角距离」近似判断，把没重叠的一行误判成重叠，
+   * 整行被推到下一行。锁住：卡片明明放得下时，必须停在第一行。
+   */
+  it('宽图能放下时不被误判重叠（不整行下坠）', async () => {
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() {
+        return { status: 'done', urls: ['https://x/tall.png', 'https://x/wide.png', 'https://x/legs.png'] }
+      },
+    }
+    // tall.png 256×384（卡片约 165×248）；wide.png 1296×500（卡片约 420×162）；legs.png 410×410（卡片 320）
+    const shapes: Record<string, [number, number]> = {
+      'tall.png': [256, 384],
+      'wide.png': [1296, 500],
+      'legs.png': [410, 410],
+    }
+    const { doc, tasks } = await setup(p, {
+      artifacts: (url) => {
+        const name = url.split('/').pop() ?? ''
+        const [w, h] = shapes[name] ?? [320, 320]
+        const bytes = pngBytes(w, h)
+        const out = new Uint8Array(bytes.length + 1)
+        out.set(bytes, 0)
+        out[bytes.length] = (name.charCodeAt(0) % 97) + 1
+        return out
+      },
+    })
+    // 原节点没有显式 size：按类型默认 320×240 估（与线上截图一致）
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(job.id)?.status === 'done')).toBe(true)
+
+    const images = (await doc.read()).nodes.filter((n) => n.type === 'image')
+    expect(images).toHaveLength(3)
+    // 两张新节点都在第一行（y 与原节点一致），没有被误判成重叠而掉到下一行
+    const origin = images[0]!
+    for (const extra of images.slice(1)) {
+      expect(extra.position.y).toBe(origin.position.y)
+      // x 依次往右排，且不与原节点重叠
+      expect(extra.position.x).toBeGreaterThanOrEqual(origin.position.x + 320 + 48)
+    }
+    expect(images[2]!.position.x).toBeGreaterThanOrEqual(images[1]!.position.x + (images[1]!.size?.w ?? 320) + 48)
+  })
+
+  /** 第 2 张取不到字节：跳过它，第 1、3 张照常落地，任务仍算成功 */
+  it('某一张取不到字节 → 跳过那一张，其它照常落地', async () => {
+    const p: Provider = {
+      id: 'p',
+      actions: [ACTION],
+      async submit() { return { taskId: 'pt1' } },
+      async poll() {
+        return {
+          status: 'done',
+          urls: [
+            'http://localhost:8033/api/resources/images/doubao/ok1.png',
+            'http://localhost:8033/api/resources/images/doubao/broken.png',
+            'http://localhost:8033/api/resources/images/doubao/ok2.png',
+          ],
+        }
+      },
+    }
+    const { doc, tasks } = await setup(p, {
+      // 中间那张取字节直接失败（模拟上游资源 404）
+      artifacts: (url) => {
+        if (url.endsWith('broken.png')) throw new Error('取产物失败 404')
+        // 两张好图要给不同字节，否则会被当成同一张去重
+        return pngBytes(url.includes('ok1') ? 40 : 80, 40)
+      },
+    })
+    const job = (await tasks.createJob({ canvasId: 'default', nodeId: 'n1', actionId: ACTION.id })) as { id: string }
+    expect(await waitFor(() => tasks.getJob(job.id)?.status === 'done')).toBe(true)
+    // 原节点 + 1 个新节点（坏的那张被跳过）
+    expect((await doc.read()).nodes.filter((n) => n.type === 'image')).toHaveLength(2)
   })
 
   it('历史记下生成参数：提示词 / 参数 / 参考素材 / 媒体元数据（尺寸·时长·大小）', async () => {

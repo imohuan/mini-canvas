@@ -73,10 +73,26 @@ export interface ProviderConfigFile {
   platforms?: Record<string, ProviderPlatformMeta>
   /** 生成类型 → 默认模型 id（全局，不分平台） */
   defaults?: ModelDefaults
+  /**
+   * platformId → 被关掉的模型（动作 id）。
+   *
+   * 用户口径 2026-11-20：一个平台会导出很多模型，用户可能只常用其中几个；
+   * 关掉的模型仍在配置里（随时可以打开），只是不再下发给前端的模型下拉。
+   */
+  disabledModels?: Record<string, string[]>
 }
 
 export function emptyProviderConfig(): ProviderConfigFile {
-  return { version: 2, disabledFiles: [], deletedFiles: [], files: {}, config: {}, platforms: {}, defaults: {} }
+  return {
+    version: 2,
+    disabledFiles: [],
+    deletedFiles: [],
+    files: {},
+    config: {},
+    platforms: {},
+    defaults: {},
+    disabledModels: {},
+  }
 }
 
 /** 文件名白名单：只允许普通 .js 名（无路径分隔），杜绝路径穿越 */
@@ -139,6 +155,15 @@ export async function readProviderConfig(file: string): Promise<ProviderConfigFi
     if (raw.defaults && typeof raw.defaults === 'object' && !Array.isArray(raw.defaults)) {
       for (const [k, v] of Object.entries(raw.defaults as Record<string, unknown>)) {
         if (typeof v === 'string' && v !== '') defaults[k] = v
+      }
+    }
+    // 被关掉的模型（platformId → 动作 id 列表）
+    const disabledModels = (out.disabledModels ||= {})
+    if (raw.disabledModels && typeof raw.disabledModels === 'object' && !Array.isArray(raw.disabledModels)) {
+      for (const [pid, list] of Object.entries(raw.disabledModels as Record<string, unknown>)) {
+        if (!Array.isArray(list)) continue
+        const ids = list.filter((x): x is string => typeof x === 'string' && x !== '')
+        if (ids.length > 0) disabledModels[pid] = [...new Set(ids)]
       }
     }
     // v2：files[文件名].accounts

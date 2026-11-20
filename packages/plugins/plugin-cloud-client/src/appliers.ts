@@ -11,6 +11,8 @@
  * - image / text：由各自的节点插件提供，本插件**不要碰**。
  */
 
+import { isResourceRef, resourceRefOfUrl } from '@plume-canvas/canvas-data'
+
 /** 写入器要用到的那点 doc 能力（结构化取，不 import 数据层类型） */
 export interface DocLike {
   updateNode?(id: string, patch: { data: Record<string, unknown> }): void
@@ -41,20 +43,16 @@ interface LocalizedResult {
  * 迁移期会把这种地址从老存档/后台产物里带回来；能认就顺手升级成 ID，
  * 免得每写一次都留一份 URL。
  */
+/** 与 canvas-data 的 resourceRefOfUrl 同一份实现（打包时内联；地址形态/白名单只此一处） */
 function resourceIdFromUrl(url: string): string | undefined {
-  const m = /^\/api\/canvases\/([A-Za-z0-9_-]{1,64})\/resources\/([^/?#]+)$/.exec(url)
-  if (!m) return undefined
-  return m[1] + '/' + m[2]
+  return resourceRefOfUrl(url)
 }
 
 /** 已经是资源库引用（逻辑 ID `<canvasId>/<hashName>`，或本地 `res-…`） */
 function isResourceRefLike(ref: string): boolean {
   if (/^res-/.test(ref)) return true
-  // 逻辑 ID 只有一段斜杠，第二段是内容哈希 / 槽位名（与 cloudResourceAdapter 同口径）
-  const i = ref.indexOf('/')
-  if (i <= 0 || i !== ref.lastIndexOf('/')) return false
-  if (!/^[A-Za-z0-9_-]{1,64}$/.test(ref.slice(0, i))) return false
-  return /^([0-9a-f]{16}(\.[a-z0-9]+)?|slot-[A-Za-z0-9_-]{1,64}(\.[a-z0-9]+)?)$/i.test(ref.slice(i + 1))
+  // 只算**逻辑 ID**（目标形态）：地址形态走上面那条"本画布地址直接可用"的快路
+  return isResourceRef(ref)
 }
 
 /**

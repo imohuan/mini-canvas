@@ -28,6 +28,8 @@ beforeAll(() => {
     'Button', 'Badge', 'ScrollArea',
     'InputGroup', 'InputGroupAddon', 'InputGroupButton', 'InputGroupInput',
     'DropdownMenuSub', 'DropdownMenuSubTrigger', 'DropdownMenuSubContent', 'DropdownMenuItem',
+    // 第二行的悬停说明（用户 2026-11-20）：面板里用了 Tooltip 四件套
+    'Tooltip', 'TooltipContent', 'TooltipProvider', 'TooltipTrigger',
   ]) field.add(n, stub(n), { id: 'test' })
   uiField = field
 })

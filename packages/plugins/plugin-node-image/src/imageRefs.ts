@@ -9,6 +9,8 @@
  * 回退分支集中在本文件（只此一处），组件不再各写一份 `imageUrl || ...`。
  */
 
+import { resolveMediaSrc } from '@plume-canvas/canvas-data'
+
 /**
  * 只认 "按名字取服务" 这一件事（插件 ctx 与渲染上下文都满足）。
  *
@@ -65,17 +67,7 @@ export async function resolveImageSrc(
   ctx: ResourceResolverLike | undefined,
   data: Record<string, unknown> | undefined,
 ): Promise<string> {
-  const { resourceId, legacyUrl } = readImageSourceFields(data)
-  if (!resourceId) return legacyUrl
-  const port = imageResourcePort(ctx)
-  if (port) {
-    try {
-      const url = await port.resolve(resourceId)
-      if (url) return url
-    } catch {
-      // 资源服务异常按“取不到”处理，下面回退旧地址（不能让整张卡片渲染失败）
-    }
-  }
-  return legacyUrl // 迁移期：旧存档只有 imageUrl，没有 resourceId 对应的资源条目
+  // 统一实现（引用 → 资源服务 → 回退旧地址）在 canvas-data 的 resolveMediaSrc，这里只固定字段名。
+  return resolveMediaSrc(ctx, data, 'imageUrl')
 }
 

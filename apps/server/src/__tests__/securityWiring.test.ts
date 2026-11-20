@@ -304,6 +304,19 @@ describe('任务令牌只能写本节点的产物字段（M1）', () => {
     // 正路：脚本把产物写回自己
     expect(verify({ token, canvasId: 'c1', body: { update: [{ id: 'n1', data: { uiOutputUrl: '/x.png' } }] } })).toBe(true)
     expect(verify({ token, canvasId: 'c1', body: { update: [{ id: 'n1', data: { imageUrl: '/a.png', text: 'hi' } }] } })).toBe(true)
+    // 产物先有引用、再算地址（用户口径 2026-11-20）；UI 节点还要靠 uiOutputType 定右侧端口类型。
+    // 早先这两项不在白名单里，UI 节点交产物会整批被拒。
+    expect(
+      verify({
+        token,
+        canvasId: 'c1',
+        body: {
+          update: [
+            { id: 'n1', data: { resourceId: 'c1/0123456789abcdef.png', uiOutputUrl: '/x.png', uiOutputType: 'image' } },
+          ],
+        },
+      }),
+    ).toBe(true)
 
     // 夹带界面代码：脚本不该能给自己换一套 HTML
     expect(verify({ token, canvasId: 'c1', body: { update: [{ id: 'n1', data: { uiHtml: '<script>x</script>' } }] } })).toBe(false)

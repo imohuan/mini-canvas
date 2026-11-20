@@ -108,5 +108,25 @@ describe('平台管理接口', () => {
     // 内置平台没有文件：删它必须是 4xx，不能 200 假装成功
     const del = await call('DELETE', '/api/providers/agent-chat.js')
     expect(del.status).toBeGreaterThanOrEqual(400)
+    expect(del.json.error).toBe('这个平台是内置的，没有文件可删')
+  })
+
+  /**
+   * 先停用、再删除的文件不能留在列表里（用户 2026-11-20 截图）。
+   *
+   * 删除只把名字记进 deletedFiles，文件已经不在了；可 disabledFiles 里往往还留着同一个名字，
+   * 于是列表永远多一行「已停用」的幽灵平台，再点删除又必然失败。
+   */
+  it('已删除的文件不再作为「已停用」占位行出现', async () => {
+    expect((await call('POST', '/api/providers/p-test.js/disable')).status).toBe(200)
+    expect((await rows()).find((r) => r.id === 'p-test')?.enabled).toBe(false)
+
+    expect((await call('DELETE', '/api/providers/p-test.js')).status).toBe(200)
+    expect((await rows()).map((r) => r.id)).not.toContain('p-test')
+
+    // 重启（重新读同一份配置）也不该把幽灵行捞回来
+    srv.stop()
+    srv = await createCloudServer({ port: 0, dir, watchProviders: false })
+    expect((await rows()).map((r) => r.id)).not.toContain('p-test')
   })
 })

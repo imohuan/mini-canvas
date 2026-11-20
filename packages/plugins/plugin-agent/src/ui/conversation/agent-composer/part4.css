@@ -148,8 +148,10 @@
   height: 16px;
   flex: none;
   color: var(--ui-ink, #18202b);
-  opacity: 0;
-  transition: opacity 0.12s ease;
+  /*
+   * 不再靠 opacity 隐藏：用户 2026-11-20 指出「没选中时也一直占着 16px」，
+   * 导致第二行永远贴不到右边。现在由模板 v-if 决定渲不渲染（没选中就没有这颗节点）。
+   */
 }
 
 .ac-split {

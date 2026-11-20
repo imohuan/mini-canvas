@@ -24,6 +24,7 @@ import {
   probeMedia,
   type MediaProbe,
 } from './mediaSize.js'
+import { resourceUrlOfRef, toResourceUrl } from '../store/canvasResources.js'
 
 /** 默认轮询间隔（ms） */
 export const DEFAULT_INTERVAL = 1500
@@ -291,15 +292,21 @@ export class TaskManager {
   /**
    * 产物该写进节点的哪个字段 —— 按节点类型决定（与前端 applier 同一套映射）。
    * 认不出类型时退回 imageUrl（图片是最常见的产物）。
+   *
+   * `image-compare` 必须写 `leftImageUrl`：它只读左右两槽，写 imageUrl 等于没写
+   *（任务「成功」但对比窗口还是空的）。与 canvas-data 的 mediaUrlFieldsOf 同一张表。
    */
   private mediaFieldFor(type: string | undefined): string {
     switch (type) {
+      case 'ui':
+        return 'uiOutputUrl'
       case 'audio':
         return 'audioUrl'
       case 'video':
         return 'videoUrl'
-      case '3d-preview':
       case 'image-compare':
+        return 'leftImageUrl'
+      case '3d-preview':
       case 'image':
       default:
         return 'imageUrl'
@@ -327,22 +334,68 @@ export class TaskManager {
   }
 
   /**
-   * 把产物**字节**收进本画布资源目录，再把**同源地址**写进节点的媒体字段。
+   * 产物要落到**这个节点自己**的哪种地址字段。
+   *
+   * 为什么读节点而不是只看动作声明：同一个动作可以被不同节点类型接住 —— 比如可视化节点
+   * （type=ui）也能接生成任务，它的产物地址统一存在 `uiOutputUrl`。只按动作的 nodeTypes 猜，
+   * 会把地址写进一个该节点根本不读的字段（表现就是「任务成功了，卡片还是空的」）。
+   * 读不到节点（已被删除 / 读盘失败）时退回动作声明。
+   */
+  private async targetNodeType(job: Job, doc: CanvasDocument, action: ActionDef): Promise<string | undefined> {
+    try {
+      const snap = await doc.read()
+      const node = snap.nodes.find((n) => n.id === job.nodeId)
+      if (node?.type) return node.type
+    } catch {
+      /* 读不到就退回动作声明 */
+    }
+    return action.nodeTypes?.[0]
+  }
+
+  /**
+   * UI 节点这次产出的内容类型（image / video / audio / text）。
+   *
+   * 与前端 plugin-node-ui 的 outputTypeForName 同一套口径：按产物扩展名认，
+   * 认不出再看实测到的媒体类型（有些平台给 .bin，扩展名不可靠）。
+   */
+  private uiOutputTypeOf(fileName: string | undefined, media: MediaProbe): 'image' | 'video' | 'audio' | 'text' {
+    const ext = (String(fileName ?? '').match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
+    if (ext === 'mp4' || ext === 'webm' || ext === 'mov') return 'video'
+    if (ext === 'mp3' || ext === 'wav' || ext === 'ogg' || ext === 'm4a') return 'audio'
+    if (ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv') return 'text'
+    if (media.width !== undefined && media.height !== undefined) return 'image'
+    return 'image'
+  }
+
+  /**
+   * 把**一份**产物的字节收进本画布资源目录，返回要写进节点的那份数据。
    *
    * 关键：不能只把 provider 的地址（`http://localhost:8033/...`）抄进节点 —— 那是另一个服务的地址，
    * 换机器 / 换端口就取不到，画布上只会显示「图片已失效」。必须先 `saveResource` 把字节落到
    * `<画布>/resources/`（按内容哈希，重复不重复存），再把 `saveResource` 返回的同源地址写进节点。
    * 这个地址形如 `/api/canvases/<画布>/resources/<hash>.<ext>`，文件**确实存在**，图片节点直接就能加载。
+   *
+   * 单份失败（地址取不到 / 存盘失败）只返回 undefined，让调用方跳过这一份 —— 不能因为第 3 张挂了，
+   * 把前两张和整次任务一起判失败。
    */
-  private async writeMediaFields(
+  private async localizeArtifact(
     job: Job,
     action: ActionDef,
-    urls: string[] | undefined,
-  ): Promise<{ url: string; media: MediaProbe } | undefined> {
-    const raw = urls?.[0]
-    if (!raw) return undefined
+    raw: string,
+    doc: CanvasDocument,
+  ): Promise<
+    | {
+        url: string
+        resourceId: string
+        hashName: string
+        media: MediaProbe
+        fileName?: string
+        size: { width: number; height: number } | null
+        sizeFields: { w: string; h: string } | null
+      }
+    | undefined
+  > {
     try {
-      const doc = this.deps.docForCanvas?.(job.canvasId) ?? this.deps.doc
       const bytes = this.deps.fetchArtifact
         ? await this.deps.fetchArtifact(raw)
         : await (async () => {
@@ -353,6 +406,14 @@ export class TaskManager {
           })()
       const fileName = raw.split('?')[0]?.split('/').pop() ?? undefined
       const stored = await doc.saveResource(bytes, fileName ? { fileName } : {})
+      /**
+       * 先定**引用**，再由引用推出地址（用户口径 2026-11-20）。
+       *
+       * 引用是长期身份；地址只是它的投影，不能反过来当真相。写成"先有地址再拼引用"
+       * 就是这次「图片 17 重新生成还是旧图」的根因：地址换了、引用没换，画面按引用显示旧图。
+       */
+      const resourceId = job.canvasId + '/' + stored.hashName
+      const url = resourceUrlOfRef(resourceId) ?? toResourceUrl(job.canvasId, stored.hashName)
       // 一次量全卡片要用的元数据（尺寸 / 时长 / 字节数）：历史里存下来，
       // 卡片就不必等 <video>/<audio> 的 metadata 才敢画真实比例（会先闪一下再跳）。
       // 后缀认不出（如 web2api 给的 .bin / 无扩展名）时按节点类型兜底：
@@ -373,22 +434,208 @@ export class TaskManager {
       // 缺了就会停在类型默认的 4:3 —— 9:16 的竖图被塞成横的（用户实测）。
       const size = fileName ? this.measureBytes(bytes, fileName) : null
       const sizeFields = fileName ? this.sizeFieldsFor(fileName) : null
-      await doc.batchNodes({
-        update: [
-          {
-            id: job.nodeId,
-            data: {
-              [this.mediaFieldFor(action.nodeTypes?.[0])]: stored.url,
-              ...(size && sizeFields ? { [sizeFields.w]: size.width, [sizeFields.h]: size.height } : {}),
-            },
-          },
-        ],
-      })
-      // 返回**同源地址**（存在的那份）：历史 / runState 都用它，前端缩略图才加载得出来
-      return { url: stored.url, media }
+      return { url, resourceId, hashName: stored.hashName, media, ...(fileName ? { fileName } : {}), size, sizeFields }
     } catch (err) {
-      this.deps.onError?.('[tasks] 写节点产物字段失败（产物可能取不到，或节点已被删除）', err)
+      this.deps.onError?.('[tasks] 产物落盘失败，跳过这一份：' + raw, err)
       return undefined
+    }
+  }
+
+  /** 一份已本地化的产物 → 写进节点的 data 字段（地址永远是 resourceId 的投影） */
+  private fieldsForArtifact(
+    artifact: {
+      url: string
+      resourceId: string
+      media: MediaProbe
+      fileName?: string
+      size: { width: number; height: number } | null
+      sizeFields: { w: string; h: string } | null
+    },
+    targetType: string | undefined,
+  ): Record<string, unknown> {
+    const fields: Record<string, unknown> = {
+      resourceId: artifact.resourceId,
+      [this.mediaFieldFor(targetType)]: artifact.url,
+      ...(artifact.size && artifact.sizeFields
+        ? { [artifact.sizeFields.w]: artifact.size.width, [artifact.sizeFields.h]: artifact.size.height }
+        : {}),
+    }
+    // UI 节点还要定「这次产物是哪一类」：右侧端口类型与下游能不能连都读它。
+    if (targetType === 'ui') fields.uiOutputType = this.uiOutputTypeOf(artifact.fileName, artifact.media)
+    return fields
+  }
+
+  /**
+   * 多产物落地：第 1 张写回任务节点，其余每张**各建一个同类型节点**。
+   *
+   * 用户口径（2026-11-20）：豆包这类网页自动化生图一次会回多张，现在只显示第一张。
+   * 多出来的要「配置相同的输入节点，和底部状态栏的参数」：
+   * - 位置：原节点右侧，一行 3 个，排满换行；
+   * - 输入：复制原节点的入边（参考图 / 参考文字接上）；
+   * - 底栏：复制 `barValues` / `barPrompt` / `barPromptDoc`，点开就是同一个模型同一套参数；
+   * - 状态：直接标 done（**不带 taskId**），前端对账不会把它当成原任务再写一遍；
+   * - 名称：不复制 label，交给数据层自动起名「图片 N」，避免重名。
+   *
+   * 为什么不限数量：生图要花钱，正常不会回一大把；真出现了就都落下来，比悄悄丢掉强。
+   * 同一张图（内容哈希相同）重复返回只建一个节点。
+   */
+  private async spawnExtraArtifactNodes(
+    job: Job,
+    action: ActionDef,
+    extras: Array<{
+      url: string
+      resourceId: string
+      hashName: string
+      media: MediaProbe
+      fileName?: string
+      size: { width: number; height: number } | null
+      sizeFields: { w: string; h: string } | null
+    }>,
+    doc: CanvasDocument,
+  ): Promise<void> {
+    if (extras.length === 0) return
+    try {
+      const snap = await doc.read()
+      const origin = snap.nodes.find((n) => n.id === job.nodeId)
+      // 原节点被删了（用户中途删掉）：没有可参照的位置与参数，干脆不建，别凭空冒节点
+      if (!origin) return
+      const originW = origin.size?.w ?? 320
+      const originH = origin.size?.h ?? 240
+      const gapX = 48
+      const gapY = 48
+      const cols = 3
+      /**
+       * 卡片尺寸（宽和高都要算，不能只算高）。
+       *
+       * 用户实测 2026-11-20：一张 1296×500 的横图卡片比 320 宽得多，按固定列宽摆会压住下一张。
+       * 这里用与前端 imageFit 同一套规则（最短边 ≥120、最长边 ≤420，冲突时最短边优先），
+       * 算出来的尺寸直接写进新节点 —— 摆放和显示用的是同一份数字，不会再对不上。
+       */
+      const cardSizeOf = (
+        artifact: { size: { width: number; height: number } | null },
+      ): { w: number; h: number } => {
+        const w = artifact.size?.width ?? originW
+        const h = artifact.size?.height ?? originH
+        if (!w || !h) return { w: originW, h: originH }
+        const short = Math.min(w, h)
+        const long = Math.max(w, h)
+        const ratio = Math.max(120 / short, Math.min(1, 420 / long))
+        return { w: Math.max(1, Math.round(w * ratio)), h: Math.max(1, Math.round(h * ratio)) }
+      }
+      /**
+       * 避让已占用的位置（用户实测 2026-11-20）：同一个节点再生成一次时，
+       * 新一批节点会正好压住上一批 —— 画布上看像"没生成"，其实是叠在一起了。
+       *
+       * 用矩形相交判断，只比同分组的节点：不同分组里坐标含义不同（父/画布），拿来比会误判。
+       * 老节点没存 size 的按类型默认 320×240 估。
+       */
+      const siblings = snap.nodes.filter((n) => (n.parentId ?? '') === (origin.parentId ?? ''))
+      const occupied = (x: number, y: number, w: number, h: number): boolean =>
+        siblings.some((n) => {
+          const nw = n.size?.w ?? 320
+          const nh = n.size?.h ?? 240
+          /**
+           * 真正的矩形相交（AABB），各留 8px 余量。
+           * 之前用「左上角距离 < 尺寸和的一半」近似：宽图卡片（420 宽）会被误判成
+           * 与原节点重叠 —— 实际中间还隔着 48px 空隙 —— 整行被错误推到下一行
+           *（用户实测 2026-11-20：新节点跑到了原节点右下方）。
+           */
+          return (
+            x < n.position.x + nw + 8 &&
+            n.position.x < x + w + 8 &&
+            y < n.position.y + nh + 8 &&
+            n.position.y < y + h + 8
+          )
+        })
+      /** 底栏「这次准备用什么」的那几个字段：新节点抄一份，点开就是同一套配置 */
+      const copied: Record<string, unknown> = {}
+      for (const key of ['barValues', 'barPrompt', 'barPromptDoc'] as const) {
+        if (origin.data?.[key] !== undefined) copied[key] = origin.data[key]
+      }
+      const seen = new Set<string>()
+      const add = extras
+        .filter((a) => {
+          if (seen.has(a.hashName)) return false
+          seen.add(a.hashName)
+          return true
+        })
+        .map((artifact) => ({
+          artifact,
+          card: cardSizeOf(artifact),
+          position: null as { x: number; y: number } | null,
+        }))
+      /**
+       * 逐行摆放：同一行按**这一行最宽/最高**的卡片推位置，下一行从它下面开始。
+       *
+       * 之前只按固定列宽和固定高度摆，横图（比原节点宽）会压住右边、竖图会压住下一行
+       *（两次都是截图实测到的）。现在每一列的实际宽度累加，行高取这一行最高那张。
+       */
+      let rowY = Math.round(origin.position.y)
+      for (let start = 0; start < add.length; start += cols) {
+        const rowItems = add.slice(start, start + cols)
+        const rowH = Math.max(originH, ...rowItems.map((it) => it.card.h))
+        for (let guard = 0; guard < 200; guard += 1) {
+          let x = Math.round(origin.position.x + originW + gapX)
+          const clash = rowItems.some((it) => {
+            const hit = occupied(x, rowY, it.card.w, it.card.h)
+            x += it.card.w + gapX
+            return hit
+          })
+          if (!clash) break
+          rowY += rowH + gapY
+        }
+        let x = Math.round(origin.position.x + originW + gapX)
+        for (const it of rowItems) {
+          it.position = { x, y: rowY }
+          x += it.card.w + gapX
+        }
+        rowY += rowH + gapY
+      }
+      const placed = add.map(({ artifact, card, position }) => ({
+        type: origin.type,
+        position: position ?? { x: origin.position.x, y: origin.position.y },
+        /**
+         * 尺寸直接写进节点：前端拿到就有正确比例，不用等图片加载完再量一次；
+         * 摆放用的是同一份尺寸，节点之间不会互相压住。
+         */
+        size: card,
+        // 原节点在分组里时，新节点也要进同一个分组：否则会掉到分组外面，
+        // 而且坐标含义会从「相对父节点」变成「相对画布」，位置整个错位。
+        ...(origin.parentId ? { parentId: origin.parentId } : {}),
+        data: {
+          ...copied,
+          ...this.fieldsForArtifact(artifact, origin.type),
+          runState: { status: 'done', progress: 100, actionId: action.id, message: '已完成' },
+        },
+      }))
+      if (placed.length === 0) return
+      const added = await doc.batchNodes({ add: placed })
+      if (!added.ok) {
+        this.deps.onError?.('[tasks] 多产物建节点失败：' + added.errors.map((e) => e.message).join('；'))
+        return
+      }
+      /**
+       * 复制入边：源节点与端口都照抄，只把 target 换成新节点。
+       * 放到建完节点之后单独一批 —— batchNodes 的预校验要求两端节点都已存在。
+       */
+      const incoming = snap.edges.filter((e) => e.target === job.nodeId)
+      if (incoming.length === 0) return
+      const newEdges = added.added.flatMap((target) =>
+        incoming.map((e) => ({
+          source: e.source,
+          target,
+          type: e.type ?? 'custom',
+          ...(e.sourceHandle ? { sourceHandle: e.sourceHandle } : {}),
+          ...(e.targetHandle ? { targetHandle: e.targetHandle } : {}),
+        })),
+      )
+      const linked = await doc.batchEdges({ add: newEdges })
+      if (!linked.ok) {
+        this.deps.onError?.('[tasks] 多产物复制连线失败：' + linked.errors.map((e) => e.message).join('；'))
+      }
+    } catch (err) {
+      // 拆节点失败不该把任务判失败：第 1 张已经落到原节点上了
+      this.deps.onError?.('[tasks] 多产物拆节点失败（不影响主产物）', err)
     }
   }
 
@@ -553,18 +800,66 @@ export class TaskManager {
     // 产物落到节点的**媒体字段**（imageUrl / audioUrl / videoUrl）—— 这一步不能少：
     // 节点只有在「有产物字段」时才把图/音频显示出来；只写 runState.urls 的话画布上是空的。
     // 前端那条路是靠底栏的 applier 写这个字段；MCP 下的单没有底栏，必须由后台补写。
-    // 写之前先把字节收进画布资源目录（见 writeMediaFields），写的是**确实存在**的同源地址。
+    // 写之前先把字节收进画布资源目录（见 localizeArtifact），写的是**确实存在**的同源地址。
     // 它返回的同源地址要**回填进 result**：历史 / runState 也用它 —— 否则那两处仍存 web2api 的原始地址，
     // 前端拿它当缩略图会因为「文件名不是内容哈希」被资源接口判非法（400），历史卡片就是一片裂图。
     let media: MediaProbe | undefined
+    /** 产物落地后的**引用**：任务结果也带上它，前端不必再从地址反推（地址只是投影） */
+    let resourceId: string | undefined
     /** 文本产物：节点类型是 text（或动作声明 text）时，正文写进 data.text —— 与前端 applier 同一字段 */
     const isTextProduct = this.kindOf(action) === 'text' || action.nodeTypes?.[0] === 'text'
     const textPayload = isTextProduct && result.ok && typeof result.text === 'string' ? { text: result.text } : undefined
     if (result.ok) {
-      const sameOrigin = await this.writeMediaFields(job, action, result.urls)
-      if (sameOrigin) {
-        result = { ...result, urls: [sameOrigin.url, ...(result.urls ?? []).slice(1)] }
-        media = sameOrigin.media
+      const doc = this.deps.docForCanvas?.(job.canvasId) ?? this.deps.doc
+      /**
+       * 多产物（用户口径 2026-11-20）：provider 一次回几张就落几张。
+       *
+       * 顺序落盘而不是并发：都是小文件，但并发会同时抢同一张画布的写锁（saveResource / batchNodes
+       * 内部串行），排队反而更慢，也看不出第几张失败。单张失败跳过，不影响其它张。
+       */
+      const localized: NonNullable<Awaited<ReturnType<typeof this.localizeArtifact>>>[] = []
+      const failed: string[] = []
+      for (const raw of result.urls ?? []) {
+        const one = await this.localizeArtifact(job, action, raw, doc)
+        if (one) localized.push(one)
+        else failed.push(raw)
+      }
+      /**
+       * 按内容哈希去重：同一张图被重复返回（不同地址、同一份字节）只落一次，
+       * 否则会在画布上多出一个一模一样的节点。
+       */
+      const unique: typeof localized = []
+      const seenHashes = new Set<string>()
+      for (const one of localized) {
+        if (seenHashes.has(one.hashName)) continue
+        seenHashes.add(one.hashName)
+        unique.push(one)
+      }
+      const targetType = await this.targetNodeType(job, doc, action)
+      const [primary, ...extras] = unique
+      if (primary) {
+        try {
+          await doc.batchNodes({
+            update: [{ id: job.nodeId, data: this.fieldsForArtifact(primary, targetType) }],
+          })
+        } catch (err) {
+          this.deps.onError?.('[tasks] 写节点产物字段失败（产物可能取不到，或节点已被删除）', err)
+        }
+        media = primary.media
+        resourceId = primary.resourceId
+        /**
+         * 其余每一张各建一个节点：配置（入边 / 底栏参数）与原节点相同。
+         *
+         * 只对图片节点拆：多产物是生图平台的特征（豆包一次回多张）；视频 / 音频 / 文本
+         * 一次只有一个产物，多余地址留在历史里，不凭空造出一堆节点。
+         */
+        if (targetType === 'image') await this.spawnExtraArtifactNodes(job, action, extras, doc)
+        /**
+         * 只回填**确实落进画布**的地址：历史 / runState 用这些当初图。
+         * 取不到字节的那几张不进 urls（留在 web2api 上只会变成 400 裂图），
+         * 失败本身已经通过 onError 记了日志。
+         */
+        result = { ...result, urls: unique.map((a) => a.url) }
       }
     }
     await this.writeRunState(
@@ -576,6 +871,7 @@ export class TaskManager {
             message: '已完成',
             actionId: action.id,
             taskId: job.id,
+            ...(resourceId ? { resourceId } : {}),
             urls: result.urls ?? [],
             /** 文本任务带总量：用户想知道这次一共用了多少 token（只是过程信息） */
             ...(isTextProduct && typeof result.text === 'string'
@@ -600,7 +896,7 @@ export class TaskManager {
     // 这里不再重复调：目的是让「字节先落进画布资源目录」发生在写节点媒体字段之前。
     job.status = result.ok ? 'done' : 'error'
     job.progress = result.ok ? 100 : job.progress
-    job.result = { ...result, taskId: job.id }
+    job.result = { ...result, taskId: job.id, ...(resourceId ? { resourceId } : {}) }
     job.finishedAt = finishedAt
   }
 

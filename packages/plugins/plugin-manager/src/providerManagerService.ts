@@ -51,9 +51,11 @@ export interface ProviderRow {
   shared?: Record<string, string | number | boolean>
   accounts: ProviderAccountRow[]
   /** 这个平台的模型明细 */
-  models?: Array<{ id: string; title: string; nodeTypes: string[]; group?: string }>
+  models?: Array<{ id: string; title: string; description?: string; nodeTypes: string[]; group?: string }>
   /** 这个平台服务哪些类型（后台给了就按它分；没给时按模型自己的 nodeTypes 判） */
   nodeTypes?: string[]
+  /** 用户关掉的模型（动作 id）：底栏模型下拉里不显示，但在这里随时能打开 */
+  disabledModels?: string[]
 }
 
 /** 一个账号的草稿（编辑中的副本，保存前不动真身） */
@@ -81,6 +83,8 @@ export interface ProviderManagerState {
   expanded: string[]
   /** 正在「编辑全局属性」的账号（`pid:index`） */
   editingSharedOf: string | null
+  /** 编辑中：这个平台里被关掉的模型（动作 id） */
+  disabledModels: string[]
 }
 
 /** 确认框（只用那一个方法；命名避开裸 confirm，见 noNativeDialogs 守卫） */
@@ -119,6 +123,7 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     busy: false,
     expanded: [],
     editingSharedOf: null,
+    disabledModels: [],
   })
 
   async function refresh(): Promise<void> {
@@ -170,6 +175,7 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     if (!state.accounts.some((a) => a.isDefault)) state.accounts[0]!.isDefault = true
     state.expanded = []
     state.editingSharedOf = null
+    state.disabledModels = [...(row.disabledModels ?? [])]
   }
 
   function closeEdit(): void {
@@ -179,6 +185,7 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     state.accounts = []
     state.expanded = []
     state.editingSharedOf = null
+    state.disabledModels = []
   }
 
   /**
@@ -248,6 +255,23 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     return state.editingSharedOf === `${state.editingId}:${index}`
   }
 
+  /** 这个模型的开关是不是打开的（没有记录 = 打开） */
+  function isModelEnabled(actionId: string): boolean {
+    return !state.disabledModels.includes(actionId)
+  }
+
+  /**
+   * 拨一个模型的开关。
+   *
+   * 只改草稿，保存时和账号一起提交 —— 与「账号 / 配置」同一个保存按钮，
+   * 这样用户改到一半点取消时底栏不会先变。
+   */
+  function toggleModel(actionId: string): void {
+    state.disabledModels = state.disabledModels.includes(actionId)
+      ? state.disabledModels.filter((id) => id !== actionId)
+      : [...state.disabledModels, actionId]
+  }
+
   async function saveEdit(): Promise<string | null> {
     const row = state.editingId ? rowOf(state.editingId) : undefined
     if (!row) return null
@@ -280,6 +304,16 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(body.error ?? '保存失败 ' + res.status)
+      }
+      // 模型开关单独存一份（不动账号与字段值）；失败要说出来，别让开关看着像成功了
+      const modelRes = await call('/api/providers/model-disabled', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ platformId: row.id, disabled: state.disabledModels }),
+      })
+      if (!modelRes.ok) {
+        const body = (await modelRes.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? '保存模型开关失败 ' + modelRes.status)
       }
       closeEdit()
       await refresh()
@@ -354,6 +388,8 @@ export function createProviderManagerService(ctx: Context, feedback?: ConfirmLik
     toggleExpanded,
     isEditingShared,
     toggleEditShared,
+    isModelEnabled,
+    toggleModel,
     saveEdit,
     toggleEnabled,
     remove: removeRow,

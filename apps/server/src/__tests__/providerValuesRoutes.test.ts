@@ -150,6 +150,42 @@ describe('平台配置（点分隔 key）', () => {
   })
 
   /**
+   * 模型开关（用户口径 2026-11-20）：关掉的模型不下发给底栏。
+   *
+   * 三件事必须一起成立，缺一件用户就会看到「开关拨了但下拉没变」：
+   * 1. 落盘到 providers-config.json，重启后还记得；
+   * 2. /api/actions 不再吐出这个动作 —— 底栏列表就是照它画的；
+   * 3. 内容版本号往前走 —— 前端用 ifVersion 判断要不要重拉，版本不变就不会刷新。
+   */
+  it('关掉的模型不再出现在动作清单里，版本号也跟着变', async () => {
+    const before = await call('GET', '/api/actions')
+    expect(before.json.actions.map((a: any) => a.id)).toContain('v-test:a')
+
+    const saved = await call('PUT', '/api/providers/model-disabled', {
+      platformId: 'v-test',
+      disabled: ['v-test:a'],
+    })
+    expect(saved.status).toBe(200)
+    expect((await readFile()).disabledModels).toEqual({ 'v-test': ['v-test:a'] })
+
+    // 前端会拿上次的版本号问：必须判定为「变了」，否则它会跳过重拉
+    const after = await call('GET', '/api/actions?ifVersion=' + before.json.version)
+    expect(after.json.changed).toBe(true)
+    expect(after.json.actions.map((a: any) => a.id)).not.toContain('v-test:a')
+
+    // 管理页读回来仍然能看到这个模型（只是开关是关的），用户随时能打开
+    const list = await call('GET', '/api/providers')
+    const row = list.json.providers.find((x: any) => x.id === 'v-test')
+    expect(row.models.map((m: any) => m.id)).toEqual(['v-test:a'])
+    expect(row.disabledModels).toEqual(['v-test:a'])
+
+    // 再打开 → 下拉里又有了
+    await call('PUT', '/api/providers/model-disabled', { platformId: 'v-test', disabled: [] })
+    const reopened = await call('GET', '/api/actions')
+    expect(reopened.json.actions.map((a: any) => a.id)).toContain('v-test:a')
+  })
+
+  /**
    * 掩码回传必须还原（用户 2026-11-10 实测：任务直接失败且没有原因）。
    *
    * 界面把 `shared` 里的 secret 显示成 `sk-Z…RQFG`，用户点保存时原样回传。

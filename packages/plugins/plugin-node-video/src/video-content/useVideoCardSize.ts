@@ -22,6 +22,8 @@ export interface VideoCardSizeOptions {
    * 得等平移缩放才恢复」）。所以拖动期间只记下真实宽高，尺寸等松手后再补。
    */
   dragging?: () => boolean
+  /** 设置项 videoLoadingResetSize 的现读值：true = 生成中回到默认尺寸（用户 2026-11-19） */
+  loadingResetSize?: () => boolean
 }
 
 /**
@@ -47,9 +49,17 @@ export function useVideoCardSize(options: VideoCardSizeOptions) {
 
   function syncCardSize(patch: CardSizePatch | null): void {
     if (!patch) return
+    // 生成中 + 「生成时恢复默认尺寸」打开：卡片停在默认尺寸，不被旧画面比例拉回去（用户 2026-11-19）
+    if (loadingResetActive()) return
     const current = ops.read(nodeId()) ?? data()
     // 派生尺寸不是用户动作：走 measured 写入（落盘、不进撤销栈，与图片节点同一口径）
     ops.writeMeasured?.(nodeId(), current, patch.size)
+  }
+
+  /** 生成中且开关打开 → 卡片按默认尺寸显示 */
+  function loadingResetActive(): boolean {
+    if (options.loadingResetSize?.() !== true) return false
+    return (data().runState as { status?: unknown } | undefined)?.status === 'running'
   }
 
   /**

@@ -127,7 +127,7 @@ describe('upstream 能力：一层与无限向上', () => {
       expect(up.ofType('image')).toEqual([])
 
       // 没有输出类型：什么都不产出（下游读不到）
-      nodes[0]!.data = { uiOutputUrl: '/api/x.mp3' }
+      nodes[0]!.data = { uiOutputUrl: '/api/x.mp3', uiOutputType: '' }
       const up2 = upstreamOf(nodes, [{ source: 'ui', target: 'out' }], { id: 'out', type: 'output' })
       expect(up2.nodes()[0]!.outputs).toEqual({})
     } finally {

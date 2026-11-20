@@ -642,7 +642,20 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    * 这几项是「产物」：脚本跑完把图/视频/音频/文本交回来。`uiHtml` / `uiScripts` 不在里面 ——
    * 那是界面本身，让脚本改它等于让脚本给自己换一套代码（审查 M1）。
    */
-  const TASK_WRITABLE_NODE_FIELDS = new Set(['uiOutputUrl', 'imageUrl', 'videoUrl', 'audioUrl', 'text'])
+  /**
+   * `resourceId` 与 `uiOutputType` 也必须放行（用户口径 2026-11-20）：
+   * 产物要先有**引用**，地址才是它的投影；UI 节点还要靠 uiOutputType 决定右侧端口类型。
+   * 早先漏了这两项，UI 节点交产物时整批被拒（403），节点数据里只剩半截。
+   */
+  const TASK_WRITABLE_NODE_FIELDS = new Set([
+    'uiOutputUrl',
+    'uiOutputType',
+    'resourceId',
+    'imageUrl',
+    'videoUrl',
+    'audioUrl',
+    'text',
+  ])
   host.ctx.inject(
     'verifyTaskWrite',
     (input: { token?: string; canvasId: string; body: Record<string, unknown> }) => {
@@ -906,6 +919,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     providerConfig.config = config.config
     providerConfig.platforms = config.platforms
     providerConfig.defaults = config.defaults
+    providerConfig.disabledModels = config.disabledModels
     const scanned = await loadProvidersFromDir(providersDir, { config })
     registry.replaceAll(scanned.providers)
     // replaceAll 会清空整张表（删掉的 provider 的动作为了不残留，必须清）——
@@ -1128,6 +1142,31 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       cfg.defaults = defaults
       await writeProviderConfig(providerConfigFile, cfg)
       await broadcastProvidersChanged()
+    },
+    /**
+     * 保存一个平台里被关掉的模型（整体替换）。
+     *
+     * 不重新装载 provider（文件没变，import 一次纯属浪费）；但要：
+     * 1. 让动作清单的版本号往前走 —— 前端用 ifVersion 判断「变没变」，不看内容本身；
+     * 2. 广播 providers-version —— 底栏靠它立刻重拉。
+     */
+    async saveDisabledModels(platformId: string, ids: string[]): Promise<void> {
+      const pid = platformId.trim()
+      if (!pid) throw new Error('platformId 不能为空')
+      const cfg = await readProviderConfig(providerConfigFile)
+      const table = { ...(cfg.disabledModels ?? {}) }
+      const unique = [...new Set(ids.map((x) => String(x).trim()).filter((x) => x !== ''))]
+      if (unique.length > 0) table[pid] = unique
+      else delete table[pid]
+      cfg.disabledModels = table
+      await writeProviderConfig(providerConfigFile, cfg)
+      providerConfig.disabledModels = table
+      registry.bumpVersion()
+      await broadcastProvidersChanged()
+    },
+    /** 某个平台里被关掉的模型（动作清单按它过滤） */
+    disabledModelsOf(id: string): string[] {
+      return [...(providerConfig.disabledModels?.[id] ?? [])]
     },
     /** 读配置（GET 接口用） */
     readConfig: () => readProviderConfig(providerConfigFile),

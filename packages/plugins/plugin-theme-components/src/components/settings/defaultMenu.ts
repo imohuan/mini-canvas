@@ -101,7 +101,12 @@ const sections: SettingsSectionDef[] = [
     ['布局/图片节点尺寸', '布局/视频节点尺寸', '布局/文本节点尺寸', '布局/可视化节点尺寸'],
     55,
   ),
-  s('canvas/layout', 'toolbar', '控制栏', ['布局/控制栏', '常规/底栏'], 60),
+  // 「底栏 AI 工具」不再挂在布局最下面：它有自己的整页（plugin-bottom-bar 注册在集成下）
+  s('canvas/layout', 'toolbar', '控制栏', '布局/控制栏', 60),
+  // 「底栏 AI 工具」的 Config 分组必须被显式 section 收编（否则菜单层会报 unregistered-group，
+  // 并在「集成」下补一个 auto 一级）。整页优先于小节渲染（NavEntry.page），
+  // 所以这一节只负责「让分组有归属」，不会在页面上多出第二张卡片。
+  s('integration/bottom-bar-ai', 'tools', '底栏 AI 工具', '集成/底栏 AI 工具', 10),
   s('canvas/layout', 'diagnose', '诊断', '布局/诊断', 70),
   s('canvas/node', 'port', '端口', '节点/端口', 10),
   s('canvas/node', 'port-zone', '活动区域', '节点/端口活动区', 15),

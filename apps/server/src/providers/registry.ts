@@ -16,6 +16,16 @@ export class ProviderRegistry {
   /** actionId → providerId（路由用） */
   private readonly actionOwner = new Map<string, string>()
   private version = 0
+  /**
+   * 「只改了模型开关」这类**不重新装载**的变化，也要让版本号往前走。
+   *
+   * 为什么：前端拿 ifVersion 问「清单变了吗」，版本没变就直接跳过重拉。
+   * 关掉一个模型并不需要重新 import provider 文件，但下发内容确实变了 ——
+   * 不加这一下，用户拨完开关底栏要等到别的改动才更新（实测就是这么卡住的）。
+   */
+  bumpVersion(): void {
+    this.version += 1
+  }
 
   /** 装一批 provider（重复 id 覆盖旧的） */
   load(providers: Provider[]): void {

@@ -258,7 +258,7 @@ export const name = 'bottom-bar'
 export const inject = ['doc'] as string[]
 
 /**
- * 插件可配置项（设置面板「常规/底栏」组）。
+ * 插件可配置项（设置面板「集成/底栏 AI 工具」组）。
  *
  * **这里不声明后台地址**（用户口径 2026-10-27）：「这边本身就是使用 Agent 之间配置的这个数据」。
  * AI 请求的后台根地址直接取 plugin-agent 的 `agentBaseUrl`（缺省同源），渠道与模型也是
@@ -268,6 +268,9 @@ export const inject = ['doc'] as string[]
  * 分组必须有**至少一个真 schema 字段**才会被登记（否则 settings.groups() 里没有它，
  * 挂在上面的自绘页永远不渲染）。所以这里放「失败重试轮数」这个确实有用的旋钮
  *（用户口径：默认 3 轮），而不是编个占位字段。
+ *
+ * 2026-11-20：这一组从「画布 → 布局 → 控制栏」最下面搬到「集成 → 智能助手」下面；
+ * 整页（BottomBarAiSettings）用标准字段控件自己画出这一项。
  */
 export const Config = {
   bottomBarAiRetries: {
@@ -277,28 +280,37 @@ export const Config = {
     max: 10,
     step: 1,
     label: 'AI 失败重试',
-    group: '常规/底栏',
+    group: '集成/底栏 AI 工具',
     description: 'AI 按钮请求失败时最多试几轮（含第一次）。网络抖动 / 5xx 会退避重试；4xx 参数错误不重试。',
   },
 }
 
-// 「AI 按钮」自定义配置界面（设置面板「底栏」组的内容插槽）；插件后端地址用 Config 声明。
-// Config 的标量项自动登记进 settings 单一数据源（面板左树出现「底栏」分组）；
-// 结构化清单（图标/描述/提示词）由 PromptActionSettings 自绘（内容插槽优先于平铺字段）。
-import PromptActionSettings from './PromptActionSettings.vue'
+// 「底栏 AI 工具」整页（设置面板「集成 → 智能助手 → 底栏 AI 工具」）：
+// 按钮清单 + 每个按钮用哪颗模型，都在这一页里（用户 2026-11-20）。
+// Config 的标量项自动登记进 settings 单一数据源；页面用 page 整页接管（见下）。
+import { markRaw } from 'vue'
+import BottomBarAiSettings from './BottomBarAiSettings.vue'
 
 /** 应用插件：上架服务 + 挂底栏宿主/覆盖层 + 刷新续查（默认皮登记见 Task 5） */
 export function apply(ctx: Context) {
-  // 设置面板「底栏」组的内容插槽：AI 按钮清单（增删改 / 模板 / 图标）自绘页。
-  // meta.mode = 'append'：这一页**追加**在 schema 字段之后，而不是顶替它们。
-  // 缺省是 replace —— 那样「AI 后台地址」这个 Config 字段会被整组盖掉、根本不渲染
-  // （设置面板 blocksOf：有 replace 插槽时不铺 fields，2026-10-27 实测）。
-  ctx.slots.register('settingsGroup/常规/底栏', {
-    id: 'bottom-bar/prompt-actions',
-    order: 5,
-    component: PromptActionSettings,
-    meta: { mode: 'append' },
+  /**
+   * 设置菜单（用户 2026-11-20）：一级「底栏 AI 工具」放在「智能助手」下面、「平台」上面。
+   * 「平台」由 plugin-manager 以 order 15 注册，这里用 12 夹在中间；
+   * 不写 before/after —— 那是跨插件 id 的硬依赖，装没装平台都不该让本页消失。
+   */
+  ctx.settingsMenu.nav({
+    id: 'nav/integration/bottom-bar-ai',
+    category: 'category/integration',
+    title: '底栏 AI 工具',
+    order: 12,
+    // 整页：列表 → 二级编辑页 + 模型下拉。字段由页面内用 settingsField 画，
+    // 不再靠 section 铺（否则页面里会再套一张卡片）。
+    page: markRaw(BottomBarAiSettings),
   })
+  // 只注册一级：二级 section 由默认菜单（defaultMenu.ts）统一登记，
+  // 两处都写会在同一 nav 下叠出两张同名卡片。
+
+  // 页面内容由 page 接管；这里不再注册 settingsGroup 槽，避免页面被渲染两次。
 
   // 构造即上架（随本插件 scope 回收）
   new NodeBarService(ctx)
@@ -335,7 +347,7 @@ export function apply(ctx: Context) {
    *
    * 为什么不能只写进 `inject`：nodeToolbar 由**宿主**注入，而本插件还要在项目页
    * （没有画布会话、没有 nodeToolbar）启动并注册自己的设置分组；写成硬依赖会让它在项目页
-   * 永远 PENDING，设置里的「常规/底栏」整组消失（真实回归，被 bottomBarSettingsRender 抓到）。
+   * 永远 PENDING，设置里的「集成/底栏 AI 工具」整组消失（真实回归，被 bottomBarSettingsRender 抓到）。
    *
    * 为什么不能只监听 `ctx:plugin-installed`：宿主注入服务不走插件安装事件，那一枪永远不会响，
    * 真实运行里表现成「选中节点后底栏整条不出现」。

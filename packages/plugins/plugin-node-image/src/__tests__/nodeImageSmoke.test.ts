@@ -212,6 +212,7 @@ describe('node-image 装配 smoke', () => {
     // 拖拽开关/方式已删除（用户口径 2026-11-07：图片节点不允许 resize）。
     expect(group.map((i) => i.key).sort()).toEqual([
       'imageCardMaxLongSide', 'imageCardMinShortSide', 'imageDefaultHeight', 'imageDefaultWidth',
+      'imageLoadingResetSize',
     ])
     expect(group.find((i) => i.key === 'imageCardMinShortSide')?.schema.label).toBe('最短边最小')
     expect(group.find((i) => i.key === 'imageCardMaxLongSide')?.schema.label).toBe('最长边最大')

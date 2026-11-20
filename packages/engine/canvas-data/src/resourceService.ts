@@ -15,6 +15,10 @@
  */
 
 import type { ResourcePutOptions, ResourceAdapter } from './storage/types'
+import { RESOURCE_URL_FIELDS, mediaKindOf, mediaUrlFieldsOf } from './resourceRefs'
+
+// 「类型 → 地址字段」唯一一份在 resourceRefs；这里再导出，保持既有 import 路径可用。
+export { mediaUrlFieldsOf }
 
 /** URL 回收后端（浏览器实现包一层 URL.revokeObjectURL；测试用假实现） */
 export interface ResourceUrlBackend {
@@ -116,10 +120,7 @@ export interface ResourceAdoptOptions {
   fetchBytes?: (url: string) => Promise<Blob | undefined>
 }
 
-const RESOURCE_URL_FIELDS = [
-  "imageUrl", "videoUrl", "audioUrl", "posterUrl", "thumbUrl", "maskUrl",
-  "panoUrl", "leftImageUrl", "rightImageUrl",
-] as const
+// 媒体地址字段清单与「类型 → 字段」表都在 resourceRefs.ts（唯一一份）。
 /**
  * 保存画布前移除**当前页面之外取不回来**的临时地址。
  *
@@ -205,13 +206,6 @@ const URL_FIELD_TO_REF: Record<string, string> = {
   maskUrl: 'resourceId',
   leftImageUrl: 'leftResourceId',
   rightImageUrl: 'rightResourceId',
-}
-
-/** 某节点类型的主资源种类（决定后端落盘扩展名） */
-function mediaKindOf(nodeType: string | undefined, field: string): string {
-  if (field === 'videoUrl' || nodeType === 'video') return 'video'
-  if (field === 'audioUrl' || nodeType === 'audio') return 'audio'
-  return 'image'
 }
 
 export interface AdoptNodeResourcesResult<T> {
@@ -315,28 +309,8 @@ export async function adoptNodeResources<T extends { id?: string; type?: string;
   return { nodes: out, adopted, failed }
 }
 
-/** 各类节点的媒体 URL 字段（恢复资源时该写回哪个键）。判据与节点自身一致：node.type 优先。 */
-const MEDIA_URL_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
-  video: ["videoUrl"],
-  image: ["imageUrl"],
-  panorama: ["panoUrl"],
-  "3d-preview": ["imageUrl"],
-  "image-compare": ["leftImageUrl", "rightImageUrl"],
-}
-
-/**
- * 某节点恢复资源时该写回的字段。
- *
- * 为什么不能只看 data 里现有的键：保存会清掉失效的临时地址，字段可能已经不在 data 里，
- * 只按"现有键"恢复等于什么都没恢复（视频就是这样变成"无视频"的）。
- * 因此先按节点类型给出该类型的媒体字段，类型未知时才退回扫描 data。
- */
-export function mediaUrlFieldsOf(node: { type?: string; data?: Record<string, unknown> }): string[] {
-  const fromData = typeof node.data?.nodeType === "string" ? (node.data.nodeType as string) : ""
-  const declared = MEDIA_URL_FIELDS_BY_TYPE[node.type || fromData]
-  if (declared) return [...declared]
-  return RESOURCE_URL_FIELDS.filter((key) => typeof node.data?.[key] === "string")
-}
+// 「类型 → 地址字段」这张表与 mediaUrlFieldsOf 收在 resourceRefs.ts（唯一一份，见那里的说明）。
+// 这里保留同名再导出，避免下游 import 路径被迫改动。
 
 /** 需要重建的媒体字段：缺失，或仍是只在当前页面有效的 blob:/data: 地址。 */
 export function pendingMediaRestoreFields(node: { type?: string; data?: Record<string, unknown> }): string[] {

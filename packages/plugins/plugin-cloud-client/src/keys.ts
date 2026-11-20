@@ -58,14 +58,13 @@ export const RESOURCE_URL_FIELDS = [
 /**
  * 各类节点的媒体字段（与 canvas-data 的 MEDIA_URL_FIELDS_BY_TYPE 同口径）—— 「重建地址该写回哪个键」。
  * 判据与节点自身一致：node.type 优先。
- *
- * 注意**没有** audio 一项：数据层那边也没有（音频靠"类型未知 → 扫 data 里现有的 audioUrl"兜底）。
- * 两边故意保持逐字一致，免得同一份输入在两条路径上算出不同结果。
  */
 const MEDIA_URL_FIELDS_BY_TYPE: Record<string, readonly string[]> = {
   video: ['videoUrl'],
   image: ['imageUrl'],
-  panorama: ['panoUrl'],
+  audio: ['audioUrl'],
+  // 可视化节点的产物地址在 uiOutputUrl（类型另有 uiOutputType）；漏了它在云端恢复时会空白
+  ui: ['uiOutputUrl'],
   '3d-preview': ['imageUrl'],
   'image-compare': ['leftImageUrl', 'rightImageUrl'],
 }

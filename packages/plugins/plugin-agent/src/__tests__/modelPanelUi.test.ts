@@ -87,7 +87,21 @@ describe('选中勾：普通 Check，不是青色实心圆', () => {
     const block = SRC.slice(base, SRC.indexOf('\n}', base))
     expect(block).not.toContain('background')
     expect(block).not.toContain('border-radius')
-    expect(block).toContain('opacity: 0')
+    /*
+     * 用户 2026-11-20：对勾不再靠 opacity 隐藏 —— 那样没选中时也一直占着 16px，
+     * 第二行永远贴不到右边。现在由模板 v-if 决定渲不渲染，样式里也就不该再藏它。
+     */
+    expect(block).not.toMatch(/\bopacity\s*:/)
+  })
+
+  it('只有当前选中项才渲染对勾（没选中时连节点都没有，不占宽度）', () => {
+    const choice = readSfcWithStyles(path.resolve(HERE, '../ui/conversation/ChoicePicker.vue'))
+    expect(MODEL).toMatch(/v-if="isPicked\(m\)"[^>]*class="ac-check-mark"/)
+    expect(choice).toMatch(/v-if="item\.id === currentId"[^>]*class="ac-check-mark"/)
+    // 四个渲染分支（卡片/分栏 × 普通/多账号）都必须带条件，不能漏一处
+    const all = [...choice.matchAll(/class="ac-check-mark"/g)].length
+    const guarded = [...choice.matchAll(/v-if="item\.id === currentId" class="ac-check-mark"/g)].length
+    expect(guarded).toBe(all)
   })
 
   it('图标尺寸为 16（shadcn 菜单勾的常规尺寸）', () => {

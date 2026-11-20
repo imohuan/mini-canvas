@@ -46,6 +46,8 @@ describe('与 canvas-data 逐字一致', () => {
       { id: 'i2', type: 'image', data: { resourceId: '/api/canvases/c1/resources/d.png', imageUrl: '/keep.png' } },
       // 资源取不到 → 应清掉失效地址
       { id: 'i3', type: 'image', data: { resourceId: 'gone', imageUrl: 'blob:dead' } },
+      // 可视化节点：地址在 uiOutputUrl（漏了这条，云端恢复后 UI 产物会空白）
+      { id: 'u1', type: 'ui', data: { resourceId: '/api/canvases/c1/resources/e.png' } },
     ]
     const local = makeNodes()
     const dataLayer = makeNodes()
@@ -56,6 +58,33 @@ describe('与 canvas-data 逐字一致', () => {
     await restoreNodeMediaUrls(dataLayer, restore)
 
     expect(local).toEqual(dataLayer)
+  })
+
+  // 字段表必须逐项一致：少一个类型时，只有真的出现那种节点才会炸（音频 / 对比图这类）。
+  it('节点类型 → 地址字段 逐类型一致（含 audio / ui / 3d-preview / image-compare）', async () => {
+    const types = ['image', 'video', 'audio', 'ui', '3d-preview', 'image-compare', 'unknown-type']
+    const makeNodes = () => types.map((type, i) => ({
+      id: 'n' + i,
+      type,
+      data: { resourceId: '/api/canvases/c1/resources/0123456789abcdef.png' },
+    }))
+    const local = makeNodes()
+    const dataLayer = makeNodes()
+    const restore = async (_resourceId: string, kind: string): Promise<string | undefined> =>
+      '/resolved/' + kind + '.png'
+
+    await restoreMediaUrls(local, restore)
+    await restoreNodeMediaUrls(dataLayer, restore)
+    expect(local).toEqual(dataLayer)
+
+    // 再逐类型核对：**已知类型**都确实写进了自己的地址字段（没写＝只拿到引用、画面空白）。
+    // unknown-type 两边都不写：类型未知且节点上没有现成地址键时，猜一个字段更危险。
+    for (const [i, type] of types.entries()) {
+      if (type === 'unknown-type') continue
+      const data = local[i]!.data as Record<string, unknown>
+      const filled = Object.keys(data).filter((k) => k.endsWith('Url'))
+      expect(filled.length, type + ' 没写任何地址字段').toBeGreaterThan(0)
+    }
   })
 })
 

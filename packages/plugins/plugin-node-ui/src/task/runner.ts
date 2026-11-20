@@ -28,6 +28,7 @@ import { randomUUID } from 'node:crypto'
 import { pathToFileURL } from 'node:url'
 import type { TaskContextData } from './context.js'
 import { removeWorkspace } from './context.js'
+import { mediaTypeByExt } from './mediaTypes.js'
 
 /** 默认超时（10 分钟：转码这类够用；到点连整棵树一起收） */
 export const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000
@@ -67,6 +68,9 @@ export const BOOTSTRAP = [
   '  ".pdf": "application/pdf", ".txt": "text/plain", ".json": "application/json",',
   "}",
   'const guessMime = (ext) => MIME[String(ext).toLowerCase()] || "application/octet-stream"',
+  // 产物后缀 → 内容类型：与宿主共用同一张表（由 buildBootstrap 注入，避免脚本里再抄一份）
+  'const MEDIA_TYPE_BY_EXT = __PLUME_MEDIA_TYPES__',
+  'const mediaTypeOfExt = (ext) => MEDIA_TYPE_BY_EXT[String(ext || "").toLowerCase()] || "image"',
   // 地址 → 本地路径（与主进程侧 task/resolve.ts 同一套规则；
   // 子进程里拿不到那份模块，所以在这儿现写一遍 —— **规则改了要一起改**，有测试盯着）
   "const resolveLocalFile = (raw, env) => {",
@@ -148,14 +152,19 @@ export const BOOTSTRAP = [
   //
   // 只在「落到本节点自己的槽位」时写：显式存到别的槽位不是本节点的产物，宿主不该替它改。
   "      if (!(opts && opts.slot) || opts.slot === info.ctx.nodeId) {",
-  "        const field = ext === \".mp4\" || ext === \".webm\" || ext === \".mov\" ? \"videoUrl\"",
-  "          : ext === \".mp3\" || ext === \".wav\" || ext === \".ogg\" || ext === \".m4a\" ? \"audioUrl\"",
-  "          : ext === \".txt\" || ext === \".md\" || ext === \".json\" || ext === \".csv\" ? \"text\" : \"imageUrl\"",
+  // 后缀 → 字段：与宿主同一张表（MEDIA_TYPE_BY_EXT 由 runner 注入，见 mediaFieldOfExt）
+  "        const kind = mediaTypeOfExt(ext)",
+  "        const field = kind === \"video\" ? \"videoUrl\" : kind === \"audio\" ? \"audioUrl\"",
+  "          : kind === \"text\" ? \"text\" : \"imageUrl\"",
   // 槽位地址不变（一个节点一份文件），字段里带 ?v= 让下游知道"内容换了，重新取"
   "        const versioned = j.url + (j.url.indexOf(\"?\") >= 0 ? \"&v=\" : \"?v=\") + Date.now()",
   // 输出类型跟着产物走：右侧端口的类型与「能连到谁」都读它（用户 2026-11-17）。
   "        const patch = { uiOutputUrl: j.url, uiOutputType: field === \"videoUrl\" ? \"video\"",
   "          : field === \"audioUrl\" ? \"audio\" : field === \"text\" ? \"text\" : \"image\" }",
+  // 产物先有**引用**，地址只是它的投影（用户口径 2026-11-20）：两份一起交，刷新后不会只剩地址。
+  "        const ref = j.url.split('?')[0].split('#')[0]",
+  "        const m = /^\\/api\\/canvases\\/([A-Za-z0-9_-]{1,64})\\/resources\\/([^/]+)$/.exec(ref)",
+  "        if (m) patch.resourceId = m[1] + '/' + m[2]",
   // 文本给的是**正文**（下游 data.text 的约定就是内容，不是地址 —— 文本节点一直如此）。
   // 交字节也认得出来：按 UTF-8 解一次（把地址当正文写进去更糟）。
   "        if (field === \"text\") patch.text = typeof data === \"string\" ? data : new TextDecoder().decode(bytes)",
@@ -182,6 +191,16 @@ export const BOOTSTRAP = [
   "  process.exitCode = 1",
   "})"
 ].join("\n")
+
+/**
+ * 把「产物后缀 → 内容类型」注入引导代码。
+ *
+ * 为什么注入而不是在脚本里再写一遍：这张表必须与宿主同一份（canvas-data 的 mediaTypeOfName），
+ * 否则 .mkv / .flac 这类产物在脚本里会被算成图片。
+ */
+export function buildBootstrap(mediaTypes: Record<string, string>): string {
+  return BOOTSTRAP.replace('__PLUME_MEDIA_TYPES__', JSON.stringify(mediaTypes))
+}
 
 /** 一次运行的对外状态 */
 export interface TaskRun {
@@ -348,7 +367,7 @@ export function createTaskRuns(opts: { timeoutMs?: number } = {}): TaskRuns {
 
       const child = spawn(
         process.execPath,
-        ['--input-type=module', '-e', BOOTSTRAP, infoURL, pathToFileURL(input.scriptPath).href],
+        ['--input-type=module', '-e', buildBootstrap(mediaTypeByExt()), infoURL, pathToFileURL(input.scriptPath).href],
         {
           // detached：让子进程自成一个进程组（非 Windows），取消时能整组收掉
           detached: process.platform !== 'win32',

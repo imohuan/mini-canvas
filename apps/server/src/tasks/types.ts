@@ -44,7 +44,15 @@ export interface Job {
   progressText?: string
   tail?: string
   /** 终态产物 */
-  result?: { ok: boolean; urls?: string[]; text?: string; error?: string; taskId?: string }
+  result?: {
+    ok: boolean
+    urls?: string[]
+    text?: string
+    error?: string
+    taskId?: string
+    /** 产物落进画布后的**引用**（`<画布id>/<hashName>`）：地址是它的投影，前端据此对账 */
+    resourceId?: string
+  }
   /**
    * 下单时的原始请求快照（提示词 / 参数 / 参考素材）。
    *

@@ -3,11 +3,11 @@
  *
  * 用户口径（2026-10-26，附截图）：
  * 1. 底栏右侧「翻译 / 提示词优化」按钮要**可配置**：每条 = 图标 + 描述 + 提示词模板；
- *    清单存云端 KV（config/bottomBarAiActions），配置界面挂设置面板「底栏」组
- *    （见 PromptActionSettings.vue：内容插槽 settingsGroup/常规/底栏 优先于 schema 平铺字段；
- *    菜单层把这一组收进「画布 → 布局 → 控制栏」。）
- * 2. 点按钮 → 请求后台 AI（POST /api/agent/chat/completion，**不带 model** = 直接用
- *    Agent 插件已配好的默认渠道/模型），流式返回**直接写进底栏输入框**。
+ *    清单存云端 KV（config/bottomBarAiActions）。配置界面在「集成 → 底栏 AI 工具」
+ *    （BottomBarAiSettings.vue；2026-11-20 从「布局 → 控制栏」搬过来，并加了模型配置）。
+ * 2. 点按钮 → 请求后台 AI（POST /api/agent/chat/completion）。配置里给这个按钮选过模型
+ *    就带上 provider/model；没选（或选的失效）就**不带 model**，用 Agent 插件已配好的默认。
+ *    流式返回**直接写进底栏输入框**。
  * 3. 提示词模板支持 {{变量}}：{{prompt}} 输入框当前内容、{{nodeType}} 节点类型、
  *    {{action}} 当前动作名、{{nodeId}} 节点 id。认得的替换，不认得的原样保留。
  * 4. 流式写入的历史**分批**落：每 500ms 一次（节拍在 NodeBottomBar 里，这里只管取流与清洗）。
@@ -34,6 +34,33 @@ export interface AiActionConfig {
   enabled: boolean
   /** 内置项标记（恢复默认用；不特殊对待删除） */
   builtin?: boolean
+}
+
+/** 一个模型选择（与 Agent 的 ModelRow 同一对键） */
+export interface AiModelChoice {
+  provider: string
+  modelId: string
+}
+
+/**
+ * 底栏 AI 工具用哪颗模型（用户 2026-11-20 口径）：
+ * - `default`：通用模型，所有没单独配的按钮都用它；
+ * - `perAction`：按按钮 id 单独指定；空 = 跟随通用模型。
+ *
+ * 存云端 KV（config/bottomBarAiModels），与按钮清单分开：
+ * 清单是“有哪些按钮”，这里是“每个按钮用哪颗模型”，两者改动频率不同。
+ */
+export interface AiModelConfig {
+  default: AiModelChoice | null
+  perAction: Record<string, AiModelChoice>
+}
+
+/** KV 键（config 作用域；路径 = /api/kv/config/bottomBarAiModels） */
+export const AI_MODELS_KV_KEY = 'bottomBarAiModels'
+
+/** 空配置：通用模型不指定（= 后台默认），没有单独指定的按钮 */
+export function emptyAiModelConfig(): AiModelConfig {
+  return { default: null, perAction: {} }
 }
 
 /** 默认图标：四角星 */
@@ -95,6 +122,9 @@ export const AI_ACTIONS_KV_KEY = 'bottomBarAiActions'
  */
 export const AI_ACTIONS_CHANGED_EVENT = 'bottom-bar:ai-actions-changed'
 
+/** 「底栏 AI 模型」保存成功的广播（底栏收到后立即换模型，不必重挂载） */
+export const AI_MODELS_CHANGED_EVENT = 'bottom-bar:ai-models-changed'
+
 export interface AiActionsChangedPayload {
   /** 保存后的完整清单（监听方直接用它，不必再发一次 GET） */
   actions: AiActionConfig[]
@@ -104,6 +134,14 @@ export interface AiActionsChangedPayload {
 
 // 模块加载时登记：dev 下 emit 未登记的事件名会 warn（每个名字只提示一次）。
 registerEventName(AI_ACTIONS_CHANGED_EVENT)
+registerEventName(AI_MODELS_CHANGED_EVENT)
+
+export interface AiModelsChangedPayload {
+  /** 保存后的完整模型配置 */
+  models: AiModelConfig
+  /** 本次保存用的后台地址（空 = 同源） */
+  baseUrl?: string
+}
 
 /** 模板里认得的变量（设置页的提示 chips 也用这份） */
 export const TEMPLATE_VARS: readonly { token: string; description: string }[] = [
@@ -212,6 +250,55 @@ export function normalizeAiActions(raw: unknown): AiActionConfig[] {
   return out
 }
 
+/** 单个模型选择归一化：provider / modelId 都是非空字符串才算；否则 null */
+export function normalizeAiModelChoice(raw: unknown): AiModelChoice | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const o = raw as Record<string, unknown>
+  const provider = typeof o.provider === 'string' ? o.provider.trim() : ''
+  const modelId = typeof o.modelId === 'string' ? o.modelId.trim() : ''
+  return provider && modelId ? { provider, modelId } : null
+}
+
+/** 模型配置归一化：坏数据丢掉，不抛错（云端可能是旧版本写的） */
+export function normalizeAiModelConfig(raw: unknown): AiModelConfig {
+  const out = emptyAiModelConfig()
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out
+  const o = raw as Record<string, unknown>
+  out.default = normalizeAiModelChoice(o.default)
+  const per = o.perAction
+  if (per && typeof per === 'object' && !Array.isArray(per)) {
+    for (const [id, value] of Object.entries(per as Record<string, unknown>)) {
+      const key = id.trim()
+      if (!key) continue
+      const choice = normalizeAiModelChoice(value)
+      if (choice) out.perAction[key] = choice
+    }
+  }
+  return out
+}
+
+/**
+ * 某个按钮实际用哪颗模型（用户 2026-11-20 口径）：
+ *
+ * 1. 单独指定了、而且这颗模型**现在还能用** → 用它；
+ * 2. 否则（没指定 / 模型被删了 / 没配密钥）→ 通用模型；
+ * 3. 通用模型也不能用 → null（请求不带 model，后台用自己的默认）。
+ *
+ * “能用”由调用方给（Agent 的 models 列表里 hasKey 的那些），
+ * 这里只管优先级，不碰网络。
+ */
+export function resolveAiActionModel(
+  actionId: string,
+  config: AiModelConfig | null | undefined,
+  isUsable: (choice: AiModelChoice) => boolean = () => true,
+): AiModelChoice | null {
+  if (!config) return null
+  const own = config.perAction?.[actionId]
+  if (own && isUsable(own)) return own
+  if (config.default && isUsable(config.default)) return config.default
+  return null
+}
+
 const TEMPLATE_TOKEN_RE = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/g
 
 /** 渲染模板：认得的 {{key}} 替换成 vars[key]；不认得的原样保留（让用户看见写错的变量名） */
@@ -300,6 +387,13 @@ export interface AiRequestOptions {
   baseUrl?: string
   /** 重试轮数（含第一次；缺省 3） */
   retryRounds?: number
+  /**
+   * 这次用哪颗模型（用户 2026-11-20）。
+   *
+   * 不给 = 沿用旧行为：body 不带 provider/model，后台用 Agent 配好的默认模型。
+   * 给了就随请求带上，与底栏底部那个模型下拉同一条协议。
+   */
+  model?: AiModelChoice
   signal?: AbortSignal
   fetchImpl?: typeof fetch
   /** 每段**过滤后**的正文增量（写入输入框用） */
@@ -389,6 +483,7 @@ async function consumeStream(
  *
  * body 不带 model / provider → 后台 resolveModel 落到 Agent 插件配好的**项目默认模型**
  * （用户口径：渠道与模型直接用 Agent 里已配好的那套）。
+ * 带了（设置里给这个按钮配了模型）就以携带的为准。
  */
 export async function requestAiText(opts: AiRequestOptions): Promise<AiRequestResult> {
   const rounds = Math.max(1, Math.floor(opts.retryRounds ?? DEFAULT_RETRY_ROUNDS))
@@ -406,7 +501,11 @@ export async function requestAiText(opts: AiRequestOptions): Promise<AiRequestRe
       const res = await f(base + '/api/agent/chat/completion', {
         method: 'POST',
         headers: withAdminToken({ 'content-type': 'application/json', accept: 'text/event-stream' }),
-        body: JSON.stringify({ stream: true, messages: [{ role: 'user', content }] }),
+        body: JSON.stringify({
+          stream: true,
+          ...(opts.model ? { provider: opts.model.provider, model: opts.model.modelId } : {}),
+          messages: [{ role: 'user', content }],
+        }),
         ...(opts.signal ? { signal: opts.signal } : {}),
       })
       if (!res.ok) {
@@ -434,6 +533,7 @@ export async function requestAiText(opts: AiRequestOptions): Promise<AiRequestRe
 
 const CONFIG_BUCKET_PATH = '/api/kv/config?values=1'
 const ACTIONS_PATH = '/api/kv/config/' + AI_ACTIONS_KV_KEY
+const MODELS_PATH = '/api/kv/config/' + AI_MODELS_KV_KEY
 
 function cloneDefaults(): AiActionConfig[] {
   return DEFAULT_AI_ACTIONS.map((a) => ({ ...a }))
@@ -471,6 +571,49 @@ export async function saveAiActions(
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ value: list }),
+    })
+    if (!res.ok) return { ok: false, error: await readErrorBody(res) }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/**
+ * 读「每个按钮用哪颗模型」：没存过 / 后台没起 → 空配置（= 全部走后台默认）。
+ *
+ * 为什么不和按钮清单合成一个键：清单是结构化编辑器整包保存的，
+ * 模型配置是另一页；合成一个键会让两页互相覆盖对方的改动。
+ */
+export async function loadAiModels(
+  opts: { baseUrl?: string; fetchImpl?: typeof fetch } = {},
+): Promise<AiModelConfig> {
+  const f = opts.fetchImpl ?? (typeof fetch === 'undefined' ? undefined : fetch)
+  if (!f) return emptyAiModelConfig()
+  const base = (opts.baseUrl ?? '').replace(/\/+$/, '')
+  try {
+    const res = await f(base + CONFIG_BUCKET_PATH, { headers: { accept: 'application/json' } })
+    if (!res.ok) return emptyAiModelConfig()
+    const body = (await res.json()) as { values?: Record<string, unknown> } | null
+    return normalizeAiModelConfig(body?.values?.[AI_MODELS_KV_KEY])
+  } catch {
+    return emptyAiModelConfig()
+  }
+}
+
+/** 整包写回模型配置（KV 的 value 契约 { value }） */
+export async function saveAiModels(
+  config: AiModelConfig,
+  opts: { baseUrl?: string; fetchImpl?: typeof fetch } = {},
+): Promise<{ ok: boolean; error?: string }> {
+  const f = opts.fetchImpl ?? (typeof fetch === 'undefined' ? undefined : fetch)
+  if (!f) return { ok: false, error: '当前环境没有可用的 fetch' }
+  const base = (opts.baseUrl ?? '').replace(/\/+$/, '')
+  try {
+    const res = await f(base + MODELS_PATH, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ value: normalizeAiModelConfig(config) }),
     })
     if (!res.ok) return { ok: false, error: await readErrorBody(res) }
     return { ok: true }

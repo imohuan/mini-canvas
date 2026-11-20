@@ -12,6 +12,8 @@
  * （「算得对不对」与「画得对不对」分开，出问题能立刻定位是哪一层）。
  */
 
+import { mediaTypeOfName } from '@plume-canvas/canvas-data'
+
 /** 输入参数的类型词表（闭合）。AI 与后面的取值都按它理解一个参数是什么东西。 */
 export const UI_INPUT_TYPES = ['text', 'number', 'boolean', 'json', 'table', 'image', 'video', 'audio'] as const
 export type UiInputType = (typeof UI_INPUT_TYPES)[number]
@@ -198,13 +200,14 @@ export function resolveOutputType(data: Record<string, unknown> | undefined): Ui
   return url ? outputTypeForName(url) : undefined
 }
 
-/** 产物文件名的扩展名 → 输出类型（与宿主写字段、任务脚本 ctx.save 的那张表同源） */
+/**
+ * 产物文件名的扩展名 → 输出类型。
+ *
+ * 判定规则只此一处（canvas-data 的 `mediaTypeOfName`）：以前后台、UI 节点、任务脚本
+ * 各写一份，.mkv / .flac 这些就分家了 —— 后台算视频、UI 当图片，右侧端口类型直接错。
+ */
 export function outputTypeForName(name: string): UiOutputType {
-  const ext = (String(name).match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
-  if (ext === 'mp4' || ext === 'webm' || ext === 'mov') return 'video'
-  if (ext === 'mp3' || ext === 'wav' || ext === 'ogg' || ext === 'm4a') return 'audio'
-  if (ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv') return 'text'
-  return 'image'
+  return mediaTypeOfName(name)
 }
 
 /**

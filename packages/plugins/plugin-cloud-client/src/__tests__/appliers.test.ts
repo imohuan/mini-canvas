@@ -61,11 +61,13 @@ describe('产物地址本地化：不留外链在画布上', () => {
   it('**已经是本画布地址** → 不再重复落地（否则每写一次多存一份字节）', async () => {
     const { doc, writes } = fakeDoc()
     const { resources, stored } = fakeResources()
-    const local = '/api/canvases/default/resources/exists.mp4'
+    // 资源名必须是服务端认的形态（16 位哈希或 slot-…）：签名名会被资源接口 400 拒掉，
+    // 让它"可用地址"本身就不成立 —— 这里用真实形态，顺带挡住"随便一个名字都当资源"的错觉。
+    const local = '/api/canvases/default/resources/0123456789abcdef.mp4'
     await writeVideoResult(doc, 'n1', { urls: [local] }, { resources, fetchBytes: async () => new Blob(['X']) })
     expect(stored).toHaveLength(0)
     // 旧 URL 顺手拆成逻辑 ID，下次保存后节点里就有 ID 了。
-    expect(writes[0]!.data.resourceId).toBe('default/exists.mp4')
+    expect(writes[0]!.data.resourceId).toBe('default/0123456789abcdef.mp4')
     expect(writes[0]!.data.videoUrl).toBeUndefined()
   })
 

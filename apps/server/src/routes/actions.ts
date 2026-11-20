@@ -18,6 +18,13 @@ export function actionsRoutes(
   registry: ProviderRegistry,
   /** 宿主注入：按平台 id 查账号清单（拿不到就只有模型行，不出账号二级菜单） */
   accountsOf?: (providerId: string) => Array<{ id: string; name?: string; default?: boolean }>,
+  /**
+   * 宿主注入：按平台 id 查被用户关掉的模型（动作 id）。
+   *
+   * 关掉的模型**不再下发给前端**，于是底栏的模型下拉里就没有它了（用户口径 2026-11-20）。
+   * 拿不到这个函数 = 一个都不关，行为与旧版一致。
+   */
+  disabledModelsOf?: (providerId: string) => string[],
 ): Hono {
   const app = new Hono()
 
@@ -34,7 +41,10 @@ export function actionsRoutes(
       // 账号清单（多账号时底栏要在模型行右侧出二级菜单；只有一个号就没什么可选）
       const accounts = accountsOf?.(p.id) ?? []
       const defaultAccount = accounts.find((a) => a.default)?.id ?? accounts[0]?.id ?? ''
+      const disabled = new Set(disabledModelsOf?.(p.id) ?? [])
       for (const a of p.actions) {
+        // 用户关掉的模型不下发：底栏不认识它，自然就不会显示
+        if (disabled.has(a.id)) continue
         /**
          * 把「这条动作能不能取消」变成前端看得见的字段（用户 2026-11-10）。
          *

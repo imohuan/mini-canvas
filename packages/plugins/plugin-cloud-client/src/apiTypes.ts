@@ -63,6 +63,10 @@ export interface ProviderRow {
   config: ProviderConfigField[]
   /** 账号级字段的 key 列表（其余字段是平台通用） */
   accountFields?: string[]
+  /** 这个平台导出的模型（id / 名字 / 说明 / 分组） */
+  models?: Array<{ id: string; title: string; description?: string; nodeTypes: string[]; group?: string }>
+  /** 用户关掉的模型（动作 id）：底栏模型下拉里不显示 */
+  disabledModels?: string[]
   /** 平台通用值（secret 已掩码） */
   shared?: Record<string, string | number | boolean>
   accounts: Array<{
@@ -91,7 +95,15 @@ export interface ServerJob {
   tail?: string
   /** 这条任务能不能取消（后台按动作声明算出来，前端只照着画按钮） */
   canCancel?: boolean
-  result?: { ok: boolean; urls?: string[]; text?: string; error?: string; taskId?: string }
+  result?: {
+    ok: boolean
+    urls?: string[]
+    text?: string
+    error?: string
+    taskId?: string
+    /** 产物落进画布后的**引用**（`<画布id>/<hashName>`）：地址由它推出来，不用反解 */
+    resourceId?: string
+  }
 }
 
 /** 历史里的一笔 */

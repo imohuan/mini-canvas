@@ -2,7 +2,7 @@ import { ref, watch, type Ref } from 'vue'
 import type { UpstreamItem } from '../uiData'
 import { outputTypeForName, toCloneableState } from '../uiData'
 import type { UiOutputField } from './useUiOutput'
-import { outputFieldForName } from './useUiOutput'
+import { outputFieldForName, resourceRefFromUiUrl } from './useUiOutput'
 
 export interface UseUiBridgeOptions {
   iframeEl: Ref<HTMLIFrameElement | null>
@@ -118,6 +118,9 @@ export function useUiBridge(options: UseUiBridgeOptions) {
         const field: UiOutputField = outputFieldForName(url)
         // 产物落地即定输出类型（右侧端口类型跟着它走）
         const patch: Record<string, unknown> = { uiOutputUrl: url, uiOutputType: outputTypeForName(url) }
+        // 地址只是引用的投影（与后台产物落地同一规矩）：两份一起写，保存时才不会只剩一个地址
+        const ref = resourceRefFromUiUrl(url)
+        if (ref) patch.resourceId = ref
         if (field === 'text') {
           if (typeof m.text === 'string') patch.text = m.text
         } else {

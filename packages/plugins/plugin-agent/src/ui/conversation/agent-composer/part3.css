@@ -348,6 +348,21 @@
   color: var(--ui-ink-mute, #9ca3af);
 }
 
+/*
+ * 第二行「平台 · 描述」：只占一行，超出省略（用户口径 2026-11-20）。
+ * 完整内容走悬停气泡（.ac-model-tip），不再往行里堆第二行字。
+ */
+.ac-model-line {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 气泡排版：标题加粗 + 描述降一档，限宽换行（与底栏 AI 提示同一套） */
+.ac-model-tip { display: flex; flex-direction: column; gap: 2px; max-width: 280px; white-space: normal; }
+.ac-model-tip-desc { opacity: .78; line-height: 1.4; word-break: break-word; }
+
 .ac-model-card-top {
   display: flex;
   align-items: flex-start;

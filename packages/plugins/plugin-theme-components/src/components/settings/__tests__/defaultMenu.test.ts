@@ -86,13 +86,13 @@ describe('默认设置菜单', () => {
     const view = menu.resolve([
       '常规/图片生成', '常规/文本生成', '常规/上游接口', '常规/云端客户端',
       'web2api/连接', 'web2api/任务', '常规/小地图', '常规/风格库', '常规/调试',
-      '常规/可视化节点', '常规/底栏',
+      '常规/可视化节点',
     ])
     const flat = view.navs.flatMap((n) => n.sections).flatMap((s) => s.groups)
     for (const group of [
       '常规/图片生成', '常规/文本生成', '常规/上游接口', '常规/云端客户端',
       'web2api/连接', 'web2api/任务', '常规/小地图', '常规/风格库', '常规/调试',
-      '常规/可视化节点', '常规/底栏',
+      '常规/可视化节点',
     ]) {
       expect(flat).toContain(group)
     }

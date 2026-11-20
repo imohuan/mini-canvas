@@ -97,6 +97,21 @@ describe('requestAiText：流式 + 重试', () => {
     expect(body.model).toBeUndefined()
   })
 
+  it('设置里给按钮配了模型 → 请求带上 provider / model（用户 2026-11-20）', async () => {
+    let body: Record<string, unknown> = {}
+    await requestAiText({
+      template: '优化：{{prompt}}',
+      vars: { prompt: '猫' },
+      model: { provider: 'local', modelId: 'hy3' },
+      fetchImpl: async (_url, init) => {
+        body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>
+        return sseResponse([chunkFrame('好'), 'data: [DONE]\n\n'])
+      },
+    })
+    expect(body.provider).toBe('local')
+    expect(body.model).toBe('hy3')
+  })
+
   it('5xx：默认重试 3 轮后失败（attempts=3）', async () => {
     let calls = 0
     const res = await requestAiText({

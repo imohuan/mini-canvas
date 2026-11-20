@@ -52,6 +52,13 @@ const items = computed(() =>
     id: o.value,
     title: o.label,
     subtitle: o.group || o.description || '',
+  /**
+   * 描述：与设置页「模型列表」同一段字（用户口径 2026-11-20）。
+   *
+   * 副标题放平台前缀（group 就是「平台 · 类型」），这里放模型自己的介绍，
+   * 两处读的是同一个 `description`，不会再出现「左边一句、右边另一句」。
+   */
+  desc: o.description || '',
     note: o.note ?? '',
     /** 每行自己的图标：与触发器同一份，列表里不会再退回兜底图形 */
     icon: o.model ?? null,

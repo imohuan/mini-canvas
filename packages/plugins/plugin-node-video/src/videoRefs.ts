@@ -5,6 +5,8 @@
  * 迁移期兼容：旧存档仍在 `videoUrl` 里放地址，回退分支只允许出现在本文件。
  */
 
+import { resolveMediaSrc } from '@plume-canvas/canvas-data'
+
 /** 只认“按名字取服务”这一件事（插件 ctx 与渲染上下文都满足；用 unknown 兼容泛型 tryGet） */
 export interface ResourceResolverLike {
   tryGet?(name: string): unknown
@@ -52,17 +54,7 @@ export async function resolveVideoSrc(
   ctx: ResourceResolverLike | undefined,
   data: Record<string, unknown> | undefined,
 ): Promise<string> {
-  const { resourceId, legacyUrl } = readVideoSourceFields(data)
-  if (!resourceId) return legacyUrl
-  const port = videoResourcePort(ctx)
-  if (port) {
-    try {
-      const url = await port.resolve(resourceId)
-      if (url) return url
-    } catch {
-      // 资源服务异常按“取不到”处理
-    }
-  }
-  return legacyUrl // 迁移期：旧存档 / 资源已删时仍要能播
+  // 统一实现（引用 → 资源服务 → 回退旧地址）在 canvas-data 的 resolveMediaSrc；这里只固定字段名。
+  return resolveMediaSrc(ctx, data, 'videoUrl')
 }
 

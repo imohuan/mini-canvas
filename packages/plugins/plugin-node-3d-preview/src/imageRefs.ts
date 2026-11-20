@@ -5,6 +5,8 @@
  * 迁移期兼容：旧存档 / 旧上游只有 `imageUrl`，回退分支只在这一处。
  */
 
+import { isDisplayUrl, resolveMediaSrc } from '@plume-canvas/canvas-data'
+
 /** 只认“按名字取服务”这一件事（用 unknown 兼容真实 ctx 的泛型 tryGet） */
 export interface ResourceResolverLike {
   tryGet?(name: string): unknown
@@ -30,30 +32,17 @@ export function imageResourcePort(ctx: ResourceResolverLike | undefined): ImageR
  * 图片显示地址：`resourceId` 优先，解析不出来再退回旧 `imageUrl`。
  * 结果只用于本次渲染，不写回任何节点 data。
  */
+/**
+ * 统一实现（引用 → 资源服务 → 回退旧地址）在 canvas-data 的 resolveMediaSrc。
+ * 那条「引用本身已是地址就不必再解析」的历史兜底也已收进同一处（所有节点行为一致）。
+ */
 export async function resolveImageSrc(
   ctx: ResourceResolverLike | undefined,
   data: Record<string, unknown> | undefined,
 ): Promise<string> {
-  const resourceId = typeof data?.resourceId === 'string' ? data.resourceId : ''
-  const legacyUrl = typeof data?.imageUrl === 'string' ? data.imageUrl : ''
-  if (!resourceId) return legacyUrl
-  // 引用可能被上一代写入方写成「已经解析好的地址」（新链路曾把同源 URL 同时写进
-  // resourceId）：那它本身就是可显示地址，不必再问资源服务（问也会原样回来）。
-  if (isDisplayUrl(resourceId)) return resourceId
-  const port = imageResourcePort(ctx)
-  if (port) {
-    try {
-      const url = await port.resolve(resourceId)
-      if (url) return url
-    } catch {
-      // 资源服务异常按取不到处理
-    }
-  }
-  return legacyUrl // 迁移期：旧存档只有 imageUrl
+  return resolveMediaSrc(ctx, data, 'imageUrl')
 }
 
-/** 能直接交给 `<img>` / 纹理加载器的地址（http(s) / blob / data / 同源根路径） */
-export function isDisplayUrl(value: string): boolean {
-  return /^(?:[a-z]+:)?\/\//i.test(value) || /^(?:blob:|data:)/i.test(value) || value.startsWith('/')
-}
+/** 能直接交给 `<img>` / 纹理加载器的地址（直接复用数据层那份） */
+export { isDisplayUrl }
 

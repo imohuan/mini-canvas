@@ -3,16 +3,25 @@ import type { CanvasRenderContext } from '@plume-canvas/canvas-render'
 import type { BarAction } from '../barTypes'
 import {
   loadAiActions,
+  loadAiModels,
   requestAiText,
   resolveAgentBaseUrl,
   normalizeAiActions,
+  normalizeAiModelConfig,
+  resolveAiActionModel,
   AI_ACTIONS_CHANGED_EVENT,
+  AI_MODELS_CHANGED_EVENT,
+  emptyAiModelConfig,
   type AiActionsChangedPayload,
+  type AiModelsChangedPayload,
+  type AiModelConfig,
   DEFAULT_AI_ICON,
   type AiActionConfig,
 } from '../aiActions'
 import { aiPromptDataPatch } from '../promptPersist'
 import type { BottomBarEditorHandle } from './types'
+import { readAgentModels } from './modelPickerBridge'
+import type { NotifyContract } from '@plume-canvas/plugin-sdk'
 
 interface AiDeps {
   ctx: CanvasRenderContext['ctx']
@@ -31,9 +40,15 @@ interface AiDeps {
 /** AI 按钮清单、流式写入与批量落盘。 */
 export function useBottomBarAiActions(deps: AiDeps) {
   const aiActions = ref<AiActionConfig[]>([])
+  /** 每个按钮用哪颗模型（用户 2026-11-20）：空配置 = 全部走后台默认 */
+  const aiModels = ref<AiModelConfig>(emptyAiModelConfig())
   const aiRunningId = ref<string | null>(null)
   const aiPhase = ref<'idle' | 'starting' | 'streaming'>('idle')
   const aiEditorLocked = ref(false)
+  /**
+   * 上一条失败提示。**只用于无障碍播报与测试观察** ——
+   * 用户 2026-11-20 口径：失败弹全局 notify，不在底栏里排一行小字。
+   */
   const aiError = ref('')
   let aiAbort: AbortController | null = null
   let aiFlushTimer: ReturnType<typeof setTimeout> | null = null
@@ -51,7 +66,25 @@ export function useBottomBarAiActions(deps: AiDeps) {
     }
   }
   reloadAiActions()
+
+  async function reloadAiModels(): Promise<void> {
+    const base = resolveAgentBaseUrl(deps.ctx)
+    try {
+      aiModels.value = normalizeAiModelConfig(await loadAiModels({ baseUrl: base }))
+    } catch {
+      aiModels.value = emptyAiModelConfig()
+    }
+  }
+  void reloadAiModels()
   const offAiActions = deps.ctx.on('ctx:plugin-installed', () => void reloadAiActions())
+
+  const offAiModelsChanged = deps.ctx.on(AI_MODELS_CHANGED_EVENT, (payload?: AiModelsChangedPayload) => {
+    if (payload?.models) {
+      aiModels.value = normalizeAiModelConfig(payload.models)
+      return
+    }
+    void reloadAiModels()
+  })
 
   const offAiActionsChanged = deps.ctx.on(AI_ACTIONS_CHANGED_EVENT, (payload?: AiActionsChangedPayload) => {
     if (Array.isArray(payload?.actions)) {
@@ -63,6 +96,24 @@ export function useBottomBarAiActions(deps: AiDeps) {
   })
 
   const aiButtons = computed(() => aiActions.value.filter((a) => a.enabled).map((a) => ({ ...a, icon: a.icon || DEFAULT_AI_ICON })))
+
+  /**
+   * 这颗模型现在还能用吗（用户 2026-11-20：单按钮模型失效 → 回落通用模型）。
+   *
+   * 「能用」= Agent 的模型清单里有它，并且配了密钥。清单拿不到（Agent 没装 / 还在拉）时
+   * 不判死：否则一开画布就把用户配好的模型全当成失效。
+   */
+  function modelUsable(choice: { provider: string; modelId: string }): boolean {
+    const models = readAgentModels(deps.ctx).models
+    if (!models.length) return true
+    const hit = models.find((m) => m.provider === choice.provider && m.modelId === choice.modelId)
+    return Boolean(hit?.hasKey)
+  }
+
+  /** 某个按钮这次该用哪颗模型（单按钮 → 通用 → null = 后台默认） */
+  function modelFor(actionId: string) {
+    return resolveAiActionModel(actionId, aiModels.value, modelUsable)
+  }
 
   function onAiDelta(fullText: string): void {
     deps.prompt.value = fullText
@@ -112,6 +163,7 @@ export function useBottomBarAiActions(deps: AiDeps) {
     const base = resolveAgentBaseUrl(deps.ctx)
     const retriesRaw = deps.ctx.tryGet<{ get(key: string): string | number | boolean }>('settings')?.get('bottomBarAiRetries')
     const retryRounds = typeof retriesRaw === 'number' && retriesRaw >= 1 ? Math.floor(retriesRaw) : undefined
+    const model = modelFor(action.id)
     aiRunningId.value = action.id
     aiError.value = ''
     aiAbort = new AbortController()
@@ -130,6 +182,7 @@ export function useBottomBarAiActions(deps: AiDeps) {
           nodeId: deps.props.id,
         },
         baseUrl: base,
+        ...(model ? { model } : {}),
         ...(retryRounds === undefined ? {} : { retryRounds }),
         signal: aiAbort.signal,
         onDelta: (delta) => {
@@ -161,6 +214,9 @@ export function useBottomBarAiActions(deps: AiDeps) {
         }
         flushAiPrompt()
         aiError.value = res.error
+        // 用户 2026-11-20 口径：失败用全局 notify，不在底栏里塞一行小字
+        deps.ctx.tryGet<NotifyContract>('notify')?.error(res.error || 'AI 请求失败')
+        // sr-only 播报只留一会儿：读屏念完后清掉，别让旧错误一直挂在 DOM 里
         setTimeout(() => { if (aiError.value === res.error) aiError.value = '' }, 4000)
       }
     } finally {
@@ -183,11 +239,13 @@ export function useBottomBarAiActions(deps: AiDeps) {
     if (aiFlushPending) { aiFlushPending = false; flushAiPrompt() }
     aiAbort?.abort()
     offAiActions.dispose()
+    offAiModelsChanged.dispose()
     offAiActionsChanged.dispose()
   })
 
   return {
     aiActions,
+    aiModels,
     aiRunningId,
     aiPhase,
     aiEditorLocked,

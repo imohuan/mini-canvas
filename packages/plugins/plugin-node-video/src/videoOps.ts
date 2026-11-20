@@ -253,7 +253,7 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     getNodes(): NodeLike[]
     types: ReadonlyMap<string, unknown>
     updateNode(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } }): void
-    updateNodeRuntime(id: string, patch: { data: Record<string, unknown> }): void
+    updateNodeRuntime(id: string, patch: { data: Record<string, unknown>; size?: { w: number; h: number } | undefined }): void
     transaction<T>(
       reason: string,
       fn: (tx: {
@@ -319,7 +319,8 @@ export function createVideoOps(svc: ServiceGetter): VideoOpsContext {
     ),
     // 派生尺寸（按画面比例补算）：有 runtime 写口就不进撤销栈；极简宿主退回普通写
     writeMeasured: (nodeId, data, size) => {
-      const patch = size !== undefined ? { data, size: { w: size.w, h: size.h } } : { data }
+      // size 键恒在：undefined = 清掉显式尺寸（回退跟默认走）。与 imageOps.writeMeasured 同口径。
+      const patch = { data, size: size !== undefined ? { w: size.w, h: size.h } : undefined }
       const d = doc()
       if (d?.updateNodeRuntime) d.updateNodeRuntime(nodeId, patch)
       else d?.updateNode(nodeId, patch)

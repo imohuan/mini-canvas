@@ -16,11 +16,13 @@
  * 副本会指回原画布的资源（原画布一删，副本全裂）。带上作用域后，「复制」只要把 ID 前缀
  * 换成新画布 id 即可，不依赖 URL 字符串替换。
  *
- * 零 import / 零 Vue：本插件要打成自包含单文件（见 vite.config.ts 的说明）。
+ * 零 Vue：本插件要打成自包含单文件（见 vite.config.ts 的说明）。允许 import canvas-data 的
+ * **纯函数**（打包时会内联进产物）；禁止的是运行期残留裸模块名。
  */
 import type { ResourceAdapter, StorageAdapterCapability, ResourcePutOptions } from './shims.js'
 import type { CloudApi } from './api.js'
 import { CANVAS_ID } from './keys.js'
+import { isResourceName, resourceRefOfUrl } from '@plume-canvas/canvas-data'
 
 /** 已是可请求地址：绝对 http(s)，或同源 `/api/` 路径 */
 function isRequestableUrl(ref: string): boolean {
@@ -46,12 +48,14 @@ export function cloudResourceId(canvasId: string, hashName: string): string {
  * 或第二段不是内容哈希/槽位名的字符串都不算 ID —— 这样外部链接不会被误当成引用。
  */
 export function parseCloudResourceId(ref: string): { canvasId: string; hashName: string } | undefined {
-  const i = ref.indexOf('/')
-  if (i <= 0 || i !== ref.lastIndexOf('/')) return undefined
-  const canvasId = ref.slice(0, i)
-  const hashName = ref.slice(i + 1)
-  if (!CANVAS_ID_RE.test(canvasId)) return undefined
-  if (!CONTENT_NAME_RE.test(hashName) && !SLOT_NAME_RE.test(hashName)) return undefined
+  // 白名单判定只此一处（canvas-data 的 isResourceName / resourceRefOfUrl 同源），
+  // 这里只把结果拆成两段给调用方用。地址形态（含 ?v= / 绝对地址）也一并认。
+  const logical = resourceRefOfUrl(ref) ?? ref
+  const i = logical.indexOf('/')
+  if (i <= 0 || i !== logical.lastIndexOf('/')) return undefined
+  const canvasId = logical.slice(0, i)
+  const hashName = logical.slice(i + 1)
+  if (!CANVAS_ID_RE.test(canvasId) || !isResourceName(hashName)) return undefined
   return { canvasId, hashName }
 }
 

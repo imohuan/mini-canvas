@@ -16,6 +16,102 @@ import type { NotifyContract } from '@plume-canvas/plugin-sdk'
 import { createProviderManagerService, type ProviderRow } from '../../providerManagerService'
 import ProviderIcon from './ProviderIcon.vue'
 
+/*
+ * 模型图标判定（与底栏模型下拉逐条对齐，用户口径 2026-11-20）。
+ *
+ * 为什么写在组件里而不是单独开一个文件：这个工作区里同时跑着多台 vite dev，
+ * 「新增一个源文件 + 别的文件 import 它」在热重载期间会被解析成找不到模块
+ * （用户 2026-11-20 启动服务直接报 Failed to resolve import "../../modelIcon"）。
+ * 逻辑放进本文件后，改完只触发一次组件热替换，任何 dev 服务器都不会再踩到。
+ *
+ * 优先级照抄 plugin-bottom-bar/src/node-bottom-bar/actionIcon.ts：
+ * 1. `icon` 是 SVG / Base64 → 直接用；
+ * 2. `icon` 是名字 → 交给 Agent 的图标服务模糊查；
+ * 3. 没给 icon → 按模型标题猜平台；
+ * 4. 平台自己的 icon 兜底；
+ * 5. 都认不出 → 按节点类型给通用图形。
+ */
+interface ModelIcon {
+  tone: string
+  svg: string
+}
+
+/** Agent 的 modelIcons 服务（没装 Agent 时为 undefined） */
+interface ModelIconServiceLike {
+  svgOfName(name: string): string
+  platformOfName(name: string): string
+  platformOfIconHint?(hint: string): string
+  svgOfIconHint?(hint: string): string
+}
+
+/** 本地通用兜底图形（认不出平台时用；颜色由 data-tone 决定） */
+function fallbackModelIcon(nodeType?: string): ModelIcon {
+  const body: Record<string, string> = {
+    image:
+      '<rect x="3" y="4.5" width="18" height="15" rx="2.6"/><circle cx="8.6" cy="9.6" r="1.6"/>'
+      + '<path d="m21 15.4-4.6-4.6a1.5 1.5 0 0 0-2.1 0L6 19.4"/>',
+    video:
+      '<rect x="3" y="5.4" width="13" height="13.2" rx="2.4"/><path d="m16 9.6 5-2.8v10.4l-5-2.8z"/>',
+    audio: '<path d="M3 10v4M7 6.6v10.8M11 3.6v16.8M15 7.4v9.2M19 10v4"/>',
+    text: '<path d="M4 7V4h16v3M12 4v16M8 20h8"/>',
+  }
+  const key = nodeType && body[nodeType] ? nodeType : 'text'
+  return {
+    tone: key,
+    svg:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" '
+      + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + body[key] + '</svg>',
+  }
+}
+
+/**
+ * provider 自带图标：SVG 字符串，或 `data:image/…;base64,…`。
+ * 这段字符串会走 v-html，来源是 providers 目录里的文件，只放行两种确定安全的形态。
+ */
+function customModelIcon(raw: unknown): ModelIcon | undefined {
+  if (typeof raw !== 'string') return undefined
+  let s = raw.trim()
+  if (!s) return undefined
+
+  const svgAt = s.search(/<svg[\s>]/i)
+  if (svgAt > 0) s = s.slice(svgAt)
+
+  if (/^<svg[\s>]/i.test(s)) {
+    if (/<script|<foreignObject|javascript:|\son[a-z]+\s*=/i.test(s)) return undefined
+    if (!/viewBox\s*=|width\s*=/i.test(s)) return undefined
+    return { tone: 'custom', svg: s }
+  }
+
+  const m = /^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,([A-Za-z0-9+/=\s]+)$/i.exec(s)
+  if (!m) return undefined
+  const mime = 'image/' + m[1]!.toLowerCase()
+  return {
+    tone: 'custom',
+    svg: '<img src="data:' + mime + ';base64,' + m[2]!.replace(/\s+/g, '') + '" alt="" draggable="false">',
+  }
+}
+
+/** 解析一个模型的图标（入参与底栏的 resolveActionIcon 一致） */
+function resolveModelIcon(
+  title: string,
+  service: ModelIconServiceLike | undefined,
+  nodeType: string | undefined,
+  providerIcon: unknown,
+): ModelIcon {
+  // 1. 按标题猜平台（设置页拿不到动作自己的 icon，从这一步开始）
+  if (service) {
+    const platform = service.platformOfName(title)
+    if (platform !== 'custom') return { tone: platform, svg: service.svgOfName(title) }
+  }
+
+  // 2. 平台自己的图标兜底
+  const fromProvider = customModelIcon(providerIcon)
+  if (fromProvider) return fromProvider
+
+  // 3. 本地通用图形（绝不空白）
+  return fallbackModelIcon(nodeType)
+}
+
 const { ctx } = useCanvasContextOrRender()
 const notify = ctx.tryGet<NotifyContract>('notify')
 const feedback = ctx.tryGet<FeedbackService>('feedback')
@@ -40,6 +136,22 @@ function fail(msg: string | null): void {
 const editingRow = computed<ProviderRow | undefined>(() =>
   s.editingId ? s.rows.find((r) => r.id === s.editingId) : undefined,
 )
+
+/** 平台图标服务（与底栏模型下拉同一把尺子） */
+const iconService = computed(() => ctx.tryGet<ModelIconServiceLike>('modelIcons'))
+
+const modelRows = computed(() =>
+  (editingRow.value?.models ?? []).map((m) => ({
+    ...m,
+    icon: resolveModelIcon(m.title, iconService.value, m.nodeTypes?.[0], editingRow.value?.icon),
+    /**
+     * 设置页只显示模型自己的描述，不加平台前缀（用户口径 2026-11-20）。
+     * 平台前缀是底栏下拉的事；两处表现形式不同是有意的。
+     */
+    desc: m.description ?? '',
+  })),
+)
+const enabledModelCount = computed(() => modelRows.value.filter((m) => svc.isModelEnabled(m.id)).length)
 
 function onSave(): void {
   void svc.saveEdit().then(fail)
@@ -217,6 +329,45 @@ function onSave(): void {
         </div>
       </section>
 
+      <!-- 模型：这个平台导出的全部模型，关掉的不会出现在底栏下拉里 -->
+      <section class="pmp-section">
+        <header class="pmp-section-head">
+          <h4>模型</h4>
+          <span>关掉的模型不会出现在底栏的模型下拉里；随时可以再打开</span>
+          <span class="pmp-flex" />
+          <span class="pmp-hint">{{ enabledModelCount }} / {{ modelRows.length }} 个已开启</span>
+        </header>
+
+        <p v-if="!modelRows.length" class="pmp-empty">这个平台还没有导出模型</p>
+        <div v-else class="pmp-model-list">
+          <!--
+            设置页只显示**模型标题 + 描述**（用户口径 2026-11-20 第二次修正）。
+            这里不加平台前缀、也不出悬停气泡：描述直接把话说完，最多 4 行内换行显示。
+            底栏下拉才需要「平台前缀 + 单行省略 + 气泡」，两处表现本来就该不同。
+          -->
+          <div
+            v-for="m in modelRows"
+            :key="m.id"
+            class="pmp-model-row"
+            :class="{ 'is-off': !svc.isModelEnabled(m.id) }"
+          >
+            <!-- 图标托与底栏下拉完全同款：白底 + 1px 内描边，35×35，里面 22×22 的图形 -->
+            <span class="pmp-model-brand" :data-tone="m.icon.tone" :title="m.title" aria-hidden="true" v-html="m.icon.svg" />
+            <div class="pmp-model-main">
+              <div class="pmp-model-title">
+                <span class="pmp-model-name">{{ m.title }}</span>
+              </div>
+              <div v-if="m.desc" class="pmp-model-desc">{{ m.desc }}</div>
+            </div>
+            <Switch
+              :model-value="svc.isModelEnabled(m.id)"
+              :aria-label="m.title + '：是否在底栏显示'"
+              @update:model-value="() => svc.toggleModel(m.id)"
+            />
+          </div>
+        </div>
+      </section>
+
       <div class="pmp-edit-actions">
         <span class="pmp-flex" />
         <Button variant="outline" size="sm" type="button" @click="svc.closeEdit()">取消</Button>
@@ -278,20 +429,96 @@ function onSave(): void {
 .pmp-field-control .pmp-input { width: 220px; max-width: 220px; flex-shrink: 0; }
 .pmp-account-name { max-width: 150px; }
 
-.pmp-account { margin-top: 8px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: 10px; background: var(--ui-hover-soft); }
-.pmp-account-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
+/*
+ * 账号行不再自成一格「卡片」：它与「配置项」同属一张分区卡片，
+ * 只靠分隔线区分。以前这里是灰底 + 10px 圆角的独立块，嵌在 12px 圆角的分区里，
+ * 看起来像卡里又套了一张卡（用户 2026-11-20 截图）。
+ */
+.pmp-account { margin-top: 0; border: 0; border-radius: 0; background: transparent; }
+.pmp-account + .pmp-account { border-top: 1px solid var(--ui-line, #e2e5ea); }
+.pmp-account-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.pmp-account-head:hover { background: var(--ui-hover-soft); }
 .pmp-account-toggle { display: flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; cursor: pointer; }
 .pmp-caret { flex-shrink: 0; width: 15px; height: 15px; color: var(--ui-ink-dim); transition: transform .14s ease; }
 .pmp-caret.is-open { transform: rotate(90deg); }
 .pmp-account-no { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 999px; background: var(--ui-panel); font-size: 10px; font-weight: 700; color: var(--ui-ink-dim); box-shadow: inset 0 0 0 1px var(--ui-line, #e2e5ea); }
 .pmp-account-name { min-width: 120px; max-width: 150px; }
 .pmp-account-id { font-size: 10.5px; color: var(--ui-ink-mute); }
-.pmp-account-body { padding: 8px 10px 10px; border-top: 1px solid var(--ui-line, #e2e5ea); }
+/*
+ * 展开区与外层账号卡片同一块底：以前这里另起一块浅灰 + 圆角，看起来像「卡里又套了一张卡」，
+ * 与账号卡片的圆角打架（用户 2026-11-20 截图）。现在只留一条分隔线，左右内缩与外层一致。
+ */
+.pmp-account-body { padding: 8px 12px 10px 34px; border-top: 1px solid var(--ui-line, #e2e5ea); }
 .pmp-account-note { margin: 0 0 6px; font-size: 10.5px; color: var(--ui-ink-mute); }
 .pmp-account-field { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
 .pmp-account-field-label { width: 84px; flex-shrink: 0; text-align: right; font-size: 11px; color: var(--ui-ink-dim); }
 .pmp-shared-value { font-size: 11.5px; color: var(--ui-ink); }
 .pmp-shared-note { font-size: 9.5px; color: var(--ui-accent, #0891b2); }
+
+/*
+ * 模型列表：与左侧底栏「生成模型」下拉**同一套信息层次**（用户口径 2026-11-20）。
+ * 取值照抄 plugin-agent 的 ChoicePicker：35px 图标托（圆角 9、白底、1px 内描边、图形 22px）、
+ * 主标题 12.5px/600、副标题 10.5px 灰色、行内 10px 间距。
+ * 不再画每行之间的横线 —— 下拉里也没有，靠间距分行。
+ */
+.pmp-model-list { display: flex; flex-direction: column; gap: 2px; padding: 4px 0; }
+.pmp-model-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; }
+.pmp-model-row:hover { background: var(--ui-hover, rgb(0 0 0 / 0.06)); }
+.pmp-model-brand {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  flex: none;
+  border-radius: 9px;
+  background: var(--ui-panel, #fff);
+  color: var(--ui-ink, #374151);
+  box-shadow: inset 0 0 0 1px var(--ui-line-soft, rgba(0, 0, 0, 0.05));
+}
+.pmp-model-brand :deep(svg) { width: 22px; height: 22px; display: block; }
+/* provider 自带图标走 <img>：给同一档尺寸，否则 1×1 会缩成 0、大图撑破图标托 */
+.pmp-model-brand :deep(img) { width: 22px; height: 22px; display: block; object-fit: contain; border-radius: 6px; }
+/* 认不出平台时的通用线稿：沿用底栏那套家族色 */
+.pmp-model-brand[data-tone='seedream'] { color: #1e37fc; }
+.pmp-model-brand[data-tone='seedance'] { color: #7c3aed; }
+.pmp-model-brand[data-tone='doubao'] { color: #1e37fc; }
+.pmp-model-brand[data-tone='dola'] { color: #0ea5e9; }
+.pmp-model-brand[data-tone='volcengine'] { color: #166534; }
+.pmp-model-brand[data-tone='kling'] { color: #f97316; }
+.pmp-model-brand[data-tone='sora'] { color: #0f766e; }
+.pmp-model-brand[data-tone='veo'] { color: #2563eb; }
+.pmp-model-brand[data-tone='runway'] { color: #111827; }
+.pmp-model-brand[data-tone='pika'] { color: #e11d48; }
+.pmp-model-brand[data-tone='hailuo'] { color: #0891b2; }
+.pmp-model-brand[data-tone='qwen'] { color: #7c3aed; }
+.pmp-model-brand[data-tone='midjourney'] { color: #334155; }
+.pmp-model-brand[data-tone='image'] { color: #2563eb; }
+.pmp-model-brand[data-tone='video'] { color: #7c3aed; }
+.pmp-model-brand[data-tone='audio'] { color: #059669; }
+.pmp-model-brand[data-tone='text'] { color: var(--ui-ink-dim, #6b7280); }
+.pmp-model-main { flex: 1; min-width: 0; }
+.pmp-model-title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pmp-model-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; line-height: 1.4; color: var(--ui-ink); }
+/*
+ * 设置页的描述（用户口径 2026-11-20）：直接显示完整内容，最多 4 行。
+ * 与底栏下拉不同 —— 那边是「平台前缀 + 单行省略 + 气泡」，这边把话说完就够，
+ * 超出 4 行才截断，不挂气泡。
+ */
+.pmp-model-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  white-space: normal;
+  word-break: break-word;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--ui-ink-mute, #9ca3af);
+}
+/* 关掉的模型整行变暗，但仍然可以点开关打开 */
+.pmp-model-row.is-off .pmp-model-name { opacity: .55; }
+.pmp-model-row.is-off .pmp-model-desc { opacity: .55; }
+.pmp-model-row.is-off .pmp-model-brand { opacity: .55; }
 
 .pmp-edit-actions { display: flex; align-items: center; gap: 8px; padding-top: 4px; }
 </style>

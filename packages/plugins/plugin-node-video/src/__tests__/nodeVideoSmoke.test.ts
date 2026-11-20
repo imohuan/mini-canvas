@@ -252,6 +252,7 @@ describe('node-video 装配 smoke', () => {
       'videoCardMinShortSide',
       'videoDefaultHeight',
       'videoDefaultWidth',
+      'videoLoadingResetSize',
     ])
     expect(settings.groupOf('节点/视频剪辑').map((i) => i.key)).toEqual([
       'videoMinClipDuration',

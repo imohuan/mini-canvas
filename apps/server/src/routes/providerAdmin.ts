@@ -48,6 +48,10 @@ export interface ProviderAdminService {
   ): Promise<void>
   /** 生成类型 → 默认模型（全局） */
   saveDefaults?(defaults: Record<string, string>): Promise<void>
+  /** 保存一个平台里被关掉的模型（动作 id 列表，整体替换） */
+  saveDisabledModels?(platformId: string, ids: string[]): Promise<void>
+  /** 读一个平台里被关掉的模型（同步，动作清单下发时用） */
+  disabledModelsOf?(platformId: string): string[]
   readConfig(): Promise<ProviderConfigFile>
   dir: string
 }
@@ -90,7 +94,7 @@ export interface ProviderRow {
   /** 这个平台提供哪些节点类型（image / video / audio / text）；界面按它统计「生成类型」 */
   nodeTypes?: string[]
   /** 这个平台的模型明细（模型页按类型列出来，设置默认模型用） */
-  models?: Array<{ id: string; title: string; nodeTypes: string[]; group?: string }>
+  models?: Array<{ id: string; title: string; description?: string; nodeTypes: string[]; group?: string }>
   config: ProviderConfigField[]
   /**
    * 哪些字段是「账号级」：key 列表。
@@ -103,6 +107,8 @@ export interface ProviderRow {
   shared?: Record<string, string | number | boolean>
   /** 每个账号：id / name / 值（secret 已按位掩掉） */
   accounts: Array<{ id: string; name?: string; default?: boolean; values: Record<string, string | number | boolean> }>
+  /** 用户关掉的模型（动作 id）；前端「模型列表」按它把开关拨到关闭 */
+  disabledModels?: string[]
 }
 
 export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderAdminService): Hono {
@@ -155,6 +161,7 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
         models: p.actions.map((a) => ({
           id: a.id,
           title: a.title,
+          ...(a.description ? { description: a.description } : {}),
           nodeTypes: a.nodeTypes ?? [],
           ...(a.group ? { group: a.group } : {}),
         })),
@@ -173,12 +180,22 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
           ...(a.default ? { default: true } : {}),
           values: maskValues(a.values, fields),
         })),
+        ...(admin.disabledModelsOf?.(p.id)?.length ? { disabledModels: admin.disabledModelsOf(p.id) } : {}),
       }
     })
     // 停用文件：registry 里没有 —— 给占位行（配置表单拿不到声明，前端按「已停用」渲染）。
     const knownFiles = new Set(rows.map((r) => r.file))
+    /**
+     * 已经删掉的文件不能再当「停用」列出来。
+     *
+     * 删除时只会把文件名记进 deletedFiles，文件本身已经不在了；可 disabledFiles 里
+     * 往往还留着同一个名字（先停用、后删除）。不过滤的话，列表里会永远多一行幽灵平台，
+     * 点「删除」又必然失败（找不到文件）—— 用户 2026-11-20 截图里的「这个平台是内置的，
+     * 没有文件可删」就是这么来的。
+     */
+    const deletedFiles = new Set(cfg.deletedFiles)
     for (const file of cfg.disabledFiles) {
-      if (!isSafeFileName(file) || knownFiles.has(file)) continue
+      if (!isSafeFileName(file) || knownFiles.has(file) || deletedFiles.has(file)) continue
       // 停用的文件已经装载不到声明，只能拿配置里的账号清单；按文件名猜 platformId（历史约定一致）
       const pid = file.replace(/\.js$/, '')
       const keyConfig = cfg.config ?? {}
@@ -206,6 +223,7 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
           ...(a.default ? { default: true } : {}),
           values: { ...a.values },
         })),
+        ...((cfg.disabledModels?.[pid] ?? []).length > 0 ? { disabledModels: [...(cfg.disabledModels?.[pid] ?? [])] } : {}),
       })
     }
     rows.sort((a, b) => a.id.localeCompare(b.id))
@@ -242,6 +260,29 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
     return c.json({ ok: true })
   })
 
+  /**
+   * 一个平台里「关掉哪些模型」——底栏模型下拉只列打开的。
+   *
+   * PUT body: { platformId: 'v-test', disabled: ['v-test:a', 'v-test:b'] }
+   * 立刻生效：保存后广播 providers-version，前端重拉动作清单，关掉的模型从下拉里消失。
+   */
+  app.put('/api/providers/model-disabled', async (c) => {
+    if (!admin.saveDisabledModels) return c.json({ ok: false, error: '当前宿主不支持模型开关' }, 501)
+    let body: unknown
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ ok: false, error: 'body 不是合法 JSON' }, 400)
+    }
+    const platformId = String((body as { platformId?: unknown }).platformId ?? '').trim()
+    if (!platformId) return c.json({ ok: false, error: 'platformId 不能为空' }, 400)
+    const raw = (body as { disabled?: unknown }).disabled
+    if (!Array.isArray(raw)) return c.json({ ok: false, error: 'disabled 必须是数组' }, 400)
+    const disabled = [...new Set(raw.filter((x): x is string => typeof x === 'string' && x.trim() !== ''))]
+    await admin.saveDisabledModels(platformId, disabled)
+    return c.json({ ok: true })
+  })
+
   /** 文件名参数守卫（所有 :file 路由共用） */
   function safeFile(raw: string): string | undefined {
     const decoded = decodeURIComponent(raw)
@@ -266,8 +307,25 @@ export function providerAdminRoutes(registry: ProviderRegistry, admin: ProviderA
     const file = safeFile(c.req.param('file'))
     if (!file) return c.json({ ok: false, error: '非法文件名' }, 400)
     const removed = await admin.deleteFile(file)
-    // 内置平台没有文件：明确报错，别让界面以为删掉了
-    if (!removed) return c.json({ ok: false, error: '这个平台是内置的，没有文件可删' }, 404)
+    /**
+     * 两种可能：内置平台（本来就没有文件），或者文件已经不在了（之前删过 / 被手动移走）。
+     * 以前一律说「这个平台是内置的」，于是删一个普通平台也会得到这句话，看不清真因
+     * （用户 2026-11-20 截图）。这里按「清单里有没有它的文件」分开说。
+     */
+    if (!removed) {
+      const row = registry.listProviders().find((p) => p.id === file.replace(/\.js$/, ''))
+      // fileOf 对内置平台返回 undefined（没有登记过文件名），不能只判空串
+      const builtin = row !== undefined && !admin.fileOf(row.id)
+      return c.json(
+        {
+          ok: false,
+          error: builtin
+            ? '这个平台是内置的，没有文件可删'
+            : '找不到文件 ' + file + '（可能已经被删除），刷新列表即可',
+        },
+        404,
+      )
+    }
     return c.json({ ok: true })
   })
 

@@ -14,7 +14,7 @@ import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { resolveLocalFile } from '../task/resolve'
-import { BOOTSTRAP } from '../task/runner'
+import { BOOTSTRAP, buildBootstrap } from '../task/runner'
 import { normalizeManualValues } from '../uiValues'
 
 let root = ''

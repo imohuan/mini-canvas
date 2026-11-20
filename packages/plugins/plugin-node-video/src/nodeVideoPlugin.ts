@@ -234,6 +234,13 @@ export const Config: ConfigSchema = {
     label: '最长边最大', group: '布局/视频节点尺寸',
     description: '视频节点卡片最长的一条边最多这么长（px）。特别细长的视频会超过它，以最短边为准。',
   },
+  // —— 「布局 / 视频节点尺寸」：生成期间的尺寸行为（用户 2026-11-19）——
+  videoLoadingResetSize: {
+    type: 'boolean', default: false,
+    label: '生成时恢复默认尺寸', group: '布局/视频节点尺寸',
+    description: '打开后：点生成立刻清掉该节点自己的尺寸（回到默认宽/高），跑完再按新视频比例写回。' +
+      '关闭时：生成期间保持上一次的尺寸，只在原尺寸上盖一层加载动画。',
+  },
   videoMinClipDuration: {
     type: 'number', default: 1, min: 0.1, max: 10, step: 0.1,
     label: '剪辑最短时长', group: '节点/视频剪辑',

@@ -219,6 +219,10 @@ export const actionsPlugin: PluginModule = {
           'providerAdmin',
         )
         return admin ? admin.accountsOf(id) : []
+      }, (id) => {
+        // 模型开关：用户关掉的模型不下发，底栏下拉里就没有它
+        const admin = ctx.tryGet<{ disabledModelsOf?(id: string): string[] }>('providerAdmin')
+        return admin?.disabledModelsOf?.(id) ?? []
       }),
     )
     // 动作文案（下拉标题 / 发送按钮里的价格）：provider 声明了函数，由后台执行后下发字符串。

@@ -14,6 +14,7 @@
  * 零 Vue / 零 DOM：时钟、请求、读写都由调用方注入，node 环境可单测。
  */
 import type { ServerJob } from './apiTypes.js'
+import { mediaTypeOfName } from '@plume-canvas/canvas-data'
 
 /** 画布上一个正在跑的节点（调用方从 doc 里扫出来） */
 export interface RunningNodeLike {
@@ -56,6 +57,44 @@ const MEDIA_FIELD: Record<string, string> = {
   image: 'imageUrl',
   video: 'videoUrl',
   audio: 'audioUrl',
+  /** 可视化节点：产物地址统一在 uiOutputUrl（类型另有 uiOutputType） */
+  ui: 'uiOutputUrl',
+  /** 对比节点只读左右两槽：写 imageUrl 等于没写（卡片依然空白） */
+  'image-compare': 'leftImageUrl',
+  '3d-preview': 'imageUrl',
+}
+
+/**
+ * 同源产物地址 → 逻辑引用 `<画布id>/<hashName>`。
+ *
+ * 为什么这一路也必须写 resourceId：图片组件**优先按 resourceId 现取**，
+ * 只补地址的话，节点上的旧引用会把画面留在旧图上（用户实测 2026-11-20 的「图片 17」）；
+ * 保存时"有引用就删地址副本"的清理还会把刚补的地址删掉。认不出形状就不猜。
+ *
+ * 优先用后台随任务结果给出的 `result.resourceId`（那是权威的引用），
+ * 这里只在老后台没给时，按同源地址的形状反推一次。
+ */
+export function resourceRefFromUrl(url: string): string | undefined {
+  const prefix = '/api/canvases/'
+  if (!url.startsWith(prefix)) return undefined
+  const rest = url.slice(prefix.length)
+  const sep = '/resources/'
+  const i = rest.indexOf(sep)
+  if (i <= 0) return undefined
+  const name = rest.slice(i + sep.length)
+  if (!name || name.includes('/') || name.includes('?') || name.includes('#')) return undefined
+  return rest.slice(0, i) + '/' + name
+}
+
+/**
+ * 产物文件名后缀 → UI 节点该声明的输出类型。
+ *
+ * 与后台 `uiOutputTypeOf`、节点插件 `outputTypeForName` 同一套口径；
+ * SSE 断着走兜底这条路时也要写 uiOutputType，否则 UI 节点「有产物却没有输出端口」。
+ */
+export function uiOutputTypeForName(name: string): string {
+  // 与 canvas-data 的 mediaTypeOfName 同一套后缀表（constants.test 有比对）；认不出当图片。
+  return mediaTypeOfName(name)
 }
 
 /** 把一批 id 切成若干块（后台一次最多 200，这里默认 50 更保守） */
@@ -151,8 +190,18 @@ export function createJobsWatcher(deps: JobsWatcherDeps): JobsWatcher {
     if (!url) return
     const field = MEDIA_FIELD[node.nodeType]
     if (!field) return
-    if (typeof node.data?.[field] === 'string' && node.data[field] === url) return
-    deps.writeResult(node.nodeId, { [field]: url })
+    // 后台随结果给出的引用是权威值；只有老后台没给时才按地址反推
+    const ref = job.result?.resourceId || resourceRefFromUrl(url)
+    const sameUrl = typeof node.data?.[field] === 'string' && node.data[field] === url
+    const sameRef = !ref || node.data?.resourceId === ref
+    if (sameUrl && sameRef) return
+    // UI 节点还要定「这次产物是哪一类」：右侧端口类型与下游能不能连都读它
+    const uiType = node.nodeType === 'ui' ? uiOutputTypeForName(url) : undefined
+    deps.writeResult(node.nodeId, {
+      [field]: url,
+      ...(ref ? { resourceId: ref } : {}),
+      ...(uiType ? { uiOutputType: uiType } : {}),
+    })
   }
 
   async function runOnce(): Promise<void> {

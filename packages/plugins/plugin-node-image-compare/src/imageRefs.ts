@@ -7,6 +7,8 @@
  * TODO(upstream): 换成 `upstream.media('left'/'right')` 后，本文件只剩 resolve 一段。
  */
 
+import { resolveMediaSrc } from '@plume-canvas/canvas-data'
+
 /** 只认“按名字取服务”这一件事（用 unknown 兼容真实 ctx 的泛型 tryGet） */
 export interface ResourceResolverLike {
   tryGet?(name: string): unknown
@@ -36,18 +38,7 @@ export async function resolveImageSrc(
   ctx: ResourceResolverLike | undefined,
   data: Record<string, unknown> | undefined,
 ): Promise<string> {
-  const resourceId = typeof data?.resourceId === 'string' ? data.resourceId : ''
-  const legacyUrl = typeof data?.imageUrl === 'string' ? data.imageUrl : ''
-  if (!resourceId) return legacyUrl
-  const port = imageResourcePort(ctx)
-  if (port) {
-    try {
-      const url = await port.resolve(resourceId)
-      if (url) return url
-    } catch {
-      // 资源服务异常按取不到处理
-    }
-  }
-  return legacyUrl // 迁移期：旧存档只有 imageUrl
+  // 统一实现（引用 → 资源服务 → 回退旧地址）在 canvas-data 的 resolveMediaSrc
+  return resolveMediaSrc(ctx, data, 'imageUrl')
 }
 

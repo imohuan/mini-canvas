@@ -172,7 +172,10 @@ const {
 /** 读写句柄：读 nodeStore、写 graph（唯一写入口 → 进历史 + 落盘） */
 const ops = createVideoOps(ctx)
 /** 节点实际尺寸唯一来源（nodeGeometry.getEffective → node.size ?? 类型默认） */
-const nodeGeometry = ctx.tryGet<{ getEffective(id: string): { w: number; h: number } | null }>('nodeGeometry')
+const nodeGeometry = ctx.tryGet<{
+  get(id: string): { w: number; h: number } | null
+  getEffective(id: string): { w: number; h: number } | null
+}>('nodeGeometry')
 function currentNodeSize(): { w: number; h: number } | null {
   return nodeGeometry?.getEffective(props.id) ?? null
 }
@@ -239,6 +242,8 @@ const { mountSize } = useVideoCardSize({
   // 拖动中先别改卡片尺寸：节点会在指针下跳一下（用户实测「拖不动、要平移缩放才恢复」）
   dragging: () =>
     interaction.activity.value.nodeDragging && interaction.activity.value.nodeDragId === props.id,
+  // 生成中回到默认尺寸（设置项 videoLoadingResetSize，用户 2026-11-19）
+  loadingResetSize: () => ctx.tryGet<{ get(key: string): unknown }>('settings')?.get('videoLoadingResetSize') === true,
 })
 
 onMounted(() => {
@@ -262,6 +267,29 @@ function recordVideoMeta(v: { videoWidth: number; videoHeight: number }): void {
   if (sameMeta) return
   ops.writeMeasured?.(props.id, { ...current, videoWidth: w, videoHeight: h })
 }
+
+/**
+ * 生成期间的尺寸行为（设置项 videoLoadingResetSize，用户 2026-11-19）：
+ * 打开 → 点生成立刻清掉本节点的显式 size，卡片回到设置里的默认宽/高；
+ *        跑完（成功/失败）再按当前画面比例写回。
+ * 关闭 → 什么都不做，保持原尺寸、只在上面盖一层加载动画。
+ */
+watch(
+  () => (props.data?.runState as { status?: unknown } | undefined)?.status,
+  (status) => {
+    const on = ctx.tryGet<{ get(key: string): unknown }>('settings')?.get('videoLoadingResetSize') === true
+    if (!on) return
+    if (status === 'running') {
+      const explicit = nodeGeometry?.get(props.id) ?? null
+      if (explicit) ops.writeMeasured?.(props.id, ops.read(props.id) ?? props.data, undefined)
+      return
+    }
+    const w = positiveNum(props.data?.videoWidth)
+    const h = positiveNum(props.data?.videoHeight)
+    if (w !== null && h !== null) recordVideoMeta({ videoWidth: w, videoHeight: h })
+  },
+  { immediate: true },
+)
 
 /**
  * 点画布空白：只负责退出裁剪。

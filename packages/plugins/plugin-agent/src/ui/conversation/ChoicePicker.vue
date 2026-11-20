@@ -30,6 +30,13 @@ export interface ChoiceItem {
   title: string
   /** 副标题（平台名 / 说明） */
   subtitle?: string
+  /**
+   * 描述（模型自己的介绍）。
+   *
+   * 用户口径 2026-11-20：平台管理页的模型列表与这个下拉必须显示同一段描述，
+   * 所以面板统一留一个描述行，调用方传什么就显示什么（不在这里改名或改写）。
+   */
+  desc?: string
   /** 右侧备注（上下文长度 / 参数摘要） */
   note?: string
   /** 平台 key；不传就按 title 猜 */
@@ -95,6 +102,10 @@ const emit = defineEmits<{
 
 const Button = useUiComponent('Button')
 const Badge = useUiComponent('Badge')
+const Tooltip = useUiComponent('Tooltip')
+const TooltipContent = useUiComponent('TooltipContent')
+const TooltipProvider = useUiComponent('TooltipProvider')
+const TooltipTrigger = useUiComponent('TooltipTrigger')
 const InputGroup = useUiComponent('InputGroup')
 const InputGroupAddon = useUiComponent('InputGroupAddon')
 const InputGroupButton = useUiComponent('InputGroupButton')
@@ -118,6 +129,19 @@ function setView(value: string | number): void {
 
 function platformOf(item: ChoiceItem): string {
   return item.platform || detectPlatform(item.title, '')
+}
+
+/**
+ * 行内第二行：**平台 · 描述**，只占一行，超出省略（用户口径 2026-11-20）。
+ *
+ * 以前这里是「平台 + 参数」一行、描述再单独一行 —— 一个模型占三四行，列表被撑得很长。
+ * 现在合并成一行；没有描述时退回参数摘要，保证这行始终有内容。
+ * 全文由悬停气泡给（与底栏「更多 AI 功能」同一套 Tooltip）。
+ */
+function lineOf(item: ChoiceItem): string {
+  const head = item.subtitle || brandName(platformOf(item))
+  const tail = item.desc || item.note || ''
+  return tail ? head + ' · ' + tail : head
 }
 
 const platforms = computed(() => {
@@ -422,14 +446,20 @@ defineExpose({ refreshLayout })
                     <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
                   </span>
                   <span class="ac-model-meta">
-                    <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
-                    <template v-if="item.note">
-                      <span class="ac-dot-sep" aria-hidden="true"></span>
-                      <span>{{ item.note }}</span>
-                    </template>
+                    <TooltipProvider :delay-duration="260" disable-hoverable-content>
+                      <Tooltip>
+                        <TooltipTrigger as-child>
+                          <span class="ac-model-line">{{ lineOf(item) }}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" :arrow="true" class="ac-model-tip">
+                          <span class="ac-model-tip-desc">{{ lineOf(item) }}</span>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </span>
                 </span>
-                <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+                <!-- 对勾只在选中时渲染：以前靠 opacity 隐藏，仍占 16px，第二行就贴不到右边 -->
+                <span v-if="item.id === currentId" class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
               </DropdownMenuSubTrigger>
               <Button v-else variant="ghost" size="sm" class="ac-model-entry ac-model-hit"
                 role="option" :aria-selected="item.id === currentId" :disabled="item.disabled" @click="pick(item)">
@@ -441,14 +471,19 @@ defineExpose({ refreshLayout })
                     <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
                   </span>
                   <span class="ac-model-meta">
-                    <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
-                    <template v-if="item.note">
-                      <span class="ac-dot-sep" aria-hidden="true"></span>
-                      <span>{{ item.note }}</span>
-                    </template>
+                    <TooltipProvider :delay-duration="260" disable-hoverable-content>
+                      <Tooltip>
+                        <TooltipTrigger as-child>
+                          <span class="ac-model-line">{{ lineOf(item) }}</span>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" :arrow="true" class="ac-model-tip">
+                          <span class="ac-model-tip-desc">{{ lineOf(item) }}</span>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </span>
                 </span>
-                <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+                <span v-if="item.id === currentId" class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
               </Button>
               <DropdownMenuSubContent v-if="hasAccounts(item)" class="ac-model-account-menu"
                 @mouseenter="keepAccountMenu" @mouseleave="scheduleAccountClose(item.id)">
@@ -501,17 +536,22 @@ defineExpose({ refreshLayout })
                     <span class="ac-model-copy">
                       <span class="ac-model-id">{{ item.title }}</span>
                       <span class="ac-model-meta">
-                        <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
-                        <template v-if="item.note">
-                          <span class="ac-dot-sep" aria-hidden="true"></span>
-                          <span>{{ item.note }}</span>
-                        </template>
+                        <TooltipProvider :delay-duration="260" disable-hoverable-content>
+                          <Tooltip>
+                            <TooltipTrigger as-child>
+                              <span class="ac-model-line">{{ lineOf(item) }}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" :arrow="true" class="ac-model-tip">
+                              <span class="ac-model-tip-desc">{{ lineOf(item) }}</span>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </span>
                     </span>
                     <span class="ac-model-badges">
                       <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
                     </span>
-                    <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+                    <span v-if="item.id === currentId" class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                   </DropdownMenuSubTrigger>
                   <Button v-else variant="ghost" size="sm" class="ac-model-entry ac-model-entry-row ac-model-hit"
                     role="option" :aria-selected="item.id === currentId" :disabled="item.disabled" @click="pick(item)">
@@ -520,17 +560,22 @@ defineExpose({ refreshLayout })
                     <span class="ac-model-copy">
                       <span class="ac-model-id">{{ item.title }}</span>
                       <span class="ac-model-meta">
-                        <span>{{ item.subtitle || brandName(platformOf(item)) }}</span>
-                        <template v-if="item.note">
-                          <span class="ac-dot-sep" aria-hidden="true"></span>
-                          <span>{{ item.note }}</span>
-                        </template>
+                        <TooltipProvider :delay-duration="260" disable-hoverable-content>
+                          <Tooltip>
+                            <TooltipTrigger as-child>
+                              <span class="ac-model-line">{{ lineOf(item) }}</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" :arrow="true" class="ac-model-tip">
+                              <span class="ac-model-tip-desc">{{ lineOf(item) }}</span>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </span>
                     </span>
                     <span class="ac-model-badges">
                       <Badge v-if="item.isDefault" variant="secondary">默认</Badge>
                     </span>
-                    <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+                    <span v-if="item.id === currentId" class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                   </Button>
                   <DropdownMenuSubContent v-if="hasAccounts(item)" class="ac-model-account-menu"
                     @mouseenter="keepAccountMenu" @mouseleave="scheduleAccountClose(item.id)">

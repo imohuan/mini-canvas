@@ -16,6 +16,8 @@ export interface PickerItem {
   id: string
   title: string
   subtitle?: string
+  /** 模型自己的描述（与设置页模型列表同一段字） */
+  desc?: string
   note?: string
   /**
    * 这一行自己的图标（provider 的 icon / 图标名 / 兜底）。
@@ -134,8 +136,13 @@ const items = computed(() =>
   props.items.map((o) => ({
     id: o.id,
     title: o.title,
-    subtitle: o.subtitle ?? '',
-    note: o.note ?? '',
+    /**
+     * 第二行整句：**平台 · 描述**（用户口径 2026-11-20）。
+     *
+     * 面板只认一个 subtitle 字段来画那一行；把描述并进来，行数就从三四行收敛成两行，
+     * 超出部分由面板做省略 + 悬停气泡。没有描述时才退回参数摘要。
+     */
+    subtitle: [o.subtitle, o.desc || o.note].filter((v): v is string => Boolean(v && v.trim())).join(' · '),
     // 「默认」标签已删（用户 2026-11-10）：底栏没选中时默认取第一项，不再标哪一行
     ...(o.icon?.svg ? { svg: o.icon.svg } : {}),
     // 多账号：行尾二级菜单用（只有一个号时面板不渲染箭头）

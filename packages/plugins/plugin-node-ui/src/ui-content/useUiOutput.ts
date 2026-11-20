@@ -1,14 +1,17 @@
 export type UiOutputField = 'videoUrl' | 'audioUrl' | 'text' | 'imageUrl'
 
 import { outputTypeForName } from '../uiData'
+import { resourceRefOfUrl } from '@plume-canvas/canvas-data'
 
-/** 按产物名字认类型（与原 UiContent 的 applyOutput 同一套映射）。 */
+/**
+ * 按产物名字认类型（决定写哪个地址字段）。
+ *
+ * 判定只问 outputTypeForName（→ canvas-data 的 mediaTypeOfName），这里只做"类型 → 字段名"的翻译，
+ * 不再自己重复一遍后缀表。
+ */
 export function outputFieldForName(name: string): UiOutputField {
-  const ext = (name.match(/\.([a-z0-9]+)(?:\?|$)/i)?.[1] ?? '').toLowerCase()
-  return ext === 'mp4' || ext === 'webm' || ext === 'mov' ? 'videoUrl'
-    : ext === 'mp3' || ext === 'wav' || ext === 'ogg' || ext === 'm4a' ? 'audioUrl'
-      : ext === 'txt' || ext === 'md' || ext === 'json' || ext === 'csv' ? 'text'
-        : 'imageUrl'
+  const kind = outputTypeForName(name)
+  return kind === 'video' ? 'videoUrl' : kind === 'audio' ? 'audioUrl' : kind === 'text' ? 'text' : 'imageUrl'
 }
 
 export interface UseUiOutputOptions {
@@ -16,6 +19,17 @@ export interface UseUiOutputOptions {
   canvasId: string
   baseUrl(): string
   updateNodeRuntime(id: string, data: Record<string, unknown>): void
+}
+
+/**
+ * 同源产物地址 → 逻辑引用 `<画布id>/<hashName>`；认不出形状返回 undefined。
+ *
+ * 为什么 UI 节点也要写引用：产物地址只是引用的投影（用户口径 2026-11-20）。
+ * 只写地址的话，保存时会被"有引用就删地址副本"的清理删掉，节点反而变空；
+ * 下游与恢复流程都按引用取件。
+ */
+export function resourceRefFromUiUrl(url: string): string | undefined {
+  return resourceRefOfUrl(url)
 }
 
 export function useUiOutput(options: UseUiOutputOptions) {
@@ -33,6 +47,9 @@ export function useUiOutput(options: UseUiOutputOptions) {
     const bust = url.indexOf('?') >= 0 ? '&v=' : '?v='
     // 产物一落地就把输出类型定下来：右侧端口的类型与「能不能连到下游」都跟着它走
     const patch: Record<string, unknown> = { uiOutputUrl: url, uiOutputType: outputTypeForName(name) }
+    // 引用是长期身份；地址只是它的投影。两份一起写，画面当帧就能显示，保存后也不会丢。
+    const ref = resourceRefFromUiUrl(url)
+    if (ref) patch.resourceId = ref
     if (field === 'text') {
       if (text !== undefined) patch.text = text
     } else {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ToolParamDef } from '@plume-canvas/kernel'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { AiActionConfig } from '../aiActions'
@@ -19,6 +19,7 @@ const props = defineProps<{
   values: Record<string, unknown>
   aiButtons: Array<AiActionConfig & { icon: string }>
   aiRunningId: string | null
+  /** 仅用于无障碍播报（失败原因的可见提示走全局 notify，用户 2026-11-20） */
   aiError: string
   showEditor: boolean
   charCount: number
@@ -114,6 +115,36 @@ const modelTriggerText = computed(() => {
   return hit?.label ?? props.currentActionLabel ?? ''
 })
 let budgetObserver: ResizeObserver | null = null
+/** 观察右侧按钮区里每个子元素（AI 按钮 / 更多 / 字数 / 发送）的宽高变化 */
+let actionsChildrenObserver: ResizeObserver | null = null
+/** 右侧按钮区的子节点增删（AI 按钮开关、更多菜单出现/消失） */
+let actionsMutationObserver: MutationObserver | null = null
+
+/**
+ * 换行状态下右侧整块是 **flex-basis:100%**，它的盒子宽恒等于整行 ——
+ * 于是只观察 .nb-actions 本身，永远收不到「右侧内容变少、可以回到一行」的信号。
+ * 用户 2026-11-20 截图：错误短句消失后，底栏仍停在两行。
+ *
+ * 这里额外盯住右侧的每个子元素与子节点增删，任何一处变化都重新算一次预算。
+ */
+function observeActionsChildren(): void {
+  actionsChildrenObserver?.disconnect()
+  actionsMutationObserver?.disconnect()
+  const box = actionsBox.value
+  if (!box) return
+  if (typeof ResizeObserver !== 'undefined') {
+    actionsChildrenObserver ??= new ResizeObserver(() => measureBudget())
+    for (const child of Array.from(box.children)) actionsChildrenObserver.observe(child)
+  }
+  const MO = (globalThis as { MutationObserver?: typeof MutationObserver }).MutationObserver
+  if (MO) {
+    actionsMutationObserver ??= new MO(() => {
+      observeActionsChildren()
+      measureBudget()
+    })
+    actionsMutationObserver.observe(box, { childList: true })
+  }
+}
 
 /**
  * 一个元素「不被压缩时」的宽。
@@ -265,6 +296,7 @@ function naturalWidthOf(el: Element | null | undefined): number {
 
 onMounted(() => {
   measureBudget()
+  observeActionsChildren()
   if (typeof ResizeObserver === 'undefined') return
   budgetObserver = new ResizeObserver(() => measureBudget())
   if (bottomRow.value) budgetObserver.observe(bottomRow.value)
@@ -274,7 +306,32 @@ onMounted(() => {
 onBeforeUnmount(() => {
   budgetObserver?.disconnect()
   budgetObserver = null
+  actionsChildrenObserver?.disconnect()
+  actionsChildrenObserver = null
+  actionsMutationObserver?.disconnect()
+  actionsMutationObserver = null
 })
+
+/**
+ * 影响宽度的输入变了就重算一次（用户 2026-11-20：右侧内容变少后 UI 仍停在两行）。
+ *
+ * 换行时右侧整块的盒子宽恒等于整行，只靠 ResizeObserver 收不到「内容变少」；
+ * 这里把真正决定宽度的 props 列出来，变化后下一帧再量。
+ */
+watch(
+  () => [
+    props.aiButtons.map((a) => a.id).join('|'),
+    props.aiError,
+    props.aiRunningId,
+    props.aiVisibleCount,
+    props.charCount,
+    props.sendLabel,
+    props.paramLabel,
+    props.currentId,
+    props.currentActionLabel,
+  ],
+  () => void nextTick(() => measureBudget()),
+)
 
 /**
  * 参数摘要：只显示**改过默认值**的那些（用户 2026-11-16：没必要显示每一个选项的值）。
@@ -649,7 +706,8 @@ function pickAction(value: string): void {
           </TooltipProvider>
         </DropdownMenuContent>
       </DropdownMenu>
-      <span v-if="aiError" class="nb-ai-error" role="alert" :title="aiError">{{ aiError }}</span>
+      <!-- 失败原因只给读屏播报（视觉提示走全局 notify，用户 2026-11-20）；不占行内宽度 -->
+      <span v-if="aiError" class="sr-only" role="alert">{{ aiError }}</span>
       <!-- 字数统计也不再挂原生 title（用户 2026-11-18） -->
       <TooltipProvider :delay-duration="220">
         <Tooltip>

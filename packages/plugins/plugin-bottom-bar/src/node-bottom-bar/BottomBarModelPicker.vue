@@ -27,6 +27,10 @@ const props = defineProps<{
   /** 当前选中的模型（底栏记住的那一份，不是 Agent 会话的） */
   model: { provider: string; modelId: string } | null
   disabled?: boolean
+  /** 没选模型时触发器上的字（设置页用它表达「跟随通用模型」） */
+  placeholder?: string
+  /** 触发器右侧只留箭头，不画多余的占位按钮（设置页里和「关闭」并排时用） */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -88,7 +92,7 @@ watch(
 
 /** 触发器上显示的名字：优先 displayName，否则 modelId */
 const label = computed(() => {
-  if (!props.model) return '选择模型'
+  if (!props.model) return props.placeholder || '选择模型'
   const hit = props.models.find((m) => m.provider === props.model!.provider && m.modelId === props.model!.modelId)
   return hit?.displayName || props.model.modelId
 })
@@ -134,4 +138,83 @@ function pick(m: { provider: string; modelId: string }): void {
   不能用 scoped：这些 class 在 Agent 的组件里渲染，不带本组件的 data-v。
 -->
 <style src="./bottom-bar-model-menu.css"></style>
+<!--
+ * 触发器形状（.nb-model-trigger / .nb-model-badge）原本由底栏的全局样式提供。
+ * 设置页也要复用这件下拉（用户 2026-11-20），那里没有底栏样式，
+ * 所以把这两块随组件一起带上；选择器只作用在 .nb-model-trigger 上，不影响别处。
+ *
+ * ⚠️ 这里**必须内联**，不能再加一条 `<style src>`：
+ * 相对路径的 src 由解析器按宿主目录定位，在 apps/web 下会去找
+ * `apps/web/bottom-bar-model-trigger.css`，启动即 ENOTENT 白屏（用户 2026-11-20 截图）。
+ * 数值与 bottom-bar-editor-footer.css 里那份一致，改动时两处一起改。
+ -->
+<style>
+.nb-model-trigger {
+  gap: 6px;
+  padding: 4px 8px;
+  min-width: 85px;
+  max-width: var(--nb-model-max, 220px);
+  width: auto;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-ink-dim, #6b7280);
+  font-size: 13px;
+  font-weight: 600;
+}
+.nb-model-trigger:hover:not(:disabled) {
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+}
+.nb-model-trigger[aria-expanded='true'] {
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-ink, #18202b);
+}
+.nb-model-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nb-model-trigger.has-account {
+  max-width: 300px;
+}
+.nb-model-trigger-caret {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--ui-ink-mute, #8c95a3);
+  transition: transform 0.15s ease-out;
+}
+.nb-model-trigger[aria-expanded='true'] .nb-model-trigger-caret {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-model-trigger-caret {
+    transition: none;
+  }
+}
+.nb-model-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--ui-hover-soft, rgb(0 0 0 / 0.05));
+  color: var(--ui-ink-dim, #6b7280);
+}
+.nb-model-badge svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.nb-model-badge img {
+  width: 14px;
+  height: 14px;
+  display: block;
+  object-fit: contain;
+}
+</style>
 

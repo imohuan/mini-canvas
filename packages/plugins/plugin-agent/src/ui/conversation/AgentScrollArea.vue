@@ -80,6 +80,9 @@ defineExpose({ scrollElement, rootElement })
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  /* 右侧不留白（用户 2026-11-06：模型面板右侧空出一大块）；
+     给滚动条让路的留白统一写在内容层，这里保持 0。 */
+  padding-right: 0;
 }
 
 .ac-scrollarea :deep([data-slot='scroll-area']) {

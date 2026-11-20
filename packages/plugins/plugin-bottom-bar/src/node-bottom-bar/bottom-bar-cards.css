@@ -112,16 +112,11 @@
   animation: nb-spin 0.7s linear infinite;
 }
 
-/* AI 失败提示：琥珀短句贴在按钮右侧，4 秒自动消（详情在 title 里） */
-.nb-ai-error {
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 10px;
-  color: var(--ui-warn, #b45309);
-  cursor: help;
-}
+/*
+ * AI 失败提示不再在底栏里画一行字（用户 2026-11-20）：
+ * 改为全局 notify 弹出。底栏只留一个 sr-only 的 role=alert 供读屏播报，
+ * 它不占宽度，也就不会把右侧按钮区挤到第二行。
+ */
 .nb-icon-btn:disabled {
   opacity: 0.4;
 }

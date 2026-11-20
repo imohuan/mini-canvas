@@ -315,7 +315,7 @@ defineExpose({ refreshLayout })
                 <span class="ac-model-card-top">
                   <span class="ac-model-id">{{ m.modelId }}</span>
                   <Badge v-if="m.isDefault" variant="secondary">默认</Badge>
-                  <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+                  <span v-if="isPicked(m)" class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                 </span>
                 <span class="ac-model-meta">
                   <span>{{ brandNameOf(m) }}</span>
@@ -362,7 +362,7 @@ defineExpose({ refreshLayout })
                   <span class="ac-model-badges">
                     <Badge v-if="m.isDefault" variant="secondary">默认</Badge>
                   </span>
-                  <span class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+                  <span v-if="isPicked(m)" class="ac-check-mark" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
                 </Button>
               </div>
               <div v-else class="ac-empty-state">

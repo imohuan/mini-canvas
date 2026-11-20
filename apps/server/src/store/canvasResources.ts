@@ -29,6 +29,25 @@ export function toResourceUrl(canvasId: string, hashName: string): string {
 }
 
 /**
+ * 逻辑引用 `<画布id>/<hashName>` → 可访问地址。
+ *
+ * 为什么后台也有一份：cloud-server 是能独立 `npx` 的包，**不依赖 canvas-data**
+ *（数据层是前端引擎包）。这里只保留这一份最小实现，并由 `resourceUrlOfRef.test.ts`
+ * 拿同一组样例与 canvas-data 的公共实现逐条比对 —— 漂移了测试先红。
+ */
+export function resourceUrlOfRef(ref: string): string | undefined {
+  const s = (ref ?? '').trim()
+  if (!s) return undefined
+  const i = s.indexOf('/')
+  if (i <= 0 || i !== s.lastIndexOf('/')) return undefined
+  const canvasId = s.slice(0, i)
+  const hashName = s.slice(i + 1)
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(canvasId)) return undefined
+  if (!isSafeResourceName(hashName)) return undefined
+  return toResourceUrl(canvasId, hashName)
+}
+
+/**
  * 从「画布资源地址」里取资源名。
  *
  * 节点里存的就是这个地址（或它的带 origin 版本），后台收到的参考图也是它。
