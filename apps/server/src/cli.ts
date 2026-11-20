@@ -311,6 +311,8 @@ async function main(): Promise<void> {
           dataDir: opts.dir,
           // 包根 builtin-manifest.json（files 里列了；dist/cli.js 的上一级 = 包根，与 readVersion 同源）
           manifestPath: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'builtin-manifest.json'),
+          // registry 可用 PLUME_REGISTRY 指到本地假 registry（自验证 / 离线环境）
+          ...(process.env.PLUME_REGISTRY ? { registry: process.env.PLUME_REGISTRY } : {}),
           uiPkgName: '@plume-canvas/ui',
           serverPkgName: '@plume-canvas/cloud-server',
           currentServerVersion: version,

@@ -603,7 +603,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     const refreshReport = async (): Promise<unknown> => {
       const { createUpdateChecker } = await import('./updater/checker.js')
       const { readBuiltinManifest } = await import('./updater/builtinManifest.js')
-      const client = createNpmClient()
+      // registry 可用 PLUME_REGISTRY 指到本地假 registry（自验证 / 离线环境）
+      const client = createNpmClient({ ...(process.env.PLUME_REGISTRY ? { registry: process.env.PLUME_REGISTRY } : {}) })
       const manifest = await readBuiltinManifest(PACKAGE_ROOT)
       // 当前 server 版本：读本包 package.json（与 cli 的 readVersion 同源）
       let currentVersion = '0.0.0'
@@ -644,6 +645,13 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       }
     })
     app.route('/', updates)
+  }
+
+  // ①.7 发布（自验证链路）：UI 触发，把仓库内库打包推到 PLUME_REGISTRY。
+  // 未配置 registry 时只允许 dry-run（防误发真 npmjs）。
+  {
+    const { createPublishRoutes } = await import('./routes/publish.js')
+    app.route('/', createPublishRoutes({ ...(process.env.PLUME_REGISTRY ? { registry: process.env.PLUME_REGISTRY } : {}) }))
   }
 
   // ② 把宿主建好的实例按名上架（内置插件经 inject 取用；见 §三·补 服务名表）

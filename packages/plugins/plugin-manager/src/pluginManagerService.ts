@@ -151,6 +151,12 @@ export interface PluginManagerService {
    * 失败返回 null（调用方 fallback 到 checkNpmUpdates 的 browse 路径）。
    */
   fetchUpdateReport(): Promise<Record<string, string> | null>
+  /**
+   * 发布一个库到服务端配置的 registry（自验证链路）。
+   * @param dir 插件目录名 / 'ui' / 'server'
+   * @param opts.dryRun true = 只打包不推
+   */
+  publishPkg(dir: string, opts?: { dryRun?: boolean }): Promise<{ ok: boolean; error?: string; pkg?: string; note?: string }>
 }
 
 /** NPM 搜索结果的一条（cloud-server /api/npm-plugins/search 的 results 元素） */
@@ -1001,9 +1007,22 @@ export function createPluginManagerService(
     }
   }
 
+  async function publishPkg(dir: string, opts?: { dryRun?: boolean }): Promise<{ ok: boolean; error?: string; pkg?: string; note?: string }> {
+    const origin = baseOfCatalogUrl(state.catalogUrl)
+    const res = await doFetch(origin + '/api/publish', {
+      method: 'POST',
+      headers: withAdminToken({ 'content-type': 'application/json' }),
+      body: JSON.stringify({ dir, dryRun: opts?.dryRun === true }),
+    })
+    const json = (await res.json()) as { ok?: boolean; error?: string; pkg?: string; note?: string }
+    if (!res.ok || json.ok !== true) return { ok: false, error: readableServerError(json.error ?? '发布失败：' + res.status, res.status) }
+    return { ok: true, pkg: json.pkg, note: json.note }
+  }
+
   return {
     state, refresh, bindManager, install, uninstall, reinstall, installAll,
     searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled, checkNpmUpdates,
     fetchUpdateReport,
+    publishPkg,
   }
 }

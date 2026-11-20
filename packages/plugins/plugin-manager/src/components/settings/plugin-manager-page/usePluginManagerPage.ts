@@ -225,6 +225,12 @@ export function usePluginManagerPage() {
           disabled: busy,
         })
       }
+      actions.push({
+        key: 'publish:' + item.pkg,
+        label: '发布',
+        variant: 'outline',
+        disabled: busy,
+      })
 
       const meta = ['v' + item.version]
       if (item.hasServer) meta.push('含后台')
@@ -436,6 +442,20 @@ export function usePluginManagerPage() {
     }
     if (kind === 'npm-uninstall') {
       void onNpmUninstall(value)
+    }
+    if (kind === 'publish') {
+      const ok = await feedback?.confirm({
+        title: '发布「' + value + '」',
+        description: '把仓库里这个库的当前代码打包发布到服务端配置的 registry。',
+        confirmText: '发布',
+        cancelText: '取消',
+      })
+      if (ok) {
+        const dir = value.replace(/^@[^/]+\//, '')
+        const r = await svc.publishPkg(dir)
+        if (!r.ok) await feedback?.alert({ title: '发布失败', description: r.error ?? '未知错误', confirmText: '知道了' })
+        else await feedback?.alert({ title: '发布成功', description: (r.pkg ?? value) + (r.note ? '\n' + r.note : ''), confirmText: '好' })
+      }
     }
   }
 
