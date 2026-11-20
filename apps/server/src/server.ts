@@ -90,7 +90,7 @@ export type { CloudServerOptions, CloudServer } from './serverTypes.js'
 export async function createCloudServer(opts: CloudServerOptions = {}): Promise<CloudServer> {
   const port = opts.port ?? DEFAULT_PORT
   const dataDir = path.resolve(opts.dir ?? DEFAULT_DATA_DIR)
-  const uiDist = await resolveUiDist(opts.uiDist)
+  const uiDist = await resolveUiDist(opts.uiDist, dataDir)
   /**
    * 插件**不复制**（用户口径 2026-11-12）：两层目录，全局优先、随包兜底，
    * 按插件解析实际生效的那一份。

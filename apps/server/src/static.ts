@@ -124,15 +124,25 @@ export function resolvePluginAsset(urlPath: string): { rel: string; altRel?: str
  * - `npx plume-canvas serve`（空目录）：仓库路径都不存在，落到随包 assets/ui，开箱即用。
  * 反过来（assets 优先）会让仓库里改了 ui 却一直看到 assets 里那份旧副本，很难查。
  */
-export async function resolveUiDist(explicit?: string): Promise<string | undefined> {
+export async function resolveUiDist(explicit?: string, dataDir?: string): Promise<string | undefined> {
   if (explicit) {
     if (!(await isDir(explicit))) throw new Error(`--ui 指定的目录不存在: ${explicit}`)
     return path.resolve(explicit)
+  }
+  // 数据目录安装的 UI（bootstrap 从 NPM 装的）排在仓库路径之后、随包 assets 之前：
+  // 仓库内开发仍走 apps/web/dist；npx 发布包（无 assets）时落这里。
+  const installedUi: string[] = []
+  if (dataDir) {
+    try {
+      const v = JSON.parse(await import('node:fs/promises').then((m) => m.readFile(path.join(dataDir, 'ui', 'version.json'), 'utf8'))) as { version?: string }
+      if (v.version) installedUi.push(path.join(dataDir, 'ui', v.version))
+    } catch { /* 没装过 → 无候选 */ }
   }
   const candidates = [
     path.resolve('apps/web/dist'),
     path.resolve('../ui/dist'),
     path.resolve('ui-dist'),
+    ...installedUi,
     path.join(PACKAGE_ROOT, 'assets/ui'),
   ]
   for (const c of candidates) {

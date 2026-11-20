@@ -8,8 +8,8 @@
   },
   "files": [
     "dist",
-    "assets",
-    "providers"
+    "providers",
+    "builtin-manifest.json"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,7 +27,7 @@
     "bundle": "node scripts/bundle.mjs && tsc -p tsconfig.build.json && node scripts/bundle-dts.mjs",
     "gen:manifest": "node scripts/gen-builtin-manifest.mjs",
     "build:assets": "node scripts/build-assets-parallel.mjs",
-    "prepack": "pnpm run build && node scripts/bundle-assets.mjs",
+    "prepack": "pnpm run build && pnpm gen:manifest",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "serve": "node ./dist/cli.js serve",
