@@ -21,6 +21,7 @@ import { CanvasResourceStore } from './store/canvasResources.js'
 import { ProjectStore } from './store/projectStore.js'
 import { AssetStore } from './store/assetStore.js'
 import { resolveUiDist, uiRoutes } from './static.js'
+import { createNpmClient } from './npm/npmClient.js'
 import { resolvePluginRoots } from './plugins/pluginRoots.js'
 import { fileURLToPath } from 'node:url'
 import { mcpRoutes } from './routes/mcp.js'
@@ -588,6 +589,47 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    //      命中「test模型」时由它就地伪造回复，完全不请求真实后台。
    //      必须排在 ui 静态兜底（⑤ 的 get('*')）之前，否则会被通配吃掉。
    app.route('/', testModelRoutes())
+
+  // ①.6 更新检查（发布体系 Task 5）：最近一次报告 + 手动触发。
+  // 只提示不自动装（用户口径 2026-11-20）；数据在 bootstrap/checker 侧，
+  // 这里读共享状态文件（.plume/update-report.json）+ 触发时重算。
+  {
+    const { Hono } = await import('hono')
+    const updates = new Hono()
+    const reportFile = path.join(dataDir, 'update-report.json')
+    const readReport = async (): Promise<unknown> => {
+      try { return JSON.parse(await fs.readFile(reportFile, 'utf8')) } catch { return { plugins: [], checkedAt: null } }
+    }
+    updates.get('/api/updates', async (c) => c.json({ ok: true, report: await readReport() }))
+    updates.post('/api/updates/refresh', async (c) => {
+      try {
+        const { createUpdateChecker } = await import('./updater/checker.js')
+        const { readBuiltinManifest } = await import('./updater/builtinManifest.js')
+        const client = createNpmClient()
+        const manifest = await readBuiltinManifest(PACKAGE_ROOT)
+        // 当前 server 版本：读本包 package.json（与 cli 的 readVersion 同源）
+        let currentVersion = '0.0.0'
+        try {
+          const pj = JSON.parse(await fs.readFile(path.join(PACKAGE_ROOT, 'package.json'), 'utf8')) as { version?: string }
+          currentVersion = pj.version ?? '0.0.0'
+        } catch { /* 读不到用默认 */ }
+        const checker = createUpdateChecker({
+          npmClient: client,
+          installedRecordFile: path.join(pluginsDir, '.npm-installed.json'),
+          serverPkgName: '@plume-canvas/cloud-server',
+          currentServerVersion: currentVersion,
+          builtinManifest: manifest,
+        })
+        const report = await checker.checkAll()
+        await fs.mkdir(dataDir, { recursive: true })
+        await fs.writeFile(reportFile, JSON.stringify(report, null, 2), 'utf8')
+        return c.json({ ok: true, report })
+      } catch (err) {
+        return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
+      }
+    })
+    app.route('/', updates)
+  }
 
   // ② 把宿主建好的实例按名上架（内置插件经 inject 取用；见 §三·补 服务名表）
   host.ctx.inject('kvStore', kvStore)

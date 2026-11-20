@@ -26,6 +26,8 @@ interface CliOptions {
   plugins?: string
   providers?: string
   open: boolean
+  /** 跳过启动初始化的全部联网步骤（装插件/装 UI/查更新） */
+  offline: boolean
   /** 是否提供 MCP 接口（缺省开） */
   mcp: boolean
   /** 关闭管理令牌鉴权（必须配合 PLUME_ALLOW_INSECURE=1） */
@@ -83,6 +85,7 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     hostname: '127.0.0.1',
     // 启动服务时不要自动弹浏览器：由人或代理手动打开页面（用户 2026-10-30 明确要求）
     open: false,
+    offline: false,
     mcp: true,
     noAdminAuth: false,
     trustedHosts: [],
@@ -115,6 +118,7 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     else if (a === '--trusted-origin') opts.trustedOrigins.push(takeValue(a))
     else if (a === '--open') opts.open = true
     else if (a === '--no-open') opts.open = false
+    else if (a === '--offline') opts.offline = true
     else if (a === '-h' || a === '--help') {
       console.log(HELP)
       process.exit(0)
@@ -297,6 +301,26 @@ async function main(): Promise<void> {
   console.log('')
 
   if (opts.open) openBrowser(info.url)
+
+  // 启动初始化（发布体系 Task 5）：装缺的内置插件 + 装 UI + 挂更新检查定时器。
+  // 异步不 await：不拦启动；失败只 warn（bootstrap 内部保证不抛）。
+  if (!opts.offline) {
+    void import('./updater/bootstrap.js').then(({ runBootstrap }) =>
+      readVersion().then((version) =>
+        runBootstrap({
+          dataDir: opts.dir,
+          manifestPath: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'builtin-manifest.json'),
+          uiPkgName: '@plume-canvas/ui',
+          serverPkgName: '@plume-canvas/cloud-server',
+          currentServerVersion: version,
+        }),
+      ),
+    ).then((r) => {
+      if (r.installed.length) console.log('  启动初始化：装上了 ' + r.installed.join(', '))
+      if (r.failed.length) console.warn('  启动初始化失败（下次启动再试）：' + r.failed.join(', '))
+      if (r.uiVersion) console.log('  界面 v' + r.uiVersion + ' 已就绪')
+    }).catch(() => { /* bootstrap 内部已兜底，这里只挡未预期错误 */ })
+  }
 
   // Ctrl+C / 结束信号：优雅关掉监听再退出（避免端口半开占着）
   const shutdown = (): void => {
