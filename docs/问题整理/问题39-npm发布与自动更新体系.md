@@ -48,3 +48,18 @@
  - **真实发布已完成（2026-11-21）**：npmjs 创建 org plume-canvas（免费 public）；26 个包全部发布（24 插件 0.1.2~0.1.3 + ui@0.1.0 + cloud-server@0.1.0）；发布形态 main/exports 指 dist、删除 @plume-canvas/* 内部依赖、workspace:* 转 *；npm install @plume-canvas/plugin-clipboard@0.1.2 干净目录验证通过。
  - 踩坑记录：① @scope 发包必须先建 org；② registry CDN 同步延迟 2~5 分钟（npm view 落后导致撞版本）；③ workspace:* 不能出现在发布依赖（EUNSUPPORTEDPROTOCOL）；④ 内部依赖 @plume-canvas/* 必须删除（引擎包未发布 404）；⑤ npm publish --prefix 读错 package.json（EPRIVATE），必须 cwd；⑥ npm 缓存致 install 看不到新版本，cache clean --force 解决。
  - 工具沉淀：scripts/swap-dev-to-pub.cjs（发布形态切换/恢复）、scripts/sync-npm-versions.cjs（本地版本与 npm 同步）。
+ - 工具沉淀：scripts/swap-dev-to-pub.cjs（发布形态切换/恢复）、scripts/sync-npm-versions.cjs（本地版本号与 npm 同步）。
+
+ ## 真实数据端到端验证（2026-11-21 第二轮）
+
+ - 发现并修复两个真实缺陷：
+   1. **bootstrap 产物回退缺失**：线上早期发布的包 entry 写 dist/web.js 但实际文件是 dist/<包名>.js，24 个内置插件全部装不上 → bootstrap 加 resolveArtifact 回退（entry 不存在时找 dist 下唯一 .js），测试覆盖；
+   2. **catalog 自带 id 不认 NPM 副本**：builtinInstallIds/builtin 标记按裸目录名匹配，NPM 副本目录名是 plume-canvas__<dir> → 前端首启一个插件都装不上（界面空白）→ catalog 与 pluginRoots 双向修复（bareDirOf），测试覆盖。
+ - 真实流程验证（不用假 registry）：
+   1. 干净数据目录 + 真实 npm 启动 → 24 个内置插件全部从 npm 装上（boot-probe2.log installed:24 failed:0）；
+   2. UI 正常启动，界面出现「插件」入口，插件管理页显示 24/31 已装、自带 24 个；
+   3. 发布插件新版本（clipboard 0.1.3→0.1.4→0.1.5）→ 服务端更新报告正确显示有更新；
+   4. UI 插件管理页显示「有更新 → v0.1.5」红点提示；
+   5. 点击「更新」→ 真实从 npm 下载安装 → 磁盘版本升级到 0.1.5、来源记录同步（截图留证）；
+   6. server 更新提醒（0.1.0→0.1.1）在 /api/updates 正确报告。
+ - 所有 31 个 npm 包现在都带 README（34 个插件脚本生成 + 4 个核心包手写）。
