@@ -45,4 +45,6 @@
 - apps/server 全量 158 文件 1069 测试全绿；typecheck 干净。
 - plugin-manager 60 测试全绿；apps/web 除 themeColorHygiene（既有失败，ProviderManagerPage 写死颜色，先前 commit 遗留）外全绿。
 - npm publish --dry-run：24 插件 + ui + server 全通过，server 包 288.8 kB / 10 文件。
-- 真实发布未执行（等用户配好 NPM_TOKEN 环境变量后跑 node scripts/publish-all.mjs）。
+ - **真实发布已完成（2026-11-21）**：npmjs 创建 org plume-canvas（免费 public）；26 个包全部发布（24 插件 0.1.2~0.1.3 + ui@0.1.0 + cloud-server@0.1.0）；发布形态 main/exports 指 dist、删除 @plume-canvas/* 内部依赖、workspace:* 转 *；npm install @plume-canvas/plugin-clipboard@0.1.2 干净目录验证通过。
+ - 踩坑记录：① @scope 发包必须先建 org；② registry CDN 同步延迟 2~5 分钟（npm view 落后导致撞版本）；③ workspace:* 不能出现在发布依赖（EUNSUPPORTEDPROTOCOL）；④ 内部依赖 @plume-canvas/* 必须删除（引擎包未发布 404）；⑤ npm publish --prefix 读错 package.json（EPRIVATE），必须 cwd；⑥ npm 缓存致 install 看不到新版本，cache clean --force 解决。
+ - 工具沉淀：scripts/swap-dev-to-pub.cjs（发布形态切换/恢复）、scripts/sync-npm-versions.cjs（本地版本与 npm 同步）。
