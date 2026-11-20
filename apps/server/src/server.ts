@@ -90,6 +90,8 @@ export type { CloudServerOptions, CloudServer } from './serverTypes.js'
 export async function createCloudServer(opts: CloudServerOptions = {}): Promise<CloudServer> {
   const port = opts.port ?? DEFAULT_PORT
   const dataDir = path.resolve(opts.dir ?? DEFAULT_DATA_DIR)
+  /** 更新检查定时器（updates 路由块赋值；stop() 里清，防反复 create/stop 积累句柄） */
+  let updateTimer: ReturnType<typeof setInterval> | undefined
   const uiDist = await resolveUiDist(opts.uiDist, dataDir)
   /**
    * 插件**不复制**（用户口径 2026-11-12）：两层目录，全局优先、随包兜底，
@@ -622,8 +624,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       return report
     }
     // 30 分钟定时检查（设计口径：启动时一次 + 每半小时一次）。失败只 warn，定时器不中断。
+    // 启动立即算一次（首次请求就有报告）；定时器句柄提到外层，stop() 里 clearInterval。
     const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000
-    const updateTimer = setInterval(() => {
+    void refreshReport().catch((err) => console.warn('[updates] 启动检查失败：' + (err instanceof Error ? err.message : String(err))))
+    updateTimer = setInterval(() => {
       void refreshReport().catch((err) => console.warn('[updates] 定时检查失败：' + (err instanceof Error ? err.message : String(err))))
     }, UPDATE_CHECK_INTERVAL_MS)
     updateTimer.unref()  // 不阻止进程退出
@@ -1331,6 +1335,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     },
     stop() {
       watcher?.stop()
+      if (updateTimer) clearInterval(updateTimer)
       void debugOrigin.stop().catch(() => undefined)
       agentServicesRef?.dispose()
       void tasks.dispose()
