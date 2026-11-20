@@ -31,7 +31,7 @@ const src = await readFile(path.join(REPO_ROOT, "apps/server/src/plugins/builtin
 const pluginDirs = [...src.matchAll(/\{\s*dir:\s*['"]([^'"]+)['"]/g)].map((m) => m[1])
 
 const jobs = [
-  ...pluginDirs.map((d) => ({ dir: path.join(REPO_ROOT, "packages/plugins", d), name: d })),
+  ...pluginDirs.map((d) => ({ dir: path.join(REPO_ROOT, "packages/plugins", d), name: d, swapExports: true })),
   { dir: path.join(REPO_ROOT, "apps/web"), name: "ui", swapExports: true },
   { dir: path.join(REPO_ROOT, "apps/server"), name: "server" },
 ]
@@ -44,8 +44,14 @@ for (const job of jobs) {
     // ui：临时切 exports/main 到 dist（monorepo 内部用 src，发布用 dist），发完恢复
     backup = await readFile(pkgPath, "utf8")
     const pkg = JSON.parse(backup)
-    pkg.main = "./dist/index.html"
-    pkg.exports = { ".": "./dist/" }
+    // 插件：main 指 dist/web.js；ui：dist/ 目录（静态产物无单一入口）
+    if (job.name === "ui") {
+      pkg.main = "./dist/index.html"
+      pkg.exports = { ".": "./dist/" }
+    } else {
+      pkg.main = "./dist/web.js"
+      pkg.exports = { ".": "./dist/web.js" }
+    }
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf8")
   }
   try {

@@ -27,11 +27,8 @@ for (const dir of dirs) {
   pkg.version = "0.1.0"
   pkg.publishConfig = { access: "public" }
   pkg.files = ["dist", "README.md"]
-  // 发布产物指向 dist；"./*" 保留 src 子路径（monorepo 开发依赖它：
-  // apps/server import "@plume-canvas/plugin-agent/server/..."，
-  // 发布包不含 src 但 server 是 bundle 部署，不走 npm 解析子路径）。
-  pkg.main = "./dist/web.js"
-  pkg.exports = { ".": "./dist/web.js", "./*": "./src/*" }
+  // main/exports 不动：monorepo 开发走源码形态（exports "./*": "./src/*"）。
+  // 发布时的 dist 形态由 publish-all.mjs 临时 swap（发完恢复，与 ui 包同一机制）。
   if (JSON.stringify(pkg) !== before) {
     await writeFile(pkgPath, JSON.stringify(pkg, null, 2) + "\n", "utf8")
     changed++
