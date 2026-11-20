@@ -61,6 +61,14 @@ export async function listPluginIds(roots: PluginRoots): Promise<string[]> {
 }
 
 /** 该目录的 package.json 是否声明了 `plume.npmInstalled: true`（NPM 安装副本的显式标记） */
+/**
+ * 目录名 → 裸目录名（去掉 `plume-canvas__` 这类 NPM 副本前缀）。
+ * 用途：自带清单（builtinPlugins.ts）按裸目录名登记，两种形态都要能识别。
+ */
+function bareDirOf(id: string): string {
+  return id.replace(/^[a-z0-9-]+__/, '')
+}
+
 async function isNpmInstalledDir(dir: string): Promise<boolean> {
   try {
     const pkg = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8')) as {
@@ -90,7 +98,7 @@ export async function resolvePluginDir(roots: PluginRoots, id: string): Promise<
   const globalExists = globalDir ? await isDir(globalDir) : false
   const packagedExists = packagedDir ? await isDir(packagedDir) : false
 
-  if (BUILTIN_BY_DIR.has(id)) {
+  if (BUILTIN_BY_DIR.has(id) || BUILTIN_BY_DIR.has(bareDirOf(id))) {
     if (globalExists && globalDir && (await isNpmInstalledDir(globalDir))) return globalDir
     if (packagedExists) return packagedDir
     if (globalExists) return globalDir
@@ -129,7 +137,8 @@ export async function resolvePluginDirWithServer(
   if (id.startsWith('.') || id.startsWith('_') || id.includes('/') || id.includes('\\')) return undefined
   const globalDir = roots.global ? path.join(roots.global, id) : undefined
   const globalNpm = globalDir && (await isDir(globalDir)) ? await isNpmInstalledDir(globalDir) : false
-  const rootsInOrder = BUILTIN_BY_DIR.has(id) && !globalNpm
+  const isBuiltinId = BUILTIN_BY_DIR.has(id) || BUILTIN_BY_DIR.has(bareDirOf(id))
+  const rootsInOrder = isBuiltinId && !globalNpm
     ? [roots.packaged, roots.global]
     : [roots.global, roots.packaged]
   for (const root of rootsInOrder) {

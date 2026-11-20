@@ -144,6 +144,46 @@ describe('runBootstrap', () => {
     reg2.close()
   })
 
+  it('entry 指向 dist/web.js 但包内实际是 dist/<包名>.js → 回退成功装上', async () => {
+    // 模拟线上早期发布的包：entry 与真实文件名不一致
+    const sub = path.join(dir, 'legacy')
+    await fs.mkdir(sub, { recursive: true })
+    const webFile = path.join(sub, 'payload', 'dist', 'plugin-legacy.js')
+    await fs.mkdir(path.dirname(webFile), { recursive: true })
+    await fs.writeFile(webFile, '(function(e,t){t(e.PlumePluginX={})})(this,function(e){e.name="x";e.apply=function(){}})', 'utf8')
+    await fs.writeFile(path.join(sub, 'payload', 'package.json'), JSON.stringify({
+      name: '@plume-canvas/plugin-legacy', version: '0.1.0',
+      plume: { pluginName: 'legacy', web: { entry: 'dist/web.js' } },
+    }), 'utf8')
+    const stage = path.join(sub, 'stage')
+    await fs.cp(path.join(sub, 'payload'), path.join(stage, 'package'), { recursive: true })
+    const tgz = path.join(sub, 'legacy.tgz')
+    await run('tar', ['-czf', tgz, '-C', stage, 'package'])
+    const pk = {
+      name: '@plume-canvas/plugin-legacy',
+      'dist-tags': { latest: '0.1.0' },
+      versions: { '0.1.0': { version: '0.1.0', dist: { tarball: '' }, plume: { pluginName: 'legacy', web: { entry: 'dist/web.js' } } } },
+      time: {},
+    }
+    const registry = await startFakeRegistry({ '@plume-canvas/plugin-legacy': pk }, { '/legacy.tgz': tgz })
+    ;(pk.versions as Record<string, { dist: { tarball: string } }>)['0.1.0'].dist.tarball = registry.url + '/legacy.tgz'
+    const dataDir = path.join(dir, 'data-legacy')
+    // runBootstrap 按 path.dirname(manifestPath) 读 builtin-manifest.json，必须放到独立目录
+    const legacyRoot = path.join(dir, 'legacy-root')
+    await fs.mkdir(legacyRoot, { recursive: true })
+    const manifestPath = path.join(legacyRoot, 'builtin-manifest.json')
+    await fs.writeFile(manifestPath, JSON.stringify({ plugins: { '@plume-canvas/plugin-legacy': 'latest' } }))
+    const result = await runBootstrap({
+      dataDir, manifestPath, registry: registry.url,
+      serverPkgName: '@plume-canvas/server', uiPkgName: '@plume-canvas/ui', currentServerVersion: '0.1.0',
+    })
+    expect(result.installed).toContain('@plume-canvas/plugin-legacy')
+    // 落盘后 entry 被纠正成真实文件名
+    const pj = JSON.parse(await fs.readFile(path.join(dataDir, 'plugins', 'plume-canvas__plugin-legacy', 'package.json'), 'utf8'))
+    expect((pj as { plume: { web: { entry: string } } }).plume.web.entry).toBe('dist/plugin-legacy.js')
+    registry.close()
+  })
+
   it('插件已装 → skipped；registry 挂了 → failed 不抛', async () => {
     const dataDir = path.join(dir, "data")
     const pluginsDir = path.join(dataDir, "plugins")

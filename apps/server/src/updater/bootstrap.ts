@@ -120,9 +120,26 @@ async function installPluginFromRegistry(
     const webRel = safeEntry((mini.web as { entry?: unknown } | undefined)?.entry, "plume.web.entry")
     const serverDecl = (mini.server as { entry?: unknown } | undefined)?.entry
     const serverRel = serverDecl === undefined ? undefined : safeEntry(serverDecl, "plume.server.entry")
-    for (const rel of [webRel, serverRel].filter((x): x is string => typeof x === "string")) {
-      await fs.access(path.join(extracted, rel))
+    /**
+     * 产物文件解析（兼容线上已发的旧包）：
+     * entry 指向的文件不存在时，回退到 dist 下唯一的 .js（排除 .map）。
+     * 为什么要兜底：早期发布的包 entry 写 dist/web.js，但实际文件是 dist/<包名>.js，
+     * 严格按 entry 找会让这类包永远装不上（实测 24 个内置插件全失败）。
+     */
+    const resolveArtifact = async (rel: string, fallbackExclude?: string): Promise<string> => {
+      try { await fs.access(path.join(extracted, rel)); return rel } catch { /* 走兜底 */ }
+      const distDir = path.join(extracted, "dist")
+      let files: string[] = []
+      try { files = await fs.readdir(distDir) } catch { throw new Error("包里没有产物：" + rel) }
+      const candidates = files.filter((f) => f.endsWith(".js") && !f.endsWith(".map") && f !== fallbackExclude)
+      // 优先 server.js（后台半）与名字相近的；只有唯一候选时直接用
+      if (candidates.length === 1) return "dist/" + candidates[0]
+      const exactName = candidates.find((f) => rel.includes(f))
+      if (exactName) return "dist/" + exactName
+      throw new Error("包里缺少声明的产物：" + rel + "（dist 下候选：" + candidates.join(", ") + "）")
     }
+    const resolvedWeb = await resolveArtifact(webRel, "server.js")
+    const resolvedServer = typeof serverRel === "string" ? await resolveArtifact(serverRel, "web.js") : undefined
 
     const destDir = path.join(pluginsDir, dirNameOf(pkgName))
     await fs.mkdir(destDir, { recursive: true })
@@ -131,15 +148,15 @@ async function installPluginFromRegistry(
       await fs.mkdir(path.dirname(target), { recursive: true })
       await fs.copyFile(path.join(extracted, rel), target)
     }
-    await copyEntry(webRel)
-    if (typeof serverRel === "string") await copyEntry(serverRel)
+    await copyEntry(resolvedWeb)
+    if (typeof resolvedServer === "string") await copyEntry(resolvedServer)
     const pkgObj = JSON.parse(await fs.readFile(pkgJsonPath, "utf8")) as { plume?: Record<string, unknown> }
     pkgObj.plume = {
       ...(pkgObj.plume ?? {}),
       installable: true,
       npmInstalled: true,
-      web: { ...((pkgObj.plume?.web as object) ?? {}), entry: webRel },
-      ...(typeof serverRel === "string" ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: serverRel } } : {}),
+      web: { ...((pkgObj.plume?.web as object) ?? {}), entry: resolvedWeb },
+      ...(typeof resolvedServer === "string" ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: resolvedServer } } : {}),
     }
     await fs.writeFile(path.join(destDir, "package.json"), JSON.stringify(pkgObj, null, 2), "utf8")
 

@@ -1,12 +1,15 @@
 {
   "name": "@plume-canvas/plugin-clipboard",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "type": "module",
   "plume": {
     "title": "复制粘贴",
     "description": "Ctrl/Cmd+C/V/X/D",
     "pluginName": "clipboard",
-    "builtin": true
+    "builtin": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -22,12 +25,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@plume-canvas/plugin-sdk": "workspace:*",
-    "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/canvas-render": "workspace:*",
-    "@plume-canvas/kernel": "workspace:*"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",

@@ -461,7 +461,11 @@ export async function buildPluginCatalog(
     const pkg = await readPkgJson(pkgDir)
     // 收录条件：声明了 plume.web.entry（能不能装载）。installable / builtin 只影响面板分类。
     // 是否自带只看**项目清单**（builtinPlugins.ts），不读插件自己的 plume.builtin。
-    const isBuiltin = BUILTIN_BY_DIR.has(pkgName)
+    // 是否自带只看**项目清单**（builtinPlugins.ts）。
+    // 目录名有两种形态：仓库目录名（plugin-clipboard）与 NPM 安装副本（plume-canvas__plugin-clipboard），
+    // 两种都要认，否则从 npm 装回来的自带插件在面板上会显示成「非自带」（实测踩过）。
+    const bareDir = pkgName.replace(/^[a-z0-9-]+__/, '')
+    const isBuiltin = BUILTIN_BY_DIR.has(pkgName) || BUILTIN_BY_DIR.has(bareDir)
 
     const id = pkgName
     const name = pkg.plume?.pluginName ?? (pkg.name ?? pkgName).replace(/^@[^/]+\//, '')

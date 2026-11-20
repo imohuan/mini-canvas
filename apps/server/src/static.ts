@@ -561,10 +561,22 @@ export function pluginRoutes(pluginsDir: string | PluginRoots | undefined): Hono
     const catalog = await buildPluginCatalog(pluginsDir)
     // 自带插件清单：由**项目**决定（src/plugins/builtinPlugins.ts），不由插件自己在
     // package.json 里写 builtin。前端首启按这份清单装，装完即用。
+    /**
+     * 清单里的 id 有两种形态：仓库目录名（plugin-clipboard）与 NPM 安装副本的目录名
+     * （plume-canvas__plugin-clipboard）。前端按 id 认「已装/未装」，两种都必须能命中，
+     * 否则从 npm 装的自带插件会被判成「不存在」→ 首启一个都装不上、界面空白（实测踩过）。
+     */
+    const byDir = new Map(catalog.plugins.map((p) => [p.id, p] as const))
+    const resolveId = (dir: string): string => {
+      if (byDir.has(dir)) return dir
+      const npmId = 'plume-canvas__' + dir
+      if (byDir.has(npmId)) return npmId
+      return dir
+    }
     return c.json({
       ...catalog,
-      builtinInstallIds: BUILTIN_PLUGINS.map((e) => e.dir),
-      firstInstallIds: FIRST_INSTALL_DIRS,
+      builtinInstallIds: BUILTIN_PLUGINS.map((e) => resolveId(e.dir)),
+      firstInstallIds: FIRST_INSTALL_DIRS.map(resolveId),
     })
   })
 
