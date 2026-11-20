@@ -306,7 +306,9 @@ export function usePluginManagerPage() {
     try {
       marketList.value = await svc.browseNpmPlugins()
       npmInstalled.value = await svc.listNpmInstalled()
-      npmUpdates.value = await svc.checkNpmUpdates()
+      // 优先用服务端缓存的更新报告（启动/定时已算好，快）；没有再走 browse 全量比对
+      const report = await svc.fetchUpdateReport()
+      npmUpdates.value = report ?? await svc.checkNpmUpdates()
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
     } finally {

@@ -145,6 +145,12 @@ export interface PluginManagerService {
    * 数据源是 browse（它已经查过每个包的 packument，带最新 version），不额外打服务端接口。
    */
   checkNpmUpdates(): Promise<Record<string, string>>
+  /**
+   * 拉服务端缓存的更新报告（GET /api/updates）。
+   * 服务端在启动初始化与定时里算好；这里只读。
+   * 失败返回 null（调用方 fallback 到 checkNpmUpdates 的 browse 路径）。
+   */
+  fetchUpdateReport(): Promise<Record<string, string> | null>
 }
 
 /** NPM 搜索结果的一条（cloud-server /api/npm-plugins/search 的 results 元素） */
@@ -975,8 +981,27 @@ export function createPluginManagerService(
     return out
   }
 
+  async function fetchUpdateReport(): Promise<Record<string, string> | null> {
+    try {
+      const origin = baseOfCatalogUrl(state.catalogUrl)
+      const res = await doFetch(origin + '/api/updates', { headers: { accept: 'application/json' } })
+      if (!res.ok) return null
+      const json = (await res.json()) as {
+        ok?: boolean
+        report?: { plugins?: Array<{ pkg: string; latest: string }> }
+      }
+      const list = json.report?.plugins ?? []
+      const out: Record<string, string> = {}
+      for (const p of list) out[p.pkg] = p.latest
+      return out
+    } catch {
+      return null
+    }
+  }
+
   return {
     state, refresh, bindManager, install, uninstall, reinstall, installAll,
     searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled, checkNpmUpdates,
+    fetchUpdateReport,
   }
 }
