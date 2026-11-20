@@ -1,7 +1,6 @@
 {
   "name": "@plume-canvas/plugin-clipboard",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "plume": {
     "title": "复制粘贴",
@@ -9,13 +8,10 @@
     "pluginName": "clipboard",
     "builtin": true
   },
-  "main": "./src/index.ts",
+  "main": "./dist/web.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
+    ".": "./dist/web.js",
     "./*": "./src/*"
   },
   "scripts": {
@@ -36,5 +32,12 @@
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

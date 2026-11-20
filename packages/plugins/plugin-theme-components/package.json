@@ -1,7 +1,6 @@
 {
   "name": "@plume-canvas/plugin-theme-components",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "plume": {
     "title": "主题通用组件",
@@ -9,13 +8,10 @@
     "pluginName": "theme-components",
     "builtin": true
   },
-  "main": "./src/index.ts",
+  "main": "./dist/web.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
+    ".": "./dist/web.js",
     "./*": "./src/*"
   },
   "scripts": {
@@ -52,5 +48,12 @@
     "@plume-canvas/ui-kit": "workspace:*",
     "lucide-vue-next": "^1.0.0",
     "vue-sonner": "^2.0.9"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

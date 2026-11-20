@@ -1,7 +1,6 @@
 {
   "name": "@plume-canvas/plugin-node-3d-preview",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "plume": {
     "title": "3D 预览节点",
@@ -9,13 +8,10 @@
     "pluginName": "3d-preview",
     "builtin": true
   },
-  "main": "./src/index.ts",
+  "main": "./dist/web.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
+    ".": "./dist/web.js",
     "./*": "./src/*"
   },
   "scripts": {
@@ -40,5 +36,12 @@
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

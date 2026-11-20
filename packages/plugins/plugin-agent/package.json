@@ -1,7 +1,6 @@
 {
   "name": "@plume-canvas/plugin-agent",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "plume": {
     "title": "Agent 对话助手",
@@ -9,25 +8,24 @@
     "pluginName": "agent",
     "builtin": true,
     "serverBuiltin": true,
-    "web": { "entry": "dist/web.js" },
-    "server": { "entry": "dist/server.js" },
-    "assets": ["dist/vendor-plugins"]
+    "web": {
+      "entry": "dist/web.js"
+    },
+    "server": {
+      "entry": "dist/server.js"
+    },
+    "assets": [
+      "dist/vendor-plugins"
+    ]
   },
   "files": [
     "dist",
-    "vendor-plugins"
+    "README.md"
   ],
-  "main": "./src/index.ts",
+  "main": "./dist/web.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
-    "./server/*": {
-      "types": "./src/server/*",
-      "default": "./src/server/*"
-    },
+    ".": "./dist/web.js",
     "./*": "./src/*"
   },
   "scripts": {
@@ -64,5 +62,8 @@
     "vue": "^3.5.34",
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vite": "^8.0.12"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

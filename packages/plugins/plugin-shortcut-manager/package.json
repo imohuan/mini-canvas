@@ -1,20 +1,16 @@
 {
   "name": "@plume-canvas/plugin-shortcut-manager",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "plume": {
     "title": "快捷键",
     "description": "快捷键帮助面板与设置页的快捷键配置（Ctrl/Cmd+/ 开合）",
     "pluginName": "shortcut-settings"
   },
-  "main": "./src/index.ts",
+  "main": "./dist/web.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "default": "./src/index.ts"
-    },
+    ".": "./dist/web.js",
     "./*": "./src/*"
   },
   "scripts": {
@@ -40,5 +36,12 @@
     "vitest": "^3.0.0",
     "vue": "^3.5.34",
     "vue-tsc": "^3.2.8"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }
