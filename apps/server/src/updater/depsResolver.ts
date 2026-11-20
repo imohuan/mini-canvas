@@ -35,7 +35,7 @@ export interface DepPlan {
 export type LocalProvides = Map<string, string>
 
 /** 从 packument 的 plume 段提取元数据 */
-function metaOf(pk: { versions: Record<string, { plume?: Record<string, unknown> }> }, version?: string) {
+function metaOf(pk: { "dist-tags": { latest?: string }; versions: Record<string, { plume?: Record<string, unknown> }> }, version?: string) {
   const v = version ?? pk["dist-tags"].latest
   if (!v) return {}
   const plume = (pk.versions[v]?.plume ?? {}) as {

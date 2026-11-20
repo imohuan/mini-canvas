@@ -23,6 +23,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { safeJson } from '@plume-canvas/plugin-agent/server/routes/agent.js'
 import { createNpmClient, extractTarball, NpmNotFoundError, type NpmClientOptions } from '../npm/npmClient.js'
+import { resolveDeps } from '../updater/depsResolver.js'
 import { withAudit, type AuditBase } from '../auditPair.js'
 import type { AuditAppendInput } from '../audit.js'
 
@@ -36,6 +37,37 @@ const DEFAULT_PREFIXES = ['plume-canvas-', '@plume-canvas/']
 
   /** 包名校验：scope 包（@scope/name）或普通包（plume-canvas-xxx）都收；不含路径分隔符/大写 */
   const PKG_RE = /^(@[a-z0-9-][a-z0-9-._]*\/)?[a-z0-9-][a-z0-9-._]*$/
+
+/**
+ * 扫插件目录，汇总本机所有插件 package.json plume.provides 声明的服务名。
+ * 键=服务名，值=提供它的包名（package.json 的 name）。
+ * 这是安装期依赖解析的「本机已满足」映射。
+ */
+async function scanLocalProvides(pluginsDir: string): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  let names: string[]
+  try {
+    names = await fs.readdir(pluginsDir)
+  } catch {
+    return out
+  }
+  for (const name of names) {
+    if (name.startsWith('.') || name.startsWith('_')) continue
+    const dir = path.join(pluginsDir, name)
+    try {
+      if (!(await fs.stat(dir)).isDirectory()) continue
+      const pj = JSON.parse(await fs.readFile(path.join(dir, 'package.json'), 'utf8')) as {
+        name?: string
+        plume?: { provides?: unknown }
+      }
+      if (!pj.name || !Array.isArray(pj.plume?.provides)) continue
+      for (const svc of pj.plume.provides) {
+        if (typeof svc === 'string' && svc) out.set(svc, pj.name)
+      }
+    } catch { /* 目录坏或不完整，跳过 */ }
+  }
+  return out
+}
 
 export interface NpmPluginsRoutesOptions extends NpmClientOptions {
   /**
@@ -66,6 +98,8 @@ interface InstallRecord {
 export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   const app = new Hono()
   const client = createNpmClient(opts)
+  /** 递归装依赖时的重入守卫（doInstall 开头检查；防止 A→B→A 无限递归） */
+  const installingDeps = new Set<string>()
   const prefixes = opts.scopeAllowlist ?? DEFAULT_PREFIXES
   const recordFile = opts.recordFile ?? path.join(opts.pluginsDir, '.npm-installed.json')
 
@@ -250,11 +284,35 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   // 安装 / 更新（同一套下载+校验+落盘；update 只是多一步版本比对）
   // ------------------------------------------------------------------
   async function doInstall(pkg: string, wantVersion: string | undefined): Promise<{ status: number; body: Record<string, unknown> }> {
+    // 重入守卫：装依赖时递归调 doInstall，跳过依赖解析直接装（防死循环）
+    if (!installingDeps.has(pkg)) {
+      // ①.5 依赖解析（发布体系 Task 4）：解析 plume.dependencies，缺的先装提供者。
+      const localProvides = await scanLocalProvides(opts.pluginsDir)
+      const plan = await resolveDeps(pkg, localProvides, client as unknown as Parameters<typeof resolveDeps>[2])
+      if (plan.missing.length > 0) {
+        return { status: 400, body: { ok: false, error: '缺少依赖（没有插件提供）：' + plan.missing.join(', ') } }
+      }
+      if (plan.cycle) {
+        return { status: 400, body: { ok: false, error: '依赖关系成环，拒绝安装' } }
+      }
+      const deps = plan.installOrder.slice(0, -1)
+      for (const d of deps) {
+        if (d.pkg === pkg) continue
+        installingDeps.add(d.pkg)
+        try {
+          const r = await doInstall(d.pkg, d.version)
+          if (r.status !== 200) return { status: r.status, body: { ok: false, error: '依赖 ' + d.pkg + ' 安装失败：' + JSON.stringify(r.body) } }
+        } finally {
+          installingDeps.delete(d.pkg)
+        }
+      }
+    }
     // ① scope 白名单 + 包名形状
     if (!PKG_RE.test(pkg)) return { status: 400, body: { ok: false, error: '非法包名（要 @scope/name 形态）' } }
     if (!prefixAllowed(pkg)) {
       return { status: 400, body: { ok: false, error: '包名不在允许的前缀内（允许：' + prefixes.join(' / ') + '）。装其它来源需在服务端配置 scopeAllowlist。' } }
     }
+    // ①.5 依赖解析（发布体系 Task 4）：解析 plume.dependencies，缺的先装提供者。
     // ② packument → 定版本
     let pk
     try {
@@ -486,6 +544,35 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       if (!recs[pkg]) {
         settle({ result: 'rejected', reason: 'not-installed' })
         return c.json({ ok: false, error: '这个包不是从 NPM 装的' }, 404)
+      }
+      // 反向依赖检查（发布体系 Task 4）：别的插件 dependencies 引用了它的 provides → 拒绝卸载。
+      const provides = (recs[pkg] as unknown as { provides?: string[] }).provides ?? []
+      // provides 没记录时从落盘 package.json 读
+      let providesList = provides
+      if (providesList.length === 0) {
+        try {
+          const pj = JSON.parse(await fs.readFile(path.join(opts.pluginsDir, dirNameOf(pkg), 'package.json'), 'utf8')) as { plume?: { provides?: unknown } }
+          if (Array.isArray(pj.plume?.provides)) providesList = (pj.plume.provides as unknown[]).filter((x): x is string => typeof x === 'string')
+        } catch { /* 读不到就当没有 provides */ }
+      }
+      const providedSet = new Set(providesList)
+      const dependents: string[] = []
+      let dirNames: string[] = []
+      try { dirNames = await fs.readdir(opts.pluginsDir) } catch { /* 无目录 */ }
+      for (const name of dirNames) {
+        if (name.startsWith('.') || name.startsWith('_')) continue
+        const depDir = path.join(opts.pluginsDir, name)
+        try {
+          const pj = JSON.parse(await fs.readFile(path.join(depDir, 'package.json'), 'utf8')) as { name?: string; plume?: { dependencies?: unknown } }
+          if (!pj.name || pj.name === pkg) continue
+          if (!Array.isArray(pj.plume?.dependencies)) continue
+          const deps = (pj.plume.dependencies as unknown[]).filter((x): x is string => typeof x === 'string')
+          if (deps.some((d) => providedSet.has(d))) dependents.push(pj.name)
+        } catch { /* 跳过坏目录 */ }
+      }
+      if (dependents.length > 0) {
+        settle({ result: 'rejected', reason: 'has-dependents' })
+        return c.json({ ok: false, error: '不能卸载：以下插件依赖它提供的能力：' + dependents.join(', ') }, 409)
       }
       delete recs[pkg]
       await writeRecords(recs)
