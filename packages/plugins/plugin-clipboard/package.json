@@ -6,7 +6,10 @@
     "title": "复制粘贴",
     "description": "Ctrl/Cmd+C/V/X/D",
     "pluginName": "clipboard",
-    "builtin": true
+    "builtin": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

@@ -19,7 +19,11 @@ import { promisify } from 'node:util'
 import { BUILTIN_BY_DIR } from '../plugins/builtinPlugins.js'
 
 const run = promisify(execFile)
-const SERVER_PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
+// 路径推导在 bundle 单文件（dist/cli.js）下不可靠（dirname 是 dist 不是 dist/routes），
+// 所以优先 PLUME_REPO_ROOT 环境变量；缺省按 dev 结构（src/routes 的上两级 = apps/server）推导。
+const SERVER_PKG_ROOT = process.env.PLUME_REPO_ROOT
+  ? path.resolve(process.env.PLUME_REPO_ROOT, "apps/server")
+  : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const REPO_ROOT = path.resolve(SERVER_PKG_ROOT, "../..")
 
 export interface PublishRoutesOptions {
@@ -41,6 +45,49 @@ export function createPublishRoutes(opts: PublishRoutesOptions): Hono {
   const app = new Hono()
   const registry = opts.registry
 
+  /**
+   * 把插件 dist 产物统一成 web.js / server.js 并回填 plume.entry（与构建管道 plugin-assets.mjs 同规则）。
+   * 仓库内 vite 产物名是 dist/<pkg>.js；发布包必须与安装器约定一致（dist/web.js）。
+   * 返回是否发现后台半（影响回填 server.entry）。
+   */
+  async function normalizeDist(pkgDir: string, dirName: string): Promise<boolean> {
+    const dist = path.join(pkgDir, 'dist')
+    let hasServer = false
+    try {
+      const files = await fs.readdir(dist)
+      // 前端半：优先已有 web.js；否则找 <pkg>.js 改名
+      if (!files.includes('web.js')) {
+        const cand = files.find((f) => f === dirName + '.js')
+        if (cand) await fs.rename(path.join(dist, cand), path.join(dist, 'web.js'))
+      }
+      // 后台半：源码 package.json 声明了 plume.server.entry → dist 里找对应产物改名 server.js；
+      // 没声明但有 dist/server.js 也认。
+      const srcPkg = JSON.parse(await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8')) as {
+        plume?: { server?: { entry?: string } }
+      }
+      const declaredServer = srcPkg.plume?.server?.entry
+      if (files.includes('server.js')) {
+        hasServer = true
+      } else if (declaredServer) {
+        const serverFile = path.basename(declaredServer)
+        if (files.includes(serverFile)) {
+          await fs.rename(path.join(dist, serverFile), path.join(dist, 'server.js'))
+          hasServer = true
+        }
+      }
+      // 回填 plume entry（发布形态）
+      const pkgPath = path.join(pkgDir, 'package.json')
+      const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8')) as { plume?: Record<string, unknown> }
+      pkg.plume = {
+        ...(pkg.plume ?? {}),
+        web: { ...((pkg.plume?.web as object) ?? {}), entry: 'dist/web.js' },
+        ...(hasServer ? { server: { ...((pkg.plume?.server as object) ?? {}), entry: 'dist/server.js' } } : {}),
+      }
+      await fs.writeFile(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8')
+    } catch { /* dist 不存在等，交给后续 npm pack 报错 */ }
+    return hasServer
+  }
+
   app.post("/api/publish", async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as { dir?: string; dryRun?: boolean }
     const dir = typeof body.dir === "string" ? body.dir : ""
@@ -52,6 +99,7 @@ export function createPublishRoutes(opts: PublishRoutesOptions): Hono {
     }
 
     // 确保有产物：dry-run 也走 npm pack（不推），同时能列出包内容
+    if (BUILTIN_BY_DIR.has(dir)) await normalizeDist(target.pkgDir, dir)
     const tmp = path.join(target.pkgDir, ".publish-tmp-" + Date.now())
     try {
       await fs.mkdir(tmp, { recursive: true })
