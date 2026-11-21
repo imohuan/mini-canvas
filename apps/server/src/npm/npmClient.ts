@@ -36,6 +36,8 @@ export interface NpmPackument {
   versions: Record<string, NpmVersionInfo>
   time: Record<string, string>
   description?: string
+  /** 包根 README 原文（markdown）；有些包没有 → undefined */
+  readme?: string
 }
 
 /** npm 搜索结果的一条（已裁剪到本系统关心的字段） */

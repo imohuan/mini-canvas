@@ -46,6 +46,16 @@ const lucideOf = (icon: string) =>
 <template>
   <ScrollArea v-if="show" class="canvas-tree-scroll min-h-0 flex-1">
     <div class="px-2 pb-2">
+    <!-- 空态：画布上没有任何节点 / 分组（对齐资产面板的空态样式，用户 2026-11-21 反馈空白） -->
+    <div v-if="!blocks.length" class="flex flex-col items-center justify-center gap-2.5 p-8">
+      <div class="grid size-16 place-items-center rounded-2xl bg-veil text-ink-mute">
+        <FolderIcon :size="30" />
+      </div>
+      <p class="max-w-[220px] mb-1 text-center text-xs leading-relaxed text-ink-mute">
+        画布上还没有节点。添加文本 / 图片 / 视频节点后，会自动出现在这里。
+      </p>
+    </div>
+    <template v-else>
     <template v-for="block in blocks" :key="block.key">
       <!-- 分组行（任意层）：depth 决定缩进；行内改名与资产树同款（用户口径 2026-10-08） -->
       <div v-if="block.kind === 'group'"
@@ -175,6 +185,7 @@ const lucideOf = (icon: string) =>
           </div>
         </div>
       </template>
+    </template>
     </template>
     </div>
   </ScrollArea>

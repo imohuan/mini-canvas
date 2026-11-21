@@ -52,5 +52,15 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "dependencies": {
+    "@ckpack/vue-color": "1.6.0",
+    "@plume-canvas/plugin-sdk": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
+    "@plume-canvas/ui-kit": "workspace:*",
+    "lucide-vue-next": "^1.0.0",
+    "vue-sonner": "^2.0.9"
+  }
 }

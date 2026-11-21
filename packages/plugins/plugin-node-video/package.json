@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-node-video",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "plume": {
     "title": "视频节点",
@@ -49,5 +49,12 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "dependencies": {
+    "@plume-canvas/plugin-sdk": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
+    "lucide-vue-next": "^1.0.0"
+  }
 }

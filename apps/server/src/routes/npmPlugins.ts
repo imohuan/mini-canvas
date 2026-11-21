@@ -220,6 +220,24 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
   // 浏览：把白名单前缀下**全部可安装插件**列出来（列表页默认加载，不必先搜）
   //
   // 为什么不让前端默认发一个搜索词：npm 搜索按热度排序，刚发布的新包排不进结果。
+  // ------------------------------------------------------------------
+  // README 代理：插件详情面板用。registry 不允许浏览器跨域直查，由服务端代查。
+  // 只查白名单前缀内的包（防任意包探测）；readme 原文直接透传，渲染端负责 XSS 过滤。
+  // ------------------------------------------------------------------
+  app.get('/api/npm-plugins/readme', async (c) => {
+    const pkg = c.req.query('pkg')?.trim() ?? ''
+    if (!pkg || !PKG_RE.test(pkg)) return c.json({ ok: false, error: '需要 pkg（合法包名）' }, 400)
+    if (!prefixAllowed(pkg)) return c.json({ ok: false, error: '包名不在允许的前缀内' }, 400)
+    try {
+      const pk = await client.packument(pkg)
+      const readme = typeof pk.readme === 'string' ? pk.readme : ''
+      return c.json({ ok: true, readme })
+    } catch (err) {
+      if (err instanceof NpmNotFoundError) return c.json({ ok: false, error: err.message }, 404)
+      return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
+    }
+  })
+
   // 按前缀浏览走的是"逐前缀搜 + packument 校验"，能把前缀下的插件尽量都捞出来。
   // ------------------------------------------------------------------
   app.get('/api/npm-plugins/browse', async (c) => {

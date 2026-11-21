@@ -40,5 +40,11 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "dependencies": {
+    "@dagrejs/dagre": "^3.0.0",
+    "@plume-canvas/plugin-sdk": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
+  }
 }
