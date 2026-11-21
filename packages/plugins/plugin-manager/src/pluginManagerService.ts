@@ -97,6 +97,13 @@ export interface PluginManagerService {
     ready: boolean
     /** 一次性批量装机中（首次默认全装时可能出现） */
     installingAll: boolean
+    /** 详情面板：当前打开的插件包名（null = 关闭） */
+    detailPkg: string | null
+    /** 详情面板：README markdown 原文（加载中为空） */
+    detailReadme: string
+    /** 详情面板：README 加载中/失败状态 */
+    detailLoading: boolean
+    detailError: string
   }
   /** 重新拉清单 + 对齐已装状态（用户点刷新，或改完地址后调） */
   refresh(): Promise<void>
@@ -151,6 +158,10 @@ export interface PluginManagerService {
    * 失败返回 null（调用方 fallback 到 checkNpmUpdates 的 browse 路径）。
    */
   fetchUpdateReport(): Promise<Record<string, string> | null>
+  /** 打开插件详情面板：拉 README（npm registry 的 readme 字段） */
+  openDetail(pkg: string): Promise<void>
+  /** 关闭详情面板 */
+  closeDetail(): void
   /**
    * 发布一个库到服务端配置的 registry（自验证链路）。
    * @param dir 插件目录名 / 'ui' / 'server'
@@ -270,6 +281,10 @@ export function createPluginManagerService(
     intent: [],
     ready: false,
     installingAll: false,
+    detailPkg: null,
+    detailReadme: '',
+    detailLoading: false,
+    detailError: '',
   })
 
   /**
@@ -1019,10 +1034,39 @@ export function createPluginManagerService(
     return { ok: true, pkg: json.pkg, note: json.note }
   }
 
+  /** 打开插件详情面板：走服务端 /api/npm-plugins/readme 代理拉 npm registry 的 readme */
+  async function openDetail(pkg: string): Promise<void> {
+    state.detailPkg = pkg
+    state.detailReadme = ''
+    state.detailError = ''
+    state.detailLoading = true
+    try {
+      const origin = baseOfCatalogUrl(state.catalogUrl)
+      const res = await doFetch(origin + '/api/npm-plugins/readme?pkg=' + encodeURIComponent(pkg), {
+        headers: { accept: 'application/json' },
+      })
+      const json = (await res.json()) as { ok?: boolean; readme?: string; error?: string }
+      if (!res.ok || json.ok !== true) throw new Error(json.error ?? 'README 拉取失败：' + res.status)
+      state.detailReadme = json.readme ?? ''
+    } catch (err) {
+      state.detailError = err instanceof Error ? err.message : String(err)
+    } finally {
+      state.detailLoading = false
+    }
+  }
+
+  function closeDetail(): void {
+    state.detailPkg = null
+    state.detailReadme = ''
+    state.detailError = ''
+    state.detailLoading = false
+  }
+
   return {
     state, refresh, bindManager, install, uninstall, reinstall, installAll,
     searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled, checkNpmUpdates,
     fetchUpdateReport,
+    openDetail, closeDetail,
     publishPkg,
   }
 }

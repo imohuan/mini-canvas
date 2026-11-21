@@ -3,6 +3,7 @@
 import { Loader2, PackageSearch, Search } from 'lucide-vue-next'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import PluginCard from '../PluginCard.vue'
+import PluginDetailPanel from './PluginDetailPanel.vue'
 import type { PluginManagerCardView } from '../pluginCardTypes'
 import type { PluginManagerService } from '../../../pluginManagerService'
 import type { TabId } from './usePluginManagerPage'
@@ -19,6 +20,8 @@ defineProps<{
   tabCount: (id: TabId) => number
   onCardAction: (key: string) => void
   onNpmSearch: () => void
+  openDetail: (pkg: string) => void
+  closeDetail: () => void
 }>()
 
 const npmTab = defineModel<TabId>('npmTab', { required: true })
@@ -35,7 +38,8 @@ const TabsTrigger = useUiComponent('TabsTrigger')
 </script>
 
 <template>
-  <Tabs v-model="npmTab" class="pmp-tabs">
+  <PluginDetailPanel v-if="s.detailPkg" :s="s" @close="closeDetail" />
+  <Tabs v-else v-model="npmTab" class="pmp-tabs">
     <TabsList variant="line" class="pmp-tab-list" aria-label="插件分类">
       <TabsTrigger v-for="tab in tabs" :key="tab.id" :value="tab.id" class="pmp-tab">
         {{ tab.label }}
@@ -50,32 +54,27 @@ const TabsTrigger = useUiComponent('TabsTrigger')
         class="pmp-input pmp-filter-input"
         type="text"
         spellcheck="false"
-        aria-label="筛选插件卡片"
-        placeholder="筛选当前卡片：名字、说明或包名"
+        aria-label="搜索插件：名字、说明或包名"
+        placeholder="搜索插件：名字、说明或包名（回车搜索 NPM 市场）"
+        @keydown.enter.prevent="onNpmSearch"
       />
+      <Button
+        variant="outline"
+        size="sm"
+        type="button"
+        :disabled="npmSearching"
+        @click="onNpmSearch"
+      >
+        <Loader2 v-if="npmSearching" class="spin" :size="14" aria-hidden="true" />
+        <Search v-else :size="14" aria-hidden="true" />
+        搜索
+      </Button>
     </div>
 
     <p v-if="npmError" class="pmp-error" role="alert">{{ npmError }}</p>
     <p v-if="s.error" class="pmp-error" role="alert">{{ s.error }}</p>
 
     <TabsContent value="market" class="pmp-panel">
-      <form class="pmp-search" @submit.prevent="onNpmSearch">
-        <Input
-          v-model="npmQuery"
-          class="pmp-input"
-          type="text"
-          spellcheck="false"
-          aria-label="搜索 NPM 插件"
-          placeholder="搜索包名（留空 = 列出全部可安装插件）"
-          @keydown.enter.prevent="onNpmSearch"
-        />
-        <Button variant="outline" size="sm" type="submit" :disabled="npmSearching">
-          <Loader2 v-if="npmSearching" class="spin" :size="14" aria-hidden="true" />
-          <Search v-else :size="14" aria-hidden="true" />
-          {{ npmSearching ? '加载中' : '搜索' }}
-        </Button>
-      </form>
-
       <p class="pmp-hint">只列出声明了 plume.installable、并在允许前缀里的 NPM 包。</p>
 
       <div v-if="npmSearching && !marketCards.length" class="pmp-loading">
@@ -87,7 +86,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
         {{ cardFilter ? '没有符合筛选的插件。' : '没有匹配的插件。' }}
       </div>
       <div v-else class="pmp-grid">
-        <PluginCard v-for="card in marketCards" :key="card.id" :card="card" @action="onCardAction" />
+        <PluginCard v-for="card in marketCards" :key="card.id" :card="card" @action="onCardAction" @detail="openDetail" />
       </div>
     </TabsContent>
 
@@ -102,6 +101,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
           :key="card.id"
           :card="card"
           @action="onCardAction"
+          @detail="openDetail"
         />
       </div>
     </TabsContent>
@@ -117,6 +117,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
           :key="card.id"
           :card="card"
           @action="onCardAction"
+          @detail="openDetail"
         />
       </div>
     </TabsContent>
@@ -132,6 +133,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
           :key="card.id"
           :card="card"
           @action="onCardAction"
+          @detail="openDetail"
         />
       </div>
     </TabsContent>

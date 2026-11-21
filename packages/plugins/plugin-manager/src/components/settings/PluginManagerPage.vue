@@ -35,6 +35,8 @@ const {
   visibleLocalCards,
   visibleBuiltinCards,
   onCardAction,
+  openDetail,
+  closeDetail,
 } = usePluginManagerPage()
 </script>
 
@@ -64,6 +66,8 @@ const {
       :tab-count="tabCount"
       :on-card-action="onCardAction"
       :on-npm-search="onNpmSearch"
+      :open-detail="openDetail"
+      :close-detail="closeDetail"
     />
   </div>
 </template>

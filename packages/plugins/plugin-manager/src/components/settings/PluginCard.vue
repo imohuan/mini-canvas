@@ -15,7 +15,10 @@ import type {
 } from './pluginCardTypes'
 
 const props = defineProps<{ card: PluginManagerCardView }>()
-const emit = defineEmits<{ (e: 'action', key: string): void }>()
+const emit = defineEmits<{
+  (e: 'action', key: string): void
+  (e: 'detail', id: string): void
+}>()
 
 const Badge = useUiComponent('Badge')
 const Button = useUiComponent('Button')
@@ -55,8 +58,11 @@ function iconOf(key: string) {
 }
 
 function onCardClick(): void {
-  if (!clickable.value || !props.card.primaryAction) return
-  emit('action', props.card.primaryAction)
+  if (clickable.value && props.card.primaryAction) {
+    emit('action', props.card.primaryAction)
+    return
+  }
+  emit('detail', props.card.id)
 }
 
 function onAction(key: string): void {
@@ -76,7 +82,7 @@ function onAction(key: string): void {
     :data-plugin-id="card.id"
     :data-plugin-status="card.status"
     :aria-busy="card.busy ? 'true' : undefined"
-    :title="clickable ? card.clickHint : undefined"
+    :title="clickable ? card.clickHint : '点击查看插件详情'"
     :style="{ borderRadius: 'var(--radius-open, 12px)' }"
     @click="onCardClick"
   >

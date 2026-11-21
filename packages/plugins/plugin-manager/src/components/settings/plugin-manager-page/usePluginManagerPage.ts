@@ -204,6 +204,12 @@ export function usePluginManagerPage() {
       const busy = npmBusyPkg.value === item.pkg
       const update = npmUpdates.value[item.pkg]
       const actions: PluginCardAction[] = []
+      actions.push({
+        key: 'detail:' + item.pkg,
+        label: '详情',
+        variant: 'outline',
+        disabled: false,
+      })
       if (!installedVersion) {
         actions.push({
           key: 'npm-install:' + item.pkg,
@@ -225,12 +231,14 @@ export function usePluginManagerPage() {
           disabled: busy,
         })
       }
-      actions.push({
-        key: 'publish:' + item.pkg,
-        label: '发布',
-        variant: 'outline',
-        disabled: busy,
-      })
+      if (installedVersion && update) {
+        actions.unshift({
+          key: 'npm-update:' + item.pkg,
+          label: '更新到 v' + update,
+          variant: 'default',
+          disabled: busy,
+        })
+      }
 
       const meta = ['v' + item.version]
       if (item.hasServer) meta.push('含后台')
@@ -258,10 +266,10 @@ export function usePluginManagerPage() {
       const update = npmUpdates.value[entry.pkg]
       const actions: PluginCardAction[] = [
         {
-          key: 'npm-update:' + entry.pkg,
-          label: '更新',
+          key: 'detail:' + entry.pkg,
+          label: '详情',
           variant: 'outline',
-          disabled: busy,
+          disabled: false,
         },
         {
           key: 'npm-uninstall:' + entry.pkg,
@@ -270,6 +278,14 @@ export function usePluginManagerPage() {
           disabled: busy,
         },
       ]
+      if (update) {
+        actions.unshift({
+          key: 'npm-update:' + entry.pkg,
+          label: '更新到 v' + update,
+          variant: 'default',
+          disabled: busy,
+        })
+      }
       return {
         id: entry.pkg,
         title: hit?.title || entry.pkg,
@@ -442,20 +458,11 @@ export function usePluginManagerPage() {
     }
     if (kind === 'npm-uninstall') {
       void onNpmUninstall(value)
+      return
     }
-    if (kind === 'publish') {
-      const ok = await feedback?.confirm({
-        title: '发布「' + value + '」',
-        description: '把仓库里这个库的当前代码打包发布到服务端配置的 registry。',
-        confirmText: '发布',
-        cancelText: '取消',
-      })
-      if (ok) {
-        const dir = value.replace(/^@[^/]+\//, '')
-        const r = await svc.publishPkg(dir)
-        if (!r.ok) await feedback?.alert({ title: '发布失败', description: r.error ?? '未知错误', confirmText: '知道了' })
-        else await feedback?.alert({ title: '发布成功', description: (r.pkg ?? value) + (r.note ? '\n' + r.note : ''), confirmText: '好' })
-      }
+    if (kind === 'detail') {
+      void svc.openDetail(value)
+      return
     }
   }
 
@@ -484,5 +491,7 @@ export function usePluginManagerPage() {
     visibleLocalCards,
     visibleBuiltinCards,
     onCardAction,
+    openDetail: svc.openDetail,
+    closeDetail: svc.closeDetail,
   }
 }
