@@ -82,6 +82,50 @@ const html = computed(() => {
   margin: 8px 0;
   padding-left: 20px;
 }
+/* Tailwind reset 清掉了 list-style，这里必须补回（用户 2026-11-21 实测列表没有符号） */
+.pmp-detail-readme :deep(ul) {
+  list-style: disc outside;
+}
+.pmp-detail-readme :deep(ol) {
+  list-style: decimal outside;
+}
+.pmp-detail-readme :deep(li) {
+  margin: 3px 0;
+}
+.pmp-detail-readme :deep(li > ul),
+.pmp-detail-readme :deep(li > ol) {
+  margin: 3px 0 3px 4px;
+}
+.pmp-detail-readme :deep(ul ul) {
+  list-style: circle outside;
+}
+.pmp-detail-readme :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--line, rgba(127, 127, 127, 0.3));
+  margin: 14px 0;
+}
+.pmp-detail-readme :deep(a) {
+  color: var(--brand, #4a90d9);
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.pmp-detail-readme :deep(strong) {
+  font-weight: 700;
+}
+.pmp-detail-readme :deep(table) {
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 12px;
+}
+.pmp-detail-readme :deep(th),
+.pmp-detail-readme :deep(td) {
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.3));
+  padding: 4px 8px;
+  text-align: left;
+}
+.pmp-detail-readme :deep(th) {
+  background: var(--thumb-soft, rgba(127, 127, 127, 0.1));
+}
 .pmp-detail-readme :deep(code) {
   background: var(--thumb-soft, rgba(127, 127, 127, 0.15));
   padding: 1px 5px;

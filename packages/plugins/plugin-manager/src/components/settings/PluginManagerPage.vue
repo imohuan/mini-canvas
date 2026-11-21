@@ -43,6 +43,7 @@ const {
 <template>
   <div class="pmp">
     <PluginManagerToolbar
+      v-if="!s.detailPkg"
       :s="s"
       :service="svc"
       :url-draft="urlDraft"
