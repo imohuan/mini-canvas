@@ -150,6 +150,25 @@ async function installPluginFromRegistry(
     }
     await copyEntry(resolvedWeb)
     if (typeof resolvedServer === "string") await copyEntry(resolvedServer)
+    // plume.assets 声明的附加资产目录一并复制（如 plugin-agent 的 vendor-plugins/ ——
+    // goal hook 的 .mjs 在里面；漏了它启动日志就是「goal hook 未安装：插件库里没有 goal」，
+    // 用户 2026-11-21 npx 首启实测。与 routes/npmPlugins.ts 的安装路径同一语义。
+    const assets = (mini.assets as unknown)
+    if (Array.isArray(assets)) {
+      for (const raw of assets) {
+        if (typeof raw !== "string" || !raw.trim()) continue
+        const rel = raw.trim().replace(/\\/g, "/")
+        // 条目是目录名（"dist/vendor-plugins"），不是 .js 产物 —— 只防绝对路径与 .. 穿越
+        if (path.isAbsolute(rel) || rel.split("/").includes("..")) continue
+        const srcDir = path.join(extracted, rel)
+        let stat
+        try { stat = await fs.stat(srcDir) } catch { continue } // 目录缺失跳过，不阻塞安装
+        if (!stat.isDirectory()) continue
+        const destBase = path.join(destDir, rel)
+        await fs.mkdir(path.dirname(destBase), { recursive: true })
+        await fs.cp(srcDir, destBase, { recursive: true })
+      }
+    }
     const pkgObj = JSON.parse(await fs.readFile(pkgJsonPath, "utf8")) as { plume?: Record<string, unknown> }
     pkgObj.plume = {
       ...(pkgObj.plume ?? {}),
