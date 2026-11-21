@@ -63,3 +63,15 @@
    5. 点击「更新」→ 真实从 npm 下载安装 → 磁盘版本升级到 0.1.5、来源记录同步（截图留证）；
    6. server 更新提醒（0.1.0→0.1.1）在 /api/updates 正确报告。
  - 所有 31 个 npm 包现在都带 README（34 个插件脚本生成 + 4 个核心包手写）。
+ - 工具沉淀：scripts/swap-dev-to-pub.cjs（发布形态切换/恢复）、scripts/sync-npm-versions.cjs（本地版本号与 npm 同步）。
+
+ ## 包名改名（2026-11-21 第三轮）
+
+ - 用户要求包名与目录名对齐：`@plume-canvas/cloud-server` → `@plume-canvas/server`，`@plume-canvas/ui` → `@plume-canvas/web`。
+ - 旧包由用户在 npmjs 手动删除（token 是 bypass-2FA 类型无删除权限，npm 2026 政策禁止）。
+ - 新包已发布：`@plume-canvas/server@0.1.3`、`@plume-canvas/web@0.1.1`（从真实 npm 安装验证通过，bin 名 plume-canvas 不变）。
+ - 仓库内 86 文件 136 处引用同步改名（机械重命名），期间踩坑：
+   1. 子串替换误伤 `@plume-canvas/ui-kit` → `@plume-canvas/web-kit`（51 文件，已全部改回）；
+   2. 早期发布脚本曾删除插件 package.json 的 @plume-canvas/* 依赖且 restore 级联失败，导致 17 个插件依赖缺失（已从 git 历史恢复）；
+   3. 删除后同名包不能立即重发（npm 保留期 + CDN 延迟 5 分钟以上），bump 版本号即可绕过。
+ - 踩坑补充：server 发布包的 dependencies 里 @plume-canvas/plugin-agent 是 workspace:* 协议（bundle 进 dist 但依赖声明还在），npm install 报 EUNSUPPORTEDPROTOCOL → 发布时须删除该声明。
