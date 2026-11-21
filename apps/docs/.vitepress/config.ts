@@ -90,6 +90,7 @@ const guideSidebar = [
     items: [
       { text: '后台总览', link: '/cloud-server/' },
       { text: '快速上手', link: '/cloud-server/quickstart' },
+      { text: '部署到 Railway', link: '/cloud-server/deploy-railway' },
       { text: '管理鉴权', link: '/cloud-server/admin-auth' },
       { text: '平台配置', link: '/cloud-server/provider-settings' },
       { text: '后台插件', link: '/cloud-server/server-plugins' },

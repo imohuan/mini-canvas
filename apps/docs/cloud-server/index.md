@@ -54,6 +54,7 @@ http://127.0.0.1:8865/mcp     MCP 接口（配置给 AI 客户端）
 | 想干什么 | 看哪篇 |
 | --- | --- |
 | 跑起来、发第一个请求 | [快速上手](/cloud-server/quickstart) |
+| 把服务发布到公网（Railway 免费档） | [部署到 Railway](/cloud-server/deploy-railway) |
 | 写一个后台插件（五种能力段总览） | [后台插件系统](/cloud-server/server-plugins) |
 | 给后台加一个 HTTP 接口 | [routes](/cloud-server/capabilities-routes) |
 | 插件存自己的数据 | [store](/cloud-server/capabilities-store) |

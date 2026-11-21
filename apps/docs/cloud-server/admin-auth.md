@@ -259,7 +259,21 @@ PLUME_ALLOW_INSECURE=1 pnpm -C apps/server serve --no-admin-auth
 必须同时给这个环境变量，单写 `--no-admin-auth` 会直接报错退出。关掉之后任何网页都能装插件、
 跑脚本、改画布，只用于本机临时调试。
 
-## 七、这一版没有解决的
+## 七、公网部署时的首次密码设置
+
+`setup` 只认容器内回环，是防「公网任何人抢先设密码」的根，**不要放宽**。
+部署到 Railway / VPS 时，用环境变量预置初始密码（部署者本人才能在平台控制台设置，
+信任级别与进容器等价）：
+
+```bash
+PLUME_INITIAL_PASSWORD=你的初始密码 plume-canvas serve ...
+```
+
+启动时若 `auth.json` 不存在且该变量有值，自动完成首次设置；已配置过密码时该变量
+被忽略。完整部署流程见 [部署到 Railway](/cloud-server/deploy-railway)。
+多账户体系（每人独立数据/插件/平台配置）在规划中，见问题整理 41。
+
+## 八、这一版没有解决的
 
 | 问题 | 现状 |
 |---|---|
