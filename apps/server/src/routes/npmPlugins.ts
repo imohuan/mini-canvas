@@ -423,14 +423,15 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
         for (const raw of assets) {
           if (typeof raw !== 'string' || !raw.trim()) continue
           const rel = raw.trim().replace(/\\/g, '/')
-          const assetRel = safeEntry(rel, 'plume.assets')
-          if (typeof assetRel !== 'string') continue // 非法条目已在发布侧拦截；安装侧只跳过
-          // 条目是目录：整目录复制（package.json 的 assets 声明是目录名，如 "dist/vendor-plugins"）
-          const srcDir = path.join(extracted, assetRel)
+          // 条目是**目录名**（如 "dist/vendor-plugins"），不是 .js 产物 —— 不能用 safeEntry
+          //（它要求 .js/.mjs 扩展名，实测把目录条目全拒了，2026-11-21 npx 首启复现）。
+          // 只防绝对路径与 .. 穿越。
+          if (path.isAbsolute(rel) || rel.split('/').includes('..')) continue
+          const srcDir = path.join(extracted, rel)
           let stat
           try { stat = await fs.stat(srcDir) } catch { continue } // 目录不存在 → 跳过，不阻塞安装
           if (!stat.isDirectory()) continue
-          const destBase = path.join(destDir, assetRel)
+          const destBase = path.join(destDir, rel)
           await fs.mkdir(path.dirname(destBase), { recursive: true })
           await fs.cp(srcDir, destBase, { recursive: true })
         }

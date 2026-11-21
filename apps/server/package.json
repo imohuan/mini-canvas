@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/server",
-  "version": "0.1.10",
+  "version": "0.1.13",
   "type": "module",
   "bin": {
     "plume-canvas": "./dist/cli.js"
@@ -39,11 +39,11 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",
-    "@modelcontextprotocol/sdk": "1.20.0",
+    "@modelcontextprotocol/sdk": "1.25.0",
     "@prismshadow/penguin-core": "0.2.13",
     "hono": "^4.6.0",
     "yaml": "^2.9.1",
-    "zod": "^3.23.0",
+    "zod": "^3.25.76",
     "@plume-canvas/plugin-agent": "workspace:*"
   },
   "devDependencies": {
