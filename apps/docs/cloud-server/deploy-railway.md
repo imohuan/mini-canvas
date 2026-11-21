@@ -153,8 +153,7 @@ Settings → Source → **Enable** Auto deploy 之后，`git push` 到主分支�
 ### 「自动更新」的边界：代码改动要进容器，必须发 npm
 
 上面的自动部署只解决了一半：`git push` 触发的是 **Docker 重新构建**，
-而 Dockerfile 里装的是 `npm install -g @plume-canvas/server`——**npm 上的固定版本**。
-所以：
+而 Dockerfile 里装的是**指定版本的 npm 包**。所以：
 
 | 你改了什么 | push 后会不会更新到线上 |
 | --- | --- |
@@ -162,19 +161,53 @@ Settings → Source → **Enable** Auto deploy 之后，`git push` 到主分支�
 | `@plume-canvas/server` 的**源码**（`apps/server/src/**`） | ❌ 不会——npm 版本号没变，容器里还是旧包 |
 | 前端 / 插件源码 | ❌ 不会——它们也不是从仓库打的 |
 
-让服务代码更新上线，发一个新 npm 版本：
+让服务代码真正上线，要走这三步（缺一步都不行）：
 
 ```bash
-# 1. 改版本号（apps/server/package.json），例如 0.1.4 → 0.1.5
-# 2. 构建 + 发布（在 apps/server 目录）
-pnpm build
-npm publish
-# 3. Railway 重新部署（构建时 npm install -g 拉到新版本）
+# 1. 改 apps/server/package.json 的 version，例如 0.1.6 → 0.1.7
+# 2. 发布（必须用 pnpm publish，在 apps/server 目录）
+pnpm publish --no-git-checks
+# 3. 把 Dockerfile 里的 ARG PLUME_VERSION 改成新版本号，然后提交推送
+#    3a. git add Dockerfile && git commit && git push
+#    3b. 或手动触发重建
 railway redeploy --service mini-canvas --from-source --yes
 ```
 
-发版用标准 npm 流程即可：`npm version patch`（自动改版本号）→ `npm publish`
-（package.json 的 prepack 会在发布前自动连构建一起跑）。
+`pnpm publish` 会自动跑 prepack（typecheck + bundle + 生成 builtin-manifest）。
+
+#### 两个必须知道的坑（都实测踩过）
+
+**坑 1：必须用 `pnpm publish`，不能用 `npm publish`**
+
+`apps/server/package.json` 里有工作区依赖写法 `"@plume-canvas/plugin-agent": "workspace:*"`：
+
+- `npm publish` 会**原样保留** `workspace:*` → 用户 `npm install` 直接报
+  `EUNSUPPORTEDPROTOCOL: Unsupported URL Type "workspace:"`，Railway 构建也会失败；
+- `pnpm publish` 会把它替换成真实版本号（如 `0.1.4`）→ 正常可装。
+
+坏版本一旦发出去就删不掉（npm 不允许复用版本号），只能发下一个版本号补。
+
+**坑 2：Dockerfile 里必须把版本号写成会变的 ARG**
+
+Docker 按「命令字符串」做层缓存。如果写死 `RUN npm install -g @plume-canvas/server`，
+发了新版本后命令字符串没变，构建直接复用旧层，**容器里永远是第一次装的版本**
+（实测：发了 0.1.5，容器里还是 0.1.4）。所以要这样写：
+
+```dockerfile
+ARG PLUME_VERSION=0.1.6
+RUN npm install -g @plume-canvas/server@${PLUME_VERSION}
+```
+
+每次发版把 `PLUME_VERSION` 和新版本号一起改，构建缓存才会失效。
+
+#### 怎么确认线上真的更新了
+
+```bash
+# 看容器里实际的包版本
+railway ssh --service mini-canvas -- node -e "console.log(require('/usr/local/lib/node_modules/@plume-canvas/server/package.json').version)"
+```
+
+输出应该等于你 Dockerfile 里写的 `PLUME_VERSION`。对不上就是缓存没失效或包没装上。
 
 > 为什么不直接在 Docker 里构建仓库源码：三十多个插件的 vite 构建 10 分钟起步，
 > 撞平台构建时限；npm 包形态让镜像构建只要一两分钟。
@@ -191,6 +224,10 @@ railway redeploy --service mini-canvas --from-source --yes
 5. **首次设置密码报「只允许在本机操作」**：这是安全设计不是 bug，按第 5 步进容器设置；
 6. **构建超时**：别把整个工作区搬进 Docker 构建（35 个插件构建 10 分钟打底），
    用 npm 包形态。
+7. **发了新版本，容器里还是旧版本**：Docker 层缓存命中了 `npm install` 那一层。
+   检查 Dockerfile 是不是 `ARG PLUME_VERSION` + `@${PLUME_VERSION}` 的写法；
+8. **构建失败，日志里是 `EUNSUPPORTEDPROTOCOL` / `workspace:`**：用错发布命令了，
+   必须 `pnpm publish`（它会替换工作时区依赖），`npm publish` 不行。
 
 ## 源码出处
 
@@ -200,5 +237,6 @@ railway redeploy --service mini-canvas --from-source --yes
 |`-d` 数据根目录 | `apps/server/src/server.ts`（DEFAULT_DATA_DIR） | 画布/插件/KV/providers 都落在它下面 |
 | 首次启动装插件与界面 | `apps/server/src/updater/bootstrap.ts` | 读 builtin-manifest 从 npm 拉缺失件 |
 | 首次设置密码限本机 | `apps/server/src/routes/auth.ts`（authRoutes 的 isLocal） | 回环 + Host 回环 + 无转发头三重判定 |
+| 环境变量预置初始密码 | `apps/server/src/initialPassword.ts` + `cli.ts` | 未配置过密码时走 setup；已配置则静默跳过 |
 | 登录 / 会话 | `apps/server/src/authAccount.ts`、`authSession.ts` | 哈希落 auth.json，HttpOnly cookie 30 天 |
 | 恢复令牌 | `apps/server/src/adminAuth.ts` | 数据目录 admin-token 或 PLUME_ADMIN_TOKEN，忘记密码时用 |
