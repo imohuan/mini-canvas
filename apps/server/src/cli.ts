@@ -258,6 +258,28 @@ async function main(): Promise<void> {
       console.warn('  启动初始化异常（继续启动）：' + (err instanceof Error ? err.message : String(err)))
     }
   }
+  /*
+   * 部署侧首次初始化：用环境变量预置登录密码，替代「SSH 进容器调 setup」。
+   *
+   * 时机必须在 createCloudServer **之前**：createCloudServer 构造时就读 auth.json
+   * 定型了鉴权状态；之后再写等于白写（与上面 bootstrap 同一个坑）。
+   */
+  try {
+    const { applyInitialPassword } = await import('./initialPassword.js')
+    const r = await applyInitialPassword({
+      // 和 createCloudServer 同一口径：相对路径按当前目录解析，别两边算出不同的 auth.json
+      dataDir: path.resolve(opts.dir),
+      password: process.env.PLUME_INITIAL_PASSWORD,
+    })
+    if (r === 'applied') {
+      console.log('  初始密码已从 PLUME_INITIAL_PASSWORD 设置（请登录后尽快修改）')
+    } else if (r === 'too-short') {
+      console.warn('  PLUME_INITIAL_PASSWORD 少于 5 位，已忽略；请到登录面板设置密码')
+    }
+  } catch (err) {
+    // 初始化失败不该拦启动：用户仍可在登录面板设置（本机）或走恢复令牌
+    console.warn('  初始密码初始化失败（继续启动）：' + (err instanceof Error ? err.message : String(err)))
+  }
   const { srv, info, portChanged } = await startWithPortFallback(opts)
 
   // 打印前先扫一次插件清单：让用户一眼看到"装了几个插件、其中几个是开箱就用的"。

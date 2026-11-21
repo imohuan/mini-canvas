@@ -262,16 +262,15 @@ PLUME_ALLOW_INSECURE=1 pnpm -C apps/server serve --no-admin-auth
 ## 七、公网部署时的首次密码设置
 
 `setup` 只认容器内回环，是防「公网任何人抢先设密码」的根，**不要放宽**。
-部署到 Railway / VPS 时，用环境变量预置初始密码（部署者本人才能在平台控制台设置，
+部署到 Railway / VPS 时，首选环境变量预置初始密码（部署者本人才能在平台控制台设置，
 信任级别与进容器等价）：
 
-```bash
-PLUME_INITIAL_PASSWORD=你的初始密码 plume-canvas serve ...
-```
+    PLUME_INITIAL_PASSWORD=<至少 5 位>
 
-启动时若 `auth.json` 不存在且该变量有值，自动完成首次设置；已配置过密码时该变量
-被忽略。完整部署流程见 [部署到 Railway](/cloud-server/deploy-railway)。
-多账户体系（每人独立数据/插件/平台配置）在规划中，见问题整理 41。
+启动时若 `auth.json` 不存在且该变量有值，自动完成首次设置（同一条 setup 校验链：
+最短 5 位、裁空白、加盐哈希落盘）；已配置过密码时该变量被忽略，不会覆盖。
+实现见 `apps/server/src/initialPassword.ts`，完整部署流程见
+[部署到 Railway](/cloud-server/deploy-railway)。多账户体系见问题整理 41，暂不排期。
 
 ## 八、这一版没有解决的
 
