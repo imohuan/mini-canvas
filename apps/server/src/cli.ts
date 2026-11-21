@@ -119,6 +119,11 @@ async function parseArgs(argv: string[]): Promise<CliOptions> {
     else if (a === '--open') opts.open = true
     else if (a === '--no-open') opts.open = false
     else if (a === '--offline') opts.offline = true
+    else if (a === '-y' || a === '--yes') {
+      // 兼容 npx 交互确认习惯（用户 2026-11-21 报「未知参数: -y」）：
+      // 本 CLI 无交互提示，这个参数只是被 npx 提示语带出来的习惯写法，接受并忽略。
+      continue
+    }
     else if (a === '-h' || a === '--help') {
       console.log(HELP)
       process.exit(0)
