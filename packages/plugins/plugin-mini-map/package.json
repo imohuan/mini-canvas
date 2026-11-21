@@ -3,10 +3,11 @@
   "version": "0.1.4",
   "type": "module",
   "plume": {
-    "title": "小地图",
-    "description": "Ctrl/Cmd+M 切换显隐；缩略图 + 视口矩形",
+    "title": "迷你地图",
+    "description": "画布右上角小地图：拖动视口框查看全局",
     "pluginName": "mini-map",
-    "builtin": true
+    "installable": true,
+    "defaultInstalled": true
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -19,9 +20,11 @@
   },
   "scripts": {
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
-    "typecheck:vue": "vue-tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@plume-canvas/plugin-sdk": "workspace:*"
   },
   "peerDependencies": {
     "vue": "^3.5.34"
@@ -32,8 +35,7 @@
     "vite": "^8.0.12",
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
-    "vue": "^3.5.34",
-    "vue-tsc": "^3.2.8"
+    "vue": "^3.5.34"
   },
   "publishConfig": {
     "access": "public"
@@ -41,8 +43,5 @@
   "files": [
     "dist",
     "README.md"
-  ],
-  "dependencies": {
-    "@plume-canvas/plugin-sdk": "workspace:*"
-  }
+  ]
 }

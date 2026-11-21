@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- 默认暗色：在 <html> 上直接挂 dark class，避免首屏亮→暗闪一下。
+     主题切换由 useUi().applyTheme() 增删这个 class（见 composables/ui.ts）。 -->
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- 本机开发时也按 cloud-server 托管模式运行：云端保存 / 生成历史 / 插件市场都走
+         vite 代理到的 8865 后台。正式部署时 cloud-server 会自己插入同一行标记，
+         所以这里写死不会影响线上（static.ts 插入前会先查重）。 -->
+    <meta name="plume-host" content="cloud-server" />
+    <title>Plume 羽画</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <style>
+      /* 首屏底色走主题变量：index.html 在 CSS 加载前就生效，这里给暗色兜底，
+         加载后由 --ui-canvas-bg / --ui-ink 接管（见 canvas-render/styles/ui-theme.css）。 */
+      html, body, #app {
+        height: 100%;
+        margin: 0;
+        background: var(--ui-canvas-bg, #141414);
+        color: var(--ui-ink, #f7f7f7);
+      }
+      * { box-sizing: border-box; }
+    </style>
+    <script type="module" crossorigin src="/assets/index-CGlVR5HT.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-W4YaOxHA.css">
+  </head>
+  <body>
+    <div id="app"></div>
+  </body>
+</html>

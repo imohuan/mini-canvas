@@ -135,7 +135,11 @@ export async function resolveUiDist(explicit?: string, dataDir?: string): Promis
   if (dataDir) {
     try {
       const v = JSON.parse(await import('node:fs/promises').then((m) => m.readFile(path.join(dataDir, 'ui', 'version.json'), 'utf8'))) as { version?: string }
-      if (v.version) installedUi.push(path.join(dataDir, 'ui', v.version))
+      if (v.version) {
+        // tarball 解包后是 <version>/dist/（web 包 files=['dist']），旧结构直接是 <version>/，两种都认
+        installedUi.push(path.join(dataDir, 'ui', v.version, 'dist'))
+        installedUi.push(path.join(dataDir, 'ui', v.version))
+      }
     } catch { /* 没装过 → 无候选 */ }
   }
   const candidates = [

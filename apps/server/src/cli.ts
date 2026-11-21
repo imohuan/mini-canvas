@@ -231,6 +231,33 @@ async function startWithPortFallback(opts: CliOptions) {
 
 async function main(): Promise<void> {
   const opts = await parseArgs(process.argv)
+  //
+  // 启动初始化必须在 createCloudServer **之前**同步完成：
+  // uiDist 解析、插件目录扫描都在构造函数里定型，异步后装等于白装
+  // （实测：npx 首次启动，日志说「装上了 24 个插件 · 界面已就绪」，
+  //   但页面还是「未构建画布界面」、插件识别 0 个 —— 因为路由在装之前就定型了）。
+  // 首次启动多等几十秒是必要代价；已装好的后续启动 skipped 全跳过，几乎无耗时。
+  if (!opts.offline) {
+    try {
+      const { runBootstrap } = await import('./updater/bootstrap.js')
+      const version = await readVersion()
+      const r = await runBootstrap({
+        dataDir: opts.dir,
+        // 包根 builtin-manifest.json（files 里列了；dist/cli.js 的上一级 = 包根，与 readVersion 同源）
+        manifestPath: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'builtin-manifest.json'),
+        // registry 可用 PLUME_REGISTRY 指到本地假 registry（自验证 / 离线环境）
+        ...(process.env.PLUME_REGISTRY ? { registry: process.env.PLUME_REGISTRY } : {}),
+        uiPkgName: '@plume-canvas/web',
+        serverPkgName: '@plume-canvas/server',
+        currentServerVersion: version,
+      })
+      if (r.installed.length) console.log('  启动初始化：装上了 ' + r.installed.length + ' 个插件（' + r.installed.slice(0, 3).join(', ') + (r.installed.length > 3 ? ' 等' : '') + '）')
+      if (r.failed.length) console.warn('  启动初始化失败（下次启动再试）：' + r.failed.join(', '))
+      if (r.uiVersion) console.log('  界面 v' + r.uiVersion + ' 已就绪')
+    } catch (err) {
+      console.warn('  启动初始化异常（继续启动）：' + (err instanceof Error ? err.message : String(err)))
+    }
+  }
   const { srv, info, portChanged } = await startWithPortFallback(opts)
 
   // 打印前先扫一次插件清单：让用户一眼看到"装了几个插件、其中几个是开箱就用的"。
@@ -301,29 +328,6 @@ async function main(): Promise<void> {
   console.log('')
 
   if (opts.open) openBrowser(info.url)
-
-  // 启动初始化（发布体系 Task 5）：装缺的内置插件 + 装 UI + 挂更新检查定时器。
-  // 异步不 await：不拦启动；失败只 warn（bootstrap 内部保证不抛）。
-  if (!opts.offline) {
-    void import('./updater/bootstrap.js').then(({ runBootstrap }) =>
-      readVersion().then((version) =>
-        runBootstrap({
-          dataDir: opts.dir,
-          // 包根 builtin-manifest.json（files 里列了；dist/cli.js 的上一级 = 包根，与 readVersion 同源）
-          manifestPath: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'builtin-manifest.json'),
-          // registry 可用 PLUME_REGISTRY 指到本地假 registry（自验证 / 离线环境）
-          ...(process.env.PLUME_REGISTRY ? { registry: process.env.PLUME_REGISTRY } : {}),
-          uiPkgName: '@plume-canvas/web',
-          serverPkgName: '@plume-canvas/server',
-          currentServerVersion: version,
-        }),
-      ),
-    ).then((r) => {
-      if (r.installed.length) console.log('  启动初始化：装上了 ' + r.installed.join(', '))
-      if (r.failed.length) console.warn('  启动初始化失败（下次启动再试）：' + r.failed.join(', '))
-      if (r.uiVersion) console.log('  界面 v' + r.uiVersion + ' 已就绪')
-    }).catch(() => { /* bootstrap 内部已兜底，这里只挡未预期错误 */ })
-  }
 
   // Ctrl+C / 结束信号：优雅关掉监听再退出（避免端口半开占着）
   const shutdown = (): void => {
