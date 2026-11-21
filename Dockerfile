@@ -9,6 +9,10 @@ FROM node:22-alpine
 # 直接写 @plume-canvas/server 时发新版本后字符串没变，构建会命中原层，
 # 容器里永远是第一次装的那个版本（实测：发了 0.1.5，容器仍是 0.1.4）。
 # 每次发版把这个值一起改掉（和 apps/server/package.json 的 version 保持一致）。
+#
+# 发版请用 pnpm publish（不能用 npm publish）：package.json 里有
+# "@plume-canvas/plugin-agent": "workspace:*"，npm 会原样发出去导致装不上，
+# pnpm 才会把它替换成真实版本号。完整流程见 apps/docs/cloud-server/deploy-railway.md。
 ARG PLUME_VERSION=0.1.6
 RUN npm install -g @plume-canvas/server@${PLUME_VERSION}
 

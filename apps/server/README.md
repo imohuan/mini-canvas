@@ -17,3 +17,17 @@
 ```bash
 npm i @plume-canvas/server
 ```
+
+## 发布（维护者）
+
+```bash
+# 必须用 pnpm publish，不能用 npm publish
+# 原因：package.json 里有 "@plume-canvas/plugin-agent": "workspace:*"，
+# npm 会原样保留这个写法，导致别人 npm install 报 EUNSUPPORTEDPROTOCOL；
+# pnpm 会把它替换成真实版本号。
+pnpm publish --no-git-checks
+```
+
+发完记得把仓库根 Dockerfile 的 `ARG PLUME_VERSION` 改成同一个版本号，
+否则容器构建会命中 Docker 层缓存，线上还是旧版本。
+完整部署与发版流程见 `apps/docs/cloud-server/deploy-railway.md`。
