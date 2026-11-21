@@ -271,12 +271,16 @@ export interface AgentServiceState {
 export interface PromptPreset {
   id: string
   name: string
+  /** 一句话说明这套模式干什么（下拉里显示；不进模型） */
+  description?: string
   text: string
   /** 内置项：不可删除 */
   builtin?: boolean
   /** 出厂默认的名字与正文（内置项才有；「恢复默认」用） */
   defaultName?: string
   defaultText?: string
+  /** 出厂默认的描述（内置项才有） */
+  defaultDescription?: string
 }
 
 export interface AgentService {

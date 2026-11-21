@@ -35,6 +35,56 @@
   color: var(--ui-ink-dim, #919191);
 }
 
+/*
+ * 创作模式：每套两行（名字 / 描述）。用户 2026-11-21：
+ * 「光有一个名称就很简短，都不知道这个东西是干什么的」。
+ *
+ * 组件库菜单项默认是横向 flex，两名两行必须改纵向；对勾用 margin-left:auto 贴右端。
+ */
+.ac-mode-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  width: 100%;
+}
+
+.ac-mode-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ac-mode-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--ui-ink, #18202b);
+}
+
+/* 选中项名字加粗：与对勾一起，扫一眼就能认出当前是哪套 */
+.ac-mode-item[aria-checked='true'] .ac-mode-name {
+  font-weight: 600;
+}
+
+.ac-mode-check {
+  margin-left: auto;
+  color: var(--ui-ink, #18202b);
+}
+
+/* 描述允许换行（用户 2026-11-21）：挤成一行省略就起不到「说清干什么」的作用 */
+.ac-mode-desc {
+  display: block;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--ui-ink-dim, #6b7280);
+  white-space: normal;
+  word-break: break-word;
+}
+
 .ac-menu-empty {
   margin: 8px 10px;
   font-size: 12px;

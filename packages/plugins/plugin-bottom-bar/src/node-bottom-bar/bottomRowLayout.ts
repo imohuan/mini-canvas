@@ -41,7 +41,14 @@ export function textWidthOf(s: string): number {
   return Math.ceil(w)
 }
 
-const MODEL_CHROME = 58
+/**
+ * 模型触发器里「不是文字」的部分（用户 2026-11-21：「本地多图」只有四个字也被截成「本地…」）。
+ *
+ * 实际占位：左右内边距 16 + 两处 gap 12 + 图标 20 + 箭头 14 = 62。
+ * 之前写 58，正好把四个汉字（52px）挤到省略号的临界点 —— 少算 4px 就会吃掉半个字。
+ * 这里给 66，留一点取整误差。
+ */
+const MODEL_CHROME = 66
 const PARAM_CHROME = 50
 const MODEL_MIN = 96
 const MODEL_MAX = 260
@@ -58,8 +65,10 @@ export function resolveBottomRow(input: BottomRowInput): BottomRowLayout {
   const fixed = num(input.fixedWidth)
 
   // 两格「不被裁」时需要的宽（各自受上下限约束）
-  const wantModel = clamp(textWidthOf(input.modelText) + MODEL_CHROME, MODEL_MIN, MODEL_MAX)
-  const wantParam = clamp(textWidthOf(input.paramText) + PARAM_CHROME, PARAM_MIN, PARAM_MAX)
+  const rawModel = textWidthOf(input.modelText) + MODEL_CHROME
+  const rawParam = textWidthOf(input.paramText) + PARAM_CHROME
+  const wantModel = clamp(rawModel, MODEL_MIN, MODEL_MAX)
+  const wantParam = clamp(rawParam, PARAM_MIN, PARAM_MAX)
 
   /*
    * 同排判据只看**最小**需要：两格都用上限去判会过于保守，
@@ -80,12 +89,37 @@ export function resolveBottomRow(input: BottomRowInput): BottomRowLayout {
     : Math.max(MODEL_MIN + PARAM_MIN, rowWidth - fixed - GAP * 2)
 
   /*
-   * 参数优先（标题里是「1:2 · 4K」这种短信息），但**不许吃穿模型底线**；
-   * 模型拿够之后再回补给参数。
+   * 分配顺序（用户 2026-11-21）：
+   * 「折叠之后宽度小一点，四个字就被挤压了」—— 根因是这里先把参数那格塞满
+   * 它自己的 96px 下限，再拿剩下的给模型，于是模型刚好差几个像素就开始省略。
+   *
+   * 现在的规则：
+   * 1. 两格各自「能完整显示」需要多少（wantModel / wantParam）；
+   * 2. 空间够 → 都按需要给；
+   * 3. 不够 → **先保证模型名完整**（参数只是「16:9」这种短摘要，先让它收）；
+   * 4. 两格都到自己的真实下限还放不下时，才允许缩到最小可读宽。
+   *
+   * 「真实下限」不是写死的 96：参数只有「参数」两个字时它本来就只需要 76，
+   * 让它保持 96 会白白吃掉模型名那 20px。
    */
-  let paramWidth = Math.min(wantParam, Math.max(PARAM_MIN, avail - MODEL_MIN))
-  const modelWidth = Math.min(wantModel, Math.max(MODEL_MIN, avail - paramWidth))
-  paramWidth = Math.min(wantParam, Math.max(PARAM_MIN, avail - modelWidth))
+  const paramFloor = Math.min(PARAM_MIN, rawParam)
+  const modelFloor = Math.min(MODEL_MIN, wantModel)
+  let modelWidth: number
+  let paramWidth: number
+  if (avail >= wantModel + paramFloor) {
+    modelWidth = wantModel
+    /*
+     * 参数不够 96 时按它**自己真正需要**的宽给（例如只有「参数」两个字 = 76），
+     * 不必凑到 96 把模型名的空间白占着。
+     */
+    paramWidth = Math.min(wantParam, Math.max(paramFloor, rawParam), avail - wantModel)
+  } else if (avail >= modelFloor + paramFloor) {
+    modelWidth = Math.max(modelFloor, avail - paramFloor)
+    paramWidth = Math.max(paramFloor, avail - modelWidth)
+  } else {
+    modelWidth = modelFloor
+    paramWidth = paramFloor
+  }
 
   return {
     stacked: !sameLine,

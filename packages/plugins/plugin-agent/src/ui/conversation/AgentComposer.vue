@@ -354,11 +354,20 @@ const HoverCardContent = useUiComponent('HoverCardContent')
             </DropdownMenuTrigger>
             <!-- 位置：与输入区其它菜单同一套参数（向上 / 居中 / 统一偏移），
                  见 COMPOSER_MENU_OFFSET 的注释。 -->
-            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" :style="{ minWidth: '220px' }">
-                <DropdownMenuItem v-for="m in promptPresets" :key="m.id" :aria-checked="s.activePromptId === m.id"
+            <DropdownMenuContent arrow :align="COMPOSER_MENU_ALIGN" :side="COMPOSER_MENU_SIDE" :side-offset="COMPOSER_MENU_OFFSET" :style="{ minWidth: '240px' }">
+                <!-- 每套模式两行：名字 + 对勾，下面一句它干什么（用户 2026-11-21：
+                     只有一个名字看不出区别；选中项还要能一眼认出来）。 -->
+                <DropdownMenuItem v-for="m in promptPresets" :key="m.id" class="ac-mode-item"
+                  :aria-checked="s.activePromptId === m.id"
                   @select="pickMode(m.id, () => (modeOpen = false))">
-                  {{ m.name }}
-                  <span class="ac-menu-hint">{{ m.builtin ? '内置提示词' : '自建提示词' }}</span>
+                  <span class="ac-mode-title">
+                    <span class="ac-mode-name">{{ m.name }}</span>
+                    <span class="ac-menu-hint">{{ m.builtin ? '内置提示词' : '自建提示词' }}</span>
+                    <span v-if="s.activePromptId === m.id" class="ac-check-mark ac-mode-check" aria-hidden="true">
+                      <Check :size="16" :stroke-width="2" />
+                    </span>
+                  </span>
+                  <span class="ac-mode-desc">{{ m.description || (m.builtin ? '内置提示词' : '自建提示词') }}</span>
                 </DropdownMenuItem>
                 <!-- 一套都没拉到（后端没起 / 还在加载）：别给空菜单 -->
                 <p v-if="!promptPresets.length" class="ac-menu-empty">还没有提示词，去「设置 → Agent → 提示词」加一个</p>
@@ -402,8 +411,11 @@ const HoverCardContent = useUiComponent('HoverCardContent')
                         <component :is="m.icon" :size="14" class="ac-option-icon" aria-hidden="true" />
                         <span class="ac-option-label">{{ m.label }}</span>
                         <Badge :variant="m.value === 'auto' ? 'destructive' : 'secondary'">{{ m.value === 'auto' ? '谨慎' : '推荐' }}</Badge>
-                        <!-- 选中标记：复用模型面板的 .ac-check-mark（aria-checked=true 时显形） -->
-                        <span class="ac-check-mark ac-review-check" aria-hidden="true"><Check :size="16" :stroke-width="2" /></span>
+                        <!-- 选中标记：只画在选中的那一条上（用户 2026-11-21：以前两条都常亮，
+                             看着像两个都选中了）。与模型面板同一套模板写法：v-if 决定渲不渲染。 -->
+                        <span v-if="authMode === m.value" class="ac-check-mark ac-review-check" aria-hidden="true">
+                          <Check :size="16" :stroke-width="2" />
+                        </span>
                       </span>
                       <span class="ac-option-desc">{{ m.hint }}</span>
                     </DropdownMenuItem>

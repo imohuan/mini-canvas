@@ -190,3 +190,50 @@ describe('D. 极端输入不崩', () => {
   })
 })
 
+describe('E. 短标签必须完整显示（用户 2026-11-21 截图：本地多图被截成「本地…」）', () => {
+  it('四个汉字 + 图标 + 箭头：宽度要给够，不能触发省略号', () => {
+    const r = resolveBottomRow({
+      rowWidth: 900,
+      actionsWidth: 300,
+      fixedWidth: FIXED,
+      modelText: '本地多图',
+      paramText: '参数',
+    })
+    // 文字 52px + 图标 / 箭头 / 内边距约 62px，至少 114px；少 1px 就会出现省略号
+    expect(r.modelWidth).toBeGreaterThanOrEqual(116)
+  })
+
+  /**
+   * 「折叠之后宽度小一点，文本后面就被挤压了」（用户 2026-11-21 补充）。
+   *
+   * 这里是按真实现场取的数：整行 694、右侧 196、固定件 34。
+   * 以前会把参数格先塞到 96，模型只剩 110，四个汉字被吃掉最后一笔。
+   */
+  it.each([
+    [694, 196, 34],
+    [660, 196, 34],
+    [700, 220, 34],
+  ])('行宽 %ipx / 右侧 %ipx：模型名仍能完整显示', (rowWidth, actionsWidth, fixedWidth) => {
+    const r = resolveBottomRow({
+      rowWidth,
+      actionsWidth,
+      fixedWidth,
+      modelText: '本地多图',
+      paramText: '参数',
+    })
+    expect(r.modelWidth).toBeGreaterThanOrEqual(118)
+  })
+
+  it('空间不够时先收参数那格，不先动模型名', () => {
+    const r = resolveBottomRow({
+      rowWidth: 694,
+      actionsWidth: 196,
+      fixedWidth: 34,
+      modelText: '本地多图',
+      paramText: '参数',
+    })
+    // 参数只有两个字，需要的宽比旧的 96 下限还小；它该先让位
+    expect(r.paramWidth).toBeLessThan(96)
+  })
+})
+

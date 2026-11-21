@@ -21,6 +21,7 @@ import './settings.css'
 
 const Button = useUiComponent('Button')
 const Input = useUiComponent('Input')
+const Textarea = useUiComponent('Textarea')
 
 const agent = useAgent()
 const s = agent.state
@@ -86,12 +87,14 @@ async function restoreActive(): Promise<void> {
   if (!ok) return
   p.name = p.defaultName ?? p.name
   p.text = p.defaultText ?? ''
+  // 描述与名字 / 正文一起回出厂（用户 2026-11-21：这个字段也属于「这一套」的定义）
+  p.description = p.defaultDescription ?? ''
   saved.value = false
 }
 
 function addPreset(): void {
   const id = 'user-' + Date.now() + '-' + ++seq
-  draft.value.push({ id, name: '新模式', text: '' })
+  draft.value.push({ id, name: '新模式', description: '', text: '' })
   selectedId.value = id
   editingId.value = id
   saved.value = false
@@ -216,6 +219,24 @@ function previewOf(text: string): string {
           <Input v-model="active.name" class="ap-input" aria-label="模式名称" placeholder="显示在模式选择里" @input="markDirty" />
         </label>
 
+        <!--
+          描述（用户 2026-11-21）：「光有一个名称就很简短，都不知道这个东西是干什么的」。
+          输入区里那个下拉只能显示一两行，所以这里用**多行框**，能写清一套模式怎么做事。
+          不写也能存：空着时下拉回落到出厂描述 / 内置 · 自建 的兜底文案。
+        -->
+        <label class="ap-field">
+          <span class="ap-field-label">描述</span>
+          <Textarea
+            v-model="active.description"
+            class="ap-textarea"
+            rows="3"
+            aria-label="模式描述"
+            placeholder="一句话说清这套模式怎么做事，例如：先出分镜和台词，确认后再生成画面"
+            @input="markDirty"
+          />
+          <span class="ap-hint">显示在模式下拉的名字下面，让选之前就能看懂它干什么。不写就显示默认说明。</span>
+        </label>
+
         <div class="ap-field">
           <div class="ap-field-head">
             <span class="ap-field-label">追加提示词</span>
@@ -261,6 +282,8 @@ function previewOf(text: string): string {
 .ap-field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ap-field-label { font-size: 12px; font-weight: 600; color: var(--ui-ink, #18202b); }
 .ap-input { width: 100%; }
+/* 描述三行起步：一句话说不完时能换行，不要竖着堆成一条窄缝 */
+.ap-textarea { width: 100%; min-height: 72px; resize: vertical; font-size: 12px; line-height: 1.6; }
 .ap-count { font-size: 10px; color: var(--ui-ink-dim, #6b7280); }
 .ap-detail-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 2px; }
 .ap-ok { display: inline-flex; align-items: center; gap: 4px; color: var(--ui-accent, #0891b2); }

@@ -17,6 +17,8 @@ export function normalizePrompts(list: PromptPreset[]): PromptPreset[] {
       id,
       name: String(p.name ?? '').trim() || id,
       text: String(p.text ?? ''),
+      // 描述可能为空（老数据没有这个字段）：只存非空串，读出来时回落到出厂描述
+      ...(String(p.description ?? '').trim() ? { description: String(p.description).trim() } : {}),
       ...(builtinIds.has(id) ? { builtin: true } : {}),
     })
   }
@@ -143,6 +145,12 @@ export interface PromptPreset {
   id: string
   /** 展示名（下拉里显示的那个名字） */
   name: string
+  /**
+   * 一句话说明「这套模式让 Agent 怎么做事」（用户 2026-11-21：只有名字看不出区别）。
+   *
+   * 只给下拉做说明用，**不进模型**；空串 = 用出厂描述兜底。
+   */
+  description?: string
   /** 提示词正文 */
   text: string
   /** 内置项：不可删除（用户可以改名/改内容，但不能删掉这一条） */
@@ -150,6 +158,8 @@ export interface PromptPreset {
   /** 出厂默认的名字与正文（界面「恢复默认」用；内置项才有） */
   defaultName?: string
   defaultText?: string
+  /** 出厂默认的描述（同上） */
+  defaultDescription?: string
 }
 
 /** KV 里存提示词清单的 key（type=config） */
@@ -169,6 +179,7 @@ export const DEFAULT_PROMPTS: readonly PromptPreset[] = [
   {
     id: 'general',
     name: '全能创作',
+    description: '画布上的通用助手：看图改图、找素材，直接在画布上生成图片、视频和音频。',
     builtin: true,
     text:
       '# 角色\n你是画布里的创作助手，把用户的想法变成画布上的节点与内容。\n\n' +
@@ -192,6 +203,7 @@ export const DEFAULT_PROMPTS: readonly PromptPreset[] = [
   {
     id: 'script',
     name: '剧本创编',
+    description: '剧本编剧：先写分镜和台词给你确认，确认之后再生成画面和视频。',
     builtin: true,
     text:
       '# 角色\n你是剧本编剧助手：**先把剧本写出来让用户确认，确认之后再生成画面/视频**。\n\n' +

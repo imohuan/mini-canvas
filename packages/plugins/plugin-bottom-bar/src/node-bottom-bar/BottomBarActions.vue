@@ -228,8 +228,17 @@ function measureBudget(): void {
     // 用「子元素自然宽之和」，被挤扁时不会量成 0（否则越算越窄）
     actionsWidth: actionsBox.value ? rowChildrenWidth(actionsBox.value) : 0,
     fixedWidth: fixedChromeWidth(),
-    modelText: modelTriggerText.value || props.currentActionLabel || '',
-    paramText: paramTriggerText.value || props.paramLabel || '',
+    /*
+     * 触发器上的**真实文字**（用户 2026-11-21）。
+     *
+     * 以前用 props 里的标题估算：Agent 的生成动作、带账号名的模型名都可能和
+     * 实际渲染出来的不一样，估少了就会把「本地多图」这种短名字也截成「本地…」。
+     * 现在优先量页面上真正渲染的文字，量不到才回落到 props。
+     */
+    modelText: liveTextOf('.nb-field--action .nb-model-trigger-label')
+      || modelTriggerText.value || props.currentActionLabel || '',
+    paramText: liveTextOf('.nb-field--params .tpg-text, .nb-field--params .nb-param-text')
+      || paramTriggerText.value || props.paramLabel || '',
   })
   // 值没变就不写回：避免 ResizeObserver 被自己的写入再触发一次
   if (
@@ -292,6 +301,17 @@ function naturalWidthOf(el: Element | null | undefined): number {
     return Math.max(0, text.scrollWidth + Math.max(0, innerChrome) + Math.max(0, extra) + 4)
   }
   return Math.max(0, inner.scrollWidth + Math.max(0, extra) + 4)
+}
+
+/**
+ * 页面上「现在真正显示的那段文字」。
+ *
+ * 为什么不用 props：模型名可能带账号后缀、生成动作的标题来自 provider，
+ * props 与真实渲染并不总是一致；宽度预算必须按看得见的那一行算。
+ */
+function liveTextOf(selector: string): string {
+  const el = selectsBox.value?.querySelector(selector)
+  return el instanceof HTMLElement ? (el.textContent ?? '').trim() : ''
 }
 
 onMounted(() => {

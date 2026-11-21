@@ -260,7 +260,15 @@ export class AgentConfigBase {
   private withDefaults(list: PromptPreset[]): PromptPreset[] {
     return list.map((p) => {
       const d = DEFAULT_PROMPTS.find((x) => x.id === p.id)
-      return d ? { ...p, defaultName: d.name, defaultText: d.text } : p
+      if (!d) return p
+      return {
+        ...p,
+        // 老数据 / 从没写过描述：回落到出厂描述，下拉里不会出现空白说明
+        description: String(p.description ?? '').trim() || d.description || '',
+        defaultName: d.name,
+        defaultText: d.text,
+        defaultDescription: d.description || '',
+      }
     })
   }
 
@@ -279,8 +287,15 @@ export class AgentConfigBase {
       const id = String((raw as PromptPreset).id ?? '').trim()
       const name = String((raw as PromptPreset).name ?? '').trim()
       const text = String((raw as PromptPreset).text ?? '')
+      const description = String((raw as PromptPreset).description ?? '').trim()
       if (!id || !name) continue
-      byId.set(id, { id, name, text, ...(raw.builtin ? { builtin: true } : {}) })
+      byId.set(id, {
+        id,
+        name,
+        text,
+        ...(description ? { description } : {}),
+        ...(raw.builtin ? { builtin: true } : {}),
+      })
     }
     // 内置项必须在：被删掉的补回来（正文用默认；用户改过的会以传入的为准）
     for (const d of DEFAULT_PROMPTS) {

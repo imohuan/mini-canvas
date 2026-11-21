@@ -43,6 +43,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@plume-canvas/plugin-sdk": "workspace:*"
+    "@plume-canvas/plugin-sdk": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*"
   }
 }

@@ -77,6 +77,44 @@ describe('模式提示词清单', () => {
     const r = await call('PUT', '/api/agent/prompts', { nope: true })
     expect(r.status).toBe(400)
   })
+
+  /**
+   * 用户 2026-11-21：下拉里只有名字，看不出这套模式干什么。
+   * 描述要能存下来、读回来；出场自带两条内置描述。
+   */
+  it('描述能存能读，内置两条出厂就带描述', async () => {
+    const first = await call('GET', '/api/agent/prompts')
+    const general = first.json.prompts.find((p: { id: string }) => p.id === 'general')
+    const script = first.json.prompts.find((p: { id: string }) => p.id === 'script')
+    expect(general.description).toMatch(/画布/)
+    expect(script.description).toMatch(/剧本/)
+
+    const list = first.json.prompts.map((p: { id: string }) =>
+      p.id === 'general' ? { ...p, description: '我自己写的说明' } : p,
+    )
+    const put = await call('PUT', '/api/agent/prompts', { prompts: list })
+    expect(put.status).toBe(200)
+    const saved = put.json.prompts.find((p: { id: string }) => p.id === 'general')
+    expect(saved.description).toBe('我自己写的说明')
+
+    // 重新读也一样（落盘了，不是只在内存里）
+    const again = await call('GET', '/api/agent/prompts')
+    expect(again.json.prompts.find((p: { id: string }) => p.id === 'general').description).toBe('我自己写的说明')
+  })
+
+  it('老数据没有描述：读出来用出厂描述兜底，不显示空白', async () => {
+    const first = await call('GET', '/api/agent/prompts')
+    // 模拟旧版本存下的一行（没有 description）
+    const legacy = first.json.prompts.map((p: Record<string, unknown>) => {
+      const copy = { ...p }
+      delete copy.description
+      return copy
+    })
+    await call('PUT', '/api/agent/prompts', { prompts: legacy })
+    const again = await call('GET', '/api/agent/prompts')
+    const general = again.json.prompts.find((p: { id: string }) => p.id === 'general')
+    expect(String(general.description ?? '').length).toBeGreaterThan(4)
+  })
 })
 
 describe('会话标题模型（自动命名用哪个模型）', () => {
