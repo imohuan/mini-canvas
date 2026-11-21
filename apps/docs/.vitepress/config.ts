@@ -295,6 +295,9 @@ export default withMermaid(defineConfig({
       include: ['mermaid', 'dayjs', 'dayjs/plugin/customParseFormat.js'],
     },
   },
+  // GitHub Pages 项目页部署在 /<仓库名>/ 子路径下；CI 用 DOCS_BASE 注入。
+  // 本地开发与默认构建不设该变量，base 仍是 /，行为不变。
+  base: process.env.DOCS_BASE || '/',
   lang: 'zh-CN',
   title: 'Plume 羽画',
   description: 'Plume 羽画：可堆叠插件的画布应用，文档含入门 · 示例 · 插件 · API 参考',
