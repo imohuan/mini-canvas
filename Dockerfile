@@ -5,7 +5,12 @@
 # 数据目录挂持久卷（Railway 上挂 /data），重启不丢数据。
 FROM node:22-alpine
 
-RUN npm install -g @plume-canvas/server
+# 版本号必须写成一个会变的 ARG：Docker 按「命令字符串」做层缓存，
+# 直接写 @plume-canvas/server 时发新版本后字符串没变，构建会命中原层，
+# 容器里永远是第一次装的那个版本（实测：发了 0.1.5，容器仍是 0.1.4）。
+# 每次发版把这个值一起改掉（和 apps/server/package.json 的 version 保持一致）。
+ARG PLUME_VERSION=0.1.5
+RUN npm install -g @plume-canvas/server@${PLUME_VERSION}
 
 ENV NODE_ENV=production
 EXPOSE 8865
