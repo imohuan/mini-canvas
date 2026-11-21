@@ -8,6 +8,10 @@ import path from 'node:path'
 // 规则：全部展开（collapsed: false）、名称 2~10 字、不换行。
 // ============================================================================
 
+// 站点根路径：GitHub Pages 项目页部署在 /<仓库名>/ 子路径下，CI 用 DOCS_BASE 注入。
+// 本地开发与默认构建不设该变量，base 仍是 /，行为不变。
+const siteBase = process.env.DOCS_BASE || '/'
+
 const guideSidebar = [
   {
     text: '开始',
@@ -295,14 +299,20 @@ export default withMermaid(defineConfig({
       include: ['mermaid', 'dayjs', 'dayjs/plugin/customParseFormat.js'],
     },
   },
-  // GitHub Pages 项目页部署在 /<仓库名>/ 子路径下；CI 用 DOCS_BASE 注入。
-  // 本地开发与默认构建不设该变量，base 仍是 /，行为不变。
-  base: process.env.DOCS_BASE || '/',
+  base: siteBase,
   lang: 'zh-CN',
   title: 'Plume 羽画',
   description: 'Plume 羽画：可堆叠插件的画布应用，文档含入门 · 示例 · 插件 · API 参考',
   cleanUrls: true,
   lastUpdated: true,
+  // 浏览器标签图标：与 apps/web 用同一套（源文件在 apps/web/public/）。
+  // head 里的静态链接不会被自动加 base，需要自己拼。
+  head: [
+    ['link', { rel: 'icon', href: siteBase + 'favicon.ico', sizes: 'any' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: siteBase + 'favicon-32.png' }],
+    ['link', { rel: 'icon', type: 'image/png', sizes: '192x192', href: siteBase + 'icon-192.png' }],
+    ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: siteBase + 'apple-touch-icon.png' }],
+  ],
   themeConfig: {
     outline: { level: [2, 3], label: '本页目录' },
     // 右上角：四个平级分类，无下拉；每个分类的侧边栏是一棵完整树（全部展开）
