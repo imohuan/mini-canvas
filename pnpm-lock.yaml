@@ -1562,6 +1562,9 @@ importers:
       '@plume-canvas/canvas-data':
         specifier: workspace:*
         version: link:../../engine/canvas-data
+      '@plume-canvas/canvas-render':
+        specifier: workspace:*
+        version: link:../../engine/canvas-render
       '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../engine/kernel

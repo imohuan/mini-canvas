@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-shortcut-manager",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "plume": {
     "title": "快捷键",
@@ -40,5 +40,11 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "dependencies": {
+    "@plume-canvas/plugin-sdk": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*"
+  }
 }

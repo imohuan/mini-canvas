@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-multi-select",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "plume": {
     "title": "多选",
@@ -23,6 +23,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@plume-canvas/plugin-sdk": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
     "vue": "^3.5.0"
   },
   "devDependencies": {

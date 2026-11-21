@@ -1,6 +1,6 @@
 {
-  "name": "@plume-canvas/cloud-server",
-  "version": "0.1.0",
+  "name": "@plume-canvas/server",
+  "version": "0.1.1",
   "type": "module",
   "bin": {
     "plume-canvas": "./dist/cli.js"
@@ -54,5 +54,6 @@
     "tsx": "^4.22.4",
     "typescript": "~6.0.2",
     "vitest": "^3.0.0"
-  }
+  },
+  "prepack": "pnpm run build && pnpm gen:manifest"
 }

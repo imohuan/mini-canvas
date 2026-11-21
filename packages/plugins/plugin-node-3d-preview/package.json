@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-node-3d-preview",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "plume": {
     "title": "3D 预览节点",
@@ -23,6 +23,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@plume-canvas/plugin-sdk": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "three": "^0.184.0"
   },
   "peerDependencies": {

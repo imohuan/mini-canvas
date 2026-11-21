@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-mini-map",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "plume": {
     "title": "小地图",
@@ -41,5 +41,8 @@
   "files": [
     "dist",
     "README.md"
-  ]
+  ],
+  "dependencies": {
+    "@plume-canvas/plugin-sdk": "workspace:*"
+  }
 }
