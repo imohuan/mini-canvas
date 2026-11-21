@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-manager",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "type": "module",
   "plume": {
     "title": "插件管理",

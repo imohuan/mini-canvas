@@ -237,7 +237,8 @@ const TabsTrigger = useUiComponent('TabsTrigger')
 
 .pmp-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 自适应列数：容器有多宽排多少列（用户 2026-11-21：大容器不要固定两列） */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   align-items: stretch;
   gap: 10px;
 }
@@ -258,11 +259,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
 
 @keyframes pmp-spin {
   to { transform: rotate(360deg); }
-}
-
-/* 窄屏：两列变一列，卡片文字不被压扁。 */
-@media (max-width: 640px) {
-  .pmp-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

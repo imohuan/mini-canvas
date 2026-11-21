@@ -217,11 +217,12 @@ export function usePluginManagerPage() {
           variant: 'default',
           disabled: busy,
         })
-      } else {
+      } else if (update) {
+        // 只有检测到新版本才出现「更新」；更新按钮同时承担版本号提示（用户 2026-11-21）
         actions.push({
           key: 'npm-update:' + item.pkg,
-          label: '更新',
-          variant: 'outline',
+          label: '更新到 v' + update,
+          variant: 'default',
           disabled: busy,
         })
         actions.push({
@@ -230,12 +231,11 @@ export function usePluginManagerPage() {
           variant: 'destructive',
           disabled: busy,
         })
-      }
-      if (installedVersion && update) {
-        actions.unshift({
-          key: 'npm-update:' + item.pkg,
-          label: '更新到 v' + update,
-          variant: 'default',
+      } else {
+        actions.push({
+          key: 'npm-uninstall:' + item.pkg,
+          label: '卸载',
+          variant: 'destructive',
           disabled: busy,
         })
       }
