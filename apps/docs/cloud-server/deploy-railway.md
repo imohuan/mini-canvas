@@ -89,7 +89,8 @@ CMD plume-canvas serve --host 0.0.0.0 -p ${PORT:-8865} -d /data \
 ## 第 5 步 · 设置登录密码
 
 后台默认开启登录鉴权。**首选：环境变量预置初始密码** —— 服务 → Variables
-里加一个变量，重启即生效，不用进容器：
+里加一个变量，重启即生效，不用进容器。需要服务镜像里有这个能力
+（npm 包 ≥ 0.1.5，见下文「自动更新」一节）：
 
 ```
 变量名：PLUME_INITIAL_PASSWORD
@@ -148,6 +149,35 @@ Railway 免费档每月 $1 使用额度，按秒计费：
 
 Settings → Source → **Enable** Auto deploy 之后，`git push` 到主分支就会自动
 重新构建发布。不开启的话，去 Deployments 页手动 Redeploy。
+
+### 「自动更新」的边界：代码改动要进容器，必须发 npm
+
+上面的自动部署只解决了一半：`git push` 触发的是 **Docker 重新构建**，
+而 Dockerfile 里装的是 `npm install -g @plume-canvas/server`——**npm 上的固定版本**。
+所以：
+
+| 你改了什么 | push 后会不会更新到线上 |
+| --- | --- |
+| Dockerfile / Railway 配置 / 环境变量 | ✅ 会（构建与启动流程本身变了） |
+| `@plume-canvas/server` 的**源码**（`apps/server/src/**`） | ❌ 不会——npm 版本号没变，容器里还是旧包 |
+| 前端 / 插件源码 | ❌ 不会——它们也不是从仓库打的 |
+
+让服务代码更新上线，发一个新 npm 版本：
+
+```bash
+# 1. 改版本号（apps/server/package.json），例如 0.1.4 → 0.1.5
+# 2. 构建 + 发布（在 apps/server 目录）
+pnpm build
+npm publish
+# 3. Railway 重新部署（构建时 npm install -g 拉到新版本）
+railway redeploy --service mini-canvas --from-source --yes
+```
+
+发版用标准 npm 流程即可：`npm version patch`（自动改版本号）→ `npm publish`
+（package.json 的 prepack 会在发布前自动连构建一起跑）。
+
+> 为什么不直接在 Docker 里构建仓库源码：三十多个插件的 vite 构建 10 分钟起步，
+> 撞平台构建时限；npm 包形态让镜像构建只要一两分钟。
 
 ## 常见坑
 
