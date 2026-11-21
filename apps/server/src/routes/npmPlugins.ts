@@ -200,9 +200,14 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           const mini = (pk.versions[latest] as unknown as { plume?: Record<string, unknown> })?.plume
           if (!isPluginMeta(mini)) return null
           const m = mini as Record<string, unknown>
+          // 描述优先取 plume.description（作者写的中文功能介绍）。
+          // npm 包的顶层 description 是 npm 从 README 首段自动抽的（实测抽成了 README 的
+          // 引用块「> `@plume-canvas/xxx` - vX.Y.Z」，用户 2026-11-21 反馈卡片显示这个没意义），
+          // plume.description 没写才回落 npm description。
+          const plumeDesc = typeof m.description === 'string' && m.description.trim() ? m.description.trim() : ''
           return {
             pkg: name,
-            description: pk.description ?? '',
+            description: plumeDesc || pk.description || '',
             version: latest,
             date: pk.time?.[latest] ?? '',
             hasServer: m.server !== undefined,

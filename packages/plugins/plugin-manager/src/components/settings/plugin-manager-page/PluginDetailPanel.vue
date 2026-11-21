@@ -16,6 +16,13 @@ const emit = defineEmits<{ (e: 'close'): void }>()
 
 const Button = useUiComponent('Button')
 
+/** 卡片元数据（标题/包名/plume 描述）来自 npm 插件目录，展示在 README 之前 */
+const meta = computed(() => {
+  const pkg = props.s.detailPkg
+  if (!pkg) return null
+  return { pkg }
+})
+
 const html = computed(() => {
   if (!props.s.detailReadme) return ''
   // marked 同步渲染；unsafe 的原始 html 由 DOMPurify 统一过滤
@@ -28,6 +35,9 @@ const html = computed(() => {
     <Button variant="ghost" size="xs" type="button" class="pmp-detail-back" @click="emit('close')">
       ← 返回插件列表
     </Button>
+    <div v-if="meta" class="pmp-detail-meta">
+      <code class="pmp-detail-pkg">{{ meta.pkg }}</code>
+    </div>
     <div v-if="s.detailLoading" class="pmp-detail-loading">
       <Loader2 class="spin" :size="16" aria-hidden="true" />
       正在加载 README…
@@ -64,9 +74,31 @@ const html = computed(() => {
   color: var(--tone-err, #c44);
 }
 .pmp-detail-readme {
+  /* 整页默认 user-select:none（app.css 桌面式口径），README 是内容文本要能复制（用户 2026-11-21） */
+  user-select: text;
+  -webkit-user-select: text;
   font-size: 12.5px;
   line-height: 1.7;
   overflow-wrap: anywhere;
+}
+.pmp-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pmp-detail-pkg {
+  user-select: text;
+  -webkit-user-select: text;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--thumb-soft, rgba(127, 127, 127, 0.15));
+  font-size: 11.5px;
+}
+.pmp-detail-plumedesc {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--ink, #374151);
 }
 .pmp-detail-readme :deep(h1),
 .pmp-detail-readme :deep(h2),

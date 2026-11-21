@@ -24,9 +24,10 @@ describe('NPM 路由 · 真 registry（只读）', () => {
     const body = (await res.json()) as { ok: boolean; results: Array<{ pkg: string }> }
     expect(body.ok).toBe(true)
     expect(Array.isArray(body.results)).toBe(true)
-    // 过滤语义：所有结果的包名都在白名单前缀内（默认 @imohuan/ 与 plume-canvas-）
+    // 过滤语义：所有结果的包名都在白名单前缀内（DEFAULT_PREFIXES：@plume-canvas/ 与 plume-canvas-；
+    // 测试曾写 @imohuan/，但那不是路由白名单 —— 白名单见 npmPlugins.ts DEFAULT_PREFIXES）
     for (const r of body.results) {
-      expect(r.pkg.startsWith('@imohuan/') || r.pkg.startsWith('plume-canvas-')).toBe(true)
+      expect(r.pkg.startsWith('@plume-canvas/') || r.pkg.startsWith('plume-canvas-')).toBe(true)
     }
     srv.stop()
   }, 30_000)
