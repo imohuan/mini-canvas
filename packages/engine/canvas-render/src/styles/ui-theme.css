@@ -6,7 +6,7 @@
  *     硬编码浅色值 → 暗色主题下这些浮层永远是"白底黑字"，且每个插件都要自己发明一个
  *     `theme` 配置项。
  *   - 本文件随 `@plume-canvas/canvas-render` 加载即生效（index.ts 顶部 import），
- *     所有依赖 canvas-render 的渲染插件自动获得同一套 token；宿主应用（@plume-canvas/ui）
+ *     所有依赖 canvas-render 的渲染插件自动获得同一套 token；宿主应用（@plume-canvas/web）
  *     不再重复定义，直接消费。
  *
  * 切换机制（**纯 CSS，不需要任何配置项 / JS 监听**）：

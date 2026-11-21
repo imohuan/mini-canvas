@@ -1,5 +1,5 @@
 /**
- * @plume-canvas/cloud-server —— 画布云端服务（`npx plume-canvas serve`）。
+ * @plume-canvas/server —— 画布云端服务（`npx plume-canvas serve`）。
  *
  * 定位：一套**自托管**的后台，同时提供画布数据接口、资源上传、外部插件清单与画布界面托管。
  *

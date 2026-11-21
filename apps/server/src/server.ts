@@ -615,7 +615,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       const checker = createUpdateChecker({
         npmClient: client,
         installedRecordFile: path.join(pluginsDir, '.npm-installed.json'),
-        serverPkgName: '@plume-canvas/cloud-server',
+        serverPkgName: '@plume-canvas/server',
         currentServerVersion: currentVersion,
         builtinManifest: manifest,
       })

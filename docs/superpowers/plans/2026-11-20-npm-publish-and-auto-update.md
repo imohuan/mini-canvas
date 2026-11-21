@@ -173,7 +173,7 @@ it("optionalDependencies 缺 → 只进 optionalMissing", async () => {
 
 ensurePlugins：读 manifest → 逐个检查 `<dataDir>/plugins/<dir>` 存在且 package.json 有 plume 段 → 不存在则走 npmPlugins 的安装 service（把 doInstall 抽成可 import 的函数；不经过 HTTP）。
 
-ensureUi：读 `<dataDir>/ui/version.json`（不存在/版本旧）→ npmClient.packument("@plume-canvas/ui") 拿 latest tarball → downloadTarball 到临时文件 → extractTarball 到 `<dataDir>/ui/<version>/` → 写 version.json。
+ensureUi：读 `<dataDir>/ui/version.json`（不存在/版本旧）→ npmClient.packument("@plume-canvas/web") 拿 latest tarball → downloadTarball 到临时文件 → extractTarball 到 `<dataDir>/ui/<version>/` → 写 version.json。
 
 失败策略：每个插件独立 try/catch，失败进 failed 数组继续下一个；全部 warn 不抛。
 
@@ -198,7 +198,7 @@ cli.ts：serve 子命令启动前（端口释放后）调 runBootstrap（--offli
 
 **Files:**
 - Modify: `packages/plugins/<24 个自带>/package.json`（去 private、version 0.1.0、publishConfig、files）
-- Modify: `apps/web/package.json`（同上，包名 @plume-canvas/ui）
+- Modify: `apps/web/package.json`（同上，包名 @plume-canvas/web）
 - Modify: `apps/server/package.json`（version 0.1.0、去 private）
 - Create: `scripts/publish-all.mjs`
 

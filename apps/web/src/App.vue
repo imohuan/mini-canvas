@@ -49,7 +49,7 @@ const UiKitDebugOverlay = useUiComponentOutside('uiKitDebugOverlay')
 const s = ui.state
 
 // 外壳命令（打开抽屉 / 切页签 / 收起展开）：注册在 Provider 的 ctx 上，
-// 插件按钮通过 command 调用，不反向依赖 @plume-canvas/ui 的状态。
+// 插件按钮通过 command 调用，不反向依赖 @plume-canvas/web 的状态。
 let shellCommandDisposers: Array<{ dispose(): void }> = []
 /** 「收藏到资产库 / 导出节点包 / 资源库 ▸ 节点包·节点组」三条接缝的注册句柄 */
 let assetCommandDisposers: Array<{ dispose?: () => void }> = []

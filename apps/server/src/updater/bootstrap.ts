@@ -3,7 +3,7 @@
  *
  * cli.ts serve 入口异步调用（不 await，不拦启动）：
  * 1. ensurePlugins：读 builtin-manifest → 本地缺的插件从 registry 安装（复用 npmClient 全套）；
- * 2. ensureUi：.plume/ui/version.json 缺/旧 → 下载 @plume-canvas/ui tarball 解包到 .plume/ui/<版本>/；
+ * 2. ensureUi：.plume/ui/version.json 缺/旧 → 下载 @plume-canvas/web tarball 解包到 .plume/ui/<版本>/；
  *
  * 失败策略：每个动作独立 try/catch，失败进 failed 数组继续下一个；
  * bootstrap 永不抛 —— 网络不通只意味着「这次没装上」，服务照常起。

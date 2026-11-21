@@ -250,7 +250,7 @@ function discoverPlugins() {
 
 const TASKS = [
   // ui 不 external → externalize:false，指纹覆盖整个工作区依赖闭包
-  { name: "@plume-canvas/ui", label: "画布界面", dir: path.join(REPO_ROOT, "apps/web"), externalize: false },
+  { name: "@plume-canvas/web", label: "画布界面", dir: path.join(REPO_ROOT, "apps/web"), externalize: false },
   // 每个插件的 build 脚本自己负责前端半与后台半（有后台的包会串 build:server）。
   // 这里全量纳入：发布包要给每个插件都备好产物，界面那边一个都不 import。
   ...[...new Set([...INSTALLABLE_PLUGIN_DIRS, ...discoverPlugins()])].map((d) => ({

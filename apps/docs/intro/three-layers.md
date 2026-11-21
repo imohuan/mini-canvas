@@ -55,7 +55,7 @@ canvas-data            doc 服务真正把节点删掉、进撤销栈、落盘
 | 包 | 给谁用 | 提供什么 |
 | --- | --- | --- |
 | `@plume-canvas/plugin-sdk` | **插件作者** | 一个薄入口：重导出 kernel + data 的常用东西，再加几个写插件的语法糖 |
-| `@plume-canvas/ui` | **用画布的应用** | 一行 `<CanvasApp/>` 出一张装好的画布 |
+| `@plume-canvas/web` | **用画布的应用** | 一行 `<CanvasApp/>` 出一张装好的画布 |
 
 所以写插件的规矩很简单：**只 import `@plume-canvas/plugin-sdk`**。
 想要更窄的接口再单独依赖 `@plume-canvas/canvas-data` 的类型。

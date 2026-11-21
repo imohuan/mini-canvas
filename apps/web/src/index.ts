@@ -2,7 +2,7 @@
  * 库入口（不是应用启动入口）：`package.json` 的 `main`/`types`/`exports` 都指这里；
  * 浏览器里启动这一版应用用的是同目录的 `main.ts`（见 `index.html`）。
  *
- * @plume-canvas/ui —— 成品应用出口。
+ * @plume-canvas/web —— 成品应用出口。
  *
  * 这一份公开面说清两件事，别的都不该从这里出去：
  *

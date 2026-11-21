@@ -70,7 +70,7 @@ async function makePkg(workDir: string, name: string): Promise<string> {
 async function makeUiPkg(workDir: string, version: string): Promise<string> {
   await fs.mkdir(path.join(workDir, "payload"), { recursive: true })
   await fs.writeFile(path.join(workDir, "payload", "index.html"), "<html>ui " + version + "</html>", "utf8")
-  await fs.writeFile(path.join(workDir, "payload", "package.json"), JSON.stringify({ name: "@plume-canvas/ui", version }), "utf8")
+  await fs.writeFile(path.join(workDir, "payload", "package.json"), JSON.stringify({ name: "@plume-canvas/web", version }), "utf8")
   const stage = path.join(workDir, "stage")
   await fs.rm(stage, { recursive: true, force: true })
   await fs.cp(path.join(workDir, "payload"), path.join(stage, "package"), { recursive: true })
@@ -88,12 +88,12 @@ describe('runBootstrap', () => {
     await fs.mkdir(uiSub, { recursive: true })
     const uiTgz = await makeUiPkg(uiSub, "0.1.0")
     const uiPackument = {
-      name: "@plume-canvas/ui",
+      name: "@plume-canvas/web",
       "dist-tags": { latest: "0.1.0" },
       versions: {},
       time: {},
     }
-    const registry = await startFakeRegistry({ "@plume-canvas/ui": uiPackument }, { "/ui.tgz": uiTgz })
+    const registry = await startFakeRegistry({ "@plume-canvas/web": uiPackument }, { "/ui.tgz": uiTgz })
     ;(uiPackument.versions as Record<string, unknown>)["0.1.0"] = { version: "0.1.0", dist: { tarball: registry.url + "/ui.tgz" } }
     // 插件 packument
     const pluginPk = {
@@ -113,7 +113,7 @@ describe('runBootstrap', () => {
       "/ui.tgz": uiTgz,
     }
     const packuments2: Record<string, unknown> = {
-      "@plume-canvas/ui": uiPackument,
+      "@plume-canvas/web": uiPackument,
       "@plume-canvas/plugin-demo": pluginPk,
     }
     const reg2 = await startFakeRegistry(packuments2, tarballs2)
@@ -129,7 +129,7 @@ describe('runBootstrap', () => {
       manifestPath,
       registry: reg2.url,
       serverPkgName: "@plume-canvas/server",
-      uiPkgName: "@plume-canvas/ui",
+      uiPkgName: "@plume-canvas/web",
       currentServerVersion: "0.1.0",
     })
     expect(result.installed).toContain("@plume-canvas/plugin-demo")
@@ -175,7 +175,7 @@ describe('runBootstrap', () => {
     await fs.writeFile(manifestPath, JSON.stringify({ plugins: { '@plume-canvas/plugin-legacy': 'latest' } }))
     const result = await runBootstrap({
       dataDir, manifestPath, registry: registry.url,
-      serverPkgName: '@plume-canvas/server', uiPkgName: '@plume-canvas/ui', currentServerVersion: '0.1.0',
+      serverPkgName: '@plume-canvas/server', uiPkgName: '@plume-canvas/web', currentServerVersion: '0.1.0',
     })
     expect(result.installed).toContain('@plume-canvas/plugin-legacy')
     // 落盘后 entry 被纠正成真实文件名
@@ -198,7 +198,7 @@ describe('runBootstrap', () => {
       manifestPath,
       registry: "http://127.0.0.1:1",
       serverPkgName: "@plume-canvas/server",
-      uiPkgName: "@plume-canvas/ui",
+      uiPkgName: "@plume-canvas/web",
       currentServerVersion: "0.1.0",
     })
     expect(result.skipped).toContain("@plume-canvas/plugin-demo")

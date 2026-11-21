@@ -37,7 +37,7 @@ kernel  ←  canvas-data  ←  canvas-render  ←  plugins
 | `@plume-canvas/canvas-data` | 数据层 + 画布语义 | 上面那些 + `ctx.nodes` / `ctx.theme` / `ctx.commands` / `ctx.slots` / `ctx.settings` |
 | `@plume-canvas/canvas-render` | 渲染层（Vue / VueFlow / DOM） | 画布服务里再多 `view` / `canvas` |
 | `@plume-canvas/plugin-sdk` | 插件作者的薄入口（重导出 kernel + canvas-data） | 与 canvas-data 一样 |
-| `@plume-canvas/ui` | 成品应用出口（一行 `CanvasHost` 出画布） | 与 canvas-render 一样 |
+| `@plume-canvas/web` | 成品应用出口（一行 `CanvasHost` 出画布） | 与 canvas-render 一样 |
 
 分层怎么分工看 [三层是怎么分工的](/intro/three-layers)；每个服务是谁提供的、怎么用，看 [内置服务](/services/)。
 

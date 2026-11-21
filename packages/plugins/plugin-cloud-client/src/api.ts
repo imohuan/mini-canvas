@@ -562,7 +562,7 @@ export class CloudApi {
     const factory = this.opts.createEventSource
     const url = this.absolute('/api/kv/events')
 
-    // 先复用宿主（@plume-canvas/ui）挂在全局上的**共享连接**：本应用里首页 / 画布 /
+    // 先复用宿主（@plume-canvas/web）挂在全局上的**共享连接**：本应用里首页 / 画布 /
     // 本插件都在订阅同一条 /api/kv/events，各开各的会让一个页面上出现好几条
     // **永不关闭**的长连接。浏览器对单个域名的并发上限是 6 条，占满之后页面里
     // 所有普通请求只能排队（用户报的"网页卡住、请求停在待处理"）。

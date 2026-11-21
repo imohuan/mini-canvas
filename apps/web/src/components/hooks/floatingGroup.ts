@@ -12,7 +12,7 @@
  * 判定「某次点击是否算我这一组内」只需看命中的链上有没有我的 id ——
  * 三级嵌套时链是 `A B C`，对一级 A 判定也自然成立，不需要额外的注册表/生命周期同步。
  *
- * **本文件是 `@plume-canvas/ui` 自己的一份实现**（不跨包共享）：插件都是独立的，
+ * **本文件是 `@plume-canvas/web` 自己的一份实现**（不跨包共享）：插件都是独立的，
  * 各库自带自己那份，谁也不改核心层（用户口径 2026-10-15）。
  * 主题默认件 `@plume-canvas/plugin-theme-canvas` 里另有一份等价的实现（见其
  * `components/ui/floatingChain.ts`）—— 两份都读同一个 DOM 属性 `data-pk-floating-chain`，

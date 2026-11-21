@@ -313,8 +313,8 @@ async function main(): Promise<void> {
           manifestPath: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'builtin-manifest.json'),
           // registry 可用 PLUME_REGISTRY 指到本地假 registry（自验证 / 离线环境）
           ...(process.env.PLUME_REGISTRY ? { registry: process.env.PLUME_REGISTRY } : {}),
-          uiPkgName: '@plume-canvas/ui',
-          serverPkgName: '@plume-canvas/cloud-server',
+          uiPkgName: '@plume-canvas/web',
+          serverPkgName: '@plume-canvas/server',
           currentServerVersion: version,
         }),
       ),

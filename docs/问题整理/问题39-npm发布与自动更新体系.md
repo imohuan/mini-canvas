@@ -7,7 +7,7 @@
 
 ## 方案（设计文档 docs/superpowers/specs/2026-11-20-npm-publish-and-auto-update-design.md）
 
-- 包结构：`@plume-canvas/server`（npx 入口 + builtin-manifest.json）+ `@plume-canvas/ui`（静态产物）
+- 包结构：`@plume-canvas/server`（npx 入口 + builtin-manifest.json）+ `@plume-canvas/web`（静态产物）
   + 24 个自带插件各一包（BUILTIN_PLUGINS 清单）。
 - 内置清单是 server 包内 JSON（包根 builtin-manifest.json，gen-builtin-manifest.mjs 生成），键是 npm 包名，值 latest。
 - 启动初始化 apps/server/src/updater/bootstrap.ts：异步不拦启动；插件缺了从 registry 装（复用 npmClient 全套）；

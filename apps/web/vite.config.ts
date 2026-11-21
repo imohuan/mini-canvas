@@ -6,7 +6,7 @@ import { sseProxyPlugin } from './sseProxyPlugin.mjs'
 import { fileURLToPath } from 'node:url'
 import { uiKitDebugLocPlugin } from '@plume-canvas/ui-kit/vite-plugin-debug-loc'
 
-// @plume-canvas/ui —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
+// @plume-canvas/web —— 画布展示应用：`pnpm dev` 打开根目录 index.html，
 // 用 CanvasHost + 各插件渲染真实画布（本包是"用来显示画布"的应用，index.html 在包根、代码在 src/）。
 export default defineConfig({
   plugins: [

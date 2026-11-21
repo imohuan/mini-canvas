@@ -16,7 +16,7 @@
  * 切主题仍是纯 CSS 命中不同 branch，**零 JS、零重渲染**。
  *
  * 归属为什么是 canvas-render：与 `styles/ui-theme.css` 同理 —— 24 个插件里绝大多数都依赖
- * canvas-render，放这里它们自动拿到同一套色板；放 `@plume-canvas/ui` 则插件不在那棵依赖树上，
+ * canvas-render，放这里它们自动拿到同一套色板；放 `@plume-canvas/web` 则插件不在那棵依赖树上，
  * 只能各自硬编码（那正是改造前的状况）。
  *
  * 三件事各自单一真源，别抄第二遍：

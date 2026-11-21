@@ -1,8 +1,8 @@
 {
   "apps/web/README.md": {
-    "name": "@plume-canvas/ui",
+    "name": "@plume-canvas/web",
     "title": "Plume 羽画 UI",
-    "desc": "plume-canvas 的画布界面（前端静态产物）。由 @plume-canvas/cloud-server 启动时自动安装到数据目录并托管，无需手动安装。",
+    "desc": "plume-canvas 的画布界面（前端静态产物）。由 @plume-canvas/server 启动时自动安装到数据目录并托管，无需手动安装。",
     "bullets": [
       "Vue 3 + VueFlow 画布：节点、连线、视口、保存、撤销、选中",
       "所有功能由插件提供（文本/图片/视频节点、Agent 对话、插件管理等），本包只负责外壳与装配",
@@ -10,7 +10,7 @@
     ]
   },
   "apps/server/README.md": {
-    "name": "@plume-canvas/cloud-server",
+    "name": "@plume-canvas/server",
     "title": "plume-canvas 自托管服务",
     "desc": "一条命令启动完整的画布服务：界面、插件、Agent、MCP 接口全都有。",
     "bullets": [

@@ -1,5 +1,5 @@
 /**
- * @plume-canvas/ui 的装配清单。
+ * @plume-canvas/web 的装配清单。
  *
  * **dev 与 build 是两条路**（用户口径 2026-11-11）：
  * - dev：`dev-plugins.ts` 里直接 import 插件源码 —— 改完立刻热更，方便调插件；

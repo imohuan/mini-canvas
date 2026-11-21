@@ -17,7 +17,7 @@
 | 包 | 内容 | 说明 |
 |---|---|---|
 | @plume-canvas/server | dist/ + builtin-manifest.json | npx 入口，不含 UI 和插件 |
-| @plume-canvas/ui | dist/ 静态产物 | 前端界面，启动时装到数据目录 |
+| @plume-canvas/web | dist/ 静态产物 | 前端界面，启动时装到数据目录 |
 | @plume-canvas/plugin-* | dist/web.js、dist/server.js、package.json | 每个自带插件一个包 |
 
 - 本轮只发自带插件（BUILTIN_PLUGINS 清单里的 24 个）+ ui + server。
@@ -36,7 +36,7 @@
 cli.ts serve 入口 → bootstrap（updater/bootstrap.ts，异步不阻塞起服务）：
 
 1. ensurePlugins()：读 builtin-manifest → 逐个查本地 .plume/plugins/<dir>；本地缺或未登记 → 走 npmPlugins 的 doInstall（复用，不重写）；已装 → 跳过。
-2. ensureUi()：查 .plume/ui/version.json → 缺/旧 → 下载 @plume-canvas/ui tarball，解包到 .plume/ui/<version>/ → 写 version.json。
+2. ensureUi()：查 .plume/ui/version.json → 缺/旧 → 下载 @plume-canvas/web tarball，解包到 .plume/ui/<version>/ → 写 version.json。
 3. scheduleChecks()：立即 checkAll() 一次 + setInterval 30 分钟。
 
 - bootstrap 失败不拦启动：网络失败只 warn，服务照常起，下次启动再试。

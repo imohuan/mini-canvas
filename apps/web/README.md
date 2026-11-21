@@ -1,8 +1,8 @@
 # Plume 羽画 UI
 
-> `@plume-canvas/ui`
+> `@plume-canvas/web`
 
-plume-canvas 的画布界面（前端静态产物）。由 @plume-canvas/cloud-server 启动时自动安装到数据目录并托管，无需手动安装。
+plume-canvas 的画布界面（前端静态产物）。由 @plume-canvas/server 启动时自动安装到数据目录并托管，无需手动安装。
 
 ## 特性
 
@@ -13,5 +13,5 @@ plume-canvas 的画布界面（前端静态产物）。由 @plume-canvas/cloud-s
 ## 安装
 
 ```bash
-npm i @plume-canvas/ui
+npm i @plume-canvas/web
 ```

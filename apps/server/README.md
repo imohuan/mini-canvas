@@ -1,6 +1,6 @@
 # plume-canvas 自托管服务
 
-> `@plume-canvas/cloud-server`
+> `@plume-canvas/server`
 
 一条命令启动完整的画布服务：界面、插件、Agent、MCP 接口全都有。
 
@@ -15,5 +15,5 @@
 ## 安装
 
 ```bash
-npm i @plume-canvas/cloud-server
+npm i @plume-canvas/server
 ```

@@ -2,7 +2,7 @@
  * 成品出口契约测试 —— 锁住"包根声明指向的东西真实存在且公开面是设计好的那几样"。
  *
  * 为什么值得单开一条：本包此前的 bug 正是"`package.json` 的 `main`/`types` 都指 `./src/index.ts`，
- * 而那个文件不存在"—— 安装方 `import '@plume-canvas/ui'` 会直接报模块找不到，
+ * 而那个文件不存在"—— 安装方 `import '@plume-canvas/web'` 会直接报模块找不到，
  * 但仓库内没有任何测试会红（没人从包根 import 自己）。这类"声明与实体脱节"的错，
  * 只能靠"读 package.json 再核对文件"来拦，功能测试永远碰不到。
  *
@@ -25,7 +25,7 @@ const pkg = JSON.parse(readFileSync(path.join(PKG_ROOT, 'package.json'), 'utf-8'
   exports: Record<string, Record<string, string> | string>
 }
 
-describe('@plume-canvas/ui 出口契约', () => {
+describe('@plume-canvas/web 出口契约', () => {
   it('package.json 的 main / types / exports 指向的文件真实存在', () => {
     // 曾经的 bug：三者都指 ./src/index.ts，而该文件不存在 → 安装方 import 直接失败
     expect(existsSync(path.resolve(PKG_ROOT, pkg.main)), `main 指向的文件不存在: ${pkg.main}`).toBe(true)

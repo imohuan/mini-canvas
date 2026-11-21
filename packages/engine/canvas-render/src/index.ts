@@ -290,7 +290,7 @@ export type {
   CanvasHostEmits,
   CanvasProviderEmits,
 } from './host/canvasHostTypes'
-// 设置面板数据契约(面板消费的最小 settings 接口)仍归渲染抽象层；成品面板组件 PluginSettingsPanel 已迁 @plume-canvas/ui
+// 设置面板数据契约(面板消费的最小 settings 接口)仍归渲染抽象层；成品面板组件 PluginSettingsPanel 已迁 @plume-canvas/web
 export type {
   SettingsPanelSource,
   SettingSchema,

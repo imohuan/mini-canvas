@@ -33,8 +33,8 @@ export interface PublishRoutesOptions {
 
 /** 允许发布的白名单：自带插件目录 + ui + server */
 function resolveTarget(dir: string): { pkgDir: string; name: string } | { error: string } {
-  if (dir === "ui") return { pkgDir: path.join(REPO_ROOT, "apps/web"), name: "@plume-canvas/ui" }
-  if (dir === "server") return { pkgDir: SERVER_PKG_ROOT, name: "@plume-canvas/cloud-server" }
+  if (dir === "ui") return { pkgDir: path.join(REPO_ROOT, "apps/web"), name: "@plume-canvas/web" }
+  if (dir === "server") return { pkgDir: SERVER_PKG_ROOT, name: "@plume-canvas/server" }
   if (BUILTIN_BY_DIR.has(dir)) {
     return { pkgDir: path.join(REPO_ROOT, "packages/plugins", dir), name: "@plume-canvas/" + dir }
   }
