@@ -415,6 +415,26 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       }
       await copyEntry(webRel)
       if (typeof serverRel === 'string') await copyEntry(serverRel)
+      // plume.assets 声明的附加资产目录一并复制（如 plugin-agent 的 vendor-plugins/ ——
+      // goal hook 的 .mjs 在里面；漏了它启动日志就是「goal hook 未安装：插件库里没有 goal」，
+      // 用户 2026-11-21 npx 首启实测）。发布侧 plugin-assets.mjs 有同一份语义，这里对齐。
+      const assets = (mini.assets as unknown)
+      if (Array.isArray(assets)) {
+        for (const raw of assets) {
+          if (typeof raw !== 'string' || !raw.trim()) continue
+          const rel = raw.trim().replace(/\\/g, '/')
+          const assetRel = safeEntry(rel, 'plume.assets')
+          if (typeof assetRel !== 'string') continue // 非法条目已在发布侧拦截；安装侧只跳过
+          // 条目是目录：整目录复制（package.json 的 assets 声明是目录名，如 "dist/vendor-plugins"）
+          const srcDir = path.join(extracted, assetRel)
+          let stat
+          try { stat = await fs.stat(srcDir) } catch { continue } // 目录不存在 → 跳过，不阻塞安装
+          if (!stat.isDirectory()) continue
+          const destBase = path.join(destDir, assetRel)
+          await fs.mkdir(path.dirname(destBase), { recursive: true })
+          await fs.cp(srcDir, destBase, { recursive: true })
+        }
+      }
       // ⚠️ package.json 必须一起落：catalog 靠它的 plume 段判定"进不进本地列表"并取
       // title/globalName/server 元数据。少了它，前端半文件在、但管理页列不出来（实测踩过）。
       //
