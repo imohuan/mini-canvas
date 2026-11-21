@@ -19,6 +19,23 @@ import type {
 type Row = PluginRow
 export type TabId = 'market' | 'installed' | 'local' | 'builtin'
 
+/**
+ * 当前是否在画布会话内。
+ *
+ * doc / selection / view 这些服务由画布会话装卸（项目页没有）；本地清单插件声明了
+ * 这些依赖时，项目页上会停在 PENDING —— 那是准确的运行时状态，但"缺少依赖"会误导
+ * 用户以为包坏了（用户 2026-11-21 反馈）。在画布外统一说成"待进入画布"。
+ */
+function inCanvasSession(): boolean {
+  try {
+    // PlumeUI 是画布宿主 exposeToWindow 挂的全局（App.vue windowKey）；
+    // 项目页没有会话 → 不存在。这是插件包内能拿到的最直接判据。
+    return Boolean((globalThis as { PlumeUI?: unknown }).PlumeUI)
+  } catch {
+    return false
+  }
+}
+
 export function usePluginManagerPage() {
   const svc = usePluginManager()
   const s = svc.state
@@ -138,7 +155,11 @@ export function usePluginManagerPage() {
         busy: row.busy,
         server: row.hasServer ? serverBadgeOf(row) : undefined,
         error: row.error || row.serverError,
-        warning: row.missingDeps?.length ? '缺少依赖：' + row.missingDeps.join('、') : undefined,
+        warning: row.missingDeps?.length
+          ? inCanvasSession()
+            ? '缺少依赖：' + row.missingDeps.join('、')
+            : '画布服务依赖（' + row.missingDeps.join('、') + '）：进入画布后自动激活'
+          : undefined,
         actions,
         primaryAction: !row.installed && !row.busy ? 'install:' + row.entry.id : undefined,
         clickHint: '点击卡片安装',
