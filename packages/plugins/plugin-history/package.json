@@ -16,12 +16,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
+  "devDependencies": {
     "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/kernel": "workspace:*"
-  },
-  "devDependencies": {
+    "@plume-canvas/kernel": "workspace:*",
     "typescript": "~6.0.2",
     "vitest": "^3.0.0"
   }

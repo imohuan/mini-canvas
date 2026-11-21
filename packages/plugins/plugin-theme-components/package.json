@@ -29,9 +29,14 @@
     "vue-sonner": "^2.0.9"
   },
   "devDependencies": {
-    "@plume-canvas/canvas-render": "workspace:*",
+    "@ckpack/vue-color": "1.6.0",
     "@plume-canvas/plugin-sdk": "workspace:*",
+    "@plume-canvas/canvas-data": "workspace:*",
+    "@plume-canvas/canvas-render": "workspace:*",
+    "@plume-canvas/kernel": "workspace:*",
     "@plume-canvas/ui-kit": "workspace:*",
+    "lucide-vue-next": "^1.0.0",
+    "vue-sonner": "^2.0.9",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/server-renderer": "3.5.38",
     "happy-dom": "^21.0.4",
@@ -40,16 +45,6 @@
     "vite-plugin-css-injected-by-js": "^3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34"
-  },
-  "dependencies": {
-    "@ckpack/vue-color": "1.6.0",
-    "@plume-canvas/plugin-sdk": "workspace:*",
-    "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/canvas-render": "workspace:*",
-    "@plume-canvas/kernel": "workspace:*",
-    "@plume-canvas/ui-kit": "workspace:*",
-    "lucide-vue-next": "^1.0.0",
-    "vue-sonner": "^2.0.9"
   },
   "publishConfig": {
     "access": "public"

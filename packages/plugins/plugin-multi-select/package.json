@@ -22,13 +22,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
+  "devDependencies": {
     "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*",
     "@plume-canvas/canvas-render": "workspace:*",
-    "vue": "^3.5.0"
-  },
-  "devDependencies": {
+    "vue": "^3.5.0",
     "@vitejs/plugin-vue": "^6.0.6",
     "@vue/server-renderer": "3.5.38",
     "typescript": "~6.0.2",

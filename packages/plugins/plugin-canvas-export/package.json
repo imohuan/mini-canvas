@@ -23,13 +23,11 @@
     "typecheck": "tsc --noEmit",
     "build": "vite build"
   },
-  "dependencies": {
+  "devDependencies": {
     "@plume-canvas/plugin-sdk": "workspace:*",
     "@plume-canvas/canvas-data": "workspace:*",
     "@plume-canvas/kernel": "workspace:*",
-    "html-to-image": "^1.11.13"
-  },
-  "devDependencies": {
+    "html-to-image": "^1.11.13",
     "@vitejs/plugin-vue": "^6.0.6",
     "typescript": "~6.0.2",
     "vite": "^8.0.12",

@@ -75,3 +75,14 @@
    2. 早期发布脚本曾删除插件 package.json 的 @plume-canvas/* 依赖且 restore 级联失败，导致 17 个插件依赖缺失（已从 git 历史恢复）；
    3. 删除后同名包不能立即重发（npm 保留期 + CDN 延迟 5 分钟以上），bump 版本号即可绕过。
  - 踩坑补充：server 发布包的 dependencies 里 @plume-canvas/plugin-agent 是 workspace:* 协议（bundle 进 dist 但依赖声明还在），npm install 报 EUNSUPPORTEDPROTOCOL → 发布时须删除该声明。
+ - 踩坑补充：server 发布包的 dependencies 里 @plume-canvas/plugin-agent 是 workspace:* 协议（bundle 进 dist 但依赖声明还在），npm install 报 EUNSUPPORTEDPROTOCOL → 发布时须删除该声明。
+
+ ## npx 首次启动修复（2026-11-21 第四轮，用户实测暴露）
+
+ - 用户 npx 启动后界面仍是「还没构建画布界面」、插件识别 0 个 —— 启动日志却说装了 24 个插件。
+ - 根因：bootstrap 在 createCloudServer **之后**异步执行，而 uiDist 解析和插件目录扫描都在构造函数里定型，
+   异步装完等于白装（路由早已定型）。
+ - 修复 1：bootstrap 移到 main() 开头同步 await（先装后起服务，首次启动多等几十秒）。
+ - 修复 2：web 包 tarball 解包后是 <version>/dist/（files=[dist]），resolveUiDist 候选加 dist 子层。
+ - 验证：npm pack 安装 0.1.4 到临时目录 → 从用户主目录启动（模拟 npx）→ 24 插件装上 → Chrome 实测界面完整渲染
+   （首页、项目列表、插件入口全部正常，截图留证）。npx @plume-canvas/server@latest 现在开箱即用。

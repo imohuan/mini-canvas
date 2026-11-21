@@ -11,6 +11,9 @@
     "server": {
       "entry": "dist/server.js"
     },
+    "web": {
+      "entry": "dist/web.js"
+    },
     "assets": [
       "dist/vendor-plugins"
     ]
