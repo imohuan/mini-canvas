@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/server",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "type": "module",
   "bin": {
     "plume-canvas": "./dist/cli.js"
@@ -44,7 +44,7 @@
     "hono": "^4.6.0",
     "yaml": "^2.9.1",
     "zod": "^3.25.76",
-    "@plume-canvas/plugin-agent": "workspace:*"
+    "@plume-canvas/plugin-agent": "^0.1.6"
   },
   "devDependencies": {
     "@plume-canvas/kernel": "workspace:*",
