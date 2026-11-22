@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/server",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "type": "module",
   "bin": {
     "plume-canvas": "./dist/cli.js"
