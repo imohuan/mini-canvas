@@ -93,11 +93,17 @@ export function usePluginManagerPage() {
 
 /** 每个包的最新版本（来自 /api/updates 报告，pkg → latest）。builtin 卡的「已更新」标示也用它。 */
 const npmUpdates = ref<Record<string, string>>({})
+/** 本会话里刚更新成功的自带插件（pkg → 版本）：更新完成后徽章显示「已更新」。
+ *  刷新页面后消失（报告里它也不再是"有更新"，回落「自带」即可，不持久化）。 */
+const justUpdatedVersion = ref(new Map<string, string>())
+const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
 
   function badgeOf(row: Row): { text: string; tone: PluginCardTone } {
     if (row.entry.builtin === true) {
-      const update = npmUpdates.value[row.entry.name]
-      return update ? { text: '已更新', tone: 'on' } : { text: '自带', tone: 'builtin' }
+      const pkg = '@plume-canvas/' + row.entry.id
+      if (justUpdated.value.has(pkg)) return { text: '已更新', tone: 'on' }
+      if (builtinUpdateOf(row)) return { text: '可更新', tone: 'warn' }
+      return { text: '自带', tone: 'builtin' }
     }
     if (!row.installed) return { text: '未安装', tone: 'off' }
     if (row.state === 'pending') return { text: '待依赖', tone: 'warn' }
@@ -205,27 +211,31 @@ const npmUpdates = ref<Record<string, string>>({})
       actions: builtinUpdateOf(row)
         ? [
             {
-              key: 'npm-update:' + row.entry.name,
+              // key 用 npm 包名(@plume-canvas/<目录名>) —— /api/npm-plugins/update 按包名查来源记录;
+              // entry.name 是画布插件名(如 bottom-bar),不是包名(实测 404「无来源记录」)。
+              key: 'npm-update:@plume-canvas/' + row.entry.id,
               label: '更新到 v' + builtinUpdateOf(row),
               variant: 'default',
               disabled: row.busy,
             },
             {
-              key: 'detail:' + row.entry.name,
+              key: 'detail:@plume-canvas/' + row.entry.id,
               label: '详情',
               variant: 'outline',
             },
           ]
         : [
             {
-              key: 'detail:' + row.entry.name,
+              key: 'detail:@plume-canvas/' + row.entry.id,
               label: '详情',
               variant: 'outline',
             },
           ],
-      footerNote: builtinUpdateOf(row)
-        ? '有更新 → v' + builtinUpdateOf(row)
-        : '随应用启动，不能卸载',
+      footerNote: justUpdated.value.has('@plume-canvas/' + row.entry.id)
+        ? '已更新到 v' + (justUpdatedVersion.value.get('@plume-canvas/' + row.entry.id) ?? '')
+        : builtinUpdateOf(row)
+          ? '有更新 → v' + builtinUpdateOf(row)
+          : '随应用启动，不能卸载',
     })),
   )
 
@@ -538,6 +548,7 @@ const npmUpdates = ref<Record<string, string>>({})
       clearMarketCache()
       await loadMarket(true)
       if (r.updated) {
+        justUpdatedVersion.value.set(pkg, r.to ?? '')
         notify?.success('「' + pkg + '」已更新到 v' + (r.to ?? ''))
       } else {
         notify?.info('「' + pkg + '」已是最新版本')
