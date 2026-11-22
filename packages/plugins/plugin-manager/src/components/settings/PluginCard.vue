@@ -335,9 +335,10 @@ function onAction(key: string): void {
 
 .pm-card-foot {
   display: flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: space-between;
+  /* 纵向两行：第一行 footerNote（可截断），第二行按钮组右对齐。
+   * 不再左右两端布局 —— 「更新到 vX.Y.Z」这类长按钮会把左侧 note 挤成竖排（2026-11-22）。 */
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
   margin-top: auto;
   padding: 0 14px;
@@ -345,24 +346,26 @@ function onAction(key: string): void {
 
 .pm-card-note {
   display: inline-flex;
-  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 4px;
-  min-width: 0;
   font-size: 11px;
   line-height: 1.4;
   color: var(--ui-ink-mute, #8c95a3);
+  /* note 超宽时截断，不换行 —— 也不把按钮挤变形 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .pm-card-actions {
   display: flex;
-  flex: none;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 4px;
 }
 
-.pm-card-action { font-size: 11px; }
+.pm-card-action { font-size: 11px; white-space: nowrap; }
 .pm-card-action:deep(svg) { width: 12px; height: 12px; }
 
 .pm-spin { animation: pm-spin 0.9s linear infinite; }

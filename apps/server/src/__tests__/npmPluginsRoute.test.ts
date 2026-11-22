@@ -348,4 +348,46 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     expect(pj.plume.server.entry).toBe('server/entry.js')
     host.stop()
   })
+
+  it('★ 旧包 entry 写 dist/web.js 但实际文件是 dist/<包名>.js：兜底解析后照常安装（bootstrap 同语义）', async () => {
+    await makePkg(dir, {
+      installable: true,
+      withServer: true,
+      version: '1.2.0',
+      webEntry: 'dist/web.js',
+      serverEntry: 'dist/server.js',
+    })
+    const payload = path.join(dir, 'payload')
+    await fs.rename(path.join(payload, 'dist', 'web.js'), path.join(payload, 'dist', 'plume-canvas__plugin-demo.js'))
+    const stage = path.join(dir, 'stage2')
+    await fs.rm(stage, { recursive: true, force: true })
+    await fs.cp(payload, path.join(stage, 'package'), { recursive: true })
+    const tgz2 = path.join(dir, 'old.tgz')
+    await run('tar', ['-czf', tgz2, '-C', stage, 'package'])
+
+    const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '1.2.0' }, versions: {} }
+    registry = await startFakeRegistry(packument, { '/old.tgz': tgz2 })
+    const ver = (packument.versions as Record<string, unknown>)
+    ver['1.2.0'] = {
+      version: '1.2.0',
+      dist: { tarball: registry.url + '/old.tgz' },
+      plume: {
+        pluginName: 'demo',
+        web: { entry: 'dist/web.js' },
+        server: { entry: 'dist/server.js' },
+      },
+    }
+    const host = await boot(registry.url)
+    const inst = await j(await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true }))
+    expect(inst.ok, String(inst.error)).toBe(true)
+    const installed = path.join(pluginsDir, 'plume-canvas__plugin-demo')
+    await expect(fs.access(path.join(installed, 'dist', 'plume-canvas__plugin-demo.js'))).resolves.toBeUndefined()
+    await expect(fs.access(path.join(installed, 'dist', 'server.js'))).resolves.toBeUndefined()
+    const pj = JSON.parse(await fs.readFile(path.join(installed, 'package.json'), 'utf8')) as {
+      plume: { web: { entry: string }; server: { entry: string } }
+    }
+    expect(pj.plume.web.entry).toBe('dist/plume-canvas__plugin-demo.js')
+    expect(pj.plume.server.entry).toBe('dist/server.js')
+    host.stop()
+  })
 })

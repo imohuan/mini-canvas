@@ -4,9 +4,10 @@
  * 页面只负责把这里返回的状态交给工具栏、页签正文和卡片网格；
  * 清单、NPM 市场、安装/更新/卸载仍按原来的顺序执行。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
 import type { FeedbackService } from '@plume-canvas/canvas-render'
+import type { NotifyContract } from '@plume-canvas/plugin-sdk'
 import { usePluginManager } from '../../../usePluginManager'
 import type { PluginRow } from '../../../pluginManagerService'
 import type {
@@ -41,12 +42,17 @@ export function usePluginManagerPage() {
   const s = svc.state
   /** 统一确认框：卸载 / 含后台安装都走它，不用浏览器原生 confirm。 */
   const feedback = useCanvasContextOrRender().ctx.get<FeedbackService>('feedback')
+  /** 全局 toast：装/卸/更新的结果提示（右下角 vue-sonner）。 */
+  const notify = useCanvasContextOrRender().ctx.tryGet<NotifyContract>('notify')
 
   /** 地址输入框先写草稿，点「刷新」再写回服务。 */
   const urlDraft = ref(s.catalogUrl)
   function onRefresh(): void {
     s.catalogUrl = urlDraft.value.trim() || s.catalogUrl
+    // 刷新 = 重拉清单 + 清市场缓存（否则用户以为刷新了市场列表其实没刷，2026-11-22 复核）
+    clearMarketCache()
     void svc.refresh()
+    void loadMarket(true)
   }
 
   /** 带后台的插件必须先确认：后台代码以服务端权限运行。 */
@@ -85,8 +91,14 @@ export function usePluginManagerPage() {
   const builtinRows = computed(() => s.rows.filter((row) => row.entry.builtin === true))
   const installableRows = computed(() => s.rows.filter((row) => row.entry.builtin !== true))
 
+/** 每个包的最新版本（来自 /api/updates 报告，pkg → latest）。builtin 卡的「已更新」标示也用它。 */
+const npmUpdates = ref<Record<string, string>>({})
+
   function badgeOf(row: Row): { text: string; tone: PluginCardTone } {
-    if (row.entry.builtin === true) return { text: '自带', tone: 'builtin' }
+    if (row.entry.builtin === true) {
+      const update = npmUpdates.value[row.entry.name]
+      return update ? { text: '已更新', tone: 'on' } : { text: '自带', tone: 'builtin' }
+    }
     if (!row.installed) return { text: '未安装', tone: 'off' }
     if (row.state === 'pending') return { text: '待依赖', tone: 'warn' }
     if (row.state === 'failed') return { text: '装载失败', tone: 'err' }
@@ -112,6 +124,14 @@ export function usePluginManagerPage() {
   function cardStatusOf(row: Row): string {
     if (row.busy) return row.installed ? '处理中' : '安装中'
     return badgeOf(row).text
+  }
+
+  /** 自带插件是否有可用更新（pkg 名对应 npm 包名） */
+  function builtinUpdateOf(row: Row): string | undefined {
+    if (row.entry.builtin !== true) return undefined
+    // 报告键是 npm 包名(@plume-canvas/<目录名>);entry.name 是画布里的插件名(如 agent),
+    // 两者都对一遍 —— 更新报告用的是包名,而清单用的是 pluginName。
+    return npmUpdates.value['@plume-canvas/' + row.entry.id] ?? npmUpdates.value[row.entry.name]
   }
 
   /**
@@ -174,13 +194,38 @@ export function usePluginManagerPage() {
       title: row.entry.title || row.entry.id,
       description: row.entry.description || '随应用启动的插件。',
       meta: versionMetaOf(row),
-      status: '自带',
-      tone: 'builtin',
+      status: cardStatusOf(row),
+      tone: row.busy ? 'warn' : badgeOf(row).tone,
+      busy: row.busy,
       builtin: true,
       server: row.hasServer ? serverBadgeOf(row) : undefined,
       error: row.serverError,
-      actions: [],
-      footerNote: '随应用启动，不能卸载',
+      // 有更新时给一个「更新」动作（走 /api/npm-plugins/update，与 NPM 卡同款）；
+      // 没有就只有「详情」。卸载按钮始终不给（自带件不能卸）。
+      actions: builtinUpdateOf(row)
+        ? [
+            {
+              key: 'npm-update:' + row.entry.name,
+              label: '更新到 v' + builtinUpdateOf(row),
+              variant: 'default',
+              disabled: row.busy,
+            },
+            {
+              key: 'detail:' + row.entry.name,
+              label: '详情',
+              variant: 'outline',
+            },
+          ]
+        : [
+            {
+              key: 'detail:' + row.entry.name,
+              label: '详情',
+              variant: 'outline',
+            },
+          ],
+      footerNote: builtinUpdateOf(row)
+        ? '有更新 → v' + builtinUpdateOf(row)
+        : '随应用启动，不能卸载',
     })),
   )
 
@@ -201,7 +246,6 @@ export function usePluginManagerPage() {
   ]
 
   const marketList = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
-  const npmUpdates = ref<Record<string, string>>({})
   /** 卡片区的即时筛选，不改服务端搜索词。 */
   const cardFilter = ref('')
 
@@ -343,7 +387,63 @@ export function usePluginManagerPage() {
     return visibleBuiltinCards.value.length
   }
 
-  async function loadMarket(): Promise<void> {
+  // ==========================================================================
+  // 市场缓存（用户口径 2026-11-22）：进 tab 用缓存（30 分钟过期），只有真正
+  // 点「搜索」才走真实请求。localStorage 不可用时静默降级为不缓存。
+  // ==========================================================================
+  const MARKET_CACHE_KEY = 'plugin-manager:market-cache'
+  const MARKET_CACHE_TTL_MS = 30 * 60 * 1000
+
+  function cacheStorage(): Storage | undefined {
+    try {
+      return typeof localStorage === 'undefined' ? undefined : localStorage
+    } catch {
+      return undefined
+    }
+  }
+
+  interface MarketCache {
+    marketList: Awaited<ReturnType<typeof svc.browseNpmPlugins>>
+    npmInstalled: Awaited<ReturnType<typeof svc.listNpmInstalled>>
+    npmUpdates: Record<string, string>
+    savedAt: number
+  }
+
+  function readMarketCache(): MarketCache | undefined {
+    const storage = cacheStorage()
+    if (!storage) return undefined
+    try {
+      const raw = storage.getItem(MARKET_CACHE_KEY)
+      if (!raw) return undefined
+      const parsed = JSON.parse(raw) as MarketCache
+      if (!Array.isArray(parsed.marketList) || !Array.isArray(parsed.npmInstalled)) return undefined
+      if (typeof parsed.savedAt !== 'number') return undefined
+      if (Date.now() - parsed.savedAt > MARKET_CACHE_TTL_MS) return undefined
+      return parsed
+    } catch {
+      return undefined
+    }
+  }
+
+  function writeMarketCache(data: Omit<MarketCache, 'savedAt'>): void {
+    const storage = cacheStorage()
+    if (!storage) return
+    try {
+      storage.setItem(MARKET_CACHE_KEY, JSON.stringify({ ...data, savedAt: Date.now() }))
+    } catch {
+      /* 配额满/隐私模式：缓存失败不影响主流程 */
+    }
+  }
+
+  function clearMarketCache(): void {
+    try {
+      cacheStorage()?.removeItem(MARKET_CACHE_KEY)
+    } catch {
+      /* 忽略 */
+    }
+  }
+
+  async function fetchMarket(): Promise<void> {
     npmSearching.value = true
     npmError.value = ''
     try {
@@ -352,6 +452,11 @@ export function usePluginManagerPage() {
       // 优先用服务端缓存的更新报告（启动/定时已算好，快）；没有再走 browse 全量比对
       const report = await svc.fetchUpdateReport()
       npmUpdates.value = report ?? await svc.checkNpmUpdates()
+      writeMarketCache({
+        marketList: marketList.value,
+        npmInstalled: npmInstalled.value,
+        npmUpdates: npmUpdates.value,
+      })
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
     } finally {
@@ -359,10 +464,24 @@ export function usePluginManagerPage() {
     }
   }
 
+  /** 进 tab / 刷新按钮走这里：有新鲜缓存直接用，过期才发请求。force = 无视缓存。 */
+  async function loadMarket(force = false): Promise<void> {
+    if (!force) {
+      const cached = readMarketCache()
+      if (cached) {
+        marketList.value = cached.marketList
+        npmInstalled.value = cached.npmInstalled
+        npmUpdates.value = cached.npmUpdates
+        return
+      }
+    }
+    await fetchMarket()
+  }
+
   async function onNpmSearch(): Promise<void> {
     const q = npmQuery.value.trim()
     if (!q) {
-      await loadMarket()
+      await loadMarket(true)
       return
     }
     npmSearching.value = true
@@ -370,6 +489,12 @@ export function usePluginManagerPage() {
     try {
       marketList.value = await svc.searchNpmPlugins(q)
       npmInstalled.value = await svc.listNpmInstalled()
+      // 搜索结果也进缓存：下次进 tab 直接用（30 分钟内足够新鲜；更新表沿用当前值）
+      writeMarketCache({
+        marketList: marketList.value,
+        npmInstalled: npmInstalled.value,
+        npmUpdates: npmUpdates.value,
+      })
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
     } finally {
@@ -394,6 +519,9 @@ export function usePluginManagerPage() {
     try {
       await svc.installFromNpm(pkg, { serverConfirm: hasServer })
       npmInstalled.value = await svc.listNpmInstalled()
+      // 装完清缓存：下次进 tab 拉到的是装完的最新列表
+      clearMarketCache()
+      await loadMarket(true)
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
     } finally {
@@ -405,10 +533,19 @@ export function usePluginManagerPage() {
     npmBusyPkg.value = pkg
     npmError.value = ''
     try {
-      await svc.updateFromNpm(pkg)
+      const r = await svc.updateFromNpm(pkg)
       npmInstalled.value = await svc.listNpmInstalled()
+      clearMarketCache()
+      await loadMarket(true)
+      if (r.updated) {
+        notify?.success('「' + pkg + '」已更新到 v' + (r.to ?? ''))
+      } else {
+        notify?.info('「' + pkg + '」已是最新版本')
+      }
     } catch (err) {
-      npmError.value = err instanceof Error ? err.message : String(err)
+      const msg = err instanceof Error ? err.message : String(err)
+      npmError.value = msg
+      notify?.error('更新「' + pkg + '」失败：' + msg)
     } finally {
       npmBusyPkg.value = ''
     }
@@ -428,6 +565,9 @@ export function usePluginManagerPage() {
     try {
       await svc.uninstallFromNpm(pkg)
       npmInstalled.value = await svc.listNpmInstalled()
+      clearMarketCache()
+      await loadMarket(true)
+      notify?.success('已卸载「' + pkg + '」')
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
     } finally {
@@ -491,6 +631,65 @@ export function usePluginManagerPage() {
     urlDraft.value = s.catalogUrl
     if (!s.ready && !s.loading) void svc.refresh()
     void loadMarket()
+  })
+
+  // ==========================================================================
+  // 更新通知（用户口径 2026-11-22）：启动扫一遍 + 挂载期间每 30 分钟静默拉一次。
+  // 数据源只用 /api/updates 报告（server 已缓存，轻）；拉不到就不弹等下一轮。
+  // 去重靠 localStorage 记「pkg → 上次通知过的版本」映射，同一版本不重复弹。
+  // ==========================================================================
+  const NOTIFIED_KEY = 'plugin-manager:notified-updates'
+  let notifyTimer: ReturnType<typeof setInterval> | undefined
+
+  function readNotifiedMap(): Record<string, string> {
+    try {
+      const raw = cacheStorage()?.getItem(NOTIFIED_KEY)
+      if (!raw) return {}
+      const parsed = JSON.parse(raw) as unknown
+      if (!parsed || typeof parsed !== 'object') return {}
+      const out: Record<string, string> = {}
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'string') out[k] = v
+      }
+      return out
+    } catch {
+      return {}
+    }
+  }
+
+  function writeNotifiedMap(map: Record<string, string>): void {
+    try {
+      cacheStorage()?.setItem(NOTIFIED_KEY, JSON.stringify(map))
+    } catch {
+      /* 隐私模式/配额满：只是多弹一次，不致命 */
+    }
+  }
+
+  async function checkUpdatesNotify(): Promise<void> {
+    const report = await svc.fetchUpdateReport()
+    if (!report) return
+    npmUpdates.value = report
+    const notified = readNotifiedMap()
+    // pkg 名形如 @plume-canvas/plugin-agent —— 通知文案里去掉 scope 显示更好读
+    const shortName = (pkg: string): string => pkg.replace(/^@[^/]+\//, '')
+    for (const [pkg, latest] of Object.entries(report)) {
+      if (notified[pkg] === latest) continue
+      notify?.warning(shortName(pkg) + ' 有新版本 v' + latest + '，可在插件管理里更新')
+      notified[pkg] = latest
+    }
+    writeNotifiedMap(notified)
+  }
+
+  onMounted(() => {
+    void checkUpdatesNotify()
+    // 半小时静默扫一次：页开着也能收到「有新版本」提示（服务端定时器也在跑，双保险）
+    notifyTimer = setInterval(() => {
+      void checkUpdatesNotify()
+    }, 30 * 60 * 1000)
+  })
+
+  onUnmounted(() => {
+    if (notifyTimer) clearInterval(notifyTimer)
   })
 
   return {

@@ -1009,13 +1009,19 @@ export function createPluginManagerService(
       if (!res.ok) return null
       const json = (await res.json()) as {
         ok?: boolean
-        report?: { checkedAt?: string | null; plugins?: Array<{ pkg: string; latest: string }> }
+        report?: {
+          checkedAt?: string | null
+          plugins?: Array<{ pkg: string; latest: string }>
+          server?: { current: string; latest: string }
+        }
       }
       // 服务端从没算过报告（checkedAt null）→ 视为「没有数据」，让调用方走 browse 回退
       if (!json.report?.checkedAt) return null
       const list = json.report?.plugins ?? []
       const out: Record<string, string> = {}
       for (const p of list) out[p.pkg] = p.latest
+      // server 自身有新版也放进 map：前端「有新版本」通知覆盖服务本体（键 = 包名）
+      if (json.report?.server?.latest) out['@plume-canvas/server'] = json.report.server.latest
       return out
     } catch {
       return null

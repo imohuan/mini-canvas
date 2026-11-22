@@ -21,11 +21,21 @@ import { Hono } from 'hono'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { safeJson } from '@plume-canvas/plugin-agent/server/routes/agent.js'
 import { createNpmClient, extractTarball, NpmNotFoundError, type NpmClientOptions } from '../npm/npmClient.js'
 import { resolveDeps } from '../updater/depsResolver.js'
+import { resolveArtifact } from '../updater/artifactResolver.js'
 import { withAudit, type AuditBase } from '../auditPair.js'
 import type { AuditAppendInput } from '../audit.js'
+
+/** 读 JSON body；坏 JSON 返回 undefined（由调用方回 400）。原从 plugin-agent 跨包取，现就地内联 —— 该包 exports 打包后指 dist/web.js，Node 端 import 不到 server 子路径（2026-11-22 实测）。 */
+async function safeJson(c: { req: { json: () => Promise<unknown> } }): Promise<Record<string, unknown> | undefined> {
+  try {
+    const v = await c.req.json()
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /**
  * 允许安装的包名前缀（装 NPM 包 = 服务端执行代码，所以白名单起步）。
@@ -390,13 +400,11 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       if (serverRel !== undefined && typeof serverRel !== 'string') {
         return { status: 400, body: { ok: false, error: serverRel.error } }
       }
-      for (const rel of [webRel, serverRel].filter((x): x is string => typeof x === 'string')) {
-        try {
-          await fs.access(path.join(extracted, rel))
-        } catch {
-          return { status: 400, body: { ok: false, error: '包里缺少声明的产物：' + rel } }
-        }
-      }
+      // 产物解析走共享兜底（与 bootstrap 启动安装同语义）：entry 未命中时在 dist 下
+      // 按唯一候选 / 精确名匹配回退 —— 旧包 entry 写 dist/web.js、实际文件是
+      // dist/<包名>.js 也能装（2026-11-22 用户实测的手动安装报错就这条）。
+      const resolvedWeb = await resolveArtifact(extracted, webRel, 'server.js')
+      const resolvedServer = typeof serverRel === 'string' ? await resolveArtifact(extracted, serverRel, 'web.js') : undefined
 
       // ⑥ 落盘：`<插件根>/<目录名>/` 下**保持包里的相对结构**，只把 package.json 的
       //    plume.web.entry / plume.server.entry 改成安装后的真实相对路径。
@@ -413,8 +421,8 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
         await fs.mkdir(path.dirname(target), { recursive: true })
         await fs.copyFile(path.join(extracted, rel), target)
       }
-      await copyEntry(webRel)
-      if (typeof serverRel === 'string') await copyEntry(serverRel)
+      await copyEntry(resolvedWeb)
+      if (typeof resolvedServer === 'string') await copyEntry(resolvedServer)
       // plume.assets 声明的附加资产目录一并复制（如 plugin-agent 的 vendor-plugins/ ——
       // goal hook 的 .mjs 在里面；漏了它启动日志就是「goal hook 未安装：插件库里没有 goal」，
       // 用户 2026-11-21 npx 首启实测）。发布侧 plugin-assets.mjs 有同一份语义，这里对齐。
@@ -451,10 +459,10 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
         ...(pkgObj.plume ?? {}),
         installable: true,
         npmInstalled: true,
-        // entry 仍是包内那条相对路径（文件也按原路径落盘），这里只是补齐规范化写法
-        web: { ...((pkgObj.plume?.web as object) ?? {}), entry: webRel },
-        ...(typeof serverRel === 'string'
-          ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: serverRel } }
+        // entry 写**解析后**的真实产物路径（兜底可能改写：dist/web.js → dist/<包名>.js）
+        web: { ...((pkgObj.plume?.web as object) ?? {}), entry: resolvedWeb },
+        ...(typeof resolvedServer === 'string'
+          ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: resolvedServer } }
           : {}),
       }
 
@@ -464,8 +472,8 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       //    **不再往 server-plugins 另写一份** —— 那个目录已经删掉（用户口径 2026-11-12）。
       let serverSha: string | undefined
       let hotMsg = ''
-      if (typeof serverRel === 'string') {
-        const serverText = await fs.readFile(path.join(extracted, serverRel), 'utf8')
+      if (typeof resolvedServer === 'string') {
+        const serverText = await fs.readFile(path.join(extracted, resolvedServer), 'utf8')
         serverSha = createHash('sha256').update(serverText, 'utf8').digest('hex')
         const serverId = dirNameOf(pkg)
         // 热装：宿主当场 import + 登记内核 → 后台路由即时可用，不必重启（见 hotLoad.ts）
@@ -491,8 +499,8 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
           ok: true,
           pkg,
           version,
-          hasServer: typeof serverRel === 'string',
-          note: '已安装；前端半刷新即可见' + (typeof serverRel === 'string' ? '，后台半' + hotMsg : ''),
+          hasServer: typeof resolvedServer === 'string',
+          note: '已安装；前端半刷新即可见' + (typeof resolvedServer === 'string' ? '，后台半' + hotMsg : ''),
         },
       }
     } catch (err) {

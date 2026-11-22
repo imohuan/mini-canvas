@@ -23,7 +23,8 @@ export default defineConfig({
   ],
   server: {
     port: 5288, // 独立端口，避开其它应用/demo 的端口
-    strictPort: false,
+    // 端口被占直接报错（用户口径 2026-11-22）：顺延端口会让代理/书签对不上号
+    strictPort: true,
     // 启动服务时不要自动弹浏览器：由人或代理手动打开页面（用户 2026-10-30 明确要求）
     open: false,
     // /api 转给 cloud-server（8865）：dev 下前端同源相对路径才能真正打到后台，

@@ -5,7 +5,7 @@
  * 命令名就叫 `plume-canvas`：本包（cloud-server）是唯一的主启动入口。
  *
  * 做的事：解析参数 → 起 cloud-server → 打印访问地址与数据落点 → 打印外部插件条数。
- * 端口被占用时（且用户没写死端口）自动往后找下一个可用端口，不让"怎么又起不来"成为日常。
+ * 端口被占用时直接报错（用户口径 2026-11-22）：顺延端口会让页面/代理对不上号，宁可报错。
  */
 import { spawn } from 'node:child_process'
 import { promises as fs } from 'node:fs'
@@ -48,7 +48,7 @@ const HELP = `plume-canvas —— 自托管画布服务
   plume-canvas audit-verify      校验 <数据目录>/audit.log 的 hash 链（不开服务）
 
 选项:
-  -p, --port <号>     监听端口（默认 ${DEFAULT_PORT}；被占用时自动往后找）
+  -p, --port <号>     监听端口（默认 ${DEFAULT_PORT}；被占用时报错，不自动换）
   -d, --dir <目录>    数据目录（默认当前目录下的 ${DEFAULT_DATA_DIR}/）
       --host <地址>   监听地址（默认 127.0.0.1，只本机可访问）
       --ui <目录>     画布界面产物目录（默认自动探测 apps/web/dist）
@@ -198,7 +198,11 @@ function isPortBusy(err: unknown): boolean {
   return (err as NodeJS.ErrnoException | undefined)?.code === 'EADDRINUSE'
 }
 
-/** 起服务：端口被占用且用户没写死端口时，往后找最多 10 个端口 */
+/**
+ * 起服务。
+ * 端口被占用直接报错（用户口径 2026-11-22：顺延端口会让"以为起了 8865 其实起了 8866"，
+ * 页面/代理/脚本全对不上号）。想换端口用 --port 显式指定。
+ */
 async function startWithPortFallback(opts: CliOptions) {
   // 关鉴权必须显式二次确认：裸跑等于把「装插件 / 执行脚本 / 改画布」的入口对外开放。
   if (opts.noAdminAuth && process.env.PLUME_ALLOW_INSECURE !== '1') {
@@ -207,31 +211,28 @@ async function startWithPortFallback(opts: CliOptions) {
         '这是有意的二次确认：关掉之后任何网页都能装插件、跑脚本、改画布。',
     )
   }
-  const maxTries = opts.portExplicit ? 1 : 10
-  for (let i = 0; i < maxTries; i++) {
-    const port = opts.port + i
-    const srv = await createCloudServer({
-      port,
-      dir: opts.dir,
-      hostname: opts.hostname,
-      ...(opts.ui ? { uiDist: opts.ui } : {}),
-      ...(opts.plugins ? { pluginsDir: opts.plugins } : {}),
-      ...(opts.providers ? { providersDir: opts.providers } : {}),
-      ...(opts.noAdminAuth ? { adminAuth: false } : {}),
-      ...(opts.trustedHosts.length ? { trustedHosts: opts.trustedHosts } : {}),
-      ...(opts.trustedOrigins.length ? { trustedOrigins: opts.trustedOrigins } : {}),
-      mcp: opts.mcp,
-    })
-    try {
-      const info = await srv.start()
-      return { srv, info, portChanged: port !== opts.port }
-    } catch (err) {
-      srv.stop()
-      if (isPortBusy(err)) continue
-      throw err
+  const srv = await createCloudServer({
+    port: opts.port,
+    dir: opts.dir,
+    hostname: opts.hostname,
+    ...(opts.ui ? { uiDist: opts.ui } : {}),
+    ...(opts.plugins ? { pluginsDir: opts.plugins } : {}),
+    ...(opts.providers ? { providersDir: opts.providers } : {}),
+    ...(opts.noAdminAuth ? { adminAuth: false } : {}),
+    ...(opts.trustedHosts.length ? { trustedHosts: opts.trustedHosts } : {}),
+    ...(opts.trustedOrigins.length ? { trustedOrigins: opts.trustedOrigins } : {}),
+    mcp: opts.mcp,
+  })
+  try {
+    const info = await srv.start()
+    return { srv, info, portChanged: false }
+  } catch (err) {
+    srv.stop()
+    if (isPortBusy(err)) {
+      throw new Error(`端口 ${opts.port} 已被占用。请先停掉占用它的服务，或用 --port 换一个端口`)
     }
+    throw err
   }
-  throw new Error(`端口 ${opts.port} 起连续 10 个都被占用了，用 --port 换一个吧`)
 }
 
 async function main(): Promise<void> {
