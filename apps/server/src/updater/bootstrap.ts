@@ -12,6 +12,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { createNpmClient, extractTarball } from '../npm/npmClient.js'
 import { readBuiltinManifest } from './builtinManifest.js'
+import { resolveArtifact } from './artifactResolver.js'
 
 export interface BootstrapOptions {
   /** 数据目录（.plume） */
@@ -120,26 +121,9 @@ async function installPluginFromRegistry(
     const webRel = safeEntry((mini.web as { entry?: unknown } | undefined)?.entry, "plume.web.entry")
     const serverDecl = (mini.server as { entry?: unknown } | undefined)?.entry
     const serverRel = serverDecl === undefined ? undefined : safeEntry(serverDecl, "plume.server.entry")
-    /**
-     * 产物文件解析（兼容线上已发的旧包）：
-     * entry 指向的文件不存在时，回退到 dist 下唯一的 .js（排除 .map）。
-     * 为什么要兜底：早期发布的包 entry 写 dist/web.js，但实际文件是 dist/<包名>.js，
-     * 严格按 entry 找会让这类包永远装不上（实测 24 个内置插件全失败）。
-     */
-    const resolveArtifact = async (rel: string, fallbackExclude?: string): Promise<string> => {
-      try { await fs.access(path.join(extracted, rel)); return rel } catch { /* 走兜底 */ }
-      const distDir = path.join(extracted, "dist")
-      let files: string[] = []
-      try { files = await fs.readdir(distDir) } catch { throw new Error("包里没有产物：" + rel) }
-      const candidates = files.filter((f) => f.endsWith(".js") && !f.endsWith(".map") && f !== fallbackExclude)
-      // 优先 server.js（后台半）与名字相近的；只有唯一候选时直接用
-      if (candidates.length === 1) return "dist/" + candidates[0]
-      const exactName = candidates.find((f) => rel.includes(f))
-      if (exactName) return "dist/" + exactName
-      throw new Error("包里缺少声明的产物：" + rel + "（dist 下候选：" + candidates.join(", ") + "）")
-    }
-    const resolvedWeb = await resolveArtifact(webRel, "server.js")
-    const resolvedServer = typeof serverRel === "string" ? await resolveArtifact(serverRel, "web.js") : undefined
+    // 产物文件解析抽到 artifactResolver.ts（npmPlugins 手动安装共用同一条兜底语义）
+    const resolvedWeb = await resolveArtifact(extracted, webRel, "server.js")
+    const resolvedServer = typeof serverRel === "string" ? await resolveArtifact(extracted, serverRel, "web.js") : undefined
 
     const destDir = path.join(pluginsDir, dirNameOf(pkgName))
     await fs.mkdir(destDir, { recursive: true })
