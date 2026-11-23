@@ -173,25 +173,36 @@ powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\启动p
 这个脚本会依次构建后台、构建前端与插件资源、释放端口、启动 `cloud-server`。
 默认端口是 8865，也可以用 `-Port` 指定。
 
-### 指定端口调试
+### 本地调试（端口铁律：只许 5288 + 8865）
+
+本地开发调试**只允许这两个端口**，禁止顺延到 528x/886x 其它号码：
+
+- 前端（vite dev，端口 5288，strictPort 已锁死）：
+
+  ```powershell
+  pnpm -C apps/web dev
+  ```
+
+- 后台（dev server，端口 8865）：
+
+  ```powershell
+  pnpm dev:server
+  ```
+
+端口被占时**先把占用的进程关掉再重启**（确认不是别的 Agent 的服务后，
+用 `Get-NetTCPConnection -LocalPort <端口>` 找 PID 再 `taskkill /PID <pid> /T /F`），
+**不允许换端口**。vite 已配 `strictPort: true`，端口号被占会直接报错而不是后延。
+后台 dev 是 tsx 起的，改了 server 源码要重启才能生效。
+
+### 线上调试（模拟用户真实安装）
+
+用发布的 npm 包起服务（模拟用户视角；测试端口可用 887x 段，测完即停）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Users\Administrator\Desktop\8060-plume-canvas.ps1"
+npx @plume-canvas/server@latest serve -d <数据目录> --port 8873 --no-mcp
 ```
 
-这个脚本固定用 8060，适合另开一份调试环境。
-
-### 每个 Agent 用独立端口
-
-多个 Agent 同时开发时，**每个 Agent 必须自己占一组端口**，不要共用：
-
-- 后台用 `-Port 886x` 或 `-Port 806x`，例如 8865 / 8866 / 8867。
-- 前端 dev 用 `pnpm -C apps/web dev -- --port 528x`，例如 5288 / 5289 / 5290。
-- 文档站用 `pnpm -C apps/docs dev -- --port 529x`。
-- 插件 watch 用 `PLUME_BACKEND=http://127.0.0.1:<你的端口>` 指向自己的后台，
-  不要指向别人的 8865。
-
-启动前先确认端口没被占用；脚本会自动释放自己指定的端口，但不要让它误杀别的 Agent。
+这只用于验证发布产物，日常开发一律走上面的本地调试命令。
 
 ### 插件实时调试
 
