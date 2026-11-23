@@ -301,7 +301,7 @@ const HoverCardContent = useUiComponent('HoverCardContent')
             <img :src="src" alt="" role="button" :aria-label="'查看图片 ' + (i + 1)" style="cursor: zoom-in"
               @click="openPreview(src, attached)" />
             <Button variant="ghost" size="icon-sm" class="ac-attach-del" :aria-label="'移除图片 ' + (i + 1)" @click="removeAttachment(i)">
-              <X :size="12" />
+              <X :size="10" class="size-2.5" />
             </Button>
           </div>
         </div>

@@ -28,10 +28,25 @@ describe('用户消息图片', () => {
   })
 
   it('图片卡片比按钮默认尺寸大（至少 120px）', () => {
-    // 选择器必须带父级，否则组件库按钮的 rounded-md / size-8 会把单类名规则盖掉
+    // 尺寸现在由图片按原比例撑开；上限必须明显大于按钮默认的 32px，
+    // 否则又退回「图片只剩小方块」。
     const card = rule('.ac-user-images .ac-user-image')
-    const width = Number((card.match(/width:\s*(\d+)px/) ?? [])[1])
-    expect(width).toBeGreaterThanOrEqual(120)
+    const maxWidth = Number((card.match(/max-width:\s*min\((\d+)px/) ?? [])[1])
+    expect(maxWidth).toBeGreaterThanOrEqual(120)
     expect(card).toMatch(/border-radius:\s*12px/)
+  })
+
+  it('按原比例展示：最长边有上限，不强制正方形（用户口径 2026-11-23）', () => {
+    // 之前写死 width/height 200px + object-fit: cover，横图会被裁成正方形
+    const card = rule('.ac-user-images .ac-user-image')
+    expect(card).not.toMatch(/^\s*width:\s*\d+px/m)
+    expect(card).not.toMatch(/^\s*height:\s*\d+px/m)
+    expect(card).toMatch(/max-height:\s*\d+px/)
+
+    const img = rule('.ac-user-image img')
+    expect(img).not.toMatch(/object-fit:\s*cover/)
+    expect(img).toMatch(/max-height:\s*\d+px/)
+    expect(img).toMatch(/height:\s*auto/)
+    expect(img).toMatch(/width:\s*auto/)
   })
 })
