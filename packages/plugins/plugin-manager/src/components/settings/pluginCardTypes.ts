@@ -31,8 +31,6 @@ export interface PluginManagerCardView {
   status: string
   tone: PluginCardTone
   busy?: boolean
-  /** busy 时右上角徽章的文案（安装中 / 更新中 / 卸载中）；缺省「处理中」 */
-  busyLabel?: string
   /** 正在进行的动作 key：对应按钮进入加载态（转圈 + 文案） */
   busyAction?: string
   builtin?: boolean

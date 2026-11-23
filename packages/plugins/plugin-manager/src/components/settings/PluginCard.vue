@@ -106,7 +106,7 @@ function onAction(key: string): void {
           class="pm-badge"
           :class="'pm-badge--' + card.tone"
         >
-          {{ card.busy ? (card.busyLabel || card.status) : card.status }}
+          {{ card.status }}
         </Badge>
       </CardAction>
     </CardHeader>

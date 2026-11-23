@@ -361,7 +361,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
           : undefined,
         meta: meta.join(' · '),
         status: busy ? '处理中' : installedVersion ? '已安装' : '未安装',
-        busyLabel: busy ? busyAction : undefined,
         busyAction: busy ? busyAction : undefined,
         tone: busy ? 'warn' : installedVersion ? 'on' : 'off',
         busy,
@@ -400,7 +399,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       return {
         id: entry.pkg,
         title: hit?.title || entry.pkg,
-        busyLabel: busy ? busyAction : undefined,
         busyAction: busy ? busyAction : undefined,
         description: hit?.description || '已从 NPM 安装的插件。',
         versionDiff: update && entry.version !== update
