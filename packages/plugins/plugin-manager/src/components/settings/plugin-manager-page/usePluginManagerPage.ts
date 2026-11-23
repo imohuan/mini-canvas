@@ -127,6 +127,15 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     return parts.join(' · ')
   }
 
+  /** 自带卡片的版本行：当前版本 → 最新版本（有更新才带箭头；用户口径 2026-11-23） */
+  function builtinVersionMetaOf(row: Row): string {
+    const current = row.entry.version ? 'v' + row.entry.version : row.entry.id
+    const update = builtinUpdateOf(row)
+    const parts = [update ? current + ' → v' + update : current]
+    if (row.hasServer) parts.push('含后台')
+    return parts.join(' · ')
+  }
+
   function cardStatusOf(row: Row): string {
     if (row.busy) return row.installed ? '处理中' : '安装中'
     return badgeOf(row).text
@@ -207,7 +216,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       id: row.entry.id,
       title: row.entry.title || row.entry.id,
       description: row.entry.description || '随应用启动的插件。',
-      meta: versionMetaOf(row),
+      meta: builtinVersionMetaOf(row),
       status: cardStatusOf(row),
       tone: row.busy ? 'warn' : badgeOf(row).tone,
       busy: row.busy,
@@ -222,7 +231,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
               // key 用 npm 包名(@plume-canvas/<目录名>) —— /api/npm-plugins/update 按包名查来源记录;
               // entry.name 是画布插件名(如 bottom-bar),不是包名(实测 404「无来源记录」)。
               key: 'npm-update:@plume-canvas/' + row.entry.id,
-              label: '更新到 v' + builtinUpdateOf(row),
+              label: '更新',
               variant: 'default',
               disabled: row.busy,
             },
@@ -230,9 +239,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         : [],
       footerNote: justUpdated.value.has('@plume-canvas/' + row.entry.id)
         ? '已更新到 v' + (justUpdatedVersion.value.get('@plume-canvas/' + row.entry.id) ?? '')
-        : builtinUpdateOf(row)
-          ? '有更新 → v' + builtinUpdateOf(row)
-          : '随应用启动，不能卸载',
+        : '随应用启动，不能卸载',
     })),
   )
 
@@ -288,7 +295,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         // 只有检测到新版本才出现「更新」；更新按钮同时承担版本号提示（用户 2026-11-21）
         actions.push({
           key: 'npm-update:' + item.pkg,
-          label: '更新到 v' + update,
+          label: '更新',
           variant: 'default',
           disabled: busy,
         })
@@ -307,7 +314,11 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         })
       }
 
-      const meta = ['v' + item.version]
+      // 版本行：显示当前安装的版本；有更新时递进显示 当前 → 最新（用户口径 2026-11-23）。
+      // 未安装时显示市场最新版。
+      const meta = [installedVersion
+        ? (update && installedVersion !== update ? 'v' + installedVersion + ' → v' + update : 'v' + installedVersion)
+        : 'v' + item.version]
       if (item.hasServer) meta.push('含后台')
 
       return {
@@ -321,7 +332,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         actions,
         primaryAction: !installedVersion && !busy ? 'npm-install:' + item.pkg : undefined,
         clickHint: '点击卡片安装',
-        footerNote: update ? '可更新到 v' + update : undefined,
+        footerNote: undefined,
       }
     }),
   )
@@ -342,7 +353,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       if (update) {
         actions.unshift({
           key: 'npm-update:' + entry.pkg,
-          label: '更新到 v' + update,
+          label: '更新',
           variant: 'default',
           disabled: busy,
         })
@@ -356,7 +367,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         tone: busy ? 'warn' : 'on',
         busy,
         actions,
-        footerNote: update ? '有更新 → v' + update : undefined,
+        footerNote: undefined,
       }
     }),
   )
