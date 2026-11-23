@@ -11,6 +11,7 @@
     "serve": "pnpm -C apps/server serve",
     "start": "node scripts/launch-server.mjs",
     "start:8865": "node scripts/launch-server.mjs --port 8865",
-    "kill-port": "node scripts/kill-port.mjs"
+    "kill-port": "node scripts/kill-port.mjs",
+    "verify:publish": "node scripts/verify-publish.mjs"
   }
 }
