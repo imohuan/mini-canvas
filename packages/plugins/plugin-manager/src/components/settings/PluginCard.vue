@@ -106,7 +106,7 @@ function onAction(key: string): void {
           class="pm-badge"
           :class="'pm-badge--' + card.tone"
         >
-          {{ card.status }}
+          {{ card.busy ? (card.busyLabel || card.status) : card.status }}
         </Badge>
       </CardAction>
     </CardHeader>
@@ -148,7 +148,13 @@ function onAction(key: string): void {
           :data-action="action.key"
           @click.stop="onAction(action.key)"
         >
-          <component :is="iconOf(action.key)" :size="13" aria-hidden="true" />
+          <Loader2
+            v-if="card.busyAction && card.busyAction === action.key"
+            class="pm-spin"
+            :size="13"
+            aria-hidden="true"
+          />
+          <component v-else :is="iconOf(action.key)" :size="13" aria-hidden="true" />
           {{ action.label }}
         </Button>
       </div>

@@ -158,6 +158,8 @@ export interface PluginManagerService {
    * 失败返回 null（调用方 fallback 到 checkNpmUpdates 的 browse 路径）。
    */
   fetchUpdateReport(): Promise<Record<string, string> | null>
+  /** 报告里 builtin 标记的包集合（自带插件不给卸载按钮） */
+  fetchBuiltinPkgs(): Promise<Set<string>>
   /** 打开插件详情面板：拉 README（npm registry 的 readme 字段） */
   openDetail(pkg: string): Promise<void>
   /** 关闭详情面板 */
@@ -1028,6 +1030,17 @@ export function createPluginManagerService(
     }
   }
 
+  /** 报告里的 builtin 包集合（自带插件即使从 NPM 装，也不该出现卸载按钮 —— 用户口径 2026-11-23） */
+  async function fetchBuiltinPkgs(): Promise<Set<string>> {
+    try {
+      const origin = baseOfCatalogUrl(state.catalogUrl)
+      const res = await doFetch(origin + '/api/updates', { headers: { accept: 'application/json' } })
+      if (!res.ok) return new Set()
+      const json = (await res.json()) as { report?: { plugins?: Array<{ pkg: string; builtin?: boolean }> } }
+      return new Set((json.report?.plugins ?? []).filter((p) => p.builtin).map((p) => p.pkg))
+    } catch { return new Set() }
+  }
+
   async function publishPkg(dir: string, opts?: { dryRun?: boolean }): Promise<{ ok: boolean; error?: string; pkg?: string; note?: string }> {
     const origin = baseOfCatalogUrl(state.catalogUrl)
     const res = await doFetch(origin + '/api/publish', {
@@ -1072,6 +1085,7 @@ export function createPluginManagerService(
     state, refresh, bindManager, install, uninstall, reinstall, installAll,
     searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled, checkNpmUpdates,
     fetchUpdateReport,
+    fetchBuiltinPkgs,
     openDetail, closeDetail,
     publishPkg,
   }

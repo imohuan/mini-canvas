@@ -18,7 +18,7 @@ import type {
 } from '../pluginCardTypes'
 
 type Row = PluginRow
-export type TabId = 'market' | 'installed' | 'local' | 'builtin'
+export type TabId = 'market' | 'installed'
 
 /**
  * 当前是否在画布会话内。
@@ -254,13 +254,33 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   const npmError = ref('')
   const npmInstalled = ref<Awaited<ReturnType<typeof svc.listNpmInstalled>>>([])
   /** 并发更新的 busy 集合：每个包各自显示自己的加载态(用户实测:同时更新两个只显示后点的) */
-  const npmBusyPkgs = ref(new Set<string>())
+  /** pkg → 正在进行的动作（安装/更新/卸载）：卡片据此显示加载态（用户口径 2026-11-23） */
+  const npmBusyPkgs = ref(new Map<string, string>())
   const npmTab = ref<TabId>('market')
+  /** 报告里标记 builtin 的包（有更新的那些） */
+  const reportBuiltinPkgs = ref(new Set<string>())
+  /** 自带插件集合（builtin 清单 + 报告标记）：即使从 NPM 装的也不给卸载按钮（用户口径 2026-11-23） */
+  const builtinNpmPkgs = computed(() => {
+    const set = new Set(reportBuiltinPkgs.value)
+    for (const row of s.rows) {
+      if (row.entry.builtin === true) set.add('@plume-canvas/' + row.entry.id)
+    }
+    return set
+  })
+  /** 错误日志（用户口径 2026-11-23）：安装/卸载/更新失败在此可查，最多留 50 条。 */
+  const errorLog = ref<Array<{ time: string; pkg: string; message: string }>>([])
+  function logError(pkg: string, err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err)
+    errorLog.value.unshift({
+      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+      pkg,
+      message,
+    })
+    if (errorLog.value.length > 50) errorLog.value.length = 50
+  }
   const TABS: Array<{ id: TabId; label: string }> = [
     { id: 'market', label: '市场' },
     { id: 'installed', label: '已装' },
-    { id: 'local', label: '本地清单' },
-    { id: 'builtin', label: '自带' },
   ]
 
   const marketList = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
@@ -283,8 +303,13 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
 
   const marketCards = computed<PluginManagerCardView[]>(() =>
     filteredMarket.value.map((item) => {
-      const installedVersion = npmVersionOf(item.pkg)
-      const busy = npmBusyPkgs.value.has(item.pkg)
+      // 本地脚本被删（清单行报「加载脚本失败」）时按未安装处理 → 出现安装按钮（用户口径 2026-11-23）
+      const recordVersion = npmVersionOf(item.pkg)
+      const id = item.pkg.replace(/^@[^/]+\//, '')
+      const brokenRow = s.rows.find((row) => row.entry.id === id && /脚本失败|加载失败/.test(row.error || ''))
+      const installedVersion = brokenRow ? undefined : recordVersion
+      const busyAction = npmBusyPkgs.value.get(item.pkg)
+      const busy = busyAction !== undefined
       const update = npmUpdates.value[item.pkg]
       const actions: PluginCardAction[] = []
       if (!installedVersion) {
@@ -302,13 +327,16 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
           variant: 'default',
           disabled: busy,
         })
-        actions.push({
-          key: 'npm-uninstall:' + item.pkg,
-          label: '卸载',
-          variant: 'destructive',
-          disabled: busy,
-        })
-      } else {
+        // 自带插件不给卸载按钮（卸了也会被 bootstrap 重装，且用户口径明确禁止）
+        if (!builtinNpmPkgs.value.has(item.pkg)) {
+          actions.push({
+            key: 'npm-uninstall:' + item.pkg,
+            label: '卸载',
+            variant: 'destructive',
+            disabled: busy,
+          })
+        }
+      } else if (!builtinNpmPkgs.value.has(item.pkg)) {
         actions.push({
           key: 'npm-uninstall:' + item.pkg,
           label: '卸载',
@@ -333,6 +361,8 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
           : undefined,
         meta: meta.join(' · '),
         status: busy ? '处理中' : installedVersion ? '已安装' : '未安装',
+        busyLabel: busy ? busyAction : undefined,
+        busyAction: busy ? busyAction : undefined,
         tone: busy ? 'warn' : installedVersion ? 'on' : 'off',
         busy,
         actions,
@@ -346,16 +376,19 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   const installedNpmCards = computed<PluginManagerCardView[]>(() =>
     npmInstalled.value.map((entry) => {
       const hit = marketList.value.find((item) => item.pkg === entry.pkg)
-      const busy = npmBusyPkgs.value.has(entry.pkg)
+      const busyAction = npmBusyPkgs.value.get(entry.pkg)
+      const busy = busyAction !== undefined
       const update = npmUpdates.value[entry.pkg]
-      const actions: PluginCardAction[] = [
-        {
+      const actions: PluginCardAction[] = []
+      // 自带插件不给卸载按钮（用户口径 2026-11-23）
+      if (!builtinNpmPkgs.value.has(entry.pkg)) {
+        actions.push({
           key: 'npm-uninstall:' + entry.pkg,
           label: '卸载',
           variant: 'destructive',
           disabled: busy,
-        },
-      ]
+        })
+      }
       if (update) {
         actions.unshift({
           key: 'npm-update:' + entry.pkg,
@@ -367,6 +400,8 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       return {
         id: entry.pkg,
         title: hit?.title || entry.pkg,
+        busyLabel: busy ? busyAction : undefined,
+        busyAction: busy ? busyAction : undefined,
         description: hit?.description || '已从 NPM 安装的插件。',
         versionDiff: update && entry.version !== update
           ? { from: 'v' + entry.version, to: 'v' + update }
@@ -392,15 +427,14 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     )
   }
 
-  const visibleLocalCards = computed(() => filterCards(localCards.value))
-  const visibleBuiltinCards = computed(() => filterCards(builtinCards.value))
-  const visibleInstalledCards = computed(() => filterCards(installedNpmCards.value))
+  // 已装 tab = NPM 已装 + 本地清单 + 自带（非 NPM 形态的内置件），统一一个列表（用户口径 2026-11-23）
+  const visibleInstalledCards = computed(() =>
+    filterCards([...installedNpmCards.value, ...localCards.value, ...builtinCards.value]),
+  )
 
   function tabCount(id: TabId): number {
     if (id === 'market') return marketCards.value.length
-    if (id === 'installed') return visibleInstalledCards.value.length
-    if (id === 'local') return visibleLocalCards.value.length
-    return visibleBuiltinCards.value.length
+    return visibleInstalledCards.value.length
   }
 
   // ==========================================================================
@@ -468,6 +502,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       // 优先用服务端缓存的更新报告（启动/定时已算好，快）；没有再走 browse 全量比对
       const report = await svc.fetchUpdateReport()
       npmUpdates.value = report ?? await svc.checkNpmUpdates()
+      void svc.fetchBuiltinPkgs().then((set) => { reportBuiltinPkgs.value = set })
       writeMarketCache({
         marketList: marketList.value,
         npmInstalled: npmInstalled.value,
@@ -530,7 +565,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       })
       if (!ok) return
     }
-    npmBusyPkgs.value.add(pkg)
+    npmBusyPkgs.value.set(pkg, '安装中')
     npmError.value = ''
     try {
       await svc.installFromNpm(pkg, { serverConfirm: hasServer })
@@ -540,6 +575,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       await loadMarket(true)
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
+      logError(pkg, err)
 
     } finally {
       npmBusyPkgs.value.delete(pkg)
@@ -547,7 +583,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   }
 
   async function onNpmUpdate(pkg: string): Promise<void> {
-    npmBusyPkgs.value.add(pkg)
+    npmBusyPkgs.value.set(pkg, '更新中')
     npmError.value = ''
     try {
       const r = await svc.updateFromNpm(pkg)
@@ -567,6 +603,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       const msg = err instanceof Error ? err.message : String(err)
       npmError.value = msg
       notify?.error('更新「' + pkg + '」失败：' + msg)
+      logError(pkg, err)
 
     } finally {
       npmBusyPkgs.value.delete(pkg)
@@ -582,7 +619,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       tone: 'destructive',
     })
     if (!ok) return
-    npmBusyPkgs.value.add(pkg)
+    npmBusyPkgs.value.set(pkg, '卸载中')
     npmError.value = ''
     try {
       await svc.uninstallFromNpm(pkg)
@@ -592,6 +629,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       notify?.success('已卸载「' + pkg + '」')
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
+      logError(pkg, err)
     } finally {
       npmBusyPkgs.value.delete(pkg)
     }
@@ -652,6 +690,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   onMounted(() => {
     urlDraft.value = s.catalogUrl
     if (!s.ready && !s.loading) void svc.refresh()
+    void svc.fetchBuiltinPkgs().then((set) => { reportBuiltinPkgs.value = set })
     void loadMarket()
   })
 
@@ -666,13 +705,12 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     tabCount,
     cardFilter,
     npmError,
+    errorLog,
     onNpmSearch,
     npmQuery,
     npmSearching,
     marketCards,
     visibleInstalledCards,
-    visibleLocalCards,
-    visibleBuiltinCards,
     onCardAction,
     openDetail: svc.openDetail,
     closeDetail: svc.closeDetail,

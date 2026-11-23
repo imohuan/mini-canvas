@@ -27,13 +27,12 @@ const {
   tabCount,
   cardFilter,
   npmError,
+  errorLog,
   onNpmSearch,
   npmQuery,
   npmSearching,
   marketCards,
   visibleInstalledCards,
-  visibleLocalCards,
-  visibleBuiltinCards,
   onCardAction,
   openDetail,
   closeDetail,
@@ -62,8 +61,7 @@ const {
       :npm-searching="npmSearching"
       :market-cards="marketCards"
       :visible-installed-cards="visibleInstalledCards"
-      :visible-local-cards="visibleLocalCards"
-      :visible-builtin-cards="visibleBuiltinCards"
+      :error-log="errorLog"
       :tab-count="tabCount"
       :on-card-action="onCardAction"
       :on-npm-search="onNpmSearch"
