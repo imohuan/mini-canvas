@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-agent",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
   "plume": {
     "title": "Agent 对话助手",
