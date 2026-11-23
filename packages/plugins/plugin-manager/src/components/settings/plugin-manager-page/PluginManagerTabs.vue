@@ -39,7 +39,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
 <template>
   <PluginDetailPanel v-if="s.detailPkg" :s="s" @close="closeDetail" />
   <Tabs v-else v-model="npmTab" class="pmp-tabs">
-    <TabsList class="pmp-tab-list" aria-label="插件分类">
+    <TabsList variant="line" class="pmp-tab-list" aria-label="插件分类">
       <TabsTrigger v-for="tab in tabs" :key="tab.id" :value="tab.id" class="pmp-tab">
         {{ tab.label }}
         <Badge variant="secondary" class="pmp-tab-count">{{ tabCount(tab.id) }}</Badge>
@@ -130,6 +130,14 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   gap: 8px;
 }
 
+.pmp-tab-count {
+  height: 16px;
+  min-width: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .pmp-tab-list {
   width: 100%;
   justify-content: flex-start;
@@ -158,14 +166,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
 /* 页签未选中态也保持可读（深色主题下 muted 偏暗） */
 .pmp-tab:not([data-state="active"]) {
   color: var(--ui-ink-dim, #6b7280);
-}
-
-.pmp-tab-count {
-  height: 16px;
-  min-width: 16px;
-  padding: 0 4px;
-  font-size: 10px;
-  font-weight: 700;
 }
 
 .pmp-filter {
