@@ -1,10 +1,10 @@
 {
   "name": "@plume-canvas/plugin-bottom-bar",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "plume": {
     "title": "底部状态栏",
-    "description": "节点底部状态栏：可替换底栏 + 注册式动作 + 任务进度",
+    "description": "画布底部的状态栏：可按项目替换整套底栏内容，支持插件注册自定义动作按钮，实时显示 Agent 任务的执行进度；自带常用工具入口与快捷操作，是画布内交互的总控台。",
     "pluginName": "bottom-bar",
     "builtin": true,
     "web": {
