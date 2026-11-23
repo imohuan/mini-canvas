@@ -397,7 +397,7 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     // 装出来的副本没有后台 → canvas_ui_* 等 MCP 工具全部消失。
     // 修法：没声明 server.entry 时，包里若能解析出 server 产物（dist/server.js 兜底）
     // 就照常复制，并回填 plume.server.entry 到安装后的 package.json。
-    const tgz = await makePkg(dir, { installable: true, withServer: true, version: '0.1.4' })
+    await makePkg(dir, { installable: true, withServer: true, version: '0.1.4' })
     // 从 payload 的 package.json 里删掉 server 声明，重新打包 —— 模拟发布侧漏回填
     const payload = path.join(dir, 'payload')
     const pjPath = path.join(payload, 'package.json')
