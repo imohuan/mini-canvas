@@ -216,6 +216,9 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       id: row.entry.id,
       title: row.entry.title || row.entry.id,
       description: row.entry.description || '随应用启动的插件。',
+      versionDiff: builtinUpdateOf(row) && row.entry.version
+        ? { from: 'v' + row.entry.version, to: 'v' + builtinUpdateOf(row)! }
+        : undefined,
       meta: builtinVersionMetaOf(row),
       status: cardStatusOf(row),
       tone: row.busy ? 'warn' : badgeOf(row).tone,
@@ -325,6 +328,9 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         id: item.pkg,
         title: item.title,
         description: item.description || '这个插件没有写说明。',
+        versionDiff: installedVersion && update && installedVersion !== update
+          ? { from: 'v' + installedVersion, to: 'v' + update }
+          : undefined,
         meta: meta.join(' · '),
         status: busy ? '处理中' : installedVersion ? '已安装' : '未安装',
         tone: busy ? 'warn' : installedVersion ? 'on' : 'off',
@@ -362,6 +368,9 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         id: entry.pkg,
         title: hit?.title || entry.pkg,
         description: hit?.description || '已从 NPM 安装的插件。',
+        versionDiff: update && entry.version !== update
+          ? { from: 'v' + entry.version, to: 'v' + update }
+          : undefined,
         meta: 'v' + entry.version + ' · ' + entry.pkg,
         status: busy ? '处理中' : '已安装',
         tone: busy ? 'warn' : 'on',

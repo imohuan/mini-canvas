@@ -26,6 +26,8 @@ export interface PluginManagerCardView {
   description: string
   /** 版本、包名等第二行信息 */
   meta?: string
+  /** 有更新时的递进版本行（渲染成样式化的 旧版本 → 新版本）；与 meta 二选一，versionDiff 优先 */
+  versionDiff?: { from: string; to: string }
   status: string
   tone: PluginCardTone
   busy?: boolean

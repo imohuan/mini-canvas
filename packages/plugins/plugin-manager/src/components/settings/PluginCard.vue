@@ -91,7 +91,12 @@ function onAction(key: string): void {
         <div class="pm-card-icon" aria-hidden="true">{{ initial }}</div>
         <div class="pm-card-heading">
           <CardTitle class="pm-card-title">{{ card.title }}</CardTitle>
-          <p v-if="card.meta" class="pm-card-meta">{{ card.meta }}</p>
+          <p v-if="card.versionDiff" class="pm-card-meta">
+            <span class="pm-ver-old">{{ card.versionDiff.from }}</span>
+            <span class="pm-ver-arrow" aria-hidden="true">→</span>
+            <span class="pm-ver-new">{{ card.versionDiff.to }}</span>
+          </p>
+          <p v-else-if="card.meta" class="pm-card-meta">{{ card.meta }}</p>
         </div>
       </div>
       <CardAction class="pm-card-state">
@@ -248,6 +253,25 @@ function onAction(key: string): void {
   color: var(--ui-ink-mute, #8c95a3);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 递进版本行（用户口径 2026-11-23）：旧版本红/斜体/删除线，新版本主题色加粗。 */
+.pm-ver-old {
+  color: var(--ui-danger, #ef4444);
+  font-style: italic;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.pm-ver-arrow {
+  margin: 0 5px;
+  color: var(--ui-ink-mute, #8c95a3);
+  font-weight: 600;
+}
+
+.pm-ver-new {
+  color: var(--ui-primary, #6366f1);
+  font-weight: 600;
 }
 
 .pm-card-state {
