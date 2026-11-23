@@ -602,6 +602,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     /** 通知状态（用户口径 2026-11-23）：记录已读标记 pkg@latest，检查时间用于倒计时。 */
     const notifyStateFile = path.join(dataDir, 'update-notify-state.json')
     let lastRefreshAt = 0
+    /** 自带插件包名全集（builtin manifest）：前端卸载按钮的闸门（用户口径 2026-11-23） */
+    let builtinPkgNames: string[] = []
     const readNotifyState = async (): Promise<{ read: Record<string, boolean> }> => {
       try { return JSON.parse(await fs.readFile(notifyStateFile, 'utf8')) as { read: Record<string, boolean> } }
       catch { return { read: {} } }
@@ -634,6 +636,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       await fs.mkdir(dataDir, { recursive: true })
       await fs.writeFile(reportFile, JSON.stringify(report, null, 2), 'utf8')
       lastRefreshAt = Date.now()
+      builtinPkgNames = Object.keys(manifest.plugins ?? {})
       return report
     }
     // 30 分钟定时检查（设计口径：启动时一次 + 每半小时一次）。失败只 warn，定时器不中断。
@@ -654,6 +657,15 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
         ? Math.max(0, Math.round((UPDATE_CHECK_INTERVAL_MS - (Date.now() - lastRefreshAt)) / 1000))
         : null
       const state = await readNotifyState()
+      // builtin 清单直接现读一次（有缓存）：不依赖 refreshReport 是否成功跑完，
+      // 否则启动检查因网络失败时前端会误判「非自带」而给出卸载按钮（用户实测 2026-11-23）。
+      if (builtinPkgNames.length === 0) {
+        try {
+          const { readBuiltinManifest } = await import('./updater/builtinManifest.js')
+          const manifest = await readBuiltinManifest(PACKAGE_ROOT)
+          builtinPkgNames = Object.keys(manifest.plugins ?? {})
+        } catch { /* 读不到就空 */ }
+      }
       return c.json({
         ok: true,
         report,
@@ -661,6 +673,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           pending: !ready,
           nextCheckInSeconds,
           read: state.read,
+          builtinPkgs: builtinPkgNames,
         },
       })
     })

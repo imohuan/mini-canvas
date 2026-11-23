@@ -1036,7 +1036,14 @@ export function createPluginManagerService(
       const origin = baseOfCatalogUrl(state.catalogUrl)
       const res = await doFetch(origin + '/api/updates', { headers: { accept: 'application/json' } })
       if (!res.ok) return new Set()
-      const json = (await res.json()) as { report?: { plugins?: Array<{ pkg: string; builtin?: boolean }> } }
+      const json = (await res.json()) as {
+        report?: { plugins?: Array<{ pkg: string; builtin?: boolean }> }
+        notify?: { builtinPkgs?: string[] }
+      }
+      // 首选服务端给的完整 builtin 清单（含无更新的自带件，如 cloud-client）；
+      // 老服务端没有这个字段时退回报告里的 builtin 标记。
+      const full = json.notify?.builtinPkgs
+      if (Array.isArray(full) && full.length > 0) return new Set(full)
       return new Set((json.report?.plugins ?? []).filter((p) => p.builtin).map((p) => p.pkg))
     } catch { return new Set() }
   }
