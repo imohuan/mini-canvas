@@ -142,16 +142,9 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   width: 100%;
   justify-content: flex-start;
   gap: 4px;
-  overflow-x: auto;
-  overflow-y: hidden;
   padding: 0;
   border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
   border-radius: 0;
-  scrollbar-width: none;
-}
-
-.pmp-tab-list::-webkit-scrollbar {
-  display: none;
 }
 
 .pmp-tab {
