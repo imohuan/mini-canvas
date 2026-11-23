@@ -23,6 +23,8 @@ import {
 import PluginManagerNav from './components/settings/PluginManagerNav.vue'
 import PluginManagerPage from './components/settings/PluginManagerPage.vue'
 import ProviderManagerPage from './components/settings/ProviderManagerPage.vue'
+import { startUpdateNotifier } from './updateNotifier'
+import { registerEventName } from '@plume-canvas/plugin-sdk'
 
 export const name = 'plugin-manager'
 /** 不写死依赖：宿主服务（manager / save）都做**可选探测** —— 缺了给清晰错误，不静默装死 */
@@ -60,6 +62,8 @@ export const Config = {
 /** 设置面板左导航插槽的 id（旧兼容入口；新菜单用 nav/integration/plugins） */
 export const MANAGER_NAV_ID = '集成/插件'
 
+registerEventName('settings:ui-open')
+
 export function apply(
   ctx: Context,
   config?: PluginManagerConfig,
@@ -75,6 +79,9 @@ export function apply(
   // 应用级句柄（根 Provider 注入）：项目页没有画布宿主，也照样能装插件。
   const appManager = ctx.tryGet<HostPluginManager>('appPluginManager')
   if (appManager) void service.bindManager(appManager)
+
+  // 应用级更新通知（用户口径 2026-11-23）：轮询报告，合并弹一条，带去更新 / 已读。
+  startUpdateNotifier(ctx, service)
 
   // 菜单：进「集成 → 插件」。引用默认树的 nav id，注册自己的整页。
   ctx.settingsMenu.nav({

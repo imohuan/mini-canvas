@@ -5,6 +5,7 @@
  * 维护一级 / 二级选中态，以及切换设置页时的滚动锁。菜单数据推导在 settingsMenuModel.ts。
  */
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { takePendingNav } from './pendingNav'
 import type { Component, ComponentPublicInstance } from 'vue'
 import type { SettingsMenuView } from '@plume-canvas/canvas-data'
 import type { SettingsPanelSource } from '@plume-canvas/canvas-render'
@@ -77,7 +78,14 @@ export function useSettingsNavigation(options: UseSettingsNavigationOptions) {
       reloadSlots()
       occTick.value += 1
     }),
+    // 外部跳转（更新通知「去更新」）：面板开着时收到事件直接选；挂载时消费暂存 nav。
+    ctx.on('settings:ui-open', (payload?: { nav?: string }) => {
+      if (payload?.nav) selectNav(payload.nav)
+    }),
   ]
+  // 挂载时消费暂存的 nav（事件可能在面板挂载前发出，见 pendingNav.ts）
+  const preset = takePendingNav()
+  if (preset) selectNav(preset)
 
   // 运行期 slots.register/remove（不经过插件装卸、也不在面板挂载那一刻）同样要刷新：
   // 快捷键配置页就是由已有快捷键作用域挂上来的。直接订阅底层注册表，少一个时序窗口。

@@ -599,6 +599,17 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     const { Hono } = await import('hono')
     const updates = new Hono()
     const reportFile = path.join(dataDir, 'update-report.json')
+    /** 通知状态（用户口径 2026-11-23）：记录已读标记 pkg@latest，检查时间用于倒计时。 */
+    const notifyStateFile = path.join(dataDir, 'update-notify-state.json')
+    let lastRefreshAt = 0
+    const readNotifyState = async (): Promise<{ read: Record<string, boolean> }> => {
+      try { return JSON.parse(await fs.readFile(notifyStateFile, 'utf8')) as { read: Record<string, boolean> } }
+      catch { return { read: {} } }
+    }
+    const writeNotifyState = async (state: { read: Record<string, boolean> }): Promise<void> => {
+      await fs.mkdir(dataDir, { recursive: true })
+      await fs.writeFile(notifyStateFile, JSON.stringify(state, null, 2), 'utf8')
+    }
     /** 重算并落盘更新报告（手动 refresh 与 30 分钟定时共用） */
     const refreshReport = async (): Promise<unknown> => {
       const { createUpdateChecker } = await import('./updater/checker.js')
@@ -622,6 +633,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       const report = await checker.checkAll()
       await fs.mkdir(dataDir, { recursive: true })
       await fs.writeFile(reportFile, JSON.stringify(report, null, 2), 'utf8')
+      lastRefreshAt = Date.now()
       return report
     }
     // 30 分钟定时检查（设计口径：启动时一次 + 每半小时一次）。失败只 warn，定时器不中断。
@@ -635,7 +647,45 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     const readReport = async (): Promise<unknown> => {
       try { return JSON.parse(await fs.readFile(reportFile, 'utf8')) } catch { return { plugins: [], checkedAt: null } }
     }
-    updates.get('/api/updates', async (c) => c.json({ ok: true, report: await readReport() }))
+    updates.get('/api/updates', async (c) => {
+      const report = (await readReport()) as { plugins?: unknown[]; checkedAt?: string | null }
+      const ready = Boolean(report?.checkedAt)
+      const nextCheckInSeconds = ready
+        ? Math.max(0, Math.round((UPDATE_CHECK_INTERVAL_MS - (Date.now() - lastRefreshAt)) / 1000))
+        : null
+      const state = await readNotifyState()
+      return c.json({
+        ok: true,
+        report,
+        notify: {
+          pending: !ready,
+          nextCheckInSeconds,
+          read: state.read,
+        },
+      })
+    })
+    /** 标记已读（用户点了通知上的「已读」）：pkg@latest 维度，未读的下次还弹。 */
+    updates.post('/api/updates/read', async (c) => {
+      try {
+        const body = (await c.req.json().catch(() => null)) as { pkgs?: Array<{ pkg?: string; latest?: string }> } | null
+        const items = Array.isArray(body?.pkgs) ? body!.pkgs! : []
+        const state = await readNotifyState()
+        for (const it of items) {
+          if (typeof it?.pkg === 'string' && typeof it?.latest === 'string') {
+            state.read[it.pkg + '@' + it.latest] = true
+          }
+        }
+        // 防膨胀：超过 200 条时丢弃最早的标记（Map 顺序即插入序）
+        const keys = Object.keys(state.read)
+        if (keys.length > 200) {
+          for (const k of keys.slice(0, keys.length - 200)) delete state.read[k]
+        }
+        await writeNotifyState(state)
+        return c.json({ ok: true, read: state.read })
+      } catch (err) {
+        return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502)
+      }
+    })
     updates.post('/api/updates/refresh', async (c) => {
       try {
         const report = await refreshReport()

@@ -56,11 +56,13 @@ import {
   type ThemeBridgeInput,
 } from "./theme/themeBridge"
 import { createNotifyService } from "./notifyService"
+import { setPendingNav } from "./components/settings/settings/pendingNav"
 import { setSettingsUiCatalog } from "./composables/useUiComponentOutside"
 
 // 设计文档 §7.4：emit 的事件名必须 registerEventName 登记，否则 dev 下 emit 时一条 warn。
 registerEventName('settings:ui-close')
 registerEventName('settings:ui-action')
+registerEventName('settings:ui-open')
 
 export const name = "theme-components"
 /** 不依赖 doc：项目页也要用这些组件。 */
@@ -138,6 +140,10 @@ export function apply(ctx: PluginScope, config?: ThemeComponentsConfig) {
   // 统一确认 / 输入 / 告知：禁止各处再用浏览器原生 confirm / prompt / alert。
   // 服务只排一次（应用级常驻插件），面板由下面的 feedbackHost 取件渲染。
   const feedback = createFeedbackService()
+  // 「打开设置面板并跳到某页」（更新通知「去更新」）：暂存目标 nav，面板挂载时消费。
+  ctx.on('settings:ui-open', (payload?: { nav?: string }) => {
+    if (payload?.nav) setPendingNav(payload.nav)
+  })
   ctx.provide("feedback", feedback)
   setFeedbackService(feedback)
   ctx.effect(() => () => setFeedbackService(undefined))

@@ -13,13 +13,14 @@ import type { NotifyContract, NotifyOptions } from '@plume-canvas/canvas-data'
 /** 把项目选项转成 vue-sonner 的选项；undefined 保持 undefined，免得覆盖底层默认。 */
 function toSonnerOptions(options?: NotifyOptions): ExternalToast | undefined {
   if (!options) return undefined
-  const { id, description, duration, dismissible, action, onDismiss, onAutoClose } = options
+  const { id, description, duration, dismissible, action, cancelAction, onDismiss, onAutoClose } = options
   return {
     ...(id !== undefined ? { id } : {}),
     ...(description !== undefined ? { description } : {}),
     ...(duration !== undefined ? { duration } : {}),
     ...(dismissible !== undefined ? { dismissible } : {}),
     ...(action !== undefined ? { action } : {}),
+    ...(cancelAction !== undefined ? { cancel: cancelAction } : {}),
     ...(onDismiss !== undefined ? { onDismiss: () => onDismiss() } : {}),
     ...(onAutoClose !== undefined ? { onAutoClose: () => onAutoClose() } : {}),
   }

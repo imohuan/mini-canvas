@@ -4,7 +4,7 @@
  * 页面只负责把这里返回的状态交给工具栏、页签正文和卡片网格；
  * 清单、NPM 市场、安装/更新/卸载仍按原来的顺序执行。
  */
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
 import type { FeedbackService } from '@plume-canvas/canvas-render'
 import type { NotifyContract } from '@plume-canvas/plugin-sdk'
@@ -137,7 +137,15 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     if (row.entry.builtin !== true) return undefined
     // 报告键是 npm 包名(@plume-canvas/<目录名>);entry.name 是画布里的插件名(如 agent),
     // 两者都对一遍 —— 更新报告用的是包名,而清单用的是 pluginName。
-    return npmUpdates.value['@plume-canvas/' + row.entry.id] ?? npmUpdates.value[row.entry.name]
+    const latest =
+      npmUpdates.value['@plume-canvas/' + row.entry.id] ?? npmUpdates.value[row.entry.name]
+    if (!latest) return undefined
+    // 报告是 30 分钟快照,可能落后于真实落盘记录(用户实测 2026-11-23:
+    // 包已更新到 0.1.7,标题还挂着「更新到 v0.1.7」)。本地记录已等于 latest 就不算有更新。
+    const pkg = '@plume-canvas/' + row.entry.id
+    const installed = npmInstalled.value.find((e) => e.pkg === pkg)
+    if (installed && installed.version >= latest) return undefined
+    return latest
   }
 
   /**
@@ -276,7 +284,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
           variant: 'default',
           disabled: busy,
         })
-      } else if (update) {
+      } else if (update && installedVersion !== update) {
         // 只有检测到新版本才出现「更新」；更新按钮同时承担版本号提示（用户 2026-11-21）
         actions.push({
           key: 'npm-update:' + item.pkg,
@@ -625,65 +633,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     urlDraft.value = s.catalogUrl
     if (!s.ready && !s.loading) void svc.refresh()
     void loadMarket()
-  })
-
-  // ==========================================================================
-  // 更新通知（用户口径 2026-11-22）：启动扫一遍 + 挂载期间每 30 分钟静默拉一次。
-  // 数据源只用 /api/updates 报告（server 已缓存，轻）；拉不到就不弹等下一轮。
-  // 去重靠 localStorage 记「pkg → 上次通知过的版本」映射，同一版本不重复弹。
-  // ==========================================================================
-  const NOTIFIED_KEY = 'plugin-manager:notified-updates'
-  let notifyTimer: ReturnType<typeof setInterval> | undefined
-
-  function readNotifiedMap(): Record<string, string> {
-    try {
-      const raw = cacheStorage()?.getItem(NOTIFIED_KEY)
-      if (!raw) return {}
-      const parsed = JSON.parse(raw) as unknown
-      if (!parsed || typeof parsed !== 'object') return {}
-      const out: Record<string, string> = {}
-      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-        if (typeof v === 'string') out[k] = v
-      }
-      return out
-    } catch {
-      return {}
-    }
-  }
-
-  function writeNotifiedMap(map: Record<string, string>): void {
-    try {
-      cacheStorage()?.setItem(NOTIFIED_KEY, JSON.stringify(map))
-    } catch {
-      /* 隐私模式/配额满：只是多弹一次，不致命 */
-    }
-  }
-
-  async function checkUpdatesNotify(): Promise<void> {
-    const report = await svc.fetchUpdateReport()
-    if (!report) return
-    npmUpdates.value = report
-    const notified = readNotifiedMap()
-    // pkg 名形如 @plume-canvas/plugin-agent —— 通知文案里去掉 scope 显示更好读
-    const shortName = (pkg: string): string => pkg.replace(/^@[^/]+\//, '')
-    for (const [pkg, latest] of Object.entries(report)) {
-      if (notified[pkg] === latest) continue
-      notify?.warning(shortName(pkg) + ' 有新版本 v' + latest + '，可在插件管理里更新')
-      notified[pkg] = latest
-    }
-    writeNotifiedMap(notified)
-  }
-
-  onMounted(() => {
-    void checkUpdatesNotify()
-    // 半小时静默扫一次：页开着也能收到「有新版本」提示（服务端定时器也在跑，双保险）
-    notifyTimer = setInterval(() => {
-      void checkUpdatesNotify()
-    }, 30 * 60 * 1000)
-  })
-
-  onUnmounted(() => {
-    if (notifyTimer) clearInterval(notifyTimer)
   })
 
   return {

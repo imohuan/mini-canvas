@@ -161,6 +161,10 @@ function onKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
   ui.applyTheme(s.theme)
+  // 更新通知「去更新」：打开设置面板（nav 由面板挂载时消费 pendingNav 选中）。
+  shell.ctx.on('settings:ui-open', () => {
+    s.settingsOpen = true
+  })
 })
 watch(() => s.theme, (v) => ui.applyTheme(v))
 onBeforeUnmount(() => {

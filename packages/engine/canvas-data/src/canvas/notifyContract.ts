@@ -25,6 +25,8 @@ export interface NotifyOptions {
   dismissible?: boolean
   /** 单个通知上的 action 按钮 */
   action?: { label: string; onClick: (event: MouseEvent) => void }
+  /** 第二个按钮（vue-sonner 的 cancel 位）：更新通知用它放「已读」（action 放「去更新」） */
+  cancelAction?: { label: string; onClick: (event: MouseEvent) => void }
   /** 成功/失败的回调 */
   onDismiss?: () => void
   onAutoClose?: () => void

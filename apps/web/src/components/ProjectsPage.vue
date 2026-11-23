@@ -53,6 +53,7 @@ const theme = ref<'dark' | 'light'>('dark')
 let disposeTheme: (() => void) | undefined
 /** 云端配置变更订阅（别的标签/画布页改了配置，这里立刻跟上）的 dispose */
 let disposeSettingsWatch: (() => void) | undefined
+let disposeUiOpen: (() => void) | undefined
 
 /** 把当前这份设置套到页面上（主题模式 + 配色，一处生效） */
 function applyTheme(values: Record<string, unknown>): void {
@@ -88,6 +89,10 @@ onMounted(() => {
   void clearLegacyThemeModeKey()
   void loadTheme()
   void refresh()
+  // 更新通知「去更新」（项目页形态）：直接切到左栏插件页签。
+  disposeUiOpen = ctx.on('settings:ui-open', () => {
+    pluginTabId.value = 'plugin-manager/projects-tab'
+  }).dispose
   // 跨标签页实时同步：画布页（或另一个首页标签）改了配置 → 立刻重读并重套主题。
   // 没有这一步的话，先打开的标签会一直显示旧颜色，直到手动刷新（用户实测报过）。
   disposeSettingsWatch = watchCloudSettings((values) => {
@@ -98,6 +103,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   // 撤掉配色落值（解除订阅 + 清掉 <html> 上的内联覆盖），避免切页后残留
   disposeTheme?.()
+  disposeUiOpen?.()
+  disposeUiOpen = undefined
   disposeTheme = undefined
   disposeSettingsWatch?.()
   disposeSettingsWatch = undefined
