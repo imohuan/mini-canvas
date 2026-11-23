@@ -51,10 +51,6 @@
     "README.md"
   ],
   "dependencies": {
-    "@plume-canvas/plugin-sdk": "workspace:*",
-    "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/canvas-render": "workspace:*",
-    "@plume-canvas/kernel": "workspace:*",
     "lucide-vue-next": "^1.0.0"
   }
 }

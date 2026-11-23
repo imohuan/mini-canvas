@@ -2,7 +2,6 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import cssInjectedByJs from 'vite-plugin-css-injected-by-js'
 import { fileURLToPath } from 'node:url'
-import { PLUGIN_DEFINE } from '../vite-plugin-lib'
 
 // plugin-node-text —— lib 打包（UMD）供"第三方已打包 js"场景：宿主 <script> 载入后 installPlugin。
 // - vue / 内核 / 渲染层 external（宿主只允许一份，见 docs/tmp/plugin-vite/02）。
@@ -10,7 +9,9 @@ import { PLUGIN_DEFINE } from '../vite-plugin-lib'
 export default defineConfig({
   plugins: [vue(), cssInjectedByJs()],
   // 内联的第三方库可能自带 process.env.NODE_ENV；浏览器没有 process，不替换会 ReferenceError。
-  define: PLUGIN_DEFINE,
+  define: {
+    'process.env.NODE_ENV': '"production"',
+  },
   build: {
     lib: {
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
@@ -19,22 +20,14 @@ export default defineConfig({
       fileName: () => 'plugin-node-text.js',
     },
     rollupOptions: {
-      // prosemirror-editor-bundle（富文本编辑器）是"宿主只允许一份"的共享运行时：
-      // 打进插件会造成两份编辑器实例，故与 vue/内核同列 external。
-      // 注：T07 起本插件的生产代码不再 import theme-default（UI 走主题可替换目录按名取），
-      // 它只因**测试**装载真实主题而留在 devDependencies。
-      external: [
-        'vue',
-        '@plume-canvas/canvas-data',
-        '@plume-canvas/canvas-render',
-        '@plume-canvas/editor',
-      ],
+      // 富文本编辑器不再由本插件使用：文本编辑走主题 UI 目录按名取（useUiComponent）。
+      // 这里只 external「宿主只允许一份」的共享运行时。
+      external: ['vue', '@plume-canvas/canvas-data', '@plume-canvas/canvas-render'],
       output: {
         globals: {
           vue: 'Vue',
           '@plume-canvas/canvas-data': 'PlumeCore',
           '@plume-canvas/canvas-render': 'PlumeRender',
-          '@plume-canvas/editor': 'ProseMirrorEditorBundle',
         },
       },
     },

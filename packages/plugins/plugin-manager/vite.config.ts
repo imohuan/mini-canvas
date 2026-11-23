@@ -15,7 +15,7 @@ export default defineConfig({
       entry: fileURLToPath(new URL('./src/index.ts', import.meta.url)),
       name: 'PlumePluginManager',
       formats: ['umd'],
-      fileName: () => 'plugin-manager.js',
+      fileName: () => 'web.js',
     },
     rollupOptions: {
       external: ['vue', '@vue-flow/core', '@plume-canvas/editor', '@plume-canvas/kernel', '@plume-canvas/plugin-sdk', '@plume-canvas/canvas-data', '@plume-canvas/canvas-render', '@plume-canvas/ui-kit'],

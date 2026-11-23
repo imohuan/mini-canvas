@@ -1,12 +1,15 @@
 {
   "name": "@plume-canvas/plugin-bottom-bar",
-  "version": "0.1.3",
+  "version": "0.1.5",
   "type": "module",
   "plume": {
     "title": "底部状态栏",
     "description": "节点底部状态栏：可替换底栏 + 注册式动作 + 任务进度",
     "pluginName": "bottom-bar",
-    "builtin": true
+    "builtin": true,
+    "web": {
+      "entry": "dist/web.js"
+    }
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -49,11 +52,6 @@
     "README.md"
   ],
   "dependencies": {
-    "@plume-canvas/plugin-sdk": "workspace:*",
-    "@plume-canvas/canvas-data": "workspace:*",
-    "@plume-canvas/canvas-render": "workspace:*",
-    "@plume-canvas/kernel": "workspace:*",
-    "@plume-canvas/editor": "workspace:*",
     "vue-draggable-plus": "^0.6.1"
   }
 }

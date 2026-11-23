@@ -6,8 +6,8 @@
  *   ① 一行页签（模型接入 / 技能 / MCP / 审批规则 / 三种提示词…）
  *   ② 下面只渲染当前选中的那一块
  *
- * 页签与页面壳子都用 @plume-canvas/ui-kit 的 Tabs；业务页面各自负责内容，
- * 本文件只换 UI 层，不改任何数据与调用。
+ * 页签与页面壳子按名从 UI 目录取（useUiComponent，由主题插件登记）——
+ * 不直接 import 组件库，换主题时这里零改动。业务页面各自负责内容。
  */
 import { onMounted, ref } from 'vue'
 import { useUiComponent } from '@plume-canvas/canvas-render'
