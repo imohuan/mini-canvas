@@ -428,9 +428,15 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   }
 
   // 已装 tab = NPM 已装 + 本地清单 + 自带（非 NPM 形态的内置件），统一一个列表（用户口径 2026-11-23）
-  const visibleInstalledCards = computed(() =>
-    filterCards([...installedNpmCards.value, ...localCards.value, ...builtinCards.value]),
-  )
+  // 已装 tab = NPM 已装 + 本地清单 + 自带，但按插件 id 去重：NPM 卡信息最全优先，
+  // 本地/自带卡只补「NPM 记录里没有的」。否则自带件会重复算两次（用户实测 54 条）。
+  const visibleInstalledCards = computed(() => {
+    const npmIds = new Set(installedNpmCards.value.map((c) => c.id.replace(/^@[^/]+\//, '')))
+    const extra = [...localCards.value, ...builtinCards.value].filter(
+      (c) => !npmIds.has(c.id),
+    )
+    return filterCards([...installedNpmCards.value, ...extra])
+  })
 
   function tabCount(id: TabId): number {
     if (id === 'market') return marketCards.value.length
