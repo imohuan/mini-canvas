@@ -428,10 +428,20 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   // 已装 tab = NPM 已装 + 本地清单 + 自带，但按插件 id 去重：NPM 卡信息最全优先，
   // 本地/自带卡只补「NPM 记录里没有的」。否则自带件会重复算两次（用户实测 54 条）。
   const visibleInstalledCards = computed(() => {
-    const npmIds = new Set(installedNpmCards.value.map((c) => c.id.replace(/^@[^/]+\//, '')))
-    const extra = [...localCards.value, ...builtinCards.value].filter(
-      (c) => !npmIds.has(c.id),
-    )
+    // 归一化插件身份（用户实测 2026-11-23：已装 48 条 = 重复）：
+    // NPM 记录 id = "@plume-canvas/plugin-bottom-bar"；清单行 id = "plume-canvas__plugin-bottom-bar"；
+    // 本地行 id = "plugin-bottom-bar"。共同身份 = 去掉 scope 与 plume-canvas__ 前缀。
+    const norm = (id: string): string =>
+      id.replace(/^@[^/]+\//, '').replace(/^plume-canvas__/, '')
+    const npmIds = new Set(installedNpmCards.value.map((c) => norm(c.id)))
+    // 本地清单与自带清单之间也可能撞同一插件 —— 一并去重，先到先得。
+    const seen = new Set(npmIds)
+    const extra = [...localCards.value, ...builtinCards.value].filter((c) => {
+      const key = norm(c.id)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
     return filterCards([...installedNpmCards.value, ...extra])
   })
 

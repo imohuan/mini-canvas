@@ -410,10 +410,22 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       // plugin-node-ui 0.1.4 的发布包里 server.js 在、声明不在 —— 按声明装会静默丢掉
       // 后台半，canvas_ui_* 等 MCP 工具全部消失。发布脚本已修，这里再兜一层：
       // 已装出去的旧包（声明缺失）更新时也能把后台半补回来。
+      // server 半三层判定（用户实测 2026-11-23：把浏览器包当后台半加载，
+      // 启动日志报 "Cannot read properties of undefined (reading 'defineComponent')"）：
+      //   ① 声明了 plume.server.entry → 按声明解析；
+      //   ② 没声明但包里**确实有** dist/server.js 文件 → 用它（旧包声明缺失的兜底）；
+      //   ③ 都没有 → 视为纯前端包，不装后台半。
+      // 关键：兜底必须是"文件真的存在"，不能像以前那样交给 resolveArtifact 去 dist 里
+      // 猜唯一候选 —— 纯前端包的 dist/plugin-xxx.js 会被猜成后台半。
+      const hasServerFile = async (): Promise<boolean> => {
+        try { await fs.access(path.join(extracted, 'dist/server.js')); return true } catch { return false }
+      }
       const resolvedServer =
         typeof serverRel === 'string'
           ? await resolveArtifact(extracted, serverRel, 'web.js')
-          : await resolveArtifact(extracted, 'dist/server.js', 'web.js').catch(() => undefined)
+          : (await hasServerFile())
+            ? 'dist/server.js'
+            : undefined
 
       // ⑥ 落盘：`<插件根>/<目录名>/` 下**保持包里的相对结构**，只把 package.json 的
       //    plume.web.entry / plume.server.entry 改成安装后的真实相对路径。
