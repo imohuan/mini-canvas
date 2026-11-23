@@ -75,7 +75,9 @@ export function startUpdateNotifier(ctx: Context, svc: PluginManagerService): vo
         notify.warning(label, {
           description: lines,
           duration: Infinity,
-          dismissible: false,
+          // vue-sonner 的 cancel 按钮只在 dismissible 时才触发 onClick（源码 719-724 行）。
+          // ✕ 关闭不标已读 —— 未读口径下下次还会弹，行为一致。
+          dismissible: true,
           action: {
             label: '去更新',
             onClick: () => ctx.emit('settings:ui-open', { nav: 'nav/integration/plugins' }),
