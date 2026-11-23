@@ -149,11 +149,10 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     const latest =
       npmUpdates.value['@plume-canvas/' + row.entry.id] ?? npmUpdates.value[row.entry.name]
     if (!latest) return undefined
-    // 报告是 30 分钟快照,可能落后于真实落盘记录(用户实测 2026-11-23:
-    // 包已更新到 0.1.7,标题还挂着「更新到 v0.1.7」)。本地记录已等于 latest 就不算有更新。
-    const pkg = '@plume-canvas/' + row.entry.id
-    const installed = npmInstalled.value.find((e) => e.pkg === pkg)
-    if (installed && installed.version >= latest) return undefined
+    // 报告是 30 分钟快照，可能落后于真实状态（用户实测 2026-11-23）。
+    // 这里用「当前实际在跑的版本」(row.entry.version) 判断，不读 npmInstalled —— 后者可能来自
+    // 30 分钟的市场缓存，缓存里的旧版本会把「可更新」判掉（用户实测踩过）。
+    if (row.entry.version && row.entry.version >= latest) return undefined
     return latest
   }
 
@@ -254,7 +253,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   const npmError = ref('')
   const npmInstalled = ref<Awaited<ReturnType<typeof svc.listNpmInstalled>>>([])
   /** 并发更新的 busy 集合：每个包各自显示自己的加载态(用户实测:同时更新两个只显示后点的) */
-  /** pkg → 正在进行的动作（安装/更新/卸载）：卡片据此显示加载态（用户口径 2026-11-23） */
+  /** pkg → 正在进行的动作 key（npm-install:/npm-update:/npm-uninstall: + pkg）：卡片据此把对应按钮变加载态 */
   const npmBusyPkgs = ref(new Map<string, string>())
   const npmTab = ref<TabId>('market')
   /** 报告里标记 builtin 的包（有更新的那些） */
@@ -458,8 +457,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
 
   interface MarketCache {
     marketList: Awaited<ReturnType<typeof svc.browseNpmPlugins>>
-    npmInstalled: Awaited<ReturnType<typeof svc.listNpmInstalled>>
-    npmUpdates: Record<string, string>
     savedAt: number
   }
 
@@ -470,7 +467,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       const raw = storage.getItem(MARKET_CACHE_KEY)
       if (!raw) return undefined
       const parsed = JSON.parse(raw) as MarketCache
-      if (!Array.isArray(parsed.marketList) || !Array.isArray(parsed.npmInstalled)) return undefined
+      if (!Array.isArray(parsed.marketList)) return undefined
       if (typeof parsed.savedAt !== 'number') return undefined
       if (Date.now() - parsed.savedAt > MARKET_CACHE_TTL_MS) return undefined
       return parsed
@@ -509,8 +506,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       void svc.fetchBuiltinPkgs().then((set) => { reportBuiltinPkgs.value = set })
       writeMarketCache({
         marketList: marketList.value,
-        npmInstalled: npmInstalled.value,
-        npmUpdates: npmUpdates.value,
       })
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
@@ -521,12 +516,21 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
 
   /** 进 tab / 刷新按钮走这里：有新鲜缓存直接用，过期才发请求。force = 无视缓存。 */
   async function loadMarket(force = false): Promise<void> {
+    // 已装清单与更新表**永远实时取**：它们是本地/服务端缓存接口，很便宜；
+    // 而装/卸/更新之后旧缓存会让「可更新」判断和加载态全部失真（用户实测 2026-11-23）。
+    const liveRefresh = async (): Promise<void> => {
+      try {
+        npmInstalled.value = await svc.listNpmInstalled()
+        const report = await svc.fetchUpdateReport()
+        npmUpdates.value = report ?? await svc.checkNpmUpdates()
+        void svc.fetchBuiltinPkgs().then((set) => { reportBuiltinPkgs.value = set })
+      } catch { /* 失败保留旧值，卡片会给错误提示 */ }
+    }
     if (!force) {
       const cached = readMarketCache()
       if (cached) {
         marketList.value = cached.marketList
-        npmInstalled.value = cached.npmInstalled
-        npmUpdates.value = cached.npmUpdates
+        await liveRefresh()
         return
       }
     }
@@ -547,8 +551,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       // 搜索结果也进缓存：下次进 tab 直接用（30 分钟内足够新鲜；更新表沿用当前值）
       writeMarketCache({
         marketList: marketList.value,
-        npmInstalled: npmInstalled.value,
-        npmUpdates: npmUpdates.value,
       })
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
@@ -569,7 +571,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       })
       if (!ok) return
     }
-    npmBusyPkgs.value.set(pkg, '安装中')
+    npmBusyPkgs.value.set(pkg, 'npm-install:' + pkg)
     npmError.value = ''
     try {
       await svc.installFromNpm(pkg, { serverConfirm: hasServer })
@@ -587,7 +589,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   }
 
   async function onNpmUpdate(pkg: string): Promise<void> {
-    npmBusyPkgs.value.set(pkg, '更新中')
+    npmBusyPkgs.value.set(pkg, 'npm-update:' + pkg)
     npmError.value = ''
     try {
       const r = await svc.updateFromNpm(pkg)
@@ -623,7 +625,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       tone: 'destructive',
     })
     if (!ok) return
-    npmBusyPkgs.value.set(pkg, '卸载中')
+    npmBusyPkgs.value.set(pkg, 'npm-uninstall:' + pkg)
     npmError.value = ''
     try {
       await svc.uninstallFromNpm(pkg)

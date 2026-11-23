@@ -919,7 +919,10 @@ export function createPluginManagerService(
     const res = await doFetch(origin + '/api/npm-plugins/install', {
       method: 'POST',
       headers: withAdminToken({ 'content-type': 'application/json' }),
-      body: JSON.stringify({ package: pkg, confirm: opts?.serverConfirm === true }),
+      // confirm 是「用户已同意安装」的语义，服务端必填；含后台的包在调用前已弹过确认框（serverConfirm）。
+      // 之前错写成 serverConfirm===true → 纯前端插件恒为 false，被服务端拒成
+      // 「需要 confirm: true」（用户实测 2026-11-23 装快捷键插件失败）。
+      body: JSON.stringify({ package: pkg, confirm: true }),
     })
     const json = (await res.json()) as { ok?: boolean; error?: string }
     if (!res.ok || json.ok !== true) throw new Error(readableServerError(json.error ?? 'NPM 安装失败：' + res.status, res.status))
