@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-style-library",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "plume": {
     "title": "风格库",

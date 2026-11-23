@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-theme-components",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "plume": {
     "title": "主题通用组件",
