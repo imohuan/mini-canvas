@@ -6,10 +6,7 @@
     "title": "插件管理",
     "description": "设置面板「插件」页：安装 / 卸载 / 重装第三方插件（清单来自云端或本地 dev 服务）",
     "pluginName": "plugin-manager",
-    "builtin": true,
-    "web": {
-      "entry": "dist/web.js"
-    }
+    "builtin": true
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
