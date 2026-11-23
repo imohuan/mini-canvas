@@ -206,8 +206,8 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       builtin: true,
       server: row.hasServer ? serverBadgeOf(row) : undefined,
       error: row.serverError,
-      // 有更新时给一个「更新」动作（走 /api/npm-plugins/update，与 NPM 卡同款）；
-      // 没有就只有「详情」。卸载按钮始终不给（自带件不能卸）。
+      // 有更新时给一个「更新」动作（走 /api/npm-plugins/update，与 NPM 卡同款）。
+      // 卸载按钮始终不给（自带件不能卸）；点卡片即进详情，不放详情按钮。
       actions: builtinUpdateOf(row)
         ? [
             {
@@ -218,19 +218,8 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
               variant: 'default',
               disabled: row.busy,
             },
-            {
-              key: 'detail:@plume-canvas/' + row.entry.id,
-              label: '详情',
-              variant: 'outline',
-            },
           ]
-        : [
-            {
-              key: 'detail:@plume-canvas/' + row.entry.id,
-              label: '详情',
-              variant: 'outline',
-            },
-          ],
+        : [],
       footerNote: justUpdated.value.has('@plume-canvas/' + row.entry.id)
         ? '已更新到 v' + (justUpdatedVersion.value.get('@plume-canvas/' + row.entry.id) ?? '')
         : builtinUpdateOf(row)
@@ -246,7 +235,8 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   const npmSearching = ref(false)
   const npmError = ref('')
   const npmInstalled = ref<Awaited<ReturnType<typeof svc.listNpmInstalled>>>([])
-  const npmBusyPkg = ref('')
+  /** 并发更新的 busy 集合：每个包各自显示自己的加载态(用户实测:同时更新两个只显示后点的) */
+  const npmBusyPkgs = ref(new Set<string>())
   const npmTab = ref<TabId>('market')
   const TABS: Array<{ id: TabId; label: string }> = [
     { id: 'market', label: '市场' },
@@ -276,15 +266,9 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   const marketCards = computed<PluginManagerCardView[]>(() =>
     filteredMarket.value.map((item) => {
       const installedVersion = npmVersionOf(item.pkg)
-      const busy = npmBusyPkg.value === item.pkg
+      const busy = npmBusyPkgs.value.has(item.pkg)
       const update = npmUpdates.value[item.pkg]
       const actions: PluginCardAction[] = []
-      actions.push({
-        key: 'detail:' + item.pkg,
-        label: '详情',
-        variant: 'outline',
-        disabled: false,
-      })
       if (!installedVersion) {
         actions.push({
           key: 'npm-install:' + item.pkg,
@@ -337,15 +321,9 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   const installedNpmCards = computed<PluginManagerCardView[]>(() =>
     npmInstalled.value.map((entry) => {
       const hit = marketList.value.find((item) => item.pkg === entry.pkg)
-      const busy = npmBusyPkg.value === entry.pkg
+      const busy = npmBusyPkgs.value.has(entry.pkg)
       const update = npmUpdates.value[entry.pkg]
       const actions: PluginCardAction[] = [
-        {
-          key: 'detail:' + entry.pkg,
-          label: '详情',
-          variant: 'outline',
-          disabled: false,
-        },
         {
           key: 'npm-uninstall:' + entry.pkg,
           label: '卸载',
@@ -524,7 +502,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       })
       if (!ok) return
     }
-    npmBusyPkg.value = pkg
+    npmBusyPkgs.value.add(pkg)
     npmError.value = ''
     try {
       await svc.installFromNpm(pkg, { serverConfirm: hasServer })
@@ -534,13 +512,14 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       await loadMarket(true)
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
+
     } finally {
-      npmBusyPkg.value = ''
+      npmBusyPkgs.value.delete(pkg)
     }
   }
 
   async function onNpmUpdate(pkg: string): Promise<void> {
-    npmBusyPkg.value = pkg
+    npmBusyPkgs.value.add(pkg)
     npmError.value = ''
     try {
       const r = await svc.updateFromNpm(pkg)
@@ -549,6 +528,9 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       await loadMarket(true)
       if (r.updated) {
         justUpdatedVersion.value.set(pkg, r.to ?? '')
+        // 本地已知最新:把报告里的更新项摘掉,否则「已更新」徽章旁边还挂着更新按钮
+        // (报告是定时快照,刷新前仍带旧数据 —— 用户实测 2026-11-23)。
+        delete npmUpdates.value[pkg]
         notify?.success('「' + pkg + '」已更新到 v' + (r.to ?? ''))
       } else {
         notify?.info('「' + pkg + '」已是最新版本')
@@ -557,8 +539,9 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       const msg = err instanceof Error ? err.message : String(err)
       npmError.value = msg
       notify?.error('更新「' + pkg + '」失败：' + msg)
+
     } finally {
-      npmBusyPkg.value = ''
+      npmBusyPkgs.value.delete(pkg)
     }
   }
 
@@ -571,7 +554,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       tone: 'destructive',
     })
     if (!ok) return
-    npmBusyPkg.value = pkg
+    npmBusyPkgs.value.add(pkg)
     npmError.value = ''
     try {
       await svc.uninstallFromNpm(pkg)
@@ -582,7 +565,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
     } finally {
-      npmBusyPkg.value = ''
+      npmBusyPkgs.value.delete(pkg)
     }
   }
 
