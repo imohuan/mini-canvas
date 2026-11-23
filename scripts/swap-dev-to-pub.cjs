@@ -17,6 +17,12 @@ const j = JSON.parse(b)
 j.main = './dist/web.js'
 j.exports = { '.': './dist/web.js' }
 if (j.plume) j.plume.web = { ...((j.plume.web) || {}), entry: 'dist/web.js' }
+// dist/server.js 在而声明不在 → 回填 server.entry（2026-11-23 用户实测：
+// plugin-node-ui 0.1.4 发布包里 server.js 在、声明缺失，装出来的副本没有后台半，
+// canvas_ui_* 等 MCP 工具全部消失）。有后台半的插件发布形态必须带 server 声明。
+if (j.plume && !j.plume.server && fs.existsSync(require('node:path').join(require('node:path').dirname(p), 'dist', 'server.js'))) {
+  j.plume.server = { entry: 'dist/server.js' }
+}
 for (const k of ['dependencies', 'peerDependencies']) {
   if (!j[k]) continue
   for (const d of Object.keys(j[k])) {

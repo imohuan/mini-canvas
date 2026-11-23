@@ -390,4 +390,44 @@ describe('NPM 插件路由（假 registry 全流程）', () => {
     expect(pj.plume.server.entry).toBe('dist/server.js')
     host.stop()
   })
+
+  it('★ 包里带了 dist/server.js 但 package.json 没声明 server.entry：照常装后台半并回填声明', async () => {
+    // 真实现象（2026-11-23 用户实测）：plugin-node-ui 0.1.4 发布包里有 dist/server.js，
+    // 但 swap-dev-to-pub 只回填了 web.entry —— 安装路由按声明找不到 server 半，
+    // 装出来的副本没有后台 → canvas_ui_* 等 MCP 工具全部消失。
+    // 修法：没声明 server.entry 时，包里若能解析出 server 产物（dist/server.js 兜底）
+    // 就照常复制，并回填 plume.server.entry 到安装后的 package.json。
+    const tgz = await makePkg(dir, { installable: true, withServer: true, version: '0.1.4' })
+    // 从 payload 的 package.json 里删掉 server 声明，重新打包 —— 模拟发布侧漏回填
+    const payload = path.join(dir, 'payload')
+    const pjPath = path.join(payload, 'package.json')
+    const pj0 = JSON.parse(await fs.readFile(pjPath, 'utf8')) as { plume: Record<string, unknown> }
+    delete pj0.plume.server
+    await fs.writeFile(pjPath, JSON.stringify(pj0, null, 2), 'utf8')
+    const stage = path.join(dir, 'stage3')
+    await fs.rm(stage, { recursive: true, force: true })
+    await fs.cp(payload, path.join(stage, 'package'), { recursive: true })
+    const tgz2 = path.join(dir, 'noserver.tgz')
+    await run('tar', ['-czf', tgz2, '-C', stage, 'package'])
+
+    const packument = { name: '@plume-canvas/plugin-demo', 'dist-tags': { latest: '0.1.4' }, versions: {} }
+    registry = await startFakeRegistry(packument, { '/demo.tgz': tgz2 })
+    ;(packument.versions as Record<string, unknown>)['0.1.4'] = {
+      version: '0.1.4',
+      dist: { tarball: registry.url + '/demo.tgz' },
+      plume: { pluginName: 'demo', web: { entry: 'dist/plugin-demo.js' } },
+    }
+    const host = await boot(registry.url)
+    const inst = await j(await call(host, '/api/npm-plugins/install', 'POST', { package: '@plume-canvas/plugin-demo', confirm: true }))
+    expect(inst.ok, String(inst.error)).toBe(true)
+    expect(inst.hasServer).toBe(true)
+    const installed = path.join(pluginsDir, 'plume-canvas__plugin-demo')
+    await expect(fs.access(path.join(installed, 'dist', 'server.js'))).resolves.toBeUndefined()
+    const pj = JSON.parse(await fs.readFile(path.join(installed, 'package.json'), 'utf8')) as {
+      plume: { web: { entry: string }; server?: { entry: string } }
+    }
+    expect(pj.plume.web.entry).toBe('dist/plugin-demo.js')
+    expect(pj.plume.server?.entry).toBe('dist/server.js')
+    host.stop()
+  })
 })

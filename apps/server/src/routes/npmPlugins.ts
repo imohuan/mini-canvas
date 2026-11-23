@@ -404,7 +404,16 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       // 按唯一候选 / 精确名匹配回退 —— 旧包 entry 写 dist/web.js、实际文件是
       // dist/<包名>.js 也能装（2026-11-22 用户实测的手动安装报错就这条）。
       const resolvedWeb = await resolveArtifact(extracted, webRel, 'server.js')
-      const resolvedServer = typeof serverRel === 'string' ? await resolveArtifact(extracted, serverRel, 'web.js') : undefined
+      // server 半：声明了就按声明解析；**没声明但包里带了 dist/server.js 也照装**。
+      //
+      // 为什么要兜底（2026-11-23 用户实测）：发布侧 swap-dev-to-pub 曾经只回填 web.entry，
+      // plugin-node-ui 0.1.4 的发布包里 server.js 在、声明不在 —— 按声明装会静默丢掉
+      // 后台半，canvas_ui_* 等 MCP 工具全部消失。发布脚本已修，这里再兜一层：
+      // 已装出去的旧包（声明缺失）更新时也能把后台半补回来。
+      const resolvedServer =
+        typeof serverRel === 'string'
+          ? await resolveArtifact(extracted, serverRel, 'web.js')
+          : await resolveArtifact(extracted, 'dist/server.js', 'web.js').catch(() => undefined)
 
       // ⑥ 落盘：`<插件根>/<目录名>/` 下**保持包里的相对结构**，只把 package.json 的
       //    plume.web.entry / plume.server.entry 改成安装后的真实相对路径。
