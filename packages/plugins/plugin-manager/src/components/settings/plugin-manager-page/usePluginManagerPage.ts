@@ -265,6 +265,18 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     const message = err instanceof Error ? err.message : String(err)
     notify?.error('「' + pkg + '」' + message)
   }
+  /** 「日志」视图开关（用户口径 2026-11-24）：打开后主区切换为插件加载日志 */
+  const showLogView = ref(false)
+  /** 插件加载日志：清单里加载失败的插件（含失败原因） */
+  const loadLog = computed(() =>
+    s.rows
+      .filter((row) => row.error)
+      .map((row) => ({
+        pkg: row.entry.title || row.entry.id,
+        message: row.error ?? '',
+        version: row.entry.version || '',
+      })),
+  )
   /** 页签 = 每个启用源 × (市场/已装/本地)（用户口径 2026-11-24：源与段同级，切页签即切源请求） */
   interface PluginTab { id: string; label: string; sourceId: string; section: TabId }
   const pluginTabs = computed<PluginTab[]>(() => {
@@ -740,6 +752,8 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     activeSection,
     tabCount,
     cardFilter,
+    showLogView,
+    loadLog,
     onNpmSearch,
     npmQuery,
     npmSearching,

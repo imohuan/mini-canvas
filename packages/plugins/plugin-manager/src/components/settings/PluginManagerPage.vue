@@ -65,7 +65,7 @@ const {
 .pmp {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   min-width: 0;
 }
 </style>

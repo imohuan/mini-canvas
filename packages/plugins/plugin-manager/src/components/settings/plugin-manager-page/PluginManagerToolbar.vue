@@ -125,9 +125,13 @@ function updateSource(id: string, patch: { name?: string; url?: string }): void 
   position: relative;
   display: flex;
   align-items: center;
+  gap: 8px;
   flex: 1;
   max-width: 420px;
   min-width: 260px;
+  /* 聚焦外圈（ring）需要绘制空间，贴边会被父容器裁掉（用户实测 2026-11-24） */
+  padding: 3px;
+  margin: -3px;
 }
 
 .pmp-search-input { padding-left: 30px; }

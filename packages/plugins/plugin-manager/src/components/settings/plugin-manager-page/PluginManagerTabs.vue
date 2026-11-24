@@ -49,8 +49,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
       </TabsList>
     </div>
     <div v-if="activeSection === 'market'" class="pmp-panel">
-      <p class="pmp-hint">只列出声明了 plume.installable、并在允许前缀里的 NPM 包。</p>
-
       <div v-if="npmSearching && !marketCards.length" class="pmp-loading">
         <Loader2 class="spin" :size="16" aria-hidden="true" />
         正在加载插件…
@@ -92,7 +90,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 /* 页签行：页签在左，搜索在右（用户口径 2026-11-24） */
@@ -147,22 +145,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   color: var(--ui-ink-dim, #6b7280);
 }
 
-.pmp-filter {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.pmp-filter-icon {
-  position: absolute;
-  left: 10px;
-  z-index: 1;
-  color: var(--ui-ink-mute, #9ca3af);
-  pointer-events: none;
-}
-
-.pmp-filter-input { padding-left: 30px; }
-
 .pmp-error {
   margin: 0;
   padding: 8px 10px;
@@ -177,18 +159,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   min-width: 0;
   flex-direction: column;
   gap: 10px;
-}
-
-.pmp-search {
-  display: flex;
-  gap: 8px;
-}
-
-.pmp-hint {
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--ui-ink-mute, #9ca3af);
 }
 
 .pmp-grid {
