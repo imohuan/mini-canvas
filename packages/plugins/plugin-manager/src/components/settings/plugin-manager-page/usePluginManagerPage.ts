@@ -264,6 +264,8 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   const errorLog = ref<Array<{ time: string; pkg: string; message: string }>>([])
   function logError(pkg: string, err: unknown): void {
     const message = err instanceof Error ? err.message : String(err)
+    // 失败同时弹 notify（用户口径 2026-11-24：不在页面上堆红色错误块）
+    notify?.error('「' + pkg + '」' + message)
     errorLog.value.unshift({
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
       pkg,
@@ -541,6 +543,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
       })
     } catch (err) {
       npmError.value = err instanceof Error ? err.message : String(err)
+      logError('插件源「' + (s.sources.find((x) => x.id === s.activeSourceId)?.name || s.activeSourceId) + '」加载', err)
     } finally {
       npmSearching.value = false
     }
@@ -556,7 +559,10 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         const report = await svc.fetchUpdateReport()
         npmUpdates.value = report ?? await svc.checkNpmUpdates()
         void svc.fetchBuiltinPkgs().then((set) => { reportBuiltinPkgs.value = set })
-      } catch { /* 失败保留旧值，卡片会给错误提示 */ }
+      } catch (err) {
+        // 失败保留旧值；但要让用户知道（notify + 日志，用户口径 2026-11-24）
+        logError('插件源「' + (s.sources.find((x) => x.id === s.activeSourceId)?.name || s.activeSourceId) + '」数据刷新', err)
+      }
     }
     if (!force) {
       const cached = readMarketCache()

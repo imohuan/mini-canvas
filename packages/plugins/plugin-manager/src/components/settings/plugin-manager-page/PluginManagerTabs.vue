@@ -14,7 +14,6 @@ defineProps<{
   activeTabId: string
   activeSection: string
   selectTab: (id: string) => void
-  npmError: string
   npmSearching: boolean
   marketCards: PluginManagerCardView[]
   visibleInstalledCards: PluginManagerCardView[]
@@ -50,9 +49,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
         </TabsTrigger>
       </TabsList>
     </div>
-
-    <p v-if="npmError" class="pmp-error" role="alert">{{ npmError }}</p>
-    <p v-if="s.error" class="pmp-error" role="alert">{{ s.error }}</p>
 
     <!-- 错误日志（用户口径 2026-11-23）：安装/卸载/更新失败在这里可查，不用猜。 -->
     <div v-if="errorLog.length" class="pmp-error-log">

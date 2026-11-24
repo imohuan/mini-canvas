@@ -16,7 +16,6 @@ const {
   selectTab,
   activeSection,
   tabCount,
-  npmError,
   errorLog,
   npmQuery,
   npmSearching,
@@ -51,7 +50,6 @@ const {
       :active-tab-id="activeTabId"
       :select-tab="selectTab"
       :active-section="activeSection"
-      :npm-error="npmError"
       :npm-searching="npmSearching"
       :market-cards="marketCards"
       :visible-installed-cards="visibleInstalledCards"
