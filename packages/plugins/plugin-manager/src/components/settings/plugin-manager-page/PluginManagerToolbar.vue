@@ -4,7 +4,7 @@
  * 设置展开后是插件源列表：一行一个源（名称 + 地址 + 删除）+ 添加行。
  * 全部安装按钮已删（用户口径：没有意义）。登录不在这里（归 cloud-client）。
  */
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Loader2, RefreshCw, Search, Settings2 } from 'lucide-vue-next'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { PluginManagerService } from '../../../pluginManagerService'
@@ -29,6 +29,10 @@ const Button = useUiComponent('Button')
 const Input = useUiComponent('Input')
 
 const showSources = ref(false)
+// 日志视图打开时收起插件源配置面板（用户口径 2026-11-24：日志页不要混着配置列表）
+watch(() => props.showLogView, (v) => {
+  if (v) showSources.value = false
+})
 const newName = ref('')
 const newUrl = ref('')
 
@@ -89,7 +93,7 @@ function updateSource(id: string, patch: { name?: string; url?: string }): void 
       </Button>
     </div>
   </div>
-  <div v-if="showSources" class="pmp-sources">
+  <div v-if="showSources && !showLogView" class="pmp-sources">
     <p class="pmp-label">插件源（每个源 = 一个插件清单体系；一级页签对应各源，安装/更新走对应源）</p>
     <div v-for="src in s.sources" :key="src.id" class="pmp-source-row">
       <Input

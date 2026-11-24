@@ -303,15 +303,16 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     showLogView.value = v
     if (v) void refreshLoadLog()
   }
-  /** 页签 = 每个启用源 × (市场/已装/本地)（用户口径 2026-11-24：源与段同级，切页签即切源请求） */
+  /** 页签 = 市场 / 已装 / 本机（本地 dev 件）/ 各第三方源（用户口径 2026-11-24：全部同级） */
   interface PluginTab { id: string; label: string; sourceId: string; section: TabId }
   const pluginTabs = computed<PluginTab[]>(() => {
     const enabled = s.sources.filter((s) => s.enabled)
     const out: PluginTab[] = [
       { id: 'local:market', label: '市场', sourceId: 'local', section: 'market' },
       { id: 'local:installed', label: '已装', sourceId: 'local', section: 'installed' },
+      { id: 'local:local', label: '本机', sourceId: 'local', section: 'local' },
     ]
-    // 第三方源：每个源一个页签，点进去展示该源的市场列表（用户口径 2026-11-24）
+    // 第三方源：每个源一个页签，展示该源的市场列表
     for (const src of enabled) {
       if (src.id === 'local') continue
       out.push({ id: src.id + ':market', label: src.name, sourceId: src.id, section: 'market' })

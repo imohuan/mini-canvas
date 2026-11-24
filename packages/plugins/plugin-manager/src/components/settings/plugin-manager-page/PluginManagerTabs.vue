@@ -36,7 +36,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
 <template>
   <PluginDetailPanel v-if="s.detailPkg" :s="s" @close="closeDetail" />
   <Tabs :model-value="activeTabId" class="pmp-tabs" @update:model-value="selectTab(String($event))">
-    <div class="pmp-tabs-row">
+    <div v-if="!showLogView" class="pmp-tabs-row">
       <TabsList variant="line" class="pmp-tab-list" aria-label="插件分类">
         <TabsTrigger
           v-for="tab in pluginTabs"
@@ -179,6 +179,36 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   /* 页签行与卡片区之间的间隔（用户口径 2026-11-24：贴太近会压住页签底线） */
   margin-top: 14px;
   gap: 6px;
+}
+
+/* 日志视图：与卡片正文同一套字体字号 */
+.pmp-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pmp-log-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ui-ink, #374151);
+}
+
+.pmp-log-pkg {
+  font-weight: 600;
+}
+
+.pmp-log-ver {
+  color: var(--ui-ink-mute, #9ca3af);
+}
+
+.pmp-log-msg {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ui-ink-dim, #6b7280);
 }
 
 .pmp-grid {
