@@ -15,12 +15,14 @@ const props = defineProps<{
   installedCount: number
   npmQuery: string
   npmSearching: boolean
+  showLogView: boolean
 }>()
 
 const emit = defineEmits<{
   'update:npmQuery': [value: string]
   npmSearch: []
   refresh: []
+  'update:showLogView': [value: boolean]
 }>()
 
 const Button = useUiComponent('Button')
@@ -72,6 +74,15 @@ function updateSource(id: string, patch: { name?: string; url?: string }): void 
         <Settings2 :size="14" aria-hidden="true" />
         设置
       </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        type="button"
+        :aria-pressed="showLogView"
+        @click="emit('update:showLogView', !showLogView)"
+      >
+        日志
+      </Button>
       <Button variant="outline" size="sm" type="button" :disabled="s.loading" @click="emit('refresh')">
         <RefreshCw :size="14" :class="{ spin: s.loading }" aria-hidden="true" />
         刷新
@@ -117,7 +128,8 @@ function updateSource(id: string, patch: { name?: string; url?: string }): void 
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
-  padding-bottom: 10px;
+  /* 上/左留出聚焦环绘制空间；下边距收紧（用户口径 2026-11-24） */
+  padding: 6px 8px 8px;
   border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
 }
 
@@ -125,13 +137,10 @@ function updateSource(id: string, patch: { name?: string; url?: string }): void 
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex: 1;
   max-width: 420px;
   min-width: 260px;
-  /* 聚焦外圈（ring）需要绘制空间，贴边会被父容器裁掉（用户实测 2026-11-24） */
-  padding: 3px;
-  margin: -3px;
 }
 
 .pmp-search-input { padding-left: 30px; }

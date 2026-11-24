@@ -17,6 +17,8 @@ defineProps<{
   npmSearching: boolean
   marketCards: PluginManagerCardView[]
   visibleInstalledCards: PluginManagerCardView[]
+  showLogView: boolean
+  loadLog: Array<{ pkg: string; message: string; version: string }>
   tabCount: (id: string) => number
   onCardAction: (key: string) => void
   openDetail: (pkg: string) => void
@@ -48,7 +50,23 @@ const TabsTrigger = useUiComponent('TabsTrigger')
         </TabsTrigger>
       </TabsList>
     </div>
-    <div v-if="activeSection === 'market'" class="pmp-panel">
+    <!-- 日志视图（用户口径 2026-11-24）：点「日志」按钮后主区切换为插件加载日志 -->
+    <div v-if="showLogView" class="pmp-panel">
+      <p class="pmp-hint">插件加载日志（检测到加载失败的插件及原因）。</p>
+      <div v-if="!loadLog.length" class="pmp-empty">
+        <PackageSearch :size="20" aria-hidden="true" />
+        没有加载失败的插件。
+      </div>
+      <div v-else class="pmp-log-list">
+        <div v-for="(item, idx) in loadLog" :key="idx" class="pmp-log-item">
+          <span class="pmp-log-pkg">{{ item.pkg }}</span>
+          <span class="pmp-log-ver">{{ item.version }}</span>
+          <span class="pmp-log-msg">{{ item.message }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div v-else-if="activeSection === 'market'" class="pmp-panel">
       <div v-if="npmSearching && !marketCards.length" class="pmp-loading">
         <Loader2 class="spin" :size="16" aria-hidden="true" />
         正在加载插件…
@@ -90,7 +108,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 /* 页签行：页签在左，搜索在右（用户口径 2026-11-24） */
@@ -158,7 +176,9 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 10px;
+  /* 页签行与卡片区之间的间隔（用户口径 2026-11-24：贴太近会压住页签底线） */
+  margin-top: 14px;
+  gap: 6px;
 }
 
 .pmp-grid {
