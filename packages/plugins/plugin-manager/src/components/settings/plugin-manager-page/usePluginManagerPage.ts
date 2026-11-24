@@ -9,7 +9,7 @@ import { useCanvasContextOrRender } from '@plume-canvas/canvas-render'
 import type { FeedbackService } from '@plume-canvas/canvas-render'
 import type { NotifyContract } from '@plume-canvas/plugin-sdk'
 import { usePluginManager } from '../../../usePluginManager'
-import type { PluginRow } from '../../../pluginManagerService'
+import { baseOfCatalogUrl, type PluginRow } from '../../../pluginManagerService'
 import type {
   PluginCardAction,
   PluginCardTone,
@@ -267,16 +267,42 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   }
   /** 「日志」视图开关（用户口径 2026-11-24）：打开后主区切换为插件加载日志 */
   const showLogView = ref(false)
-  /** 插件加载日志：清单里加载失败的插件（含失败原因） */
-  const loadLog = computed(() =>
-    s.rows
-      .filter((row) => row.error)
-      .map((row) => ({
-        pkg: row.entry.title || row.entry.id,
-        message: row.error ?? '',
-        version: row.entry.version || '',
-      })),
-  )
+  /** 插件加载日志（用户口径 2026-11-24）：后台加载失败（/api/plugin-load-log）
+   *  + 前端清单行加载失败（rows.error），合并展示 */
+  const loadLog = ref<Array<{ pkg: string; message: string; version: string; at: string }>>([])
+  async function refreshLoadLog(): Promise<void> {
+    const entries: Array<{ pkg: string; message: string; version: string; at: string }> = []
+    // ① 后台半加载失败（服务端启动/热装时记录）
+    try {
+      const origin = baseOfCatalogUrl(svc.state.catalogUrl)
+      const res = await fetch(origin + '/api/plugin-load-log', { headers: { accept: 'application/json' } })
+      const json = (await res.json()) as { ok?: boolean; entries?: Array<{ at: string; file: string; message: string }> }
+      for (const e of json.entries ?? []) {
+        entries.push({
+          pkg: e.file,
+          message: e.message,
+          version: '',
+          at: e.at ? new Date(e.at).toLocaleTimeString('zh-CN', { hour12: false }) : '',
+        })
+      }
+    } catch { /* 后台不可达：只显示前端半的失败 */ }
+    // ② 前端半加载失败（清单行 error，如「加载脚本失败」）
+    for (const row of s.rows) {
+      if (row.error) {
+        entries.push({
+          pkg: row.entry.title || row.entry.id,
+          message: row.error,
+          version: row.entry.version || '',
+          at: '',
+        })
+      }
+    }
+    loadLog.value = entries
+  }
+  function setShowLogView(v: boolean): void {
+    showLogView.value = v
+    if (v) void refreshLoadLog()
+  }
   /** 页签 = 每个启用源 × (市场/已装/本地)（用户口径 2026-11-24：源与段同级，切页签即切源请求） */
   interface PluginTab { id: string; label: string; sourceId: string; section: TabId }
   const pluginTabs = computed<PluginTab[]>(() => {
@@ -754,6 +780,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     cardFilter,
     showLogView,
     loadLog,
+    setShowLogView,
     onNpmSearch,
     npmQuery,
     npmSearching,

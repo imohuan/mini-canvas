@@ -18,6 +18,7 @@ const {
   tabCount,
   showLogView,
   loadLog,
+  setShowLogView,
   npmQuery,
   npmSearching,
   onNpmSearch,
@@ -39,7 +40,8 @@ const {
       :service="svc"
       :installed-count="installedCount"
       :npm-searching="npmSearching"
-      v-model:show-log-view="showLogView"
+      :show-log-view="showLogView"
+      @update:show-log-view="setShowLogView"
       v-model:npm-query="npmQuery"
       @npm-search="onNpmSearch"
       @refresh="onRefresh"

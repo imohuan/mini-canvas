@@ -592,6 +592,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
    //      必须排在 ui 静态兜底（⑤ 的 get('*')）之前，否则会被通配吃掉。
    app.route('/', testModelRoutes())
 
+  /** 插件加载日志（用户口径 2026-11-24）：后台插件加载/登记失败在此记录，
+   *  供 /api/plugin-load-log 与插件管理页「日志」视图展示。内存态，重启清空。 */
+  const pluginLoadLog: Array<{ at: string; file: string; message: string }> = []
+
   // ①.6 更新检查（发布体系 Task 5）：最近一次报告 + 手动触发。
   // 只提示不自动装（用户口径 2026-11-20）；数据在 bootstrap/checker 侧，
   // 这里读共享状态文件（.plume/update-report.json）+ 触发时重算。
@@ -676,6 +680,10 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           builtinPkgs: builtinPkgNames,
         },
       })
+    })
+    /** 插件加载日志（用户口径 2026-11-24）：后台插件加载/登记失败记录 */
+    updates.get('/api/plugin-load-log', async (c) => {
+      return c.json({ ok: true, entries: pluginLoadLog })
     })
     /** 标记已读（用户点了通知上的「已读」）：pkg@latest 维度，未读的下次还弹。 */
     updates.post('/api/updates/read', async (c) => {
@@ -847,6 +855,7 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
   const scannedServerPlugins = await loadServerPluginsFromPluginDirs(pluginRoots)
   for (const f of scannedServerPlugins.failures) {
     console.warn('[cloud-server] 后台插件加载失败 ' + f.file + '：' + f.error)
+    pluginLoadLog.push({ at: new Date().toISOString(), file: f.file, message: f.error })
   }
   const registeredServerPlugins: string[] = []
   const seenServerPluginNames = new Set<string>()
@@ -871,6 +880,11 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
       console.warn(
         '[cloud-server] 后台插件 ' + mod.name + ' 登记失败：' + (err instanceof Error ? err.message : String(err)),
       )
+      pluginLoadLog.push({
+        at: new Date().toISOString(),
+        file: mod.name,
+        message: err instanceof Error ? err.message : String(err),
+      })
     }
   }
   // 运行时观测面：插件目录可写 = 服务端代码执行，部署者必须能一眼看清"加载了哪些后台插件"。
