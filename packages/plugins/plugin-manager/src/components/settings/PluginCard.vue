@@ -100,7 +100,6 @@ function onAction(key: string): void {
         </div>
       </div>
       <CardAction class="pm-card-state">
-        <Loader2 v-if="card.busy" class="pm-spin" :size="13" aria-hidden="true" />
         <Badge
           :variant="badgeVariant(card.tone)"
           class="pm-badge"
