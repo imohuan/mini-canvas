@@ -16,6 +16,8 @@ const {
   selectTab,
   activeSection,
   tabCount,
+  showLogView,
+  loadLog,
   npmQuery,
   npmSearching,
   onNpmSearch,
@@ -37,6 +39,7 @@ const {
       :service="svc"
       :installed-count="installedCount"
       :npm-searching="npmSearching"
+      v-model:show-log-view="showLogView"
       v-model:npm-query="npmQuery"
       @npm-search="onNpmSearch"
       @refresh="onRefresh"
@@ -52,6 +55,8 @@ const {
       :npm-searching="npmSearching"
       :market-cards="marketCards"
       :visible-installed-cards="visibleInstalledCards"
+      :show-log-view="showLogView"
+      :load-log="loadLog"
       :tab-count="tabCount"
       :on-card-action="onCardAction"
       :open-detail="openDetail"
