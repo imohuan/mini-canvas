@@ -250,7 +250,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   /** 并发更新的 busy 集合：每个包各自显示自己的加载态(用户实测:同时更新两个只显示后点的) */
   /** pkg → 正在进行的动作 key（npm-install:/npm-update:/npm-uninstall: + pkg）：卡片据此把对应按钮变加载态 */
   const npmBusyPkgs = ref(new Map<string, string>())
-  const npmTab = ref<TabId>('market')
   /** 报告里标记 builtin 的包（有更新的那些） */
   const reportBuiltinPkgs = ref(new Set<string>())
   /** 自带插件集合（builtin 清单 + 报告标记）：即使从 NPM 装的也不给卸载按钮（用户口径 2026-11-23） */
@@ -272,24 +271,51 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     })
     if (errorLog.value.length > 50) errorLog.value.length = 50
   }
-  const TABS: Array<{ id: TabId; label: string }> = [
-    { id: 'market', label: '市场' },
-    { id: 'installed', label: '已装' },
-    { id: 'local', label: '本地' },
-  ]
-  /** 一级页签 = 启用的插件源（用户口径 2026-11-24）；切换时重拉对应源的数据 */
-  const sourceTabs = computed(() => s.sources.filter((s) => s.enabled))
-  const activeSourceId = computed({
-    get: () => s.activeSourceId,
-    set: (id: string) => {
-      if (id === s.activeSourceId) return
-      svc.setActiveSource(id)
+  /** 页签 = 每个启用源 × (市场/已装/本地)（用户口径 2026-11-24：源与段同级，切页签即切源请求） */
+  interface PluginTab { id: string; label: string; sourceId: string; section: TabId }
+  const pluginTabs = computed<PluginTab[]>(() => {
+    const enabled = s.sources.filter((s) => s.enabled)
+    const multi = enabled.length > 1
+    const sections: Array<{ section: TabId; label: string }> = [
+      { section: 'market', label: '市场' },
+      { section: 'installed', label: '已装' },
+      { section: 'local', label: '本地' },
+    ]
+    const out: PluginTab[] = []
+    for (const src of enabled) {
+      for (const sec of sections) {
+        const label = multi ? src.name + '·' + sec.label : sec.label
+        out.push({ id: src.id + ':' + sec.section, label, sourceId: src.id, section: sec.section })
+      }
+    }
+    return out
+  })
+  /** 当前选中的复合页签（默认第一个） */
+  const activeTabId = ref(pluginTabs.value[0]?.id ?? '')
+  function selectTab(id: string): void {
+    const tab = pluginTabs.value.find((t) => t.id === id)
+    if (!tab) return
+    activeTabId.value = id
+    if (tab.sourceId !== s.activeSourceId) {
+      svc.setActiveSource(tab.sourceId)
       clearMarketCache()
-      npmTab.value = 'market'
       void svc.refresh()
       void loadMarket(true)
-    },
+    }
+  }
+  /** 当前页签对应的段（渲染面板用） */
+  const activeSection = computed<TabId>(() => {
+    const tab = pluginTabs.value.find((t) => t.id === activeTabId.value)
+    return (tab?.section ?? 'market') as TabId
   })
+  function tabCount(id: string): number {
+    const tab = pluginTabs.value.find((t) => t.id === id)
+    if (!tab) return 0
+    if (tab.sourceId !== s.activeSourceId) return -1
+    if (tab.section === 'market') return marketCards.value.length
+    if (tab.section === 'installed') return visibleInstalledCards.value.length
+    return visibleLocalCards.value.length
+  }
 
   const marketList = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
   /** 卡片区的即时筛选，不改服务端搜索词。 */
@@ -449,12 +475,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     })
     return filterCards(extras)
   })
-
-  function tabCount(id: TabId): number {
-    if (id === 'market') return marketCards.value.length
-    if (id === 'installed') return visibleInstalledCards.value.length
-    return visibleLocalCards.value.length
-  }
 
   // ==========================================================================
   // 市场缓存（用户口径 2026-11-22）：进 tab 用缓存（30 分钟过期），只有真正
@@ -718,12 +738,12 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   return {
     svc,
     s,
-    sourceTabs,
-    activeSourceId,
     onRefresh,
     installedCount,
-    npmTab,
-    TABS,
+    pluginTabs,
+    activeTabId,
+    selectTab,
+    activeSection,
     tabCount,
     cardFilter,
     npmError,
