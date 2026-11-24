@@ -12,6 +12,8 @@ import 'vue-sonner/style.css'
 withDefaults(defineProps<ToasterProps>(), {
   position: 'bottom-right',
   closeButtonPosition: 'top-right',
+  /* 错误/成功通知使用危险色/主题色（vue-sonner richColors）——用户口径 2026-11-24 */
+  richColors: true,
 })
 </script>
 

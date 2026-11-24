@@ -15,6 +15,7 @@ import { useRouter } from 'vue-router'
 import { Plus, Search, Trash2, FolderPlus, House, Folder, Image as ImageIcon, ChevronLeft, Sun, Moon } from 'lucide-vue-next'
 import { useUiComponentOutside } from '../composables/ui'
 import { useCanvasContextOrRender, type FeedbackService } from '@plume-canvas/canvas-render'
+import type { NotifyContract } from '@plume-canvas/canvas-data'
 import { listProjects, createProject, deleteProject, listCanvases, createCanvas, listAssets, type ProjectSummary, type AssetSummary } from '../composables/projectsApi'
 import { applyAppTheme, clearLegacyThemeModeKey, loadAppSettings, saveThemeMode, watchCloudSettings } from '../composables/appTheme'
 import ProjectsTabsNav from './projects/ProjectsTabsNav.vue'
@@ -30,9 +31,10 @@ const Input = useUiComponentOutside('Input')
 /** 统一确认 / 输入框：项目页不再使用浏览器原生 prompt / confirm。 */
 const { ctx } = useCanvasContextOrRender()
 const feedback = ctx.get<FeedbackService>('feedback')
+/** 全局通知服务（用户口径 2026-11-24：错误改走 notify 危险色弹窗，不再渲染页内红条） */
+const notify = ctx.tryGet<NotifyContract>('notify')
 const projects = ref<ProjectSummary[]>([])
 const loading = ref(true)
-const error = ref('')
 const query = ref('')
 /** 左栏页签：首页 / 项目 / 资产（同一页里切换主区内容） */
 const nav = ref<'home' | 'projects' | 'assets'>('projects')
@@ -75,11 +77,10 @@ async function toggleTheme(): Promise<void> {
 
 async function refresh(): Promise<void> {
   loading.value = true
-  error.value = ''
   try {
     projects.value = await listProjects()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
+    notify?.error('项目列表加载失败：' + (err instanceof Error ? err.message : String(err)))
   } finally {
     loading.value = false
   }
@@ -165,7 +166,7 @@ async function openProject(p: ProjectSummary): Promise<void> {
     if (list.length === 0) list = [await createCanvas(p.id, '画布 1')]
     void router.push('/canvas/' + list[0].id)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
+    notify?.error('打开项目失败：' + (err instanceof Error ? err.message : String(err)))
   }
 }
 
@@ -184,7 +185,7 @@ async function newProject(): Promise<void> {
     const p = await createProject(name.trim() || '未命名项目')
     await openProject(p)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
+    notify?.error('新建项目失败：' + (err instanceof Error ? err.message : String(err)))
   }
 }
 
@@ -203,7 +204,7 @@ async function removeProject(p: ProjectSummary): Promise<void> {
     await deleteProject(p.id)
     await refresh()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
+    notify?.error('删除项目失败：' + (err instanceof Error ? err.message : String(err)))
   }
 }
 
@@ -400,8 +401,6 @@ function dateOf(ts: number): string {
           </Button>
         </div>
       </header>
-
-      <p v-if="error" class="mx-6 mb-2 rounded-lg border border-[color:var(--ui-danger,#ef4444)] px-3 py-2 text-[12px] text-[color:var(--ui-danger,#ef4444)]" role="alert">{{ error }}</p>
 
       <!-- 插件整页：与内置页平级切换，不叠在项目卡片下面 -->
       <ProjectsTabsPanel v-if="activePluginTab" :tab="activePluginTab" />
