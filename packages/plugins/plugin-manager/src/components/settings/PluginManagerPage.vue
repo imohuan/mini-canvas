@@ -35,7 +35,7 @@ const {
 <template>
   <div class="pmp">
     <PluginManagerToolbar
-      v-if="!s.detailPkg"
+      v-if="!s.detailPkg && !showLogView"
       :s="s"
       :service="svc"
       :installed-count="installedCount"
