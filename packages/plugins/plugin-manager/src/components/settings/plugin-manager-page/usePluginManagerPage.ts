@@ -260,18 +260,10 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     }
     return set
   })
-  /** 错误日志（用户口径 2026-11-23）：安装/卸载/更新失败在此可查，最多留 50 条。 */
-  const errorLog = ref<Array<{ time: string; pkg: string; message: string }>>([])
   function logError(pkg: string, err: unknown): void {
+    // 失败走全局 notify 弹窗即可（用户口径 2026-11-24：不要页内错误块/面板）
     const message = err instanceof Error ? err.message : String(err)
-    // 失败同时弹 notify（用户口径 2026-11-24：不在页面上堆红色错误块）
     notify?.error('「' + pkg + '」' + message)
-    errorLog.value.unshift({
-      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-      pkg,
-      message,
-    })
-    if (errorLog.value.length > 50) errorLog.value.length = 50
   }
   /** 页签 = 每个启用源 × (市场/已装/本地)（用户口径 2026-11-24：源与段同级，切页签即切源请求） */
   interface PluginTab { id: string; label: string; sourceId: string; section: TabId }
@@ -748,8 +740,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     activeSection,
     tabCount,
     cardFilter,
-    npmError,
-    errorLog,
     onNpmSearch,
     npmQuery,
     npmSearching,

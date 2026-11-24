@@ -16,7 +16,6 @@ const {
   selectTab,
   activeSection,
   tabCount,
-  errorLog,
   npmQuery,
   npmSearching,
   onNpmSearch,
@@ -53,7 +52,6 @@ const {
       :npm-searching="npmSearching"
       :market-cards="marketCards"
       :visible-installed-cards="visibleInstalledCards"
-      :error-log="errorLog"
       :tab-count="tabCount"
       :on-card-action="onCardAction"
       :open-detail="openDetail"

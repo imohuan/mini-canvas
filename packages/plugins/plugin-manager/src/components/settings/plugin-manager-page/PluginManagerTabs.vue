@@ -17,7 +17,6 @@ defineProps<{
   npmSearching: boolean
   marketCards: PluginManagerCardView[]
   visibleInstalledCards: PluginManagerCardView[]
-  errorLog: Array<{ time: string; pkg: string; message: string }>
   tabCount: (id: string) => number
   onCardAction: (key: string) => void
   openDetail: (pkg: string) => void
@@ -49,17 +48,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
         </TabsTrigger>
       </TabsList>
     </div>
-
-    <!-- 错误日志（用户口径 2026-11-23）：安装/卸载/更新失败在这里可查，不用猜。 -->
-    <div v-if="errorLog.length" class="pmp-error-log">
-      <p class="pmp-error-log-title">最近失败记录（{{ errorLog.length }}）</p>
-      <p v-for="(item, idx) in errorLog" :key="idx" class="pmp-error-log-item">
-        <span class="pmp-error-log-time">{{ item.time }}</span>
-        <span class="pmp-error-log-pkg">{{ item.pkg }}</span>
-        <span class="pmp-error-log-msg">{{ item.message }}</span>
-      </p>
-    </div>
-
     <div v-if="activeSection === 'market'" class="pmp-panel">
       <p class="pmp-hint">只列出声明了 plume.installable、并在允许前缀里的 NPM 包。</p>
 
@@ -209,48 +197,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   align-items: stretch;
   gap: 10px;
-}
-
-/* 错误日志面板（用户口径 2026-11-23）：安装/卸载/更新失败可查。 */
-.pmp-error-log {
-  margin: 0;
-  padding: 8px 10px;
-  border: 1px solid var(--ui-danger-soft, #fecaca);
-  border-radius: 10px;
-  background: var(--ui-danger-veil, rgba(239, 68, 68, 0.06));
-}
-
-.pmp-error-log-title {
-  margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ui-danger, #ef4444);
-}
-
-.pmp-error-log-item {
-  display: flex;
-  gap: 8px;
-  margin: 2px 0;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--ui-ink-dim, #6b7280);
-}
-
-.pmp-error-log-time {
-  flex: none;
-  color: var(--ui-ink-mute, #9ca3af);
-}
-
-.pmp-error-log-pkg {
-  flex: none;
-  font-weight: 600;
-  color: var(--ui-ink, #374151);
-}
-
-.pmp-error-log-msg {
-  min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--ui-danger, #ef4444);
 }
 
 .pmp-loading,
