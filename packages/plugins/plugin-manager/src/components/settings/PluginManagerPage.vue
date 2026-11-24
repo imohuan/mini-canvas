@@ -33,6 +33,7 @@ const {
   npmSearching,
   marketCards,
   visibleInstalledCards,
+  visibleLocalCards,
   onCardAction,
   openDetail,
   closeDetail,
@@ -61,6 +62,7 @@ const {
       :npm-searching="npmSearching"
       :market-cards="marketCards"
       :visible-installed-cards="visibleInstalledCards"
+      :visible-local-cards="visibleLocalCards"
       :error-log="errorLog"
       :tab-count="tabCount"
       :on-card-action="onCardAction"

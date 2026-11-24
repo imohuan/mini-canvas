@@ -15,6 +15,7 @@ defineProps<{
   npmSearching: boolean
   marketCards: PluginManagerCardView[]
   visibleInstalledCards: PluginManagerCardView[]
+  visibleLocalCards: PluginManagerCardView[]
   errorLog: Array<{ time: string; pkg: string; message: string }>
   tabCount: (id: TabId) => number
   onCardAction: (key: string) => void
@@ -107,6 +108,23 @@ const TabsTrigger = useUiComponent('TabsTrigger')
       <div v-else class="pmp-grid">
         <PluginCard
           v-for="card in visibleInstalledCards"
+          :key="card.id"
+          :card="card"
+          @action="onCardAction"
+          @detail="openDetail"
+        />
+      </div>
+    </TabsContent>
+
+    <TabsContent value="local" class="pmp-panel">
+      <p class="pmp-hint">本地或 dev 服务检测到、但不在 NPM 安装记录里的插件。</p>
+      <div v-if="!visibleLocalCards.length" class="pmp-empty">
+        <PackageSearch :size="20" aria-hidden="true" />
+        {{ cardFilter ? '没有符合筛选的插件。' : '没有本地检测到的插件。' }}
+      </div>
+      <div v-else class="pmp-grid">
+        <PluginCard
+          v-for="card in visibleLocalCards"
           :key="card.id"
           :card="card"
           @action="onCardAction"

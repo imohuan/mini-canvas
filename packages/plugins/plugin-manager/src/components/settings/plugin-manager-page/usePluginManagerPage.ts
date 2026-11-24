@@ -18,7 +18,7 @@ import type {
 } from '../pluginCardTypes'
 
 type Row = PluginRow
-export type TabId = 'market' | 'installed'
+export type TabId = 'market' | 'installed' | 'local'
 
 /**
  * 当前是否在画布会话内。
@@ -280,6 +280,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   const TABS: Array<{ id: TabId; label: string }> = [
     { id: 'market', label: '市场' },
     { id: 'installed', label: '已装' },
+    { id: 'local', label: '本地' },
   ]
 
   const marketList = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
@@ -425,29 +426,28 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   }
 
   // 已装 tab = NPM 已装 + 本地清单 + 自带（非 NPM 形态的内置件），统一一个列表（用户口径 2026-11-23）
-  // 已装 tab = NPM 已装 + 本地清单 + 自带，但按插件 id 去重：NPM 卡信息最全优先，
-  // 本地/自带卡只补「NPM 记录里没有的」。否则自带件会重复算两次（用户实测 54 条）。
-  const visibleInstalledCards = computed(() => {
-    // 归一化插件身份（用户实测 2026-11-23：已装 48 条 = 重复）：
-    // NPM 记录 id = "@plume-canvas/plugin-bottom-bar"；清单行 id = "plume-canvas__plugin-bottom-bar"；
-    // 本地行 id = "plugin-bottom-bar"。共同身份 = 去掉 scope 与 plume-canvas__ 前缀。
-    const norm = (id: string): string =>
-      id.replace(/^@[^/]+\//, '').replace(/^plume-canvas__/, '')
+  // 三个页签（用户口径 2026-11-24）：市场 = NPM 可装；已装 = 从 NPM 装的；
+  // 本地 = 服务端/本地 dev 检测到但**不在 NPM 安装记录里**的插件（dev 调试件等）。
+  // 归一化身份：NPM 记录 id 带.scope/，清单行 id 带 plume-canvas__ 目录前缀，本地行不带。
+  const norm = (id: string): string =>
+    id.replace(/^@[^/]+\//, '').replace(/^plume-canvas__/, '')
+  const visibleInstalledCards = computed(() => filterCards(installedNpmCards.value))
+  const visibleLocalCards = computed(() => {
     const npmIds = new Set(installedNpmCards.value.map((c) => norm(c.id)))
-    // 本地清单与自带清单之间也可能撞同一插件 —— 一并去重，先到先得。
-    const seen = new Set(npmIds)
-    const extra = [...localCards.value, ...builtinCards.value].filter((c) => {
+    const seen = new Set<string>()
+    const extras = [...localCards.value, ...builtinCards.value].filter((c) => {
       const key = norm(c.id)
-      if (seen.has(key)) return false
+      if (npmIds.has(key) || seen.has(key)) return false
       seen.add(key)
       return true
     })
-    return filterCards([...installedNpmCards.value, ...extra])
+    return filterCards(extras)
   })
 
   function tabCount(id: TabId): number {
     if (id === 'market') return marketCards.value.length
-    return visibleInstalledCards.value.length
+    if (id === 'installed') return visibleInstalledCards.value.length
+    return visibleLocalCards.value.length
   }
 
   // ==========================================================================
@@ -727,6 +727,7 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     npmSearching,
     marketCards,
     visibleInstalledCards,
+    visibleLocalCards,
     onCardAction,
     openDetail: svc.openDetail,
     closeDetail: svc.closeDetail,
