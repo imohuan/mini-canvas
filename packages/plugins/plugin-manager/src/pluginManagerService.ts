@@ -1063,11 +1063,30 @@ export function createPluginManagerService(
     return { ok: true, pkg: json.pkg, note: json.note }
   }
 
-  /** 打开插件详情面板：走服务端 /api/npm-plugins/readme 代理拉 npm registry 的 readme */
+  /** 打开插件详情面板：NPM 包走 readme 代理；本地 dev 插件（无 scope）直接用清单信息拼详情 */
   async function openDetail(pkg: string): Promise<void> {
     state.detailPkg = pkg
     state.detailReadme = ''
     state.detailError = ''
+    // 本地 dev 插件：npm registry 上没有它，readme 代理只会回「包名不在允许的前缀内」。
+    // 用清单里的信息拼一份 markdown 详情（用户口径 2026-11-24：本地件也要能进详情）。
+    if (!pkg.startsWith('@')) {
+      const row = state.rows.find((r) => r.entry.id === pkg)
+      const entry = row?.entry
+      if (entry) {
+        state.detailReadme = [
+          '# ' + (entry.title || pkg),
+          '',
+          (entry.description || '这个插件没有写说明。'),
+          '',
+          '- **版本**：' + (entry.version || '未知（本地 dev 包）'),
+          '- **来源**：本地 / dev 服务清单',
+          '- **插件名**：' + (entry.name || pkg),
+        ].join('\n')
+        state.detailLoading = false
+        return
+      }
+    }
     state.detailLoading = true
     try {
       const origin = baseOfCatalogUrl(state.catalogUrl)
