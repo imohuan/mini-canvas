@@ -50,18 +50,21 @@ const TabsTrigger = useUiComponent('TabsTrigger')
         </TabsTrigger>
       </TabsList>
     </div>
-    <!-- 日志视图（用户口径 2026-11-24）：点「日志」按钮后主区切换为插件加载日志 -->
-    <div v-if="showLogView" class="pmp-panel">
-      <p class="pmp-hint">插件加载日志（检测到加载失败的插件及原因）。</p>
-      <div v-if="!loadLog.length" class="pmp-empty">
-        <PackageSearch :size="20" aria-hidden="true" />
-        没有加载失败的插件。
-      </div>
+    <!-- 日志二级面板（用户口径 2026-11-24）：对齐详情页二级面板结构 —— 返回按钮 + 标题 + 分区块 -->
+    <div v-if="showLogView" class="pmp-detail">
+      <Button variant="ghost" size="xs" type="button" class="pmp-detail-back" @click="showLogView = false">
+        ← 返回插件列表
+      </Button>
+      <h2 class="pmp-log-title">插件加载日志</h2>
+      <p class="pmp-log-desc">检测到加载失败的插件及原因；来源包括后台装载失败与前端清单加载失败。</p>
+      <div v-if="!loadLog.length" class="pmp-detail-empty">没有加载失败的插件。</div>
       <div v-else class="pmp-log-list">
         <div v-for="(item, idx) in loadLog" :key="idx" class="pmp-log-item">
-          <span class="pmp-log-pkg">{{ item.pkg }}</span>
-          <span class="pmp-log-ver">{{ item.version }}</span>
-          <span class="pmp-log-msg">{{ item.message }}</span>
+          <div class="pmp-log-head">
+            <span class="pmp-log-pkg">{{ item.pkg }}</span>
+            <span v-if="item.version" class="pmp-log-ver">{{ item.version }}</span>
+          </div>
+          <div class="pmp-log-msg">{{ item.message }}</div>
         </div>
       </div>
     </div>
@@ -181,34 +184,58 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   gap: 6px;
 }
 
-/* 日志视图：与卡片正文同一套字体字号 */
+/* 日志视图：二级面板风格（对齐详情页），标题/描述用与设置面板一致的字体层级 */
+.pmp-log-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ui-ink, #374151);
+}
+
+.pmp-log-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
 .pmp-log-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 10px;
 }
 
 .pmp-log-item {
+  padding: 12px 14px;
+  border: 1px solid var(--ui-line, rgba(127, 127, 127, 0.25));
+  border-radius: 10px;
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
   font-size: 12px;
   line-height: 1.6;
   color: var(--ui-ink, #374151);
 }
 
+.pmp-log-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .pmp-log-pkg {
+  font-size: 13px;
   font-weight: 600;
 }
 
 .pmp-log-ver {
   color: var(--ui-ink-mute, #9ca3af);
+  font-size: 11px;
 }
 
 .pmp-log-msg {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: var(--ui-ink-dim, #6b7280);
+  color: var(--ui-danger, #ef4444);
 }
 
 .pmp-grid {
