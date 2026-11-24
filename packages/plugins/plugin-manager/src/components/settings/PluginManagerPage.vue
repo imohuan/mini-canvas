@@ -19,7 +19,8 @@ import PluginManagerTabs from './plugin-manager-page/PluginManagerTabs.vue'
 const {
   svc,
   s,
-  urlDraft,
+  sourceTabs,
+  activeSourceId,
   onRefresh,
   installedCount,
   npmTab,
@@ -46,13 +47,13 @@ const {
       v-if="!s.detailPkg"
       :s="s"
       :service="svc"
-      :url-draft="urlDraft"
       :installed-count="installedCount"
-      @update:url-draft="urlDraft = $event"
       @refresh="onRefresh"
     />
 
     <PluginManagerTabs
+      :source-tabs="sourceTabs"
+      v-model:active-source-id="activeSourceId"
       v-model:npm-tab="npmTab"
       v-model:npm-query="npmQuery"
       v-model:card-filter="cardFilter"

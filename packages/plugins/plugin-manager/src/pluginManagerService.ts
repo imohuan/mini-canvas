@@ -81,6 +81,10 @@ export interface PluginManagerService {
   readonly state: {
     /** 中转后台地址（可改；改完点刷新重拉） */
     catalogUrl: string
+    /** 插件源列表（用户口径 2026-11-24：多源、可命名）；默认含"本机"同源源 */
+    sources: Array<{ id: string; name: string; url: string; enabled: boolean }>
+    /** 当前激活的源 id */
+    activeSourceId: string
     /** 清单拉取中 */
     loading: boolean
     /** 拉取/操作错误（一句话） */
@@ -107,6 +111,11 @@ export interface PluginManagerService {
   }
   /** 重新拉清单 + 对齐已装状态（用户点刷新，或改完地址后调） */
   refresh(): Promise<void>
+  /** 插件源管理（多源）：增删改选，持久化到 localStorage */
+  addSource(name: string, url: string): void
+  removeSource(id: string): void
+  updateSource(id: string, patch: { name?: string; url?: string; enabled?: boolean }): void
+  setActiveSource(id: string): void
   /**
    * 绑定宿主的统一安装句柄（`host.manager`）。
    *
@@ -277,6 +286,8 @@ export function createPluginManagerService(
 
   const state = reactive<PluginManagerService['state']>({
     catalogUrl,
+    sources: [],
+    activeSourceId: '',
     loading: false,
     error: '',
     rows: [],
@@ -288,6 +299,85 @@ export function createPluginManagerService(
     detailLoading: false,
     detailError: '',
   })
+
+  // ==========================================================================
+  // 插件源（多源，用户口径 2026-11-24）：源 = 名称 + 清单地址 + 启用开关。
+  // 默认源「本机」= 同源 /plugin-catalog.json（旧行为等价）。持久化到 localStorage ——
+  // 源是本浏览器的 UI 配置，不需要跨设备同步。
+  // ==========================================================================
+  const SOURCES_KEY = 'plugin-manager:sources'
+  const LOCAL_SOURCE_URL = '/plugin-catalog.json'
+  interface PluginSource { id: string; name: string; url: string; enabled: boolean }
+
+  function loadSources(): PluginSource[] {
+    try {
+      const raw = (win.localStorage as Storage | undefined)?.getItem(SOURCES_KEY)
+      if (!raw) return []
+      const parsed = JSON.parse(raw) as PluginSource[]
+      if (!Array.isArray(parsed)) return []
+      return parsed.filter((s) => typeof s.id === 'string' && typeof s.url === 'string')
+    } catch { return [] }
+  }
+
+  function persistSources(): void {
+    try { (win.localStorage as Storage | undefined)?.setItem(SOURCES_KEY, JSON.stringify(state.sources)) } catch { /* 配额满忽略 */ }
+  }
+
+  /** 激活源的清单地址：同步到 state.catalogUrl（下游 npm 操作全部以它推 origin） */
+  function syncCatalogUrl(): void {
+    const active = state.sources.find((s) => s.id === state.activeSourceId)
+    state.catalogUrl = active?.url || LOCAL_SOURCE_URL
+  }
+
+  function initSources(): void {
+    const saved = loadSources()
+    state.sources = saved.length > 0
+      ? saved
+      : [{ id: 'local', name: '本机', url: LOCAL_SOURCE_URL, enabled: true }]
+    if (!state.sources.some((s) => s.id === state.activeSourceId)) {
+      state.activeSourceId = state.sources.find((s) => s.enabled)?.id ?? state.sources[0]?.id ?? ''
+    }
+    syncCatalogUrl()
+  }
+  initSources()
+
+  function addSource(name: string, url: string): void {
+    state.sources.push({
+      id: 'src-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+      name: name.trim() || '插件源',
+      url: url.trim(),
+      enabled: true,
+    })
+    persistSources()
+  }
+
+  function removeSource(id: string): void {
+    const idx = state.sources.findIndex((s) => s.id === id)
+    if (idx < 0) return
+    state.sources.splice(idx, 1)
+    if (state.activeSourceId === id) {
+      state.activeSourceId = state.sources.find((s) => s.enabled)?.id ?? state.sources[0]?.id ?? ''
+      syncCatalogUrl()
+    }
+    persistSources()
+  }
+
+  function updateSource(id: string, patch: { name?: string; url?: string; enabled?: boolean }): void {
+    const s = state.sources.find((x) => x.id === id)
+    if (!s) return
+    if (patch.name !== undefined) s.name = patch.name.trim() || s.name
+    if (patch.url !== undefined) s.url = patch.url.trim() || s.url
+    if (patch.enabled !== undefined) s.enabled = patch.enabled
+    if (state.activeSourceId === id) syncCatalogUrl()
+    persistSources()
+  }
+
+  function setActiveSource(id: string): void {
+    if (!state.sources.some((s) => s.id === id && s.enabled)) return
+    state.activeSourceId = id
+    syncCatalogUrl()
+  }
+
 
   /**
    * 正在飞的那次 refresh。
@@ -1112,6 +1202,7 @@ export function createPluginManagerService(
 
   return {
     state, refresh, bindManager, install, uninstall, reinstall, installAll,
+    addSource, removeSource, updateSource, setActiveSource,
     searchNpmPlugins, browseNpmPlugins, installFromNpm, updateFromNpm, uninstallFromNpm, listNpmInstalled, checkNpmUpdates,
     fetchUpdateReport,
     fetchBuiltinPkgs,

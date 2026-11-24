@@ -1,128 +1,94 @@
 <script setup lang="ts">
 /**
- * 插件页顶部：插件源（高级，默认收起）、刷新、全部安装、计数。
- *
- * 中转地址是高级配置：同源部署（npx serve）默认 /plugin-catalog.json 就是对的，
- * 只有后台跑在别的机器 / 端口时才需要填。所以默认收起，不占主界面（用户 2026-11-21）。
+ * 插件页顶部：插件源列表（一行一个源，用户口径 2026-11-24）、刷新、全部安装、计数。
+ * 每个源一行：名称 + 清单地址 + 删除；添加行在最下。改完自动生效并重拉对应源数据。
  * 登录不在这里（归 cloud-client）。
  */
 import { ref } from 'vue'
-import { ChevronDown, Download, RefreshCw } from 'lucide-vue-next'
+import { Download, RefreshCw } from 'lucide-vue-next'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { PluginManagerService } from '../../../pluginManagerService'
 
-defineProps<{
+const props = defineProps<{
   s: PluginManagerService['state']
   service: PluginManagerService
-  urlDraft: string
   installedCount: number
 }>()
 
 const emit = defineEmits<{
-  'update:urlDraft': [value: string]
   refresh: []
 }>()
 
 const Button = useUiComponent('Button')
 const Input = useUiComponent('Input')
 
-const showAdvanced = ref(false)
+const newName = ref('')
+const newUrl = ref('')
+
+function addSource(): void {
+  if (!newUrl.value.trim()) return
+  props.service.addSource(newName.value, newUrl.value)
+  newName.value = ''
+  newUrl.value = ''
+  emit('refresh')
+}
+function removeSource(id: string): void {
+  props.service.removeSource(id)
+  emit('refresh')
+}
+function updateSource(id: string, patch: { name?: string; url?: string }): void {
+  props.service.updateSource(id, patch)
+  emit('refresh')
+}
 </script>
 
 <template>
   <div class="pmp-toolbar">
-    <button
-      type="button"
-      class="pmp-advanced-toggle"
-      :aria-expanded="showAdvanced"
-      @click="showAdvanced = !showAdvanced"
-    >
-      <ChevronDown :size="13" :class="['pmp-chev', { open: showAdvanced }]" aria-hidden="true" />
-      插件源
-    </button>
     <div class="pmp-toolbar-actions">
       <Button variant="outline" size="sm" type="button" :disabled="s.loading" @click="emit('refresh')">
         <RefreshCw :size="14" :class="{ spin: s.loading }" aria-hidden="true" />
         刷新
       </Button>
-      <Button size="sm" type="button" :disabled="s.loading || s.installingAll" @click="service.installAll()">
+      <Button size="sm" type="button" :disabled="s.loading || s.installingAll" @click="props.service.installAll()">
         <Download :size="14" aria-hidden="true" />
         全部安装
       </Button>
     </div>
     <span class="pmp-count">{{ installedCount }} / {{ s.rows.length }} 已装</span>
   </div>
-  <div v-if="showAdvanced" class="pmp-advanced">
-    <label class="pmp-field pmp-url">
-      <span class="pmp-label">中转后台地址（高级）</span>
+  <div class="pmp-sources">
+    <p class="pmp-label">插件源（每个源 = 一个插件清单体系，安装/更新走对应源；选中页签即切换源）</p>
+    <div v-for="src in s.sources" :key="src.id" class="pmp-source-row">
       <Input
-        :model-value="urlDraft"
-        class="pmp-input"
+        :model-value="src.name"
+        class="pmp-input pmp-source-name"
+        type="text"
+        aria-label="插件源名称"
+        @change="updateSource(src.id, { name: String($event) })"
+      />
+      <Input
+        :model-value="src.url"
+        class="pmp-input pmp-source-url"
         type="text"
         spellcheck="false"
-        aria-label="中转后台地址"
-        placeholder="留空 = 同源 /plugin-catalog.json"
-        @update:model-value="emit('update:urlDraft', $event)"
-        @keydown.enter.prevent="emit('refresh')"
+        aria-label="插件源地址"
+        @change="updateSource(src.id, { url: String($event) })"
       />
-    </label>
-    <p class="pmp-advanced-hint">后台和页面不在同一个地址时才需要填（例如后台跑在另一台机器或另一个端口）。日常使用保持留空即可。</p>
-    <div class="pmp-advanced-actions">
-      <Button variant="outline" size="sm" type="button" :disabled="s.loading" @click="emit('refresh')">
-        应用并刷新
+      <Button variant="outline" size="sm" type="button" @click="removeSource(src.id)">
+        删除
+      </Button>
+    </div>
+    <div class="pmp-source-row">
+      <Input v-model="newName" class="pmp-input pmp-source-name" type="text" aria-label="新插件源名称" placeholder="源名称" />
+      <Input v-model="newUrl" class="pmp-input pmp-source-url" type="text" spellcheck="false" aria-label="新插件源地址" placeholder="插件清单地址，如 /plugin-catalog.json" />
+      <Button variant="outline" size="sm" type="button" @click="addSource">
+        添加源
       </Button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.pmp-advanced-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  border: 1px solid var(--ui-line-soft, rgba(127, 127, 127, 0.25));
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ui-ink-dim, #6b7280);
-  font-size: 11px;
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-.pmp-advanced-toggle:hover {
-  color: var(--ui-ink, #374151);
-  border-color: var(--ui-line, rgba(127, 127, 127, 0.4));
-}
-.pmp-chev {
-  transition: transform 0.15s;
-}
-.pmp-chev.open {
-  transform: rotate(180deg);
-}
-.pmp-advanced {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 10px 12px;
-  margin-top: -2px;
-  border: 1px dashed var(--ui-line-soft, rgba(127, 127, 127, 0.25));
-  border-top: none;
-  border-radius: 0 0 10px 10px;
-  background: var(--ui-veil-soft, rgba(127, 127, 127, 0.04));
-}
-.pmp-advanced-hint {
-  width: 100%;
-  margin: 0;
-  font-size: 11px;
-  line-height: 1.6;
-  color: var(--ui-ink-mute, #9ca3af);
-}
-.pmp-advanced-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 .pmp-toolbar {
   display: flex;
   align-items: flex-end;
@@ -132,14 +98,11 @@ const showAdvanced = ref(false)
   border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
 }
 
-.pmp-field {
+.pmp-sources {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 220px;
+  gap: 6px;
 }
-
-.pmp-url { flex: 1; }
 
 .pmp-label {
   font-size: 10px;
@@ -165,6 +128,16 @@ const showAdvanced = ref(false)
   color: var(--ui-ink-dim, #6b7280);
   white-space: nowrap;
 }
+
+.pmp-source-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.pmp-source-name { width: 140px; flex: none; }
+.pmp-source-url { flex: 1; }
 
 @media (max-width: 640px) {
   .pmp-toolbar-actions { width: 100%; }

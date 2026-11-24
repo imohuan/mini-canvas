@@ -45,10 +45,7 @@ export function usePluginManagerPage() {
   /** 全局 toast：装/卸/更新的结果提示（右下角 vue-sonner）。 */
   const notify = useCanvasContextOrRender().ctx.tryGet<NotifyContract>('notify')
 
-  /** 地址输入框先写草稿，点「刷新」再写回服务。 */
-  const urlDraft = ref(s.catalogUrl)
   function onRefresh(): void {
-    s.catalogUrl = urlDraft.value.trim() || s.catalogUrl
     // 刷新 = 重拉清单 + 清市场缓存（否则用户以为刷新了市场列表其实没刷，2026-11-22 复核）
     clearMarketCache()
     void svc.refresh()
@@ -280,6 +277,19 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
     { id: 'installed', label: '已装' },
     { id: 'local', label: '本地' },
   ]
+  /** 一级页签 = 启用的插件源（用户口径 2026-11-24）；切换时重拉对应源的数据 */
+  const sourceTabs = computed(() => s.sources.filter((s) => s.enabled))
+  const activeSourceId = computed({
+    get: () => s.activeSourceId,
+    set: (id: string) => {
+      if (id === s.activeSourceId) return
+      svc.setActiveSource(id)
+      clearMarketCache()
+      npmTab.value = 'market'
+      void svc.refresh()
+      void loadMarket(true)
+    },
+  })
 
   const marketList = ref<Awaited<ReturnType<typeof svc.searchNpmPlugins>>>([])
   /** 卡片区的即时筛选，不改服务端搜索词。 */
@@ -700,7 +710,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   }
 
   onMounted(() => {
-    urlDraft.value = s.catalogUrl
     if (!s.ready && !s.loading) void svc.refresh()
     void svc.fetchBuiltinPkgs().then((set) => { reportBuiltinPkgs.value = set })
     void loadMarket()
@@ -709,7 +718,8 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   return {
     svc,
     s,
-    urlDraft,
+    sourceTabs,
+    activeSourceId,
     onRefresh,
     installedCount,
     npmTab,

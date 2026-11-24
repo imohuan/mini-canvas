@@ -10,6 +10,8 @@ import type { TabId } from './usePluginManagerPage'
 
 defineProps<{
   s: PluginManagerService['state']
+  sourceTabs: Array<{ id: string; name: string; url: string; enabled: boolean }>
+  activeSourceId: string
   tabs: Array<{ id: TabId; label: string }>
   npmError: string
   npmSearching: boolean
@@ -25,6 +27,7 @@ defineProps<{
 }>()
 
 const npmTab = defineModel<TabId>('npmTab', { required: true })
+const activeSource = defineModel<string>('activeSourceId', { required: true })
 const npmQuery = defineModel<string>('npmQuery', { required: true })
 const cardFilter = defineModel<string>('cardFilter', { required: true })
 
@@ -39,7 +42,21 @@ const TabsTrigger = useUiComponent('TabsTrigger')
 
 <template>
   <PluginDetailPanel v-if="s.detailPkg" :s="s" @close="closeDetail" />
-  <Tabs v-else v-model="npmTab" class="pmp-tabs">
+  <!-- 一级切换 = 插件源（用户口径 2026-11-24）：切到哪个源，数据就来自哪个源 -->
+  <div v-if="sourceTabs.length > 1" class="pmp-source-bar" role="tablist" aria-label="插件源">
+    <button
+      v-for="src in sourceTabs"
+      :key="src.id"
+      type="button"
+      class="pmp-source-tab"
+      :class="{ active: src.id === activeSource }"
+      :aria-pressed="src.id === activeSource"
+      @click="activeSource = src.id"
+    >
+      {{ src.name }}
+    </button>
+  </div>
+  <Tabs v-model="npmTab" class="pmp-tabs">
     <TabsList variant="line" class="pmp-tab-list" aria-label="插件分类">
       <TabsTrigger v-for="tab in tabs" :key="tab.id" :value="tab.id" class="pmp-tab">
         {{ tab.label }}
@@ -146,6 +163,31 @@ const TabsTrigger = useUiComponent('TabsTrigger')
   min-width: 0;
   flex-direction: column;
   gap: 8px;
+}
+
+/* 源切换条：多个插件源时显示 */
+.pmp-source-bar {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.pmp-source-tab {
+  flex: none;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ui-ink-dim, #6b7280);
+  border: 1px solid var(--ui-line-soft, #eef0f4);
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.pmp-source-tab.active {
+  color: var(--ui-primary, #6366f1);
+  border-color: var(--ui-primary, #6366f1);
+  background: var(--ui-primary-soft, rgba(99, 102, 241, 0.08));
 }
 
 .pmp-tab-count {
