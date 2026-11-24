@@ -203,8 +203,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
             : '画布服务依赖（' + row.missingDeps.join('、') + '）：进入画布后自动激活'
           : undefined,
         actions,
-        primaryAction: !row.installed && !row.busy ? 'install:' + row.entry.id : undefined,
-        clickHint: '点击卡片安装',
       }
     }),
   )
@@ -365,8 +363,6 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
         tone: busy ? 'warn' : installedVersion ? 'on' : 'off',
         busy,
         actions,
-        primaryAction: !installedVersion && !busy ? 'npm-install:' + item.pkg : undefined,
-        clickHint: '点击卡片安装',
         footerNote: undefined,
       }
     }),
