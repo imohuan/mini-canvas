@@ -194,6 +194,19 @@ function updateSource(id: string, patch: { name?: string; url?: string }): void 
 .pmp-source-name { width: 140px; flex: none; }
 .pmp-source-url { flex: 1; }
 
+/* 加载转圈动画（搜索按钮 / 刷新按钮共用；用户实测 2026-11-24：缺 keyframes 转圈不动） */
+.spin {
+  animation: pmp-spin 0.9s linear infinite;
+}
+
+@keyframes pmp-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation: none; }
+}
+
 @media (max-width: 640px) {
   .pmp-toolbar-actions { width: 100%; }
   .pmp-count { padding-bottom: 0; }
