@@ -275,18 +275,14 @@ const justUpdated = computed(() => new Set(justUpdatedVersion.value.keys()))
   interface PluginTab { id: string; label: string; sourceId: string; section: TabId }
   const pluginTabs = computed<PluginTab[]>(() => {
     const enabled = s.sources.filter((s) => s.enabled)
-    const multi = enabled.length > 1
-    const sections: Array<{ section: TabId; label: string }> = [
-      { section: 'market', label: '市场' },
-      { section: 'installed', label: '已装' },
-      { section: 'local', label: '本地' },
+    const out: PluginTab[] = [
+      { id: 'local:market', label: '市场', sourceId: 'local', section: 'market' },
+      { id: 'local:installed', label: '已装', sourceId: 'local', section: 'installed' },
     ]
-    const out: PluginTab[] = []
+    // 第三方源：每个源一个页签，点进去展示该源的市场列表（用户口径 2026-11-24）
     for (const src of enabled) {
-      for (const sec of sections) {
-        const label = multi ? src.name + '·' + sec.label : sec.label
-        out.push({ id: src.id + ':' + sec.section, label, sourceId: src.id, section: sec.section })
-      }
+      if (src.id === 'local') continue
+      out.push({ id: src.id + ':market', label: src.name, sourceId: src.id, section: 'market' })
     }
     return out
   })

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** 插件页页签：市场、已装（含本地与自带），以及卡片筛选、错误日志和网格。 */
-import { Loader2, PackageSearch, Search } from 'lucide-vue-next'
+import { Loader2, PackageSearch } from 'lucide-vue-next'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import PluginCard from '../PluginCard.vue'
 import PluginDetailPanel from './PluginDetailPanel.vue'
@@ -18,17 +18,12 @@ defineProps<{
   npmSearching: boolean
   marketCards: PluginManagerCardView[]
   visibleInstalledCards: PluginManagerCardView[]
-  visibleLocalCards: PluginManagerCardView[]
   errorLog: Array<{ time: string; pkg: string; message: string }>
   tabCount: (id: string) => number
   onCardAction: (key: string) => void
-  onNpmSearch: () => void
   openDetail: (pkg: string) => void
   closeDetail: () => void
 }>()
-
-const npmQuery = defineModel<string>('npmQuery', { required: true })
-const cardFilter = defineModel<string>('cardFilter', { required: true })
 
 const Badge = useUiComponent('Badge')
 const Button = useUiComponent('Button')
@@ -51,32 +46,9 @@ const TabsTrigger = useUiComponent('TabsTrigger')
           @click.stop="selectTab(tab.id)"
         >
           {{ tab.label }}
-          <Badge variant="secondary" class="pmp-tab-count">{{ tabCount(tab.id) }}</Badge>
+          <Badge v-if="tabCount(tab.id) >= 0" variant="secondary" class="pmp-tab-count">{{ tabCount(tab.id) }}</Badge>
         </TabsTrigger>
       </TabsList>
-      <div class="pmp-filter pmp-filter-inline">
-        <Search :size="14" class="pmp-filter-icon" aria-hidden="true" />
-        <Input
-          v-model="cardFilter"
-          class="pmp-input pmp-filter-input"
-          type="text"
-          spellcheck="false"
-          aria-label="搜索插件：名字、说明或包名"
-          placeholder="搜索插件：名字、说明或包名（回车搜索 NPM 市场）"
-          @keydown.enter.prevent="onNpmSearch"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          type="button"
-          :disabled="npmSearching"
-          @click="onNpmSearch"
-        >
-          <Loader2 v-if="npmSearching" class="spin" :size="14" aria-hidden="true" />
-          <Search v-else :size="14" aria-hidden="true" />
-          搜索
-        </Button>
-      </div>
     </div>
 
     <p v-if="npmError" class="pmp-error" role="alert">{{ npmError }}</p>
@@ -101,7 +73,7 @@ const TabsTrigger = useUiComponent('TabsTrigger')
       </div>
       <div v-else-if="!marketCards.length" class="pmp-empty">
         <PackageSearch :size="20" aria-hidden="true" />
-        {{ cardFilter ? '没有符合筛选的插件。' : '没有匹配的插件。' }}
+        没有匹配的插件。
       </div>
       <div v-else class="pmp-grid">
         <PluginCard v-for="card in marketCards" :key="card.id" :card="card" @action="onCardAction" @detail="openDetail" />
@@ -111,28 +83,11 @@ const TabsTrigger = useUiComponent('TabsTrigger')
     <div v-else-if="activeSection === 'installed'" class="pmp-panel">
       <div v-if="!visibleInstalledCards.length" class="pmp-empty">
         <PackageSearch :size="20" aria-hidden="true" />
-        {{ cardFilter ? '没有符合筛选的已装插件。' : '还没有从 NPM 装过插件。' }}
+        '还没有从 NPM 装过插件。'
       </div>
       <div v-else class="pmp-grid">
         <PluginCard
           v-for="card in visibleInstalledCards"
-          :key="card.id"
-          :card="card"
-          @action="onCardAction"
-          @detail="openDetail"
-        />
-      </div>
-    </div>
-
-    <div v-else-if="activeSection === 'local'" class="pmp-panel">
-      <p class="pmp-hint">本地或 dev 服务检测到、但不在 NPM 安装记录里的插件。</p>
-      <div v-if="!visibleLocalCards.length" class="pmp-empty">
-        <PackageSearch :size="20" aria-hidden="true" />
-        {{ cardFilter ? '没有符合筛选的插件。' : '没有本地检测到的插件。' }}
-      </div>
-      <div v-else class="pmp-grid">
-        <PluginCard
-          v-for="card in visibleLocalCards"
           :key="card.id"
           :card="card"
           @action="onCardAction"

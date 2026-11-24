@@ -1,15 +1,7 @@
 <script setup lang="ts">
 /**
- * PluginManagerPage —— 设置面板里「插件」这一页。
- *
- * 布局：
- *   ① 工具条：中转地址 + 刷新 + 全部安装 + 计数
- *   ② 页签：市场 / 已装 / 本地清单 / 自带
- *   ③ 筛选 + 两列卡片（窄屏一列）
- *
- * 数据仍来自 plugin-manager 服务。状态和动作在 usePluginManagerPage，
- * 工具条与页签正文各自拆成子组件。
- *
+ * 插件管理页：顶部（搜索 + 设置(插件源) + 刷新）→ 页签（市场/已装/各第三方源）→ 卡片网格。
+ * 数据与状态在 usePluginManagerPage；工具条与页签正文各自拆成子组件。
  * 登录不在这里：认证与它的界面归 cloud-client（用户口径 2026-11-12）。
  */
 import { usePluginManagerPage } from './plugin-manager-page/usePluginManagerPage'
@@ -19,22 +11,20 @@ import PluginManagerTabs from './plugin-manager-page/PluginManagerTabs.vue'
 const {
   svc,
   s,
-  sourceTabs,
-  activeSourceId,
-  onRefresh,
-  installedCount,
-  npmTab,
-  TABS,
+  pluginTabs,
+  activeTabId,
+  selectTab,
+  activeSection,
   tabCount,
-  cardFilter,
   npmError,
   errorLog,
-  onNpmSearch,
   npmQuery,
   npmSearching,
+  onNpmSearch,
   marketCards,
   visibleInstalledCards,
-  visibleLocalCards,
+  installedCount,
+  onRefresh,
   onCardAction,
   openDetail,
   closeDetail,
@@ -48,26 +38,26 @@ const {
       :s="s"
       :service="svc"
       :installed-count="installedCount"
+      :npm-searching="npmSearching"
+      v-model:npm-query="npmQuery"
+      @npm-search="onNpmSearch"
       @refresh="onRefresh"
     />
 
     <PluginManagerTabs
-      :source-tabs="sourceTabs"
-      v-model:active-source-id="activeSourceId"
-      v-model:npm-tab="npmTab"
-      v-model:npm-query="npmQuery"
-      v-model:card-filter="cardFilter"
+      v-if="!s.detailPkg"
       :s="s"
-      :tabs="TABS"
+      :plugin-tabs="pluginTabs"
+      :active-tab-id="activeTabId"
+      :select-tab="selectTab"
+      :active-section="activeSection"
       :npm-error="npmError"
       :npm-searching="npmSearching"
       :market-cards="marketCards"
       :visible-installed-cards="visibleInstalledCards"
-      :visible-local-cards="visibleLocalCards"
       :error-log="errorLog"
       :tab-count="tabCount"
       :on-card-action="onCardAction"
-      :on-npm-search="onNpmSearch"
       :open-detail="openDetail"
       :close-detail="closeDetail"
     />

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * 插件页顶部：插件源列表（一行一个源，用户口径 2026-11-24）、刷新、全部安装、计数。
- * 每个源一行：名称 + 清单地址 + 删除；添加行在最下。改完自动生效并重拉对应源数据。
- * 登录不在这里（归 cloud-client）。
+ * 插件页顶部：左 = 搜索框 + 搜索按钮；右 = 设置（插件源配置）+ 刷新（用户口径 2026-11-24）。
+ * 设置展开后是插件源列表：一行一个源（名称 + 地址 + 删除）+ 添加行。
+ * 全部安装按钮已删（用户口径：没有意义）。登录不在这里（归 cloud-client）。
  */
 import { ref } from 'vue'
-import { Download, RefreshCw } from 'lucide-vue-next'
+import { Loader2, RefreshCw, Search, Settings2 } from 'lucide-vue-next'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import type { PluginManagerService } from '../../../pluginManagerService'
 
@@ -13,15 +13,20 @@ const props = defineProps<{
   s: PluginManagerService['state']
   service: PluginManagerService
   installedCount: number
+  npmQuery: string
+  npmSearching: boolean
 }>()
 
 const emit = defineEmits<{
+  'update:npmQuery': [value: string]
+  npmSearch: []
   refresh: []
 }>()
 
 const Button = useUiComponent('Button')
 const Input = useUiComponent('Input')
 
+const showSources = ref(false)
 const newName = ref('')
 const newUrl = ref('')
 
@@ -44,20 +49,37 @@ function updateSource(id: string, patch: { name?: string; url?: string }): void 
 
 <template>
   <div class="pmp-toolbar">
+    <div class="pmp-search">
+      <Search :size="14" class="pmp-filter-icon" aria-hidden="true" />
+      <Input
+        :model-value="npmQuery"
+        class="pmp-input pmp-search-input"
+        type="text"
+        spellcheck="false"
+        aria-label="搜索插件：名字、说明或包名"
+        placeholder="搜索插件：名字、说明或包名（回车搜索 NPM 市场）"
+        @update:model-value="emit('update:npmQuery', String($event))"
+        @keydown.enter.prevent="emit('npmSearch')"
+      />
+      <Button variant="outline" size="sm" type="button" :disabled="npmSearching" @click="emit('npmSearch')">
+        <Loader2 v-if="npmSearching" class="spin" :size="14" aria-hidden="true" />
+        <Search v-else :size="14" aria-hidden="true" />
+        搜索
+      </Button>
+    </div>
     <div class="pmp-toolbar-actions">
+      <Button variant="outline" size="sm" type="button" :aria-pressed="showSources" @click="showSources = !showSources">
+        <Settings2 :size="14" aria-hidden="true" />
+        设置
+      </Button>
       <Button variant="outline" size="sm" type="button" :disabled="s.loading" @click="emit('refresh')">
         <RefreshCw :size="14" :class="{ spin: s.loading }" aria-hidden="true" />
         刷新
       </Button>
-      <Button size="sm" type="button" :disabled="s.loading || s.installingAll" @click="props.service.installAll()">
-        <Download :size="14" aria-hidden="true" />
-        全部安装
-      </Button>
     </div>
-    <span class="pmp-count">{{ installedCount }} / {{ s.rows.length }} 已装</span>
   </div>
-  <div class="pmp-sources">
-    <p class="pmp-label">插件源（每个源 = 一个插件清单体系，安装/更新走对应源；选中页签即切换源）</p>
+  <div v-if="showSources" class="pmp-sources">
+    <p class="pmp-label">插件源（每个源 = 一个插件清单体系；一级页签对应各源，安装/更新走对应源）</p>
     <div v-for="src in s.sources" :key="src.id" class="pmp-source-row">
       <Input
         :model-value="src.name"
@@ -91,11 +113,31 @@ function updateSource(id: string, patch: { name?: string; url?: string }): void 
 <style scoped>
 .pmp-toolbar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 8px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--ui-line-soft, #eef0f4);
+}
+
+.pmp-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 420px;
+  min-width: 260px;
+}
+
+.pmp-search-input { padding-left: 30px; }
+
+.pmp-filter-icon {
+  position: absolute;
+  left: 10px;
+  z-index: 1;
+  color: var(--ui-ink-mute, #9ca3af);
+  pointer-events: none;
 }
 
 .pmp-sources {
