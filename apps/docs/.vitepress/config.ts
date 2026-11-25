@@ -209,6 +209,7 @@ const pluginsSidebar = [
       { text: '默认主题', link: '/plugins/theme-canvas' },
       { text: '默认组件库', link: '/plugins/theme-components' },
       { text: 'UI 开发', link: '/plugins/ui-development' },
+      { text: '热重载', link: '/plugins/hot-reload' },
       { text: '插件解析', link: '/plugins/parsed/' },
       { text: '渲染宿主', link: '/plugins/canvas-render' },
       { text: 'Agent 插件', link: '/cloud-server/bridge-agent' },

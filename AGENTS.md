@@ -126,6 +126,7 @@ pnpm -C apps/web typecheck
 | 案例教程（照抄能跑） | `apps/docs/examples/<编号>-<名字>.md` | `.vitepress/config.ts` 的 `examplesSidebar` 加一行 |
 | 概念讲解 | `apps/docs/intro/` `start/` `kernel/` `canvas-data/` `canvas-render/` `theme/` | `config.ts` 的 `guideSidebar` 加一行 |
 | 组件说明 | `apps/docs/plugins/theme-components/<组件名>.md` | `config.ts` 的 `pluginsSidebar` 对应分组加一行 |
+| 单个插件的完整使用说明 | `apps/docs/plugins/<插件名>.md` | `config.ts` 的 `pluginsSidebar` 加一行 |
 | 插件能力解析 | `apps/docs/plugins/parsed/<插件>/index.md` + 子页 | **不用改**：构建时扫目录自动生成 |
 | 速查表入口 | `apps/docs/examples/recipe-map.md` 的表加一行 | — |
 | 开发过程文档（计划、调研、排障） | 历史在 `backup/docs-2026-11-03/`，新问题在 `docs/问题整理/` | 不挂：只给开发者查 |
@@ -242,6 +243,8 @@ cp packages/plugins/plugin-bottom-bar/scripts/watch.mjs packages/plugins/<你的
 ## 十、找文档
 
 - 正式文档（最新功能与用法）：`apps/docs/`
+- 文档站自己的入口：`apps/docs/AGENTS.md`（哪类文档放哪、常见主题先读哪篇）
+- 热重载 / 插件调试：`apps/docs/plugins/hot-reload.md`
 - 开发过程文档（计划、调研、排障、历史）：`backup/docs-2026-11-03/`
 - 新问题整理：`docs/问题整理/`
 - 问题整理技能：`.codex/skills/issue-briefing/SKILL.md`
