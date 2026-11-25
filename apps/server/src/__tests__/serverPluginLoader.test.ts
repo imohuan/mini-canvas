@@ -70,6 +70,30 @@ describe('后台插件加载器（按配置读入口）', () => {
     expect(r.failures).toEqual([])
   })
 
+  /**
+   * 用户 2026-11-25 的启动日志：纯前端插件把前端产物写进了 server.entry，
+   * 后台把 UMD 浏览器包当 Node 脚本加载 → `defineComponent` / `reactive` 未定义。
+   * 同一个文件不能既是页面脚本又是服务端脚本，这种目录必须**整条跳过**，
+   * 不能“先试再失败” —— 失败日志本身就是用户看到的噪音。
+   */
+  it('★ server.entry 与 web.entry 指向同一个文件 → 跳过，且不记 failure', async () => {
+    await makePlugin('plugin-fe-only', {
+      entry: 'dist/plugin-fe-only.js',
+      source: 'var e={};e.PlumePluginX={};e.Vue.defineComponent()',
+      packageJson: {
+        name: '@plume-canvas/plugin-fe-only',
+        plume: {
+          pluginName: 'fe-only',
+          web: { entry: 'dist/plugin-fe-only.js' },
+          server: { entry: 'dist/plugin-fe-only.js' },
+        },
+      },
+    })
+    const r = await loadServerPluginsFromPluginDirs(dir)
+    expect(r.modules).toEqual([])
+    expect(r.failures).toEqual([])
+  })
+
   it('声明了入口但文件不存在 → 记 failure，说清缺哪个文件', async () => {
     const pluginDir = path.join(dir, 'plugin-missing')
     await fs.mkdir(pluginDir, { recursive: true })

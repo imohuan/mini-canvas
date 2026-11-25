@@ -7,8 +7,9 @@
  * 这些第三方库自带 `process.env.NODE_ENV` 判断；vite 的 lib 模式只替换自己
  * 生成的那部分，内联依赖里的一律原样留着。浏览器没有 `process`，一执行就炸。
  *
- * 修法是把 `define` 提到 config 顶层（见 packages/plugins/vite-plugin-lib.ts 的
- * PLUGIN_DEFINE）。这条守卫不看配置、只扫**真产物**，配置写对了但没生效也能抓到。
+ * 修法是把 `define` 写进各插件 vite.config.ts 的 build 段（内容固定为
+ * process.env.NODE_ENV → "production"）。这条守卫不看配置、只扫**真产物**，
+ * 配置写对了但没生效也能抓到。
  */
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
@@ -38,12 +39,6 @@ function builtPluginBundles(): string[] {
 }
 
 describe('插件产物不依赖浏览器里不存在的 process', () => {
-  it('PLUGIN_DEFINE 把 process.env.NODE_ENV 固定成 production', () => {
-    const src = readFileSync(path.join(PLUGINS_DIR, 'vite-plugin-lib.ts'), 'utf8')
-    expect(src).toMatch(/process\.env\.NODE_ENV/)
-    expect(src).toMatch(/PLUGIN_DEFINE/)
-  })
-
   it('★ 已构建的前端产物里没有 process.env.NODE_ENV', () => {
     const bundles = builtPluginBundles()
     expect(bundles.length, '一个插件产物都没有，先跑 pnpm -C apps/server build:assets').toBeGreaterThan(0)

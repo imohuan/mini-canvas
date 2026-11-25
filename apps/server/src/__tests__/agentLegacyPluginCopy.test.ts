@@ -74,6 +74,35 @@ describe('全局目录里是旧副本时，后台半要回落到随包版本', (
     const picked = await resolvePluginDirWithServer({ global: globalRoot, packaged: packagedRoot }, 'plugin-agent')
     expect(picked?.replace(/\\/g, '/')).toContain('/packaged/plugin-agent')
   })
+
+  /**
+   * 用户 2026-11-25 的 npx 启动日志：底部状态栏 / 快捷键两个**纯前端**插件，
+   * 装到数据根后 package.json 的 `plume.server.entry` 指向前端产物，
+   * 后台按配置 import 它们，第一行就炸：
+   *   Cannot read properties of undefined (reading 'defineComponent')
+   *   Cannot read properties of undefined (reading 'reactive')
+   * 同一个文件不可能既是页面脚本又是 Node 脚本 —— 命中就当纯前端件跳过。
+   */
+  it('★ server.entry 与 web.entry 是同一个文件 → 不算后台半', async () => {
+    const globalRoot = path.join(dir, 'global')
+    const d = path.join(globalRoot, 'plume-canvas__plugin-bottom-bar', 'dist')
+    await fs.mkdir(d, { recursive: true })
+    await fs.writeFile(path.join(d, 'plugin-bottom-bar.js'), 'var e.Vue;e.Vue.defineComponent()')
+    await fs.writeFile(
+      path.join(globalRoot, 'plume-canvas__plugin-bottom-bar', 'package.json'),
+      JSON.stringify({
+        name: '@plume-canvas/plugin-bottom-bar',
+        plume: {
+          pluginName: 'bottom-bar',
+          web: { entry: 'dist/plugin-bottom-bar.js' },
+          server: { entry: 'dist/plugin-bottom-bar.js' },
+        },
+      }),
+    )
+
+    const picked = await resolvePluginDirWithServer({ global: globalRoot }, 'plume-canvas__plugin-bottom-bar')
+    expect(picked, '前端产物不能被当成后台半').toBeUndefined()
+  })
 })
 
 describe('Agent 后台一份都找不到时，服务照常启动', () => {

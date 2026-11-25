@@ -13,6 +13,18 @@ import { DEV_APP_PLUGINS, DEV_CANVAS_PLUGINS, DEV_PLUGIN_REGISTRY } from '../dev
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 const PLUGINS_DIR = path.resolve(HERE, '../../../../packages/plugins')
 
+/**
+ * 同时具备两种身份的插件：既能从市场安装，又要在 dev 里静态装配。
+ *
+ * - hot-reload：发布版从市场装；仓库 dev 直接装源码，改一行就热更，省一次构建安装。
+ * - mini-map：状态栏「切换小地图」依赖它注册的槽与设置项，发行版里没装按钮就是空操作
+ *   （见 dev-plugins.ts 里的说明），所以 dev 静态装配保留。
+ *
+ * 两者都不进 build 产物（build 只走 cloud-server 清单），所以不会双份加载。
+ * 新增名单项必须在这里写清「为什么两边都要」，否则守卫就形同虚设。
+ */
+const DEV_STATIC_INSTALLABLE = new Set(['hot-reload', 'mini-map'])
+
 interface Pkg {
   name?: string
   plume?: { pluginName?: string; builtin?: boolean; installable?: boolean }
@@ -68,6 +80,7 @@ describe('DEV_PLUGIN_REGISTRY（dev 静态清单）', () => {
         }
       }
       if (mc.installable === true && mc.builtin !== true) {
+        if (DEV_STATIC_INSTALLABLE.has(pluginName)) continue
         expect(registered.has(pluginName), dir + ' 是 installable，不该进静态注册表').toBe(false)
       }
     }

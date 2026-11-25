@@ -35,8 +35,6 @@ describe('parseModuleExport —— 从 UMD 全局里找出插件模块（2026-11
   })
 })
 
-import { HOST_GLOBALS } from '../../../../packages/plugins/vite-plugin-lib'
-
 /** 造一个插件目录：<dir>/<pkg>/{package.json, dist/<file>} */
 async function makePluginsDir(spec: Record<string, { file: string; content: string; pkg?: object }>): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'cloud-catalog-'))
@@ -61,10 +59,40 @@ const UMD = (global: string, args = '') =>
   '(function(e,t){t(e.' + global + '={}' + (args ? ',' + args : '') + ')})(this,function(e){e.name="x";e.apply=function(){}})'
 
 describe('插件管理清单 /plugin-catalog.json', () => {
-  it('KNOWN_GLOBALS 与打包端 HOST_GLOBALS 的值集一致（双源漂移守卫）', () => {
-    const host = [...new Set(Object.values(HOST_GLOBALS))].sort()
-    const catalog = [...new Set([...KNOWN_GLOBALS])].sort()
-    expect(catalog).toEqual(host)
+  it('KNOWN_GLOBALS 覆盖可装卸插件产物实际用到的全局（漏一个，清单就会漏报依赖）', async () => {
+    const repo = path.resolve(__dirname, '../../../..')
+    const pluginsDir = path.join(repo, 'packages', 'plugins')
+    const known = new Set<string>(KNOWN_GLOBALS)
+    // 只查可装卸件：自带件随应用打包，不走 window 全局（如 node-3d-preview 的 THREE）。
+    const installable = (await fs.readdir(pluginsDir))
+    // 逐个过滤：读 package.json 看 plume.installable
+    const targets: string[] = []
+    for (const name of installable) {
+      try {
+        const pkg = JSON.parse(await fs.readFile(path.join(pluginsDir, name, 'package.json'), 'utf8'))
+        if (pkg.plume?.installable === true) targets.push(name)
+      } catch { /* 没有 package.json 的目录跳过 */ }
+    }
+    expect(targets.length, '没找到任何 installable 插件，判据可能写错了').toBeGreaterThan(0)
+    // 从真产物里抠出「e.Vue / e.PlumeCore」这类实参，看 KNOWN_GLOBALS 有没有漏
+    const missing: string[] = []
+    for (const name of targets) {
+      const dist = path.join(pluginsDir, name, 'dist')
+      let files: string[]
+      try { files = await fs.readdir(dist) } catch { continue }
+      for (const file of files.filter((f) => f.endsWith('.js') && !f.startsWith('server'))) {
+        const text = await fs.readFile(path.join(dist, file), 'utf8')
+        const anchor = text.match(/\.PlumePlugin[A-Za-z0-9_]+\s*=\s*\{\}/)
+        if (!anchor || anchor.index === undefined) continue
+        const head = text.slice(anchor.index, anchor.index + 800)
+        for (const m of head.matchAll(/[,"(]\s*[a-zA-Z_$][\w$]*\.([A-Z][A-Za-z0-9_]*)\b/g)) {
+          const g = m[1]
+          if (g === 'NODE_ENV' || known.has(g)) continue
+          missing.push(name + '/' + file + ' → ' + g)
+        }
+      }
+    }
+    expect(missing, '这些全局没进 KNOWN_GLOBALS，清单会漏报：\n' + missing.join('\n')).toEqual([])
   })
 
   it('收录 installable 的 UMD 插件：url 相对本服务、带 globalName/requiresGlobals/文案', async () => {
