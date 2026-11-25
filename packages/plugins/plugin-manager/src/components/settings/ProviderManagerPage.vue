@@ -479,21 +479,41 @@ function onSave(): void {
 /* provider 自带图标走 <img>：给同一档尺寸，否则 1×1 会缩成 0、大图撑破图标托 */
 .pmp-model-brand :deep(img) { width: 22px; height: 22px; display: block; object-fit: contain; border-radius: 6px; }
 /* 认不出平台时的通用线稿：沿用底栏那套家族色 */
+/*
+ * 品牌色是平台标识（Seedream / Kling / Runway 各不相同），不是界面语义色：
+ * 跟着主题换会失去辨识度，白底上也才认得出来。逐行豁免，别整块放行。
+ */
+/* 主题色白名单: 品牌标识色（seedream） */
 .pmp-model-brand[data-tone='seedream'] { color: #1e37fc; }
+/* 主题色白名单: 品牌标识色（seedance） */
 .pmp-model-brand[data-tone='seedance'] { color: #7c3aed; }
+/* 主题色白名单: 品牌标识色（doubao） */
 .pmp-model-brand[data-tone='doubao'] { color: #1e37fc; }
+/* 主题色白名单: 品牌标识色（dola） */
 .pmp-model-brand[data-tone='dola'] { color: #0ea5e9; }
+/* 主题色白名单: 品牌标识色（volcengine） */
 .pmp-model-brand[data-tone='volcengine'] { color: #166534; }
+/* 主题色白名单: 品牌标识色（kling） */
 .pmp-model-brand[data-tone='kling'] { color: #f97316; }
+/* 主题色白名单: 品牌标识色（sora） */
 .pmp-model-brand[data-tone='sora'] { color: #0f766e; }
+/* 主题色白名单: 品牌标识色（veo） */
 .pmp-model-brand[data-tone='veo'] { color: #2563eb; }
+/* 主题色白名单: 品牌标识色（runway） */
 .pmp-model-brand[data-tone='runway'] { color: #111827; }
+/* 主题色白名单: 品牌标识色（pika） */
 .pmp-model-brand[data-tone='pika'] { color: #e11d48; }
+/* 主题色白名单: 品牌标识色（hailuo） */
 .pmp-model-brand[data-tone='hailuo'] { color: #0891b2; }
+/* 主题色白名单: 品牌标识色（qwen） */
 .pmp-model-brand[data-tone='qwen'] { color: #7c3aed; }
+/* 主题色白名单: 品牌标识色（midjourney） */
 .pmp-model-brand[data-tone='midjourney'] { color: #334155; }
+/* 主题色白名单: 节点类型兜底色（image） */
 .pmp-model-brand[data-tone='image'] { color: #2563eb; }
+/* 主题色白名单: 节点类型兜底色（video） */
 .pmp-model-brand[data-tone='video'] { color: #7c3aed; }
+/* 主题色白名单: 节点类型兜底色（audio） */
 .pmp-model-brand[data-tone='audio'] { color: #059669; }
 .pmp-model-brand[data-tone='text'] { color: var(--ui-ink-dim, #6b7280); }
 .pmp-model-main { flex: 1; min-width: 0; }
