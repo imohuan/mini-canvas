@@ -222,8 +222,6 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
 要**磁盘绝对路径**（喂 ffmpeg、自己读文件）——节点里存的是同源地址，不是路径：
 
   resource_local_path({ url })        或 { canvasId, nodeId }  → { localPath, exists }
-  canvas_get({ canvasId, nodeId, withLocalPath: true })        → 节点多一个 localPath
-  resource_list({ canvasId, withLocalPath: true })             → 每项多一个 localPath
   canvas_resource_fetch({ url }) 或 { canvasId, nodeId }       → base64 + agentLocalPath
 
   ★ 你在脚本里可以直接用 `ctx.file(地址)` 现算路径；那是「Agent 手上」没有的东西，

@@ -3,9 +3,8 @@
  *
  * 背景：Agent 手里只有 `/api/canvases/<id>/resources/<名>`，没有 `ctx.file` ——
  * 那是脚本子进程里的函数。以前它只能从系统提示里抄数据根、自己拼路径，
- * 换部署就错。这三个入口把「算路径」搬回服务端：
- *   · canvas_get / resource_list 的 withLocalPath
- *   · resource_local_path（单独要路径）
+ * 换部署就错。两个新工具把「算路径」搬回服务端：
+ *   · resource_local_path（要路径）
  *   · canvas_resource_fetch（连路径都不要，直接给字节）
  *
  * 顺带盯一条安全线：调用方塞 `../` 进来不能拼出画布外。
@@ -82,22 +81,6 @@ async function boot(): Promise<void> {
 const expected = () => path.join(dir, 'canvases', CANVAS, 'resources', NAME)
 
 describe('资源本机路径', () => {
-  it('★ canvas_get 加 withLocalPath 才给路径（默认不给）', async () => {
-    await boot()
-    const plain = await mcpCall('canvas_get', { canvasId: CANVAS, nodeId: '84' })
-    expect((plain.node as Record<string, unknown>).localPath).toBeUndefined()
-
-    const withPath = await mcpCall('canvas_get', { canvasId: CANVAS, nodeId: '84', withLocalPath: true })
-    expect((withPath.node as Record<string, unknown>).localPath).toBe(expected())
-  })
-
-  it('★ resource_list 加 withLocalPath → 每项带路径', async () => {
-    await boot()
-    const r = await mcpCall('resource_list', { canvasId: CANVAS, withLocalPath: true })
-    const list = r.resources as Array<Record<string, unknown>>
-    expect(list.find((x) => x.name === NAME)?.localPath).toBe(expected())
-  })
-
   it('★ resource_local_path：给 url 或给节点，两条都能算', async () => {
     await boot()
     const byUrl = await mcpCall('resource_local_path', {

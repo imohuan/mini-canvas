@@ -209,8 +209,8 @@ export function createCanvasMcpServer(
   /**
    * 数据根（`<根>/canvases` 的上一级）。
    *
-   * 只给「把同源地址翻成磁盘路径」这一类工具用（`resource_local_path`、以及
-   * `canvas_get` / `resource_list` 的 `withLocalPath`）。拿不到就不返回路径 ——
+   * 只给「把同源地址翻成磁盘路径」的两个工具用（`resource_local_path` /
+   * `canvas_resource_fetch`）。拿不到就不返回路径 ——
    * 宁可少给一个字段，也不编一个可能是错的绝对路径。
    */
   dataRoot?: () => string | undefined,
@@ -355,26 +355,15 @@ export function createCanvasMcpServer(
   server.tool(
     'canvas_get',
     '读取画布。不给 nodeId = 读整张全量（nodes/edges/viewport），AI 编辑前先读一次掌握现状；' +
-      '给 nodeId = 只读那一个节点（引用某个节点时用，不必为看一个节点拉回整张画布）。' +
-      '★ 想直接读文件（给 ffmpeg / 自己算像素）就加 withLocalPath: true —— ' +
-      '节点会多一个 localPath（本机绝对路径）。默认不返回，避免把部署细节塞进每次读取。',
+      '给 nodeId = 只读那一个节点（引用某个节点时用，不必为看一个节点拉回整张画布）',
     {
       nodeId: z.string().optional().describe('只读这一个节点；省略 = 读整张画布'),
       canvasId: canvasIdSchema,
-      withLocalPath: z.boolean().optional().describe('顺便给出媒体文件的本机绝对路径（localPath）'),
     },
-    async ({ nodeId, canvasId, withLocalPath }) => {
+    async ({ nodeId, canvasId }) => {
       const picked = await pickDoc(canvasId)
       if ('error' in picked) return toText({ ok: false, error: picked.error })
       const snap = await picked.doc.read()
-      const effectiveCanvasId = canvasId ?? DEFAULT_CANVAS_ID
-      /** 按需补一个 localPath：算不出来就不加这个字段（不编路径） */
-      const withPath = <T extends { data?: Record<string, unknown> }>(n: T): T & { localPath?: string } => {
-        if (!withLocalPath) return n
-        const name = resourceNameOfNode(effectiveCanvasId, n)
-        const abs = name ? localPathOf(effectiveCanvasId, name) : undefined
-        return abs ? { ...n, localPath: abs } : n
-      }
       // 按 id 只取一个：省掉"读全量再自己筛"。找不到就如实回空，不编一个空节点。
       if (nodeId !== undefined) {
         const node = snap.nodes.find((n) => n.id === nodeId)
@@ -383,7 +372,7 @@ export function createCanvasMcpServer(
         const byId = new Map(snap.nodes.map((n) => [n.id, n]))
         return toText({
           ok: true,
-          node: withPath(node),
+          node,
           // 顺带把直接相连的边与对端节点给出：AI 常要"这个节点连了谁"，省一次往返
           edges: related,
           neighbors: related
@@ -396,7 +385,7 @@ export function createCanvasMcpServer(
         ok: true,
         nodeCount: snap.nodes.length,
         edgeCount: snap.edges.length,
-        nodes: withLocalPath ? snap.nodes.map(withPath) : snap.nodes,
+        nodes: snap.nodes,
         edges: snap.edges,
         viewport: snap.viewport ?? null,
       })
@@ -444,13 +433,11 @@ export function createCanvasMcpServer(
     'resource_list',
     '列出本画布已存资源（每个资源带 name / mime / kind / url）。kind 是 image/video/audio/other ——' +
       '按扩展名认不出时会读文件头嗅探（画布资源按内容哈希落盘、很多没有扩展名）。' +
-      '根据 kind 决定怎么展示：只有 image 能进 <img>，音频硬塞进 <img> 就是裂图。' +
-      '★ withLocalPath: true 时每项多一个 localPath（本机绝对路径），可直接喂 ffmpeg / 本地脚本',
-    { canvasId: canvasIdSchema, withLocalPath: z.boolean().optional().describe('同时给出每个资源的本机绝对路径') },
-    async ({ canvasId, withLocalPath }) => {
+      '根据 kind 决定怎么展示：只有 image 能进 <img>，音频硬塞进 <img> 就是裂图',
+    { canvasId: canvasIdSchema },
+    async ({ canvasId }) => {
       const picked = await pickDoc(canvasId)
       if ('error' in picked) return toText({ ok: false, error: picked.error })
-      const effectiveCanvasId = canvasId ?? DEFAULT_CANVAS_ID
       // 优先用带类型的清单（kind 不全靠调用方猜）；拿不到就退回名字清单，本地补上 url/类型
       const resources = picked.doc.listResourceInfos
         ? await picked.doc.listResourceInfos()
@@ -460,13 +447,7 @@ export function createCanvasMcpServer(
             kind: kindOfMime(mimeFromName(name)),
             url: toResourceUrl(canvasId ?? DEFAULT_CANVAS_ID, name),
           }))
-      const withPath = withLocalPath
-        ? resources.map((r) => {
-            const abs = localPathOf(effectiveCanvasId, r.name)
-            return abs ? { ...r, localPath: abs } : r
-          })
-        : resources
-      return toText({ ok: true, count: withPath.length, resources: withPath })
+      return toText({ ok: true, count: resources.length, resources })
     },
   )
 

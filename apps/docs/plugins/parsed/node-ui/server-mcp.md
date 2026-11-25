@@ -167,22 +167,20 @@
 `canvas_get` / `canvas_overview` / `canvas_list_canvases` /
 `canvas_batch_nodes` / `canvas_batch_edges` / `resource_upload` / `generation_*`。
 
-## 二·补、要「磁盘路径」时用这三个（2026-11-25 新增）
+## 二·补、要「磁盘路径」时用这两个工具（2026-11-25 新增）
 
 节点里存的是**同源地址**（`/api/canvases/<画布>/resources/<名>`），不是磁盘路径 ——
 换机器、换部署都成立。Agent 手上没有 `ctx.file`（那是脚本子进程里的函数），
-所以另给了三个入口，省掉「自己拼数据根」这一步：
+所以另给了两个入口，省掉「自己拼数据根」这一步：
 
 | 工具 | 拿到什么 | 什么时候用 |
 | --- | --- | --- |
-| `canvas_get({ …, withLocalPath: true })` | 节点多一个 `localPath` | 已经在读节点，顺手要路径 |
-| `resource_list({ …, withLocalPath: true })` | 每项多一个 `localPath` | 已经在列资源，顺手要路径 |
 | `resource_local_path({ url })` 或 `{ canvasId, nodeId }` | `{ localPath, exists }` | 只要路径 |
 | `canvas_resource_fetch({ url })` 或 `{ canvasId, nodeId }` | `base64` + `agentLocalPath` | 连路径都不想管，只要字节 |
 
 几个要点：
 
-- **默认都不返回路径**（`withLocalPath` 不传就不给），避免每次读取都塞部署细节。
+- `canvas_get` / `resource_list` 的输出**保持原样**，不多塞字段：节点里存的地址形态本来就各不相同（`imageUrl` / `uiOutputUrl` / 只有 `resourceId`），统一补一个路径反而容易给错。要路径就问上面这两个工具。
 - 路径由服务端现算，只认白名单资源名（内容哈希 / `slot-`），`../` 拼不出画布外。
 - `canvas_resource_fetch` 会把字节另存一份到 `<数据根>/canvases/<画布>/agent/workspace/_resources/`，
   因为 Agent 的文件类工具**受工作目录限制**，读不到兄弟目录 `resources/`。
