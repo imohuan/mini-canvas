@@ -219,6 +219,18 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
   canvas_overview({ canvasId })      ← 只读规模与类型分布
   canvas_list_canvases()             ← 这台服务器上有哪些画布
 
+要**磁盘绝对路径**（喂 ffmpeg、自己读文件）——节点里存的是同源地址，不是路径：
+
+  resource_local_path({ url })        或 { canvasId, nodeId }  → { localPath, exists }
+  canvas_get({ canvasId, nodeId, withLocalPath: true })        → 节点多一个 localPath
+  resource_list({ canvasId, withLocalPath: true })             → 每项多一个 localPath
+  canvas_resource_fetch({ url }) 或 { canvasId, nodeId }       → base64 + agentLocalPath
+
+  ★ 你在脚本里可以直接用 `ctx.file(地址)` 现算路径；那是「Agent 手上」没有的东西，
+    所以对 Agent 另给了上面这几个工具。
+  ★ `canvas_resource_fetch` 会把字节另存到你的工作目录（`_resources/`），
+    因为你的文件类工具出不去工作目录，读不到兄弟目录 `resources/`。
+
 要引用别的节点、或想看看某个节点连了什么，就用第一条（省一次全量搬运）。
 
 ## 四、要改画布上的东西，用内置的 canvas_batch_nodes

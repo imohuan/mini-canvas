@@ -842,6 +842,8 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     // agent 相关的两组按开关决定装不装
     // 调试在场通道：只对「监听本机回环」的服务存在（见上面 loopbackListen 的说明）
     if (plugin.name === 'plugin-presence' && !loopbackListen) continue
+    // 按路径热装后台插件同属本机调试面：监听 0.0.0.0 时连这条通道都不该存在
+    if (plugin.name === 'debug-install' && !loopbackListen) continue
     host.ctx.plugin(plugin)
   }
 
@@ -1003,6 +1005,12 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
           const nameOf = new Map(idx.map((e) => [e.id, e.name]))
           return ids.map((id) => ({ id, name: nameOf.get(id) ?? id }))
         },
+        // 数据根：`resource_local_path` / `withLocalPath` 用它把同源地址翻成磁盘路径。
+        // 从资源存储问（它就知道自己在哪个数据根下），而不是在这里再拼一遍。
+        () => canvasResources.dataRoot(),
+        // Agent 的按画布工作目录：`canvas_resource_fetch` 取回字节后落一份到这里，
+        // 因为 Agent 的文件类工具出不去自己的工作目录（画布 resources/ 是兄弟目录）。
+        (canvasId) => path.join(dataDir, 'canvases', canvasId, 'agent', 'workspace', '_resources'),
       ),
     )
   }

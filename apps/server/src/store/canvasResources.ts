@@ -107,6 +107,17 @@ export class CanvasResourceStore {
   constructor(private readonly root: string) {}
 
   /**
+   * 数据根本身（`<根>/canvases` 的上一级）。
+   *
+   * 为什么需要它：Agent 手里只有同源 URL（`/api/canvases/<id>/resources/<名>`），
+   * 想直接读文件就得知道根在哪。以前只能从系统提示里抄一行、自己拼路径 ——
+   * 现在由 MCP 工具现算给它（见 `resource_local_path`）。
+   */
+  dataRoot(): string {
+    return this.root
+  }
+
+  /**
    * 存一个资源；同内容不重复写。返回**同源 URL**（写进节点 data 的那个）与磁盘名。
    *
    * 这里就返回 URL 而不是 `res:<hash>`：写入侧只有这一个出口，统一了才不会有人漏改。

@@ -14,12 +14,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { promises as fs } from 'node:fs'
+import path from 'node:path'
 import type { CanvasDocument } from './canvasDoc.js'
 import type { ProviderRegistry } from '../providers/registry.js'
 import type { TaskManager } from '../tasks/taskManager.js'
 import { DEFAULT_CANVAS_ID } from '../store/canvasPaths.js'
 import { kindOfMime, mimeFromName } from '../store/mime.js'
-import { toResourceUrl } from '../store/canvasResources.js'
+import {
+  parseResourceNameFromUrl,
+  isSafeResourceName,
+  toResourceUrl,
+} from '../store/canvasResources.js'
 import type { McpToolDef } from '../serverFramework/mcp.js'
 
 /**
@@ -131,6 +136,8 @@ export const TOOL_LIST: McpTool[] = [
   { name: 'canvas_add_media', description: '一步往画布放一份媒体（上传字节 → 建对应类型的节点）：type=image/video/audio，支持本地路径 / http(s) 链接 / dataURL' },
   { name: 'resource_upload', description: '把资源字节交给服务器（本地路径 / http(s) 链接 / base64 / 已有 dataURL），返回稳定 URL 供节点引用' },
   { name: 'resource_list', description: '列出本画布已存资源（名字 / 类型 / 访问地址），据此判断每个资源该当图、视频还是音频用' },
+  { name: 'resource_local_path', description: '把画布资源的同源地址（或节点）翻成本机磁盘绝对路径；喂 ffmpeg / 自己读文件时用' },
+  { name: 'canvas_resource_fetch', description: '取回画布资源的字节（base64 + 落一份到 Agent 工作目录），不必关心它在磁盘哪里' },
   { name: 'canvas_batch_nodes', description: '节点批量增删改（add/delete/update 合并一次执行）' },
   { name: 'canvas_batch_edges', description: '连线增删改（只收节点 id；连线 id 自动生成）' },
   { name: 'generation_actions', description: '列出后台可用的生成动作（模型 + 要什么参数），AI 据此挑一个' },
@@ -199,6 +206,23 @@ export function createCanvasMcpServer(
   resolveDoc?: CanvasDocResolver,
   /** 列出全部画布（画布 id + 名字）。给 AI 用来发现「该往哪张画布写」的 id */
   listCanvases?: () => Promise<Array<{ id: string; name: string }>>,
+  /**
+   * 数据根（`<根>/canvases` 的上一级）。
+   *
+   * 只给「把同源地址翻成磁盘路径」这一类工具用（`resource_local_path`、以及
+   * `canvas_get` / `resource_list` 的 `withLocalPath`）。拿不到就不返回路径 ——
+   * 宁可少给一个字段，也不编一个可能是错的绝对路径。
+   */
+  dataRoot?: () => string | undefined,
+  /**
+   * 「把取回的字节落一份给 Agent 文件工具读」的目录（按画布给）。
+   *
+   * 为什么需要单独一处：Agent 的文件类工具被限制在它自己的工作目录里，
+   * 而画布资源在 `<根>/canvases/<id>/resources` —— 是**兄弟目录**，读不到。
+   * 所以取回字节时另存一份到工作目录下，返回 `agentLocalPath` 给它。
+   * 不传就不落盘，只回 base64。
+   */
+  agentFilesDir?: (canvasId: string) => string | undefined,
 ): McpServer {
   const server = new McpServer({ name: 'plume-canvas', version: '0.0.0' })
   const toText = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data) }] })
@@ -218,6 +242,45 @@ export function createCanvasMcpServer(
     .string()
     .optional()
     .describe('画布 id（省略 = default）。用户的画布 id 在引用里是 `画布id#节点id` 的前半段；不确定就先 canvas_list_canvases')
+
+  /**
+   * 同源资源地址 → 本机磁盘绝对路径。
+   *
+   * 为什么放在服务端算：数据根随部署变（`.plume` / 容器内路径 / 临时目录），
+   * Agent 手上只有 `/api/canvases/<id>/resources/<名>`。让它自己拼等于把一条
+   * 「路径规则」写进提示词，改一次布局就全错。
+   *
+   * 只认白名单里的资源名（内容哈希 / slot-），且路径必须落在本画布的 resources/ 下 ——
+   * 调用方给 `../../` 之类拼不出画布外。
+   */
+  function localPathOf(canvasId: string, name: string): string | undefined {
+    const root = dataRoot?.()
+    if (!root) return undefined
+    if (!/^[A-Za-z0-9_-]{1,64}$/.test(canvasId)) return undefined
+    if (!isSafeResourceName(name)) return undefined
+    return path.join(root, 'canvases', canvasId, 'resources', name)
+  }
+
+  /** 从节点 data 里找它指向的画布资源名（媒体字段 / 产物字段都认） */
+  function resourceNameOfNode(canvasId: string, node: { data?: Record<string, unknown> }): string | undefined {
+    const d = node.data ?? {}
+    for (const key of ['imageUrl', 'videoUrl', 'audioUrl', 'uiOutputUrl', 'posterUrl', 'thumbUrl', 'maskUrl']) {
+      const v = d[key]
+      if (typeof v !== 'string' || !v) continue
+      const name = parseResourceNameFromUrl(v, canvasId)
+      if (name) return name
+    }
+    // 只写了 resourceId（`<画布>/<名>`）的老/新存档：同样能翻
+    const ref = d.resourceId
+    if (typeof ref === 'string') {
+      const i = ref.indexOf('/')
+      if (i > 0) {
+        const name = ref.slice(i + 1)
+        if (isSafeResourceName(name)) return name
+      }
+    }
+    return undefined
+  }
 
   /**
    * 把"资源来源"取成字节。支持三种给法，覆盖 AI 手里常见的形态：
@@ -292,15 +355,26 @@ export function createCanvasMcpServer(
   server.tool(
     'canvas_get',
     '读取画布。不给 nodeId = 读整张全量（nodes/edges/viewport），AI 编辑前先读一次掌握现状；' +
-      '给 nodeId = 只读那一个节点（引用某个节点时用，不必为看一个节点拉回整张画布）',
+      '给 nodeId = 只读那一个节点（引用某个节点时用，不必为看一个节点拉回整张画布）。' +
+      '★ 想直接读文件（给 ffmpeg / 自己算像素）就加 withLocalPath: true —— ' +
+      '节点会多一个 localPath（本机绝对路径）。默认不返回，避免把部署细节塞进每次读取。',
     {
       nodeId: z.string().optional().describe('只读这一个节点；省略 = 读整张画布'),
       canvasId: canvasIdSchema,
+      withLocalPath: z.boolean().optional().describe('顺便给出媒体文件的本机绝对路径（localPath）'),
     },
-    async ({ nodeId, canvasId }) => {
+    async ({ nodeId, canvasId, withLocalPath }) => {
       const picked = await pickDoc(canvasId)
       if ('error' in picked) return toText({ ok: false, error: picked.error })
       const snap = await picked.doc.read()
+      const effectiveCanvasId = canvasId ?? DEFAULT_CANVAS_ID
+      /** 按需补一个 localPath：算不出来就不加这个字段（不编路径） */
+      const withPath = <T extends { data?: Record<string, unknown> }>(n: T): T & { localPath?: string } => {
+        if (!withLocalPath) return n
+        const name = resourceNameOfNode(effectiveCanvasId, n)
+        const abs = name ? localPathOf(effectiveCanvasId, name) : undefined
+        return abs ? { ...n, localPath: abs } : n
+      }
       // 按 id 只取一个：省掉"读全量再自己筛"。找不到就如实回空，不编一个空节点。
       if (nodeId !== undefined) {
         const node = snap.nodes.find((n) => n.id === nodeId)
@@ -309,7 +383,7 @@ export function createCanvasMcpServer(
         const byId = new Map(snap.nodes.map((n) => [n.id, n]))
         return toText({
           ok: true,
-          node,
+          node: withPath(node),
           // 顺带把直接相连的边与对端节点给出：AI 常要"这个节点连了谁"，省一次往返
           edges: related,
           neighbors: related
@@ -322,7 +396,7 @@ export function createCanvasMcpServer(
         ok: true,
         nodeCount: snap.nodes.length,
         edgeCount: snap.edges.length,
-        nodes: snap.nodes,
+        nodes: withLocalPath ? snap.nodes.map(withPath) : snap.nodes,
         edges: snap.edges,
         viewport: snap.viewport ?? null,
       })
@@ -370,11 +444,13 @@ export function createCanvasMcpServer(
     'resource_list',
     '列出本画布已存资源（每个资源带 name / mime / kind / url）。kind 是 image/video/audio/other ——' +
       '按扩展名认不出时会读文件头嗅探（画布资源按内容哈希落盘、很多没有扩展名）。' +
-      '根据 kind 决定怎么展示：只有 image 能进 <img>，音频硬塞进 <img> 就是裂图',
-    { canvasId: canvasIdSchema },
-    async ({ canvasId }) => {
+      '根据 kind 决定怎么展示：只有 image 能进 <img>，音频硬塞进 <img> 就是裂图。' +
+      '★ withLocalPath: true 时每项多一个 localPath（本机绝对路径），可直接喂 ffmpeg / 本地脚本',
+    { canvasId: canvasIdSchema, withLocalPath: z.boolean().optional().describe('同时给出每个资源的本机绝对路径') },
+    async ({ canvasId, withLocalPath }) => {
       const picked = await pickDoc(canvasId)
       if ('error' in picked) return toText({ ok: false, error: picked.error })
+      const effectiveCanvasId = canvasId ?? DEFAULT_CANVAS_ID
       // 优先用带类型的清单（kind 不全靠调用方猜）；拿不到就退回名字清单，本地补上 url/类型
       const resources = picked.doc.listResourceInfos
         ? await picked.doc.listResourceInfos()
@@ -384,7 +460,136 @@ export function createCanvasMcpServer(
             kind: kindOfMime(mimeFromName(name)),
             url: toResourceUrl(canvasId ?? DEFAULT_CANVAS_ID, name),
           }))
-      return toText({ ok: true, count: resources.length, resources })
+      const withPath = withLocalPath
+        ? resources.map((r) => {
+            const abs = localPathOf(effectiveCanvasId, r.name)
+            return abs ? { ...r, localPath: abs } : r
+          })
+        : resources
+      return toText({ ok: true, count: withPath.length, resources: withPath })
+    },
+  )
+
+  server.tool(
+    'resource_local_path',
+    '把「画布资源的同源地址」翻成**本机磁盘绝对路径**（喂 ffmpeg / 自己读文件时用）。' +
+      '输入二选一：url（`/api/canvases/<画布>/resources/<名>`，带 origin 或 ?v= 也认）' +
+      '或 canvasId + nodeId（自动从那个节点里找它指向的资源）。' +
+      '算不出来就明确报错，不会编一个路径。只想拿字节（连路径都不要）用 canvas_resource_fetch。',
+    {
+      url: z.string().optional().describe('资源地址，如 /api/canvases/<画布>/resources/<名>'),
+      canvasId: canvasIdSchema,
+      nodeId: z.string().optional().describe('从某个节点里找它指向的资源（与 url 二选一）'),
+    },
+    async ({ url, canvasId, nodeId }) => {
+      const effectiveCanvasId = canvasId ?? DEFAULT_CANVAS_ID
+      let name: string | undefined
+      if (url) {
+        name = parseResourceNameFromUrl(url, effectiveCanvasId)
+        if (!name) {
+          return toText({
+            ok: false,
+            error: '这不是画布 ' + effectiveCanvasId + ' 的资源地址：' + url +
+              '（只认 /api/canvases/<画布>/resources/<名>；资产库文件走 /api/assets/files/<名>）',
+          })
+        }
+      } else if (nodeId) {
+        const picked = await pickDoc(canvasId)
+        if ('error' in picked) return toText({ ok: false, error: picked.error })
+        const snap = await picked.doc.read()
+        const node = snap.nodes.find((n) => n.id === nodeId)
+        if (!node) return toText({ ok: false, error: '节点不存在: ' + nodeId })
+        name = resourceNameOfNode(effectiveCanvasId, node)
+        if (!name) {
+          return toText({
+            ok: false,
+            error: '节点 ' + nodeId + ' 上没有指向本画布资源的字段（imageUrl / videoUrl / audioUrl / uiOutputUrl / resourceId 都是空的或不在本画布）',
+          })
+        }
+      } else {
+        return toText({ ok: false, error: '要指定 url，或者 canvasId + nodeId' })
+      }
+      const abs = localPathOf(effectiveCanvasId, name)
+      if (!abs) {
+        return toText({
+          ok: false,
+          error: '算不出本机路径（后台没给数据根，或资源名不在白名单：' + name + '）',
+        })
+      }
+      const exists = await fs
+        .access(abs)
+        .then(() => true)
+        .catch(() => false)
+      return toText({
+        ok: true,
+        canvasId: effectiveCanvasId,
+        name,
+        localPath: abs,
+        exists,
+        ...(exists ? {} : { note: '文件现在不在磁盘上（可能已被清理 / 还没生成完）' }),
+      })
+    },
+  )
+
+  server.tool(
+    'canvas_resource_fetch',
+    '直接取回「画布资源」的字节（不必知道它在磁盘哪里）。返回 size / mime / 原始 base64，' +
+      '并**自动存一份到 Agent 工作目录**（给客户端文件工具用），返回 agentLocalPath。' +
+      '适合：要算哈希、要自己解析像素、要把图贴进别处。只看/引用图请用节点里的 url。',
+    {
+      url: z.string().optional().describe('资源地址（与 canvasId+nodeId 二选一）'),
+      canvasId: canvasIdSchema,
+      nodeId: z.string().optional().describe('取这个节点指向的资源'),
+      fileName: z.string().optional().describe('存到工作目录时用的文件名（缺省沿用资源名）'),
+    },
+    async ({ url, canvasId, nodeId, fileName }) => {
+      const effectiveCanvasId = canvasId ?? DEFAULT_CANVAS_ID
+      let name: string | undefined
+      if (url) {
+        name = parseResourceNameFromUrl(url, effectiveCanvasId)
+        if (!name) return toText({ ok: false, error: '这不是画布 ' + effectiveCanvasId + ' 的资源地址：' + url })
+      } else if (nodeId) {
+        const picked = await pickDoc(canvasId)
+        if ('error' in picked) return toText({ ok: false, error: picked.error })
+        const snap = await picked.doc.read()
+        const node = snap.nodes.find((n) => n.id === nodeId)
+        if (!node) return toText({ ok: false, error: '节点不存在: ' + nodeId })
+        name = resourceNameOfNode(effectiveCanvasId, node)
+        if (!name) return toText({ ok: false, error: '节点 ' + nodeId + ' 上没有可取的画布资源' })
+      } else {
+        return toText({ ok: false, error: '要指定 url，或者 canvasId + nodeId' })
+      }
+      const abs = localPathOf(effectiveCanvasId, name)
+      if (!abs) return toText({ ok: false, error: '算不出本机路径（资源名不在白名单：' + name + '）' })
+      let bytes: Uint8Array
+      try {
+        bytes = new Uint8Array(await fs.readFile(abs))
+      } catch {
+        return toText({ ok: false, error: '读不到文件（可能已被清理 / 还没生成完）：' + abs })
+      }
+      const mime = mimeFromName(name)
+      const wanted = (fileName ?? name).replace(/[^A-Za-z0-9._-]/g, '_')
+      const agentDir = agentFilesDir?.(effectiveCanvasId)
+      let agentLocalPath: string | undefined
+      if (agentDir) {
+        try {
+          await fs.mkdir(agentDir, { recursive: true })
+          const target = path.join(agentDir, wanted)
+          await fs.writeFile(target, bytes)
+          agentLocalPath = target
+        } catch {
+          /* 落盘失败不影响取值本身：下面照样回 base64 */
+        }
+      }
+      return toText({
+        ok: true,
+        canvasId: effectiveCanvasId,
+        name,
+        size: bytes.byteLength,
+        mime,
+        ...(agentLocalPath ? { agentLocalPath } : {}),
+        base64: Buffer.from(bytes).toString('base64'),
+      })
     },
   )
 

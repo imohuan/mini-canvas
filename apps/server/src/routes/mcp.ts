@@ -37,11 +37,24 @@ export function mcpRoutes(
   resolveDoc?: CanvasDocResolver,
   /** 列出全部画布（canvas_list_canvases 用） */
   listCanvases?: () => Promise<Array<{ id: string; name: string }>>,
+  /** 数据根（`resource_local_path` / `withLocalPath` 把同源地址翻成磁盘路径用） */
+  dataRoot?: () => string | undefined,
+  /** 某个画布的 Agent 工作目录（`canvas_resource_fetch` 取回字节后落一份给文件工具读） */
+  agentFilesDir?: (canvasId: string) => string | undefined,
 ): Hono {
   const app = new Hono()
   app.all('/mcp', async (c) => {
     const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined })
-    const server = createCanvasMcpServer(doc, registry, tasks, pluginTools?.(), resolveDoc, listCanvases)
+    const server = createCanvasMcpServer(
+      doc,
+      registry,
+      tasks,
+      pluginTools?.(),
+      resolveDoc,
+      listCanvases,
+      dataRoot,
+      agentFilesDir,
+    )
     await server.connect(transport)
     const response = await transport.handleRequest(c.req.raw)
     // 原样把 SDK 的 Response 交回 Hono（保留 SSE body 与各类响应头）
