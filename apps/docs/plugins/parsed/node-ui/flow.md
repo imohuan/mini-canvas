@@ -52,7 +52,7 @@ flowchart TD
   B -->|只展示| F[纯 HTML 就完了]
   B -->|要干活| C{机器上有现成脚本吗？<br/>看手册尾部实时清单}
   C -->|有| D[直接用]
-  C -->|没有| E[让用户往 task-scripts/ 放一个 .mjs<br/>Agent 写不了那个文件]
+  C -->|没有| E[Agent 自己写一个 .mjs 到 task-scripts/<br/>write_file 要用户点允许]
   D --> G[③ 写界面 canvas_ui_write<br/>顺带声明 data.uiScripts]
   E --> G
   G --> H[界面里 task 调脚本<br/>脚本里 ctx.save 交产物]

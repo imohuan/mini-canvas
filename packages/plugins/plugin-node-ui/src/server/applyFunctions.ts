@@ -5,6 +5,7 @@
 import type { ServerCtx } from './shared-types.js'
 import { waitRun } from './waitRun.js'
 import { nodesOf, writeNodeData } from './canvasAccess.js'
+import { ensureVirtualCanvas } from './virtualCanvas.js'
 import { listDraftScripts, listFunctions, runScript, scriptDocs, scriptMethods } from '../task/runs.js'
 import { isDraftScriptName } from '../task/scripts.js'
 import { resolveTaskScriptsDir } from '../task/routes.js'
@@ -113,15 +114,18 @@ export function applyFunctions(ctx: ServerCtx): void {
     },
   })
 
-  // ⑪ 调用指定功能函数（必须给正在操作的画布与节点）
+  // ⑪ 调用指定功能函数（两种用法：界面开发给真节点；只验脚本可以不给）
   ctx.mcp.tool({
     name: 'canvas_fn_call',
     description:
       '直接调用一个**后台功能函数**（task-scripts 里的 script.fn），把结果拿回来。' +
       'args 是位置参数数组（按 canvas_fn_info 给的顺序）；wait 缺省为真 = 等它跑完并回结果。' +
-      '**必须传 canvasId 与 nodeId**：脚本的产物（ctx.save）会直接写进这个节点的槽位，' +
-      '下游节点也读这个节点。两个值从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 取，' +
-      '不要自己编。' +
+      '**两种用法**：' +
+      '① 给 canvasId + nodeId（界面开发走这条）—— 产物写进那个节点的槽位，下游读它；' +
+      '两个值从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 取，不要自己编。' +
+      '② 两个都不给（只验脚本走这条）—— 自动落到一张 fn-probe-default 草稿画布，' +
+      '产物在那里，不碰任何用户画布；要看效果再带真节点跑一次。' +
+      '只想确认「脚本能不能跑、算得对不对」时，直接用 exec_command 跑 node 更快（不必经过画布）。' +
       '先 canvas_fn_list / canvas_fn_info 看清参数与返回，再来调。' +
       '★ script 允许**下划线打头**：那是在建脚本（还没验证），这样你才能测自己刚写的那份；' +
       '测通过之后把下划线去掉，它才会出现在 canvas_fn_list 里给别人用。',
@@ -134,20 +138,21 @@ export function applyFunctions(ctx: ServerCtx): void {
       wait: 'boolean',
       timeoutMs: 'number',
     },
-    required: ['script', 'fn', 'canvasId', 'nodeId'],
+    required: ['script', 'fn'],
     handler: async (args) => {
       const script = typeof args.script === 'string' ? args.script.trim() : ''
       const fn = typeof args.fn === 'string' ? args.fn.trim() : ''
       if (!script) return { ok: false, error: '缺少 script（脚本名，不带 .mjs）' }
       if (!fn) return { ok: false, error: '缺少 fn（要调的函数名）' }
-      const canvasId = typeof args.canvasId === 'string' ? args.canvasId.trim() : ''
-      const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : ''
-      if (!canvasId || !nodeId) {
+      const wantCanvas = typeof args.canvasId === 'string' ? args.canvasId.trim() : ''
+      const wantNode = typeof args.nodeId === 'string' ? args.nodeId.trim() : ''
+      // 只给一个 = 写错了（只给画布没节点 / 只给节点没画布），别猜，直接说清楚。
+      if (!!wantCanvas !== !!wantNode) {
         return {
           ok: false,
           error:
-            '缺少 canvasId / nodeId：脚本的产物要落到你正在操作的那个节点上。' +
-            '从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 原样取，这两项不能省。',
+            'canvasId 和 nodeId 要么一起给（在真实节点上跑），要么一起不给（落到草稿画布只验脚本）。' +
+            '现在只给了「' + (wantCanvas ? 'canvasId' : 'nodeId') + '」。',
         }
       }
       let callArgs: unknown[] = []
@@ -166,26 +171,44 @@ export function applyFunctions(ctx: ServerCtx): void {
       if (!methods.includes(fn)) {
         return { ok: false, error: '脚本 ' + script + ' 里没有导出函数 ' + fn + '（可用的：' + methods.join('、') + '）' }
       }
-      // 节点必须真实存在：否则产物没有槽位可落，ctx.save 只会写进一个不存在的画布。
-      // 读节点走文档池（与画布保存同一个实例）—— 同一把写锁，不会读到旧副本。
-      const nodes = await nodesOf(ctx, canvasId)
-      const node = nodes.find((n) => n.id === nodeId)
-      if (!node) {
-        const hint = nodes.length
-          ? '这张画布上有：' + nodes.slice(0, 20).map((n) => n.id + '（' + n.type + '）').join('、')
-          : '这张画布是空的'
-        return {
-          ok: false,
-          error: '画布 ' + canvasId + ' 上没有节点 ' + nodeId + '。' + hint + '。' +
-            '请核对用户消息里的 <ref>，不要把节点 id 写错。',
+      /*
+       * 两种上下文：
+       *   给了 → 真实节点（界面开发）。读节点走文档池，与画布保存同一个实例、同一把写锁。
+       *   没给 → 虚拟画布（只验脚本）。ctx.save 有地方可写，用户画布一个字节都不碰。
+       */
+      let canvasId = wantCanvas
+      let nodeId = wantNode
+      let virtual = false
+      let nodeData: Record<string, unknown> | undefined
+      if (canvasId && nodeId) {
+        const nodes = await nodesOf(ctx, canvasId)
+        const node = nodes.find((n) => n.id === nodeId)
+        if (!node) {
+          const hint = nodes.length
+            ? '这张画布上有：' + nodes.slice(0, 20).map((n) => n.id + '（' + n.type + '）').join('、')
+            : '这张画布是空的'
+          return {
+            ok: false,
+            error: '画布 ' + canvasId + ' 上没有节点 ' + nodeId + '。' + hint + '。' +
+              '请核对用户消息里的 <ref>，不要把节点 id 写错；只验脚本就两个都不给。',
+          }
         }
+        nodeData = node.data
+      } else {
+        const v = await ensureVirtualCanvas(ctx)
+        canvasId = v.canvasId
+        nodeId = v.nodeId
+        virtual = true
       }
       const wait = args.wait !== false
       const timeoutMs = typeof args.timeoutMs === 'number' && args.timeoutMs > 0 ? args.timeoutMs : undefined
       const scriptTimeout = timeoutMs ?? 10 * 60 * 1000
       // 补声明：跑完这一趟，这个节点就算「用过这个脚本」了。与写界面时扫 HTML 同一个合并规则，
       // 已有的声明一条都不丢。写失败就停 —— 否则界面之后调同一个脚本仍会被 403，错误还藏起来。
-      const plan = await planDeclaredForScripts([script], node.data?.[UI_SCRIPTS_KEY], dir, Date.now())
+      // 声明只对真实节点有意义（草稿画布没有界面，也没有下游要读它）。
+      const plan = virtual
+        ? null
+        : await planDeclaredForScripts([script], nodeData?.[UI_SCRIPTS_KEY], dir, Date.now())
       let declaredScripts: string[] = []
       if (plan) {
         const wrote = await writeNodeData(ctx, canvasId, nodeId, { [UI_SCRIPTS_KEY]: plan.next })
@@ -219,6 +242,7 @@ export function applyFunctions(ctx: ServerCtx): void {
           state: started.run.state,
           canvasId,
           nodeId,
+          ...(virtual ? { virtualCanvasId: canvasId } : {}),
           ...(declaredScripts.length ? { declaredScripts } : {}),
         }
       }
@@ -243,6 +267,12 @@ export function applyFunctions(ctx: ServerCtx): void {
         state: final.state,
         canvasId,
         nodeId,
+        ...(virtual
+          ? {
+              virtualCanvasId: canvasId,
+              note: '这次跑在草稿画布上（只为验证脚本）；产物在它名下，没碰你的画布。要看效果就带真实 canvasId / nodeId 再跑一次。',
+            }
+          : {}),
         ...(declaredScripts.length ? { declaredScripts } : {}),
       }
     },

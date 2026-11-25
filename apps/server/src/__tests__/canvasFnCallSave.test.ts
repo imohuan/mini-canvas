@@ -162,4 +162,71 @@ describe('★ canvas_fn_call：产物写进真实节点（403 修复）', () => 
       .filter((e) => e.action === 'auth-failed')
     expect(failed, JSON.stringify(failed)).toEqual([])
   }, 60_000)
+
+  it('★ 不给画布与节点：只验脚本也能保存（落到草稿画布，不碰用户画布）', async () => {
+    if (!built) {
+      console.warn('[skip] 没有 ' + PLUGIN_SERVER_JS + '，先跑 pnpm -C packages/plugins/plugin-node-ui build:server')
+      return
+    }
+    const pluginsDir = path.join(dir, 'plugins')
+    await fs.mkdir(path.join(pluginsDir, 'plugin-node-ui', 'dist'), { recursive: true })
+    await fs.writeFile(
+      path.join(pluginsDir, 'plugin-node-ui', 'package.json'),
+      JSON.stringify({ name: '@plume-canvas/plugin-node-ui', plume: { pluginName: 'node-ui', server: { entry: 'dist/server.js' } } }),
+    )
+    await fs.copyFile(PLUGIN_SERVER_JS, path.join(pluginsDir, 'plugin-node-ui', 'dist', 'server.js'))
+
+    // 用户自己的一张画布：这轮调用**不该碰它**
+    const CANVAS = '90da8d5cbf06424d'
+    await fs.mkdir(path.join(dir, 'canvases', CANVAS), { recursive: true })
+    await fs.writeFile(
+      path.join(dir, 'canvases', CANVAS, 'canvas.json'),
+      JSON.stringify({ nodes: [{ id: '6', type: 'ui', position: { x: 0, y: 0 }, data: { label: '可视化 1' } }], edges: [] }),
+      'utf8',
+    )
+
+    const scriptsDir = path.join(dir, 'task-scripts')
+    await fs.mkdir(scriptsDir, { recursive: true })
+    await fs.writeFile(
+      path.join(scriptsDir, 'stamp.mjs'),
+      [
+        'export async function run(ctx) {',
+        '  const bytes = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 7, 7])',
+        '  const saved = await ctx.save(bytes, "out.png")',
+        '  return { saved, canvasId: ctx.canvasId, nodeId: ctx.nodeId }',
+        '}',
+        '',
+      ].join('\n'),
+    )
+
+    srv = await createCloudServer({
+      dir,
+      port: 0,
+      hostname: '127.0.0.1',
+      watchProviders: false,
+      agent: false,
+      pluginsDir,
+      adminToken: ADMIN,
+      adminAuth: true,
+    })
+    await srv.start()
+
+    const r = await mcpCall(srv.app, 'canvas_fn_call', { script: 'stamp', fn: 'run' })
+    expect(r.ok, JSON.stringify(r)).toBe(true)
+    expect(r.virtualCanvasId).toBe('fn-probe-default')
+    expect(r.nodeId).toBe('probe')
+
+    // ① 产物落在草稿画布，保存真的成功了（这就是以前那个 403）
+    const probeSlot = path.join(dir, 'canvases', 'fn-probe-default', 'resources', 'slot-probe.png')
+    expect([...await fs.readFile(probeSlot)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10, 7, 7])
+    // ② 用户画布既没产物也没被改
+    const userResources = await fs.readdir(path.join(dir, 'canvases', CANVAS, 'resources')).catch(() => [])
+    expect(userResources).toEqual([])
+    const userNode = (await canvasOf(CANVAS)).nodes.find((n) => n.id === '6')!
+    expect(userNode.data?.uiScripts).toBeUndefined()
+    // ③ 审计里同样不该有 403
+    const audit = await fs.readFile(path.join(dir, 'audit.log'), 'utf8')
+    const failed = audit.split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l) as { action?: string }).filter((e) => e.action === 'auth-failed')
+    expect(failed).toEqual([])
+  }, 60_000)
 })

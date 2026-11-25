@@ -518,15 +518,36 @@ describe('④ canvas_fn_call：在真实画布与节点上跑', () => {
     )
   })
 
-  it('★ 缺 canvasId / nodeId 直接报错（不再自己造草稿画布）', async () => {
+  it('★ 只给一个（canvasId 或 nodeId）→ 报错，别猜', async () => {
+    const s = fakeCtx({ nodes: [{ id: '6', type: 'ui', data: {} }] })
+    apply(s.ctx)
+    const a = await call(s.tools, 'canvas_fn_call', { script: 'hello', fn: 'echo', canvasId: 'default', argsJson: '["hi"]' })
+    expect(a.ok).toBe(false)
+    expect(String(a.error)).toContain('一起给')
+    const b = await call(s.tools, 'canvas_fn_call', { script: 'hello', fn: 'echo', nodeId: '6', argsJson: '["hi"]' })
+    expect(b.ok).toBe(false)
+    expect(String(b.error)).toContain('一起给')
+    expect(s.canvasWrites).toHaveLength(0)
+  })
+
+  it('★ 两个都不给 → 落到草稿画布只验脚本（ctx.save 有地方可写）', async () => {
     const s = fakeCtx()
     apply(s.ctx)
     const r = await call(s.tools, 'canvas_fn_call', { script: 'hello', fn: 'echo', argsJson: '["hi"]' })
-    expect(r.ok).toBe(false)
-    expect(String(r.error)).toContain('canvasId')
-    expect(String(r.error)).toContain('nodeId')
-    // 关键：连进程都不起、也不写任何画布
-    expect(s.canvasWrites).toHaveLength(0)
+    expect(r.ok, JSON.stringify(r)).toBe(true)
+    const result = r.result as { text: string; canvasId: string; nodeId: string; taskToken: string }
+    expect(result.canvasId).toBe('fn-probe-default')
+    expect(result.nodeId).toBe('probe')
+    expect(r.virtualCanvasId).toBe('fn-probe-default')
+    expect(String(r.note)).toContain('草稿画布')
+    // 只验脚本也要能保存：令牌照样签，但只绑定这张草稿画布的这个占位节点
+    expect(result.taskToken).toBe('tok-fn-probe-default-probe')
+    expect(s.issued.at(-1)).toMatchObject({ canvasId: 'fn-probe-default', nodeId: 'probe' })
+    // 草稿画布里的占位节点是建出来的，不去碰用户画布
+    expect(s.canvasWrites.every((w) => w.id.startsWith('fn-probe-'))).toBe(true)
+    // 草稿画布没有界面，不补声明
+    expect(r.declaredScripts).toBeUndefined()
+    expect(s.writes).toHaveLength(0)
   })
 
   it('★ 用真实节点跑：ctx 拿到用户画布和节点，产物写进它自己的槽位', async () => {
@@ -555,7 +576,7 @@ describe('④ canvas_fn_call：在真实画布与节点上跑', () => {
     expect(s.issued).toEqual([{ canvasId: 'default', nodeId: '6', ttlMs: 10 * 60 * 1000 + 60_000 }])
   })
 
-  it('★ 节点不存在 → 报错并列出真实节点，不悄悄新建画布', async () => {
+  it('★ 节点不存在 → 报错并列出真实节点（别悄悄换成草稿画布）', async () => {
     const s = fakeCtx({ nodes: [{ id: '6', type: 'ui', data: {} }] })
     apply(s.ctx)
     const r = await call(s.tools, 'canvas_fn_call', {
@@ -567,6 +588,7 @@ describe('④ canvas_fn_call：在真实画布与节点上跑', () => {
     expect(r.ok).toBe(false)
     expect(String(r.error)).toContain('nope')
     expect(String(r.error)).toContain('6')
+    // 明确给了节点却找不到：只报错，不偷偷落草稿画布，也不建画布
     expect(s.canvasWrites).toHaveLength(0)
   })
 

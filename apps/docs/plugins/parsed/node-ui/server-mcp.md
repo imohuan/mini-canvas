@@ -126,21 +126,27 @@
 | 参数 | `script`（必填，脚本名，不带 `.mjs`）、`fn`（可选；不给就列这个脚本的全部函数） |
 | 返回 | 该函数做什么 / 参数（名字/类型/是否必填/说明）/ 返回什么 / 怎么调 |
 
-#### `canvas_fn_call(script, fn, canvasId, nodeId, argsJson?, wait?, timeoutMs?)`
+#### `canvas_fn_call(script, fn, canvasId?, nodeId?, argsJson?, wait?, timeoutMs?)`
 
 | 项 | 内容 |
 | --- | --- |
-| 参数 | `script`+`fn`+`canvasId`+`nodeId`（必填）、`argsJson`（**位置参数数组**，如 `"[640, \"x.png\"]"`）、`wait`（缺省 true = 等它跑完并回结果） |
-| 返回 | `{ ok, script, fn, result? , error?, logs, state, canvasId, nodeId, declaredScripts? }` |
+| 参数 | `script`+`fn`（必填）、`canvasId`+`nodeId`（**要么一起给，要么一起不给**）、`argsJson`（**位置参数数组**，如 `"[640, \"x.png\"]"`）、`wait`（缺省 true = 等它跑完并回结果） |
+| 返回 | `{ ok, script, fn, result? , error?, logs, state, canvasId, nodeId, declaredScripts?, virtualCanvasId? }` |
 | 干什么 | 直接调用一个后台功能函数并把结果拿回来 |
 
-> **必须传 Canvas ID / Node ID**：脚本的产物（`ctx.save`）直接写进这个节点的槽位，
-> 下游节点读的也是它。两个值从用户消息里的 `<ref type="node" canvasId="…" nodeId="…">` 取，
+两种用法，按目的选：
+
+| 用法 | 传什么 | 产物落在哪 |
+| --- | --- | --- |
+| **只验脚本**（还没到界面那步） | 两个都不给 | `fn-probe-default` 草稿画布，`ctx.save` 照样能成功；返回值带 `virtualCanvasId` 与说明 |
+| **在用户节点上跑** | `canvasId` + `nodeId` | 那个节点自己的槽位，下游节点读它 |
+
+> 在真实节点上跑时，从用户消息里的 `<ref type="node" canvasId="…" nodeId="…">` 取值，
 > 不要自己编。启动前工具会把这个脚本名补进节点的 `data.uiScripts`（返回的 `declaredScripts`
-> 就是这次新补的），已有的声明一条都不丢。
+> 就是这次新补的），已有的声明一条都不丢。只给其中一个会直接报错，不会替你猜。
 >
-> 节点不存在时明确报「画布 X 上没有节点 Y」并列出这张画布上真实的节点 id ——
-> 不会再开一张 `fn-probe-*` 草稿画布把产物藏起来。
+> 明确给了节点却找不到时，报「画布 X 上没有节点 Y」并列出这张画布上真实的节点 id，
+> 不会偷偷落到草稿画布。
 >
 > **不要用 shell 里的 `curl` 调 `/api/task/call` 验证**：那条是给节点界面用的，需要登录 cookie；
 > 命令行不带它，必然 403「需要登录」。Agent 走 MCP 这条就够了。
@@ -150,7 +156,8 @@
 ```text
 1. canvas_fn_list                  → 看看这台机器上有什么能力（带说明书）
 2. canvas_fn_info("scale", "run")  → 查清楚参数与返回
-3. canvas_fn_call("scale", "run", canvasId, nodeId, argsJson: "[640]")  → 调它、产物落进这个节点
+3. canvas_fn_call("scale", "run", argsJson: "[640]")                  → 只验脚本（草稿画布）
+   canvas_fn_call("scale", "run", canvasId, nodeId, argsJson: "[640]") → 产物落进这个节点
 ```
 
 ## 二、其余画布操作复用**内置**工具
