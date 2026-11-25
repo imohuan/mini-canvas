@@ -10,7 +10,7 @@
  * 依赖闭包怎么算（关键，算错会「改了代码却跳过」）：
  * - ui 的 vite build **不设 external** → 它把 canvas-render / theme-default / agent 等一批
  *   工作区源码一起捆进同一个 bundle。所以 ui 的指纹要覆盖它整个工作区依赖闭包。
- * - 各插件走 pluginLibBuild（见 ../vite-plugin-lib.ts），把 HOST_EXTERNALS 里的包设为 external，
+ * - 各插件的 vite.config.ts 把宿主共享包设为 external，
  *   运行期由宿主全局提供 → 这些包变化**不该**触发插件重建，故从闭包里剔除。
  * - 闭包靠**递归解析 import 语句**得到（跳过 `import type` —— 类型引用不进产物），自动跟随代码演进，
  *   不靠一份手写清单（手写清单会随开发过期）。
@@ -59,7 +59,7 @@ const BUILTIN_SERVER_PLUGINS = ["plugin-node-ui"]
 
 /**
  * 打包时一律 external（运行期由宿主 window 全局提供）的工作区包。
- * 与 ../vite-plugin-lib.ts 的 HOST_GLOBALS 保持一致：这些变化不触发插件重建。
+ * 这些包的变化不触发插件重建（运行期由宿主 window 全局提供）。
  * vue / @vue-flow/core 来自 node_modules，本就不在源码指纹范围，列在这里只为语义完整。
  */
 const HOST_EXTERNALS = [
@@ -398,6 +398,31 @@ for (const must of [
     console.error("[FAIL] 收进来的产物不完整，缺少：" + must)
     process.exit(1)
   }
+}
+
+/**
+ * 编辑器样式必须真的进到画布界面的 CSS 里（用户 2026-11-25 实测的回归）。
+ *
+ * 症状：@ 下拉和悬停预览“没有样式”，菜单被渲染成文档流里的静态块、跑到屏幕外。
+ * 根因：@plume-canvas/editor 的构建产物把 CSS 抽成独立文件、JS 里不再有 import，
+ * 宿主漏了 `import "@plume-canvas/editor/style.css"`。纯源码测试发现不了 ——
+ * 只有查**构建出来的 css** 才知道哪些规则真的进了包。
+ */
+const uiCss = []
+for (const f of await readdir(path.join(ASSETS, "ui/assets"))) {
+  if (!f.endsWith(".css")) continue
+  uiCss.push(await readFile(path.join(ASSETS, "ui/assets", f), "utf8"))
+}
+const cssText = uiCss.join("\n")
+// 声明顺序会被压缩器重排（position 可能在块中间），所以判「这个规则块里有 position:fixed」，
+// 不写死前缀 —— 前缀匹配在压缩产物上是假阴性。
+for (const selector of [".mention-menu", ".preview-box"]) {
+  const at = cssText.indexOf(selector + "{")
+  const block = at < 0 ? "" : cssText.slice(at, cssText.indexOf("}", at) + 1)
+  if (block.includes("position:fixed")) continue
+  console.error("[FAIL] 画布界面 CSS 缺少编辑器规则：" + selector + " { position:fixed }")
+  console.error("       检查 apps/web/src/main.ts 是否 import \"@plume-canvas/editor/style.css\"。")
+  process.exit(1)
 }
 
 // ---------- 5. 写回 stamp（全部任务，含这次跳过的）----------

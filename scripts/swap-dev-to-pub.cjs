@@ -23,6 +23,12 @@ if (j.plume) j.plume.web = { ...((j.plume.web) || {}), entry: 'dist/web.js' }
 if (j.plume && !j.plume.server && fs.existsSync(require('node:path').join(require('node:path').dirname(p), 'dist', 'server.js'))) {
   j.plume.server = { entry: 'dist/server.js' }
 }
+// 后端入口指向前端产物 → 视为「没有后台半」删掉（用户 2026-11-25 实测：
+// 底部状态栏 / 快捷键把前端 UMD 写进了 server.entry，启动时被当 Node 脚本加载，
+// 报 Cannot read properties of undefined (reading 'defineComponent')）。
+if (j.plume && j.plume.server && j.plume.web && j.plume.server.entry === j.plume.web.entry) {
+  delete j.plume.server
+}
 for (const k of ['dependencies', 'peerDependencies']) {
   if (!j[k]) continue
   for (const d of Object.keys(j[k])) {

@@ -123,7 +123,19 @@ async function installPluginFromRegistry(
     const serverRel = serverDecl === undefined ? undefined : safeEntry(serverDecl, "plume.server.entry")
     // 产物文件解析抽到 artifactResolver.ts（npmPlugins 手动安装共用同一条兜底语义）
     const resolvedWeb = await resolveArtifact(extracted, webRel, "server.js")
-    const resolvedServer = typeof serverRel === "string" ? await resolveArtifact(extracted, serverRel, "web.js") : undefined
+    /**
+     * 前后端指向**同一个文件** → 这不是后台半（用户 2026-11-25 实测）。
+     *
+     * 线上曾有两个纯前端插件（底部状态栏 / 快捷键）把前端 UMD 产物写进了
+     * `plume.server.entry`；启动安装照配置复制，后台再当 Node 脚本加载，
+     * 第一行就报 `Cannot read properties of undefined (reading 'defineComponent')`。
+     * 同一个文件不可能既是页面脚本又是服务端脚本，命中就当纯前端包处理。
+     */
+    const resolvedServer = typeof serverRel === "string" && serverRel !== webRel
+      ? await resolveArtifact(extracted, serverRel, "web.js")
+      : undefined
+    // 兜底解析也可能把 server 指到同一个文件：同一个产物不能当两半用。
+    const serverArtifact = resolvedServer && resolvedServer !== resolvedWeb ? resolvedServer : undefined
 
     const destDir = path.join(pluginsDir, dirNameOf(pkgName))
     await fs.mkdir(destDir, { recursive: true })
@@ -133,7 +145,7 @@ async function installPluginFromRegistry(
       await fs.copyFile(path.join(extracted, rel), target)
     }
     await copyEntry(resolvedWeb)
-    if (typeof resolvedServer === "string") await copyEntry(resolvedServer)
+    if (typeof serverArtifact === "string") await copyEntry(serverArtifact)
     // plume.assets 声明的附加资产目录一并复制（如 plugin-agent 的 vendor-plugins/ ——
     // goal hook 的 .mjs 在里面；漏了它启动日志就是「goal hook 未安装：插件库里没有 goal」，
     // 用户 2026-11-21 npx 首启实测。与 routes/npmPlugins.ts 的安装路径同一语义。
@@ -159,7 +171,7 @@ async function installPluginFromRegistry(
       installable: true,
       npmInstalled: true,
       web: { ...((pkgObj.plume?.web as object) ?? {}), entry: resolvedWeb },
-      ...(typeof resolvedServer === "string" ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: resolvedServer } } : {}),
+      ...(typeof serverArtifact === "string" ? { server: { ...((pkgObj.plume?.server as object) ?? {}), entry: serverArtifact } } : {}),
     }
     await fs.writeFile(path.join(destDir, "package.json"), JSON.stringify(pkgObj, null, 2), "utf8")
 

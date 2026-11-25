@@ -842,8 +842,6 @@ export async function createCloudServer(opts: CloudServerOptions = {}): Promise<
     // agent 相关的两组按开关决定装不装
     // 调试在场通道：只对「监听本机回环」的服务存在（见上面 loopbackListen 的说明）
     if (plugin.name === 'plugin-presence' && !loopbackListen) continue
-    // 按路径热装后台插件同属本机调试面：监听 0.0.0.0 时连这条通道都不该存在
-    if (plugin.name === 'debug-install' && !loopbackListen) continue
     host.ctx.plugin(plugin)
   }
 

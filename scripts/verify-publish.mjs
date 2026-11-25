@@ -32,8 +32,9 @@ async function checkOne(dir, name, tmp) {
   const problems = []
   const plume = pkg.plume ?? {}
   if (!plume.pluginName) problems.push('缺 plume.pluginName')
-  // dev-only 插件(hot-reload)不发 npm,跳过 workspace 检查
-  const isDevOnly = name === 'plugin-hot-reload' || pkg.private === true
+  // 只跳过真正的私有包；hot-reload 从 0.1.1 起是可安装件（市场能搜到、要能装），
+  // 再按名字跳过等于让它绕过发布闸门（用户 2026-11-25 要求一起发布）。
+  const isDevOnly = pkg.private === true
   // 源码包的 plume 段本来就不带 entry —— entry 是发布管道(plugin-assets.mjs)回填的。
   // 这里检查「回填有据」:dist 里必须有可用的 js 产物,否则发布出去就是空包。
   let distFiles = []

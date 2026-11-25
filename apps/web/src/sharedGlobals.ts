@@ -6,10 +6,9 @@
  * 于是那些插件即使加载进浏览器，也会因为 `window.Vue` 是 undefined 而在第一行炸掉。
  *
  * 这个模块就是补上那一层：在应用启动前，把「宿主只允许一份」的共享运行时挂到 window。
- * 挂的名字必须与各插件 vite.config.ts 里 `output.globals` 写的一致：
- *   Vue / VueFlow / PlumeKernel / PlumeCore / PlumeBase / PlumeRender /
- *   ProseMirrorEditorBundle / PlumeUiKit
- * 改名字要两边一起改（本文件 + 各插件 vite.config 的 globals），否则插件加载会报「找不到依赖」。
+ * SHARED_GLOBAL_NAMES 就是唯一清单：这里挂什么，外部插件就必须用什么名字取。
+ * 各插件的 vite.config.ts 在各自的 `output.globals` 里写同样的名字；
+ * externalPluginGlobals.test.ts 会拿真产物逐个核对，写岔了就是红。
  *
  * 与 vite 配置里 `optimizeDeps.exclude` 那串源码包是同一批：它们在 dev 下由 vite 现编、
  * 在 build 下被打进产物；这里只是把**同一份实例**额外挂到 window，不会造出第二份。

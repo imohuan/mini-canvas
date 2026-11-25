@@ -11,7 +11,11 @@ patchedDependencies:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      '@plume-canvas/server':
+        specifier: ^0.1.20
+        version: 0.1.25
 
   apps/docs:
     devDependencies:
@@ -66,9 +70,6 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.25.0
         version: 1.25.0(hono@4.13.5)(zod@3.25.76)
-      '@plume-canvas/plugin-agent':
-        specifier: workspace:*
-        version: link:../../packages/plugins/plugin-agent
       '@prismshadow/penguin-core':
         specifier: 0.2.13
         version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
@@ -88,6 +89,9 @@ importers:
       '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../packages/engine/kernel
+      '@plume-canvas/plugin-agent':
+        specifier: workspace:*
+        version: link:../../packages/plugins/plugin-agent
       '@types/node':
         specifier: ^24.12.3
         version: 24.13.2
@@ -502,7 +506,7 @@ importers:
     dependencies:
       '@prismshadow/penguin-core':
         specifier: 0.2.13
-        version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+        version: 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.5)
       '@vueuse/core':
         specifier: ^14.3.0
         version: 14.3.0(vue@3.5.38(typescript@6.0.3))
@@ -1065,15 +1069,27 @@ importers:
       '@plume-canvas/kernel':
         specifier: workspace:*
         version: link:../../engine/kernel
+      '@types/node':
+        specifier: ^24.12.3
+        version: 24.13.2
       '@vitejs/plugin-vue':
         specifier: ^6.0.6
         version: 6.0.7(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))(vue@3.5.38(typescript@6.0.3))
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.38(typescript@6.0.3))
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
+      vite:
+        specifier: ^8.0.16
+        version: 8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
+      vite-plugin-css-injected-by-js:
+        specifier: 3.5.2
+        version: 3.5.2(vite@8.0.16(@types/node@24.13.2)(esbuild@0.28.2)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1))
       vitest:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@24.13.2)(happy-dom@21.0.4)(jiti@2.7.0)(lightningcss@1.32.0)(stylus@0.57.0)(tsx@4.22.4)(yaml@2.9.1)
@@ -2717,6 +2733,10 @@ packages:
 
   '@penguinharness/use-firecrawl@0.2.13':
     resolution: {integrity: sha512-un0BHm1pVZfZW+xD9hF+OuEEy6Uu5TQauWRtfxaHOloXgqpcKgRhmY8951hca4qExkF001axv2nL1oI0wDJMNA==}
+
+  '@plume-canvas/server@0.1.25':
+    resolution: {integrity: sha512-UwGfU4u5nW2+UlMvMMHoYiGci9+GLADRU3Tuv+2KnM5vJC0vDnR52CmxSLHLB67r+rMTDNfRsPRwsqAA6KxQAg==}
+    hasBin: true
 
   '@prismshadow/agenthub@0.4.15':
     resolution: {integrity: sha512-4vWn+R8ck1ByNnljo1HS4r4s7LZRot9oNmBAduIgiQMdZyZrIEY1C23DVlMSFyCgzcxu2uuonFivPzETcKbEzA==}
@@ -6639,11 +6659,33 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
+  '@anthropic-ai/bedrock-sdk@0.26.4(zod@4.6.5)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.81.0(zod@4.6.5)
+      '@aws-crypto/sha256-js': 4.0.0
+      '@aws-sdk/client-bedrock-runtime': 3.1144.0
+      '@aws-sdk/credential-providers': 3.1144.0
+      '@smithy/eventstream-serde-node': 2.2.0
+      '@smithy/fetch-http-handler': 5.8.0
+      '@smithy/protocol-http': 3.3.0
+      '@smithy/signature-v4': 3.1.2
+      '@smithy/smithy-client': 2.5.1
+      '@smithy/types': 2.12.0
+      '@smithy/util-base64': 2.3.0
+    transitivePeerDependencies:
+      - zod
+
   '@anthropic-ai/sdk@0.81.0(zod@3.25.76)':
     dependencies:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
       zod: 3.25.76
+
+  '@anthropic-ai/sdk@0.81.0(zod@4.6.5)':
+    dependencies:
+      json-schema-to-ts: 3.1.1
+    optionalDependencies:
+      zod: 4.6.5
 
   '@ark/schema@0.56.5':
     dependencies:
@@ -7305,6 +7347,19 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))':
+    dependencies:
+      google-auth-library: 10.9.1
+      p-retry: 4.6.2
+      protobufjs: 7.6.6
+      ws: 8.22.0
+    optionalDependencies:
+      '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.5)
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   '@hono/node-server@1.19.19(hono@4.13.5)':
     dependencies:
       hono: 4.13.5
@@ -7490,6 +7545,29 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@modelcontextprotocol/sdk@1.32.2(zod@4.6.5)':
+    dependencies:
+      '@hono/node-server': 2.1.1(hono@4.13.5)
+      ajv: 8.18.0
+      ajv-formats: 3.0.1(ajv@8.18.0)
+      content-type: 1.0.5
+      cors: 2.8.6
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.1.1
+      express: 5.2.1
+      express-rate-limit: 8.7.0(express@5.2.1)
+      hono: 4.13.5
+      jose: 6.2.10
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.6.5
+      zod-to-json-schema: 3.25.2(zod@4.6.5)
+    transitivePeerDependencies:
+      - supports-color
+    optional: true
+
   '@napi-rs/wasm-runtime@1.1.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)':
     dependencies:
       '@emnapi/core': 1.10.0
@@ -7527,6 +7605,24 @@ snapshots:
 
   '@penguinharness/use-firecrawl@0.2.13': {}
 
+  '@plume-canvas/server@0.1.25':
+    dependencies:
+      '@hono/node-server': 2.1.1(hono@4.13.5)
+      '@modelcontextprotocol/sdk': 1.25.0(hono@4.13.5)(zod@3.25.76)
+      '@prismshadow/penguin-core': 0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))(zod@3.25.76)
+      hono: 4.13.5
+      yaml: 2.9.1
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@cfworker/json-schema'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+
   '@prismshadow/agenthub@0.4.15(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/bedrock-sdk': 0.26.4(zod@3.25.76)
@@ -7534,6 +7630,42 @@ snapshots:
       '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))
       express: 4.22.3
       openai: 6.49.0(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@prismshadow/agenthub@0.4.15(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.5)':
+    dependencies:
+      '@anthropic-ai/bedrock-sdk': 0.26.4(zod@4.6.5)
+      '@anthropic-ai/sdk': 0.81.0(zod@4.6.5)
+      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))
+      express: 4.22.3
+      openai: 6.49.0(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.5)
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@prismshadow/agenthub@0.4.15(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))(zod@3.25.76)':
+    dependencies:
+      '@anthropic-ai/bedrock-sdk': 0.26.4(zod@3.25.76)
+      '@anthropic-ai/sdk': 0.81.0(zod@3.25.76)
+      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))
+      express: 4.22.3
+      openai: 6.49.0(zod@3.25.76)
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
       - '@modelcontextprotocol/sdk'
@@ -7562,6 +7694,68 @@ snapshots:
       '@penguinharness/use-claude-code': 0.2.13
       '@penguinharness/use-firecrawl': 0.2.13
       '@prismshadow/agenthub': 0.4.15(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@3.25.76)
+      arktype: 2.2.6
+      smol-toml: 1.9.0
+      yaml: 2.9.1
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@prismshadow/penguin-core@0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.5)':
+    dependencies:
+      '@modelcontextprotocol/client': 2.2.0
+      '@penguinharness/agent-company': 0.2.13
+      '@penguinharness/agent-development': 0.2.13
+      '@penguinharness/agent-tuning': 0.2.13
+      '@penguinharness/continual-learning': 0.2.13
+      '@penguinharness/data-analysis': 0.2.13
+      '@penguinharness/goal': 0.2.13
+      '@penguinharness/humanizer': 0.2.13
+      '@penguinharness/model-development': 0.2.13
+      '@penguinharness/skill-porting': 0.2.13
+      '@penguinharness/software-development': 0.2.13
+      '@penguinharness/use-bento-slides': 0.2.13
+      '@penguinharness/use-claude-code': 0.2.13
+      '@penguinharness/use-firecrawl': 0.2.13
+      '@prismshadow/agenthub': 0.4.15(@aws-sdk/credential-provider-node@3.972.84)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.5)
+      arktype: 2.2.6
+      smol-toml: 1.9.0
+      yaml: 2.9.1
+    transitivePeerDependencies:
+      - '@aws-sdk/credential-provider-node'
+      - '@modelcontextprotocol/sdk'
+      - '@smithy/hash-node'
+      - '@smithy/signature-v4'
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@prismshadow/penguin-core@0.2.13(patch_hash=0a8a8a25db0074ef2d1d5da2186415d3a07eaaf4e70fe9ae16be6d7dcbc73bbe)(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))(zod@3.25.76)':
+    dependencies:
+      '@modelcontextprotocol/client': 2.2.0
+      '@penguinharness/agent-company': 0.2.13
+      '@penguinharness/agent-development': 0.2.13
+      '@penguinharness/agent-tuning': 0.2.13
+      '@penguinharness/continual-learning': 0.2.13
+      '@penguinharness/data-analysis': 0.2.13
+      '@penguinharness/goal': 0.2.13
+      '@penguinharness/humanizer': 0.2.13
+      '@penguinharness/model-development': 0.2.13
+      '@penguinharness/skill-porting': 0.2.13
+      '@penguinharness/software-development': 0.2.13
+      '@penguinharness/use-bento-slides': 0.2.13
+      '@penguinharness/use-claude-code': 0.2.13
+      '@penguinharness/use-firecrawl': 0.2.13
+      '@prismshadow/agenthub': 0.4.15(@modelcontextprotocol/sdk@1.25.0(hono@4.13.5)(zod@3.25.76))(zod@3.25.76)
       arktype: 2.2.6
       smol-toml: 1.9.0
       yaml: 2.9.1
@@ -10429,6 +10623,17 @@ snapshots:
       ws: 8.22.0
       zod: 3.25.76
 
+  openai@6.49.0(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)(zod@4.6.5):
+    optionalDependencies:
+      '@aws-sdk/credential-provider-node': 3.972.84
+      '@smithy/signature-v4': 5.7.4
+      ws: 8.22.0
+      zod: 4.6.5
+
+  openai@6.49.0(zod@3.25.76):
+    optionalDependencies:
+      zod: 3.25.76
+
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -11636,6 +11841,11 @@ snapshots:
   zod-to-json-schema@3.25.2(zod@3.25.76):
     dependencies:
       zod: 3.25.76
+
+  zod-to-json-schema@3.25.2(zod@4.6.5):
+    dependencies:
+      zod: 4.6.5
+    optional: true
 
   zod@3.25.76: {}
 

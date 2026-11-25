@@ -8,6 +8,18 @@
  */
 import { createApp } from "vue";
 import "./app.css";
+/**
+ * 富文本编辑器的样式（@ 菜单 / 悬停预览 / 标签行高）**必须由宿主显式引入**。
+ *
+ * 为什么会有这一行（用户 2026-11-25 实测）：编辑器的 `package.json` exports 指向
+ * `dist/prosemirror-editor.es.js`，vite lib 构建把 CSS 抽成独立文件、**不会**随 JS 注入。
+ * 只在源码里 `import "./style.css"` 的副作用因此在构建版整个消失 ——
+ * `.mention-menu` 失去 `position:fixed`，@ 下拉变成文档流里的静态块，跑到屏幕外；
+ * `.preview-box` 同理。排查时最迷惑的是“功能都在、DOM 也在”，只是没有样式。
+ *
+ * 放在这里而不是 app.css：这是第三方包导出的样式入口，跟着应用入口加载最直白。
+ */
+import "@plume-canvas/editor/style.css";
 
 // ===== 性能探针（2026-10-15 卡死排查后留档：lt=长任务数 ms=总毫秒 wall=运行秒）=====
 // longtask 观察器 + 每 5 秒把最近任务统计写 localStorage（主线程卡死前的数据已落，

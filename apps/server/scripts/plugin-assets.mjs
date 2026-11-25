@@ -87,6 +87,10 @@ export async function pickWebEntry(dir, pkg) {
 export async function pickServerEntryOf(dir, pkg) {
   const declared = pkg?.plume?.server?.entry
   if (typeof declared === "string" && declared) {
+    // 声明指向前端产物 → 这不是后台半（用户 2026-11-25 的启动报错）。
+    // 打包时若不拦，会把同一份浏览器脚本同时发成 web.js 与 server.js ——
+    // 装到数据根后后台照配置 import 它，第一行就炸 defineComponent / reactive。
+    if (declared === pkg?.plume?.web?.entry) return undefined
     const p = path.join(dir, declared)
     return (await exists(p)) ? p : undefined
   }

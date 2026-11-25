@@ -122,6 +122,19 @@ async function declaredServerEntry(dir: string): Promise<string | undefined> {
   }
 }
 
+/** 读同一个目录的 `plume.web.entry`（前端半入口；没有 / 坏了 → undefined） */
+async function declaredWebEntry(dir: string): Promise<string | undefined> {
+  try {
+    const pkg = JSON.parse(await readFile(path.join(dir, 'package.json'), 'utf8')) as {
+      plume?: { web?: { entry?: unknown } }
+    }
+    const entry = pkg.plume?.web?.entry
+    return typeof entry === 'string' && entry.trim() ? entry.trim() : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * 找**带后台半**的那一份：全局优先，但全局那份必须真的声明了 `plume.server.entry`。
  *
@@ -145,7 +158,23 @@ export async function resolvePluginDirWithServer(
     if (!root) continue
     const dir = path.join(root, id)
     if (!(await isDir(dir))) continue
-    if (await declaredServerEntry(dir)) return dir
+    const serverEntry = await declaredServerEntry(dir)
+    if (!serverEntry) continue
+    /**
+     * 后台入口 = 前端入口 → 这不是后台半。
+     *
+     * 实测（用户 2026-11-25）：plugin-bottom-bar 0.1.8、plugin-shortcut-manager 0.1.4
+     * 装到数据根后，package.json 里的 server.entry 被写成了**前端 UMD 产物**。
+     * 后台按配置把浏览器包当服务端脚本加载，第一行就炸：
+     *   Cannot read properties of undefined (reading 'defineComponent')
+     * 启动日志每次多两条失败，还白跑一次 import。
+     *
+     * 判据取「与 web.entry 同一个文件」而不是猜文件名：作者写什么名字都行，
+     * 唯一不能成立的就是「同一个文件既是页面脚本、又是 Node 脚本」。
+     * 命中时当作「没有后台半」—— 与纯前端插件完全同一条路。
+     */
+    if ((await declaredWebEntry(dir)) === serverEntry) continue
+    return dir
   }
   return undefined
 }

@@ -32,6 +32,16 @@ declare module '@plume-canvas/kernel' {
     jobs: JobsRegistrar
     /** 给 AI 加一个可调用的 MCP 工具（随插件卸载回收） */
     mcp: McpRegistrar
+    /**
+     * 运行期装卸其它后台插件（host 注入的转发壳）。
+     *
+     * 只在真实服务里存在：调试专用件（debug-install）靠它判断「我该不该装」。
+     * 纯框架单测没有这一项，相关插件就静静地不装，而不是装一半再报错。
+     */
+    runtime?: {
+      install: (mod: unknown) => void
+      uninstall: (name: string) => boolean
+    }
   }
 }
 

@@ -63,17 +63,31 @@ export function createPublishRoutes(opts: PublishRoutesOptions): Hono {
       // 后台半：源码 package.json 声明了 plume.server.entry → dist 里找对应产物改名 server.js；
       // 没声明但有 dist/server.js 也认。
       const srcPkg = JSON.parse(await fs.readFile(path.join(pkgDir, 'package.json'), 'utf8')) as {
-        plume?: { server?: { entry?: string } }
+        plume?: { web?: { entry?: string }; server?: { entry?: string } }
       }
       const declaredServer = srcPkg.plume?.server?.entry
+      /**
+       * 后台入口 = 前端入口时不认（用户 2026-11-25 实测的启动报错）：
+       * 底部状态栏 / 快捷键这两个纯前端插件一度把前端产物写成 server.entry，
+       * 发布时若照声明改名，会把 web.js 改成 server.js —— 前端半直接没了。
+       */
+      const frontEntry = path.basename(srcPkg.plume?.web?.entry ?? 'web.js')
+      const serverIsFront = !!declaredServer && path.basename(declaredServer) === frontEntry
       if (files.includes('server.js')) {
         hasServer = true
-      } else if (declaredServer) {
+      } else if (declaredServer && !serverIsFront) {
         const serverFile = path.basename(declaredServer)
         if (files.includes(serverFile)) {
           await fs.rename(path.join(dist, serverFile), path.join(dist, 'server.js'))
           hasServer = true
         }
+      }
+      // 声明指向前端产物 → 连声明一起清掉（否则下次启动又会把它当后台半加载）
+      if (serverIsFront && !hasServer) {
+        const pkgPath0 = path.join(pkgDir, 'package.json')
+        const pkg0 = JSON.parse(await fs.readFile(pkgPath0, 'utf8')) as { plume?: Record<string, unknown> }
+        if (pkg0.plume) delete pkg0.plume.server
+        await fs.writeFile(pkgPath0, JSON.stringify(pkg0, null, 2) + '\n', 'utf8')
       }
       // 回填 plume entry（发布形态）
       const pkgPath = path.join(pkgDir, 'package.json')

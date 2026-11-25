@@ -119,8 +119,8 @@ export interface PluginCatalog {
 
 /**
  * 产物运行时可能需要的 window 全局。
- * 单一事实源是 packages/plugins/vite-plugin-lib.ts 的 HOST_GLOBALS（值的集合）；
- * 这边必须与它保持一致 —— sharedGlobals.test.ts 会同时读两边做守卫（漂移即红）。
+ * 这份表用于从 UMD 产物头里认出「它依赖哪些全局」。
+ * pluginCatalog.test.ts 会扫全部真产物，漏了哪个就会被抓出来。
  */
 export const KNOWN_GLOBALS = [
   'Vue',
@@ -506,7 +506,17 @@ export async function buildPluginCatalog(
       continue
     }
 
-    const server = await readServerArtifact(pkgDir, pkgName, pkg.plume?.serverPermissions, pkg.plume?.server?.entry)
+    /**
+     * 声明指向前端入口 → 这个插件没有后台半（用户 2026-11-25 实测）。
+     *
+     * 只判 url/文件名不够：清单是插件管理页“后台 ✓ / ✗”的唯一来源。
+     * 前端产物被当成后台半时，面板会显示已装后台，但启动时那条 import 必然失败。
+     */
+    const serverDecl = pkg.plume?.server?.entry
+    const server =
+      serverDecl === declaredEntry
+        ? undefined
+        : await readServerArtifact(pkgDir, pkgName, pkg.plume?.serverPermissions, serverDecl)
     plugins.push({
       id,
       name,

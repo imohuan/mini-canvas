@@ -83,19 +83,88 @@ export async function hotInstallServerPlugin(
   const runtime = runtimeOf(ctx)
   if (!runtime) return { ok: false, error: "宿主未提供运行期装卸能力（ctx.runtime）" }
   try {
-    const file = path.join(pluginsDir, id, 'dist', 'server.js')
-    const text = await fs.readFile(file, 'utf8')
-    const mod = (await import(/* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(text))) as Record<string, unknown>
-    const candidate = (mod.default ?? mod) as unknown
-    if (!isValidServerPlugin(candidate)) return { ok: false, error: "不是合法后台插件（需导出 name 与 apply）" }
-    runtime.install(candidate)
-    installedNames.set(id, candidate.name)
-    hotLoaded.set(id, candidate.name)
-    syncAllSinks()
-    return { ok: true, name: candidate.name }
+    // 文件位置**只认安装时写进 package.json 的 plume.server.entry**，不写死 dist/server.js。
+    //
+    // 为什么（实测 2026-11-25）：安装路由按包内声明的相对路径落盘（作者可以叫 my-server.js、
+    // 也可能落在 dist/ 以外），而这里写死 dist/server.js 时，正常安装的插件会「热装失败，
+    // 重启后生效」—— 用户看到的就是「装完还得重启一次」。
+    const file = await resolveServerEntryFile(pluginsDir, id)
+    return await installServerPluginFile(runtime, id, file)
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
+}
+
+/**
+ * 找后台半的实际文件：读 `<pluginsDir>/<id>/package.json` 的 `plume.server.entry`。
+ *
+ * 只收包内相对路径（拒绝绝对路径与 `..`，防穿越）。没声明时退回 dist/server.js ——
+ * 那是仓库里的约定俗成，不是全部作者的写法。
+ */
+async function resolveServerEntryFile(pluginsDir: string, id: string): Promise<string> {
+  const dir = path.join(pluginsDir, id)
+  let declared: unknown
+  try {
+    const pkg = JSON.parse(await fs.readFile(path.join(dir, 'package.json'), 'utf8')) as {
+      plume?: { server?: { entry?: unknown } }
+    }
+    declared = pkg.plume?.server?.entry
+  } catch {
+    /* 没有 / 坏了 package.json：交给下面的兜底与读文件时的报错 */
+  }
+  if (typeof declared === 'string' && declared.trim()) {
+    const rel = declared.trim().replace(/\\/g, '/')
+    if (path.isAbsolute(rel) || rel.split('/').includes('..')) {
+      throw new Error('plume.server.entry 必须是包内相对路径：' + declared)
+    }
+    return path.join(dir, rel)
+  }
+  return path.join(dir, 'dist', 'server.js')
+}
+
+/**
+ * 运行期装载**任意路径**上的后台插件产物（调试用）。
+ *
+ * 为什么要有它（用户口径 2026-11-25）：调试时插件产物在仓库里（甚至另一个进程的临时目录），
+ * watch 上报的就是那个文件的绝对路径；**不该先复制进数据根的插件目录**再装。
+ * 与 `hotInstallServerPlugin` 只差「文件在哪」：装载方式完全一样（读文本 → import）。
+ *
+ * 只认**绝对路径**：相对路径的含义取决于服务进程的 cwd，传给它是「看起来成功、装错文件」的隐患。
+ *
+ * @param id 卸载时用的稳定键。不传就用产物导出的插件名。
+ */
+export async function hotInstallServerPluginFromPath(
+  ctx: PluginScope,
+  filePath: string,
+  id?: string,
+): Promise<HotLoadResult> {
+  const runtime = runtimeOf(ctx)
+  if (!runtime) return { ok: false, error: "宿主未提供运行期装卸能力（ctx.runtime）" }
+  const file = String(filePath ?? '').trim()
+  if (!file) return { ok: false, error: '需要 file（后台产物在服务端机器上的绝对路径）' }
+  if (!path.isAbsolute(file)) return { ok: false, error: 'file 必须是绝对路径：' + file }
+  try {
+    return await installServerPluginFile(runtime, id && id.trim() ? id.trim() : file, file)
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** 读文件 → import → 校验 → 装进内核；装成功后记下 id → 真名（卸载要用） */
+async function installServerPluginFile(
+  runtime: { install: (m: unknown) => void; uninstall: (n: string) => boolean },
+  id: string,
+  file: string,
+): Promise<HotLoadResult> {
+  const text = await fs.readFile(file, 'utf8')
+  const mod = (await import(/* @vite-ignore */ 'data:text/javascript,' + encodeURIComponent(text))) as Record<string, unknown>
+  const candidate = (mod.default ?? mod) as unknown
+  if (!isValidServerPlugin(candidate)) return { ok: false, error: "不是合法后台插件（需导出 name 与 apply）" }
+  runtime.install(candidate)
+  installedNames.set(id, candidate.name)
+  hotLoaded.set(id, candidate.name)
+  syncAllSinks()
+  return { ok: true, name: candidate.name }
 }
 
 /**

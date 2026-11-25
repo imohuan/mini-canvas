@@ -33,6 +33,7 @@ coverage/
 
 # 本地临时目录（探针、截图、一次性脚本）
 .tmp/
+.tmp-*/
 .scratch/
 _snap_tmp/
 **/.tmp-verify/
@@ -62,5 +63,6 @@ docs/tmp/scan-*.cjs
 
 # 根级调试残留
 /_*.png
+/tmp-*.png
 cdp-*.txt
 

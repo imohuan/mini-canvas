@@ -19,7 +19,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
-/** 产物运行时可能需要的 window 全局（与 vite-plugin-lib 的 HOST_GLOBALS 对应） */
+/** 产物运行时可能需要的 window 全局（与 apps/web/src/sharedGlobals.ts 对应） */
 const KNOWN_GLOBALS = [
   'Vue', 'VueFlow', 'PlumeKernel', 'PlumeBase', 'PlumeCore', 'PlumeRender',
   'ProseMirrorEditorBundle', 'THREE',

@@ -420,12 +420,15 @@ export function createNpmPluginsRoutes(opts: NpmPluginsRoutesOptions): Hono {
       const hasServerFile = async (): Promise<boolean> => {
         try { await fs.access(path.join(extracted, 'dist/server.js')); return true } catch { return false }
       }
-      const resolvedServer =
-        typeof serverRel === 'string'
-          ? await resolveArtifact(extracted, serverRel, 'web.js')
-          : (await hasServerFile())
-            ? 'dist/server.js'
-            : undefined
+      const declaredServer = typeof serverRel === 'string' && serverRel !== resolvedWeb
+        ? await resolveArtifact(extracted, serverRel, 'web.js')
+        : undefined
+      // 兜底解析也可能落回前端产物：同一个文件不能既当前端半又当后台半。
+      const resolvedServer = declaredServer && declaredServer !== resolvedWeb
+        ? declaredServer
+        : (await hasServerFile())
+          ? 'dist/server.js'
+          : undefined
 
       // ⑥ 落盘：`<插件根>/<目录名>/` 下**保持包里的相对结构**，只把 package.json 的
       //    plume.web.entry / plume.server.entry 改成安装后的真实相对路径。

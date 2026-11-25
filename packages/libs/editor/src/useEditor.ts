@@ -149,6 +149,14 @@ export function useEditor(
    */
   let previewChipId = "";
 
+  /**
+   * 「这颗标签的编辑菜单开着」时禁止 hover 预览（用户 2026-11-25）。
+   *
+   * 只禁一颗：菜单开着期间鼠标可能滑到别的标签上，那颗该照常预览。
+   * 菜单关掉由调用方传空串解除（见 suppressResourcePreview）。
+   */
+  let suppressedPreviewChipId = "";
+
   function hideResourcePreview(): void {
     previewChipId = "";
     previewVisible.value = false;
@@ -158,6 +166,26 @@ export function useEditor(
   let hoverTimer: ReturnType<typeof setTimeout> | null = null;
   /** 标签点击后的延迟落光标（CHIP_CARET_DELAY）；连点只保留最后一次 */
   let chipClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * 外部把「这颗标签的编辑菜单打开了」告诉编辑器（用户 2026-11-25）。
+   *
+   * 为什么必须有这条：插件（底栏）点标签图标会打开自己的 Dropdown，而那颗标签**还在**
+   * 鼠标下面 —— 编辑器这边的 hover 预览继续弹着，两个浮层就叠在同一块区域上：
+   * 编辑菜单选不了行、预览图挡住菜单，用户看到的是「两个一起出来」。
+   *
+   * 语义 = 「从现在起不要为它弹预览」：立刻收掉当前预览、清掉待触发的计时器，
+   * 并记下 id —— 鼠标在标签里挪动时 mouseenter 不会再弹（见 handleResourceMouseEnter）。
+   * 传空串 = 解除（菜单关了，恢复原本的 hover 行为）。
+   *
+   * 定义在计时器声明之后：函数体读 hoverTimer，放在前面虽然运行期也对，但读代码的人
+   * 会以为它在声明前就被用到（TDZ 隐患）。
+   */
+  function suppressResourcePreview(chipId?: string): void {
+    if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null }
+    hideResourcePreview()
+    suppressedPreviewChipId = String(chipId ?? '')
+  }
   /**
    * 「点了标签、正在等光标落到标签后面」的那颗标签（标签在文档里的起始位置）。
    *
@@ -331,16 +359,32 @@ export function useEditor(
     if (hoverTimer) clearTimeout(hoverTimer)
 
     const id = el.getAttribute("data-id")
+    /**
+     * 这颗标签的编辑菜单正开着 → 不弹 hover 预览（用户 2026-11-25）。
+     *
+     * 鼠标还在标签上，所以 pointerenter 会反复进来；不在这里挡住的话，菜单一开、
+     * 预览照样 500ms 后升起，两个浮层压在一起。
+     */
+    if (id && suppressedPreviewChipId && id === suppressedPreviewChipId) return
     const item = id ? itemRegistry.get(id) : undefined
     if (item?.onMouseEnter) { item.onMouseEnter(item); return }
 
     hoverTimer = setTimeout(() => {
-      const url = el.getAttribute("data-url") || ""
+      /**
+       * 地址优先读 DOM 属性，**再回退注册表里的 item.url**（用户 2026-11-25）。
+       *
+       * 为什么会不一致：标签落进文档时若资源还没 resolve，`attrs.url` 就是空串；
+       * 之后注册表补齐了地址、DOM 属性却没刷新（老存档 / 重建时序），
+       * 于是 `data-url` 一直为空 —— hover 时既没有图可画，也不满足「有地址才弹」的条件，
+       * 用户看到的就是「这颗标签死活没有预览」。注册表是当前真值，回退不会画错图。
+       */
+      const url = el.getAttribute("data-url") || item?.url || ""
       const name = el.getAttribute("data-name") || ""
       /**
        * 没有 data-url 但有 hoverPreview 时仍要弹（用户 2026-11-06：视频帧图还没取到时，
        * 标签左侧只能是图标，data-url 是空的 —— 但视频本身是能放的，hover 预览不该因此消失）。
        */
+      // url 已含注册表回退（见上）；这里再留 hoverPreview 一条，视频标签靠它
       if (!url && !item?.hoverPreview) return
       /**
        * 音频 / 文本**不弹 hover 预览**（用户 2026-10-28），但**必须按类型判断**。
@@ -1112,6 +1156,8 @@ export function useEditor(
     replaceResourceThumbByName,
     replaceResourceThumbByIds,
     refreshChips,
+    /** 菜单打开/关闭时通知编辑器「这颗标签暂时不要弹预览」（用户 2026-11-25） */
+    suppressResourcePreview,
     /** 按标签 id 删除参考标签（「清理失效」用） */
     removeRefChips,
     /**
