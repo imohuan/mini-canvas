@@ -79,6 +79,18 @@ export interface HotReload {
    * 也必须自己再拉一次快照（见 HotReloadPage 的 visibilitychange）。
    */
   watchDebugPresence(onChange: () => void): () => void
+  /**
+   * 失联自动卸载（用户口径 2026-11-25，默认关）。
+   *
+   * 打开后：watch 停止上报（心跳超时 = 失联）满 `staleMs` 才卸前端半并清掉上报记录，
+   * 所以「构建中 / 休眠几十秒」不会误删；真正关掉 watch 的插件会自动消失。
+   * 关掉：只显示「已失联」，什么都不卸（旧行为）。
+   */
+  setAutoUninstallOnStale(on: boolean): void
+  /** 当前是否开启；缺省 false */
+  readonly autoUninstallOnStale: boolean
+  /** 立刻按在场快照扫一次（开关打开时、以及界面刷新时调用；幂等） */
+  sweepStaleDebugPlugins(): Promise<void>
 }
 
 /** 调试插件清单里的一行 */
@@ -224,6 +236,14 @@ export interface HotReloadDeps {
   listInstalled?: () => string[]
   /** 从内核卸载一个插件（缺省 window.PlumeUI.uninstallPlugin）；返回是否卸到 */
   uninstall?: (name: string) => boolean
+  /**
+   * 按**绝对路径**装/卸后台插件（缺省走本插件后台半的 /api/hot-reload/server/*）。
+   *
+   * 为什么独立成一个依赖：后台那一半不是浏览器能装的，必须由服务端读文件执行。
+   * 调试时产物就在仓库里，路径由 watch 上报 —— 不需要先复制进数据根的插件目录。
+   */
+  installServerFromPath?: (file: string, name: string) => Promise<{ ok: boolean; error?: string }>
+  uninstallServerFromPath?: (file: string, name: string) => Promise<{ ok: boolean; error?: string }>
   /** 拉调试插件清单（缺省读 /api/kv/config?values=1 里 plugin-watch: 前缀的项） */
   fetchJson?: (url: string, init?: RequestInit) => Promise<unknown>
   /**
@@ -268,7 +288,8 @@ export const SOURCES_KEY = 'hot-reload:sources'
  *
  * 事件本身**只带 key**（见 routes/events.ts），所以收到通知后再 GET 这个 key 读值。
  * `front` 是浏览器能直接请求的地址，用来重装前端半；`server` 是后台能读的磁盘路径，
- * 由后台的调试安装入口消费（见 routes/serverPlugins.ts 的 `/install-from-path`）。
+ * 由本插件的后台半直接消费（`POST /api/hot-reload/server/install`）。
+ * **不需要把产物复制进插件目录**：后端读这个绝对路径就能装、能卸。
  * 老格式（只有 `t`）继续可用：那时退回清单反查，行为与以前一致。
  */
 export const PLUGIN_WATCH_PREFIX = 'plugin-watch:'
@@ -289,7 +310,13 @@ export const PRESENCE_KEY = 'plugin-presence'
 export function withAdminToken(headers: Record<string, string> = {}): Record<string, string> {
   let token = ''
   try {
-    token = (typeof localStorage !== 'undefined' ? localStorage.getItem('plume_admin_token') : '')?.trim() ?? ''
+    if (typeof localStorage !== 'undefined') {
+      token = (localStorage.getItem('plume_admin_token') ?? '').trim()
+    }
+    // 新版宿主把注入的令牌改存到 sessionStorage（见 apps/web/src/adoptInjectedAdminToken.ts）
+    if (!token && typeof sessionStorage !== 'undefined') {
+      token = (sessionStorage.getItem('plume_admin_token_legacy') ?? '').trim()
+    }
   } catch {
     token = ''
   }

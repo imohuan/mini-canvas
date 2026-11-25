@@ -17,12 +17,15 @@ import { presenceStatusOf, type DebugPluginRow, type DebugPresenceStatus, type H
 const { ctx } = useCanvasRender()
 const Badge = useUiComponent('Badge')
 const Button = useUiComponent('Button')
+const Switch = useUiComponent('Switch')
 const hr = ctx.get<HotReload>('hot-reload')
 /** 统一确认框：卸载调试插件也走应用级 AlertDialog。 */
 const feedback = ctx.get<FeedbackService>('feedback')
 if (!hr) throw new Error('[HotReloadPage] 没找到 hot-reload 服务')
 
 const rows = ref<DebugPluginRow[]>([])
+/** 失联自动卸载（插件自己的 Config 项；这里同步显示，改完立即生效） */
+const autoUninstall = ref(hr.autoUninstallOnStale)
 const loading = ref(false)
 const busy = ref('')
 const error = ref('')
@@ -42,6 +45,18 @@ async function refresh(): Promise<void> {
     error.value = err instanceof Error ? err.message : String(err)
   } finally {
     loading.value = false
+  }
+}
+
+/** 开关只改插件自己的配置项：settings 会写进 settings.json，刷新后仍是这个值 */
+function toggleAutoUninstall(next: boolean): void {
+  autoUninstall.value = next
+  hr.setAutoUninstallOnStale(next)
+  const settings = ctx.tryGet<{ set(key: string, value: string | number | boolean): boolean }>('settings')
+  try {
+    settings?.set('autoUninstallOnStale', next)
+  } catch {
+    /* 未声明该配置的宿主（纯内核）：只影响本次会话，不影响本页其它功能 */
   }
 }
 
@@ -164,6 +179,16 @@ onMounted(() => {
           <RefreshCw :size="13" :class="{ spin: loading }" aria-hidden="true" /> 刷新
         </Button>
       </div>
+      <label class="hrp-auto">
+        <Switch
+          :model-value="autoUninstall"
+          @update:model-value="(v: boolean) => toggleAutoUninstall(v)"
+        />
+        <span>
+          失联后自动卸载
+          <em>watch 停了（心跳超时）就把插件从画布卸掉并删除记录。构建中 / 休眠不会误删。</em>
+        </span>
+      </label>
     <p v-if="error" class="hrp-error" role="alert">{{ error }}</p>
 
       <div
@@ -197,6 +222,8 @@ onMounted(() => {
 .hrp { display: flex; flex-direction: column; gap: 12px; }
 .hrp-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--ui-line-soft, #eef0f4); }
 .hrp-hint { flex: 1 1 320px; margin: 0; font-size: 11px; line-height: 1.6; color: var(--ui-ink-dim, #6b7280); }
+.hrp-auto { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: var(--radius-control, 8px); font-size: 12px; color: var(--ui-ink, #18202b); }
+.hrp-auto em { display: block; margin-top: 2px; font-style: normal; font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
 .hrp-count { font-size: 11px; color: var(--ui-ink-dim, #6b7280); }
 .hrp-btn { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border: 1px solid var(--ui-line, #e2e5ea); border-radius: var(--radius-control, 8px); background: transparent; color: var(--ui-ink, #18202b); font-size: 12px; font-weight: 600; cursor: pointer; }
 .hrp-btn:hover:not(:disabled) { background: var(--ui-hover, rgb(0 0 0 / 0.05)); }

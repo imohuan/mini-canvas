@@ -70,6 +70,7 @@ import {
   looksLikeUrl,
   originOf,
   presenceStatusOf,
+  withAdminToken,
 } from './hotReloadTypes'
 
 /**
@@ -667,6 +668,8 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     const onEvent = (e: { type: string; key: string }): void => {
       if (e.type !== 'config' || e.key !== KEY) return
       onChange()
+      // 开关打开时，在场变化也是「失联了该不该卸」的触发点（否则只能等用户点刷新）
+      void sweepStale()
     }
     const shared = w.__plumeKvEvents
     // 订阅地址必须跟「读快照」用同一个后台（配置了调试服务地址就跨源，不能还连页面同源）
@@ -685,6 +688,47 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
       }
     }
     return () => es.close()
+  }
+
+  // ==================== 失联自动卸载（默认关） ====================
+  //
+  // 用户口径 2026-11-25：开关打开后，watch 停了就自动把那半边卸掉。
+  // 判定用**后台的在场快照**（stale + ageMs），不自己数心跳 —— 页面隐藏 / 后台重启时
+  // 自己的计时器不可信，服务端收到的时间才是唯一事实源（见 pluginPresence.ts 的说明）。
+  // 只卸**前端半**并删上报记录：后台代码可能正被别的进程使用，静默删掉代价太大。
+  let autoUninstallOnStale = false
+  /** 已经处理过的名字：避免每收到一次在场广播就重复卸一遍（失败的下轮还能重试） */
+  const autoUninstalled = new Set<string>()
+
+  /** 扫一遍在场快照：失联超过 staleAfterMs 的，卸前端 + 清记录 */
+  async function sweepStale(): Promise<void> {
+    if (!autoUninstallOnStale) return
+    const presence = await readPresence()
+    if (!presence) return
+    for (const row of presence.plugins) {
+      if (!row.stale || row.ageMs < presence.staleAfterMs) continue
+      if (autoUninstalled.has(row.name)) continue
+      if (!installedList().includes(row.name)) {
+        // 前端本来就没装：只把残留记录清掉，不再假装卸载了一次
+        autoUninstalled.add(row.name)
+        await deleteWatchReport(row.name)
+        continue
+      }
+      try {
+        uninstallOne(row.name)
+        autoUninstalled.add(row.name)
+        await deleteWatchReport(row.name)
+        log({
+          sourceId: 0,
+          sourceLabel: '自动卸载',
+          action: 'disconnected',
+          detail: row.name + '：watch 已失联 ' + Math.round(row.ageMs / 1000) + ' 秒，已自动卸载',
+        })
+      } catch (err) {
+        // 核心插件 / 卸载失败：记下来，下次广播再试（不阻塞其它插件）
+        log({ sourceId: 0, sourceLabel: '自动卸载', action: 'error', detail: row.name + '：' + String(err) })
+      }
+    }
   }
 
   /** 删掉某个插件的上报记录（卸载时顺手清；失败不致命） */
@@ -726,21 +770,40 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
   }
 
   /**
-   * 调试期后台半（2026-11-12 起）。
+   * 调试期后台半 —— 按**绝对路径**直接装（用户口径 2026-11-25）。
    *
-   * 旧的 server-plugins 目录与 /api/server-plugins/install-from-path 已删除：
-   * 后台半只认「插件目录 + package.json 的 plume.server.entry」，不再有第二份拷贝。
-   * 所以这里不再发起安装请求，只把情况说清楚 —— 静默成功会让作者以为后台已生效。
+   * 交给本插件的后台半 `POST /api/hot-reload/server/install`：它读这个文件、`import` 进内核。
+   * 产物留在原地（仓库里的 dist/server.js），**不复制进插件目录**。
+   * 失败不抛给调用方（前端那一半可能已经装好）：记一条可读的错误即可。
    */
   async function installServerFromPath(id: string, serverPath: string): Promise<void> {
-    log({
-      sourceId: 0,
-      sourceLabel: '调试插件',
-      action: 'error',
-      detail:
-        id + '：后台半需放到 <数据根>/plugins/<插件>/ 并由 package.json 的 plume.server.entry 声明 ' +
-        '（上报路径 ' + serverPath + ' 不再直接安装），改完重启服务生效',
-    })
+    const install =
+      deps.installServerFromPath ??
+      (async (file: string, name: string) => {
+        const res = await fetch(backend('/api/hot-reload/server/install'), {
+          method: 'POST',
+          headers: withAdminToken({ 'content-type': 'application/json' }),
+          body: JSON.stringify({ file, id: name }),
+        })
+        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+        return { ok: res.ok && body.ok === true, ...(body.error ? { error: body.error } : {}) }
+      })
+    try {
+      const r = await install(serverPath, id)
+      log({
+        sourceId: 0,
+        sourceLabel: '调试插件',
+        action: r.ok ? 'reload' : 'error',
+        detail: id + '：后台半 ' + (r.ok ? '已按路径装载 ' : '装载失败 ') + serverPath + (r.error ? '（' + r.error + '）' : ''),
+      })
+    } catch (err) {
+      log({
+        sourceId: 0,
+        sourceLabel: '调试插件',
+        action: 'error',
+        detail: id + '：后台半装载请求失败 ' + String(err),
+      })
+    }
   }
 
   /**
@@ -770,12 +833,42 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
 
   /** 卸后台半（按 id；后台没有这个 id 也算成功，因为目标状态已经达成） */
   async function uninstallServerHalf(id: string): Promise<void> {
-    // 后台半跟插件目录同生共死（删目录即消失），不再有单独的卸载接口。
-    log({ sourceId: 0, sourceLabel: '调试插件', action: 'disconnected', detail: id + '：后台半随插件目录，重启后消失' })
+    const reports = await readWatchReports()
+    const serverPath = reports.find((r) => r.name === id)?.report.server
+    const uninstall =
+      deps.uninstallServerFromPath ??
+      (async (file: string, name: string) => {
+        const res = await fetch(backend('/api/hot-reload/server/uninstall'), {
+          method: 'POST',
+          headers: withAdminToken({ 'content-type': 'application/json' }),
+          body: JSON.stringify({ file, id: name, name }),
+        })
+        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
+        return { ok: res.ok && body.ok !== false, ...(body.error ? { error: body.error } : {}) }
+      })
+    try {
+      const r = await uninstall(serverPath ?? '', id)
+      log({
+        sourceId: 0,
+        sourceLabel: '调试插件',
+        action: r.ok ? 'disconnected' : 'error',
+        detail: id + '：后台半 ' + (r.ok ? '已卸载' : '卸载失败') + (r.error ? '（' + r.error + '）' : ''),
+      })
+    } catch (err) {
+      log({ sourceId: 0, sourceLabel: '调试插件', action: 'error', detail: id + '：后台半卸载请求失败 ' + String(err) })
+    }
   }
 
   return {
     state,
+    get autoUninstallOnStale() {
+      return autoUninstallOnStale
+    },
+    setAutoUninstallOnStale(on: boolean) {
+      autoUninstallOnStale = on === true
+      // 打开的那一刻先扫一遍：之前已经失联的插件不必再等下一次广播
+      if (autoUninstallOnStale) void sweepStale()
+    },
     addSource,
     removeSource,
     updateSource,
@@ -785,6 +878,7 @@ export function createHotReload(deps: HotReloadDeps = {}): HotReload {
     clearLogs,
     watchPluginChanges,
     watchDebugPresence,
+    sweepStaleDebugPlugins: sweepStale,
     listDebugPlugins,
     reinstallDebugPlugin,
     uninstallDebugPlugin,

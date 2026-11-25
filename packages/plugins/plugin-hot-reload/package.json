@@ -1,13 +1,19 @@
 {
   "name": "@plume-canvas/plugin-hot-reload",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.1",
   "type": "module",
   "plume": {
     "title": "热重载",
-    "description": "开发用：手动登记几条链接（cloud-server 的 SSE / 插件自己的 vite dev server），产物一变自动重装插件",
+    "description": "调试用：把 watch 上报过的插件列出来，看监听在不在线，一键重装 / 卸载。安装后设置里多出「调试插件」页。",
     "pluginName": "hot-reload",
-    "installable": false
+    "installable": true,
+    "web": {
+      "entry": "dist/web.js"
+    },
+    "server": {
+      "entry": "dist/server.js"
+    },
+    "serverPermissions": []
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -19,6 +25,9 @@
     "./*": "./src/*"
   },
   "scripts": {
+    "build": "vite build && node scripts/build-server.mjs",
+    "build:web": "vite build",
+    "build:server": "node scripts/build-server.mjs",
     "typecheck": "tsc --noEmit",
     "typecheck:vue": "vue-tsc --noEmit",
     "test": "vitest run"
@@ -30,11 +39,22 @@
   "devDependencies": {
     "@plume-canvas/canvas-data": "workspace:*",
     "@plume-canvas/kernel": "workspace:*",
-    "lucide-vue-next": "^1.0.0",
+    "@types/node": "^24.12.3",
     "@vitejs/plugin-vue": "^6.0.6",
+    "esbuild": "0.28.2",
+    "lucide-vue-next": "^1.0.0",
     "typescript": "~6.0.2",
+    "vite": "^8.0.16",
+    "vite-plugin-css-injected-by-js": "3.5.2",
     "vitest": "^3.0.0",
     "vue": "^3.5.34",
     "vue-tsc": "^3.2.8"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
 }

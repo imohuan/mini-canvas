@@ -425,6 +425,52 @@ describe('调试插件清单：是否已装只看内核里的唯一名字', () =
     expect(calls).toEqual([{ name: 'demo', url: 'http://h/demo.js' }])
   })
 
+  it('重装：上报里有 server 绝对路径 → 直接按路径装后台，不复制文件', async () => {
+    const installed: Array<{ file: string; id: string }> = []
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => ['demo'],
+      reloadByUrl: async () => {},
+      installServerFromPath: async (file, id) => {
+        installed.push({ file, id })
+        return { ok: true }
+      },
+      fetchJson: async () => ({
+        ok: true,
+        values: {
+          'plugin-watch:demo': {
+            front: 'http://localhost:5199/demo.js',
+            server: 'D:/work/demo/dist/server.js',
+          },
+        },
+      }),
+    })
+    await hr.reinstallDebugPlugin('demo')
+    expect(installed).toEqual([{ file: 'D:/work/demo/dist/server.js', id: 'demo' }])
+  })
+
+  it('卸载：有 server 路径 → 连同后台一起按路径卸载', async () => {
+    const calls: string[] = []
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => ['demo'],
+      uninstall: () => true,
+      uninstallServerFromPath: async (file, id) => {
+        calls.push('server:' + id + ':' + file)
+        return { ok: true }
+      },
+      fetchJson: async (_url, init) => {
+        if ((init?.method ?? 'GET') === 'DELETE') calls.push('delete-record')
+        return {
+          ok: true,
+          values: { 'plugin-watch:demo': { front: 'http://h/demo.js', server: 'D:/work/demo/dist/server.js' } },
+        }
+      },
+    })
+    await hr.uninstallDebugPlugin('demo')
+    expect(calls).toEqual(['server:demo:D:/work/demo/dist/server.js', 'delete-record'])
+  })
+
   it('重装：上报里没有前端地址 → 明确报错，不装半成品', async () => {
     const hr = createHotReload({
       storage: memStorage(),
@@ -691,6 +737,97 @@ describe('通知稳定性：等长修改也要触发重装 + 失败要能看见'
       globalThis.fetch = originalFetch
       delete w.__plumeKvEvents
     }
+  })
+})
+
+describe('失联自动卸载（开关默认关）', () => {
+  /** 造一个只回在场快照 + 记录删除的假后台 */
+  function boot(presence: unknown, installed: string[]) {
+    const calls: string[] = []
+    let values: Record<string, unknown> = {
+      'plugin-watch:demo': { front: 'http://h/demo.js' },
+      'plugin-watch:other': { front: 'http://h/other.js' },
+    }
+    const hr = createHotReload({
+      storage: memStorage(),
+      listInstalled: () => installed,
+      uninstall: (n) => {
+        calls.push('uninstall:' + n)
+        return true
+      },
+      fetchJson: async (url, init) => {
+        const u = String(url)
+        if ((init?.method ?? 'GET') === 'DELETE') {
+          const tail = u.slice(u.lastIndexOf('plugin-watch') + 'plugin-watch'.length)
+          const name = decodeURIComponent(tail.replace(/^%3A|^:/, ''))
+          calls.push('delete-record:' + name)
+          delete values['plugin-watch:' + name]
+          return { ok: true }
+        }
+        if (u.includes('/api/plugin-presence')) return presence
+        return { ok: true, values }
+      },
+    })
+    return { hr, calls }
+  }
+
+  const snapshot = (rows: Array<{ name: string; stale: boolean; ageMs: number }>): unknown => ({
+    ok: true,
+    staleAfterMs: 30_000,
+    now: 1,
+    plugins: rows.map((r) => ({
+      name: r.name,
+      instance: 'i',
+      state: 'watching',
+      lastSeenAt: 1,
+      ageMs: r.ageMs,
+      stale: r.stale,
+      instances: 1,
+      multiple: false,
+    })),
+  })
+
+  it('开关关着：失联也不卸任何东西', async () => {
+    const { hr, calls } = boot(snapshot([{ name: 'demo', stale: true, ageMs: 120_000 }]), ['demo'])
+    await hr.sweepStaleDebugPlugins()
+    expect(calls).toEqual([])
+    expect(hr.autoUninstallOnStale).toBe(false)
+  })
+
+  it('开关打开：失联的卸前端 + 删记录；在线的完全不碰', async () => {
+    const { hr, calls } = boot(
+      snapshot([
+        { name: 'demo', stale: true, ageMs: 120_000 },
+        { name: 'other', stale: false, ageMs: 2_000 },
+      ]),
+      ['demo', 'other'],
+    )
+    hr.setAutoUninstallOnStale(true)
+    await tick(20) // 开关打开时自己先扫了一遍（异步），等它跑完再显式扫一次
+    calls.length = 0
+    await hr.sweepStaleDebugPlugins()
+    expect(calls).toEqual([]) // 已经处理过，不重复卸
+    expect(hr.autoUninstallOnStale).toBe(true)
+  })
+
+  it('开关打开后首次扫描：只卸失联那个，并清掉它的记录', async () => {
+    const { hr, calls } = boot(
+      snapshot([
+        { name: 'demo', stale: true, ageMs: 120_000 },
+        { name: 'other', stale: false, ageMs: 2_000 },
+      ]),
+      ['demo', 'other'],
+    )
+    hr.setAutoUninstallOnStale(true)
+    await tick(20)
+    expect(calls).toEqual(['uninstall:demo', 'delete-record:demo'])
+  })
+
+  it('失联但还没到超时阈值：不动（构建中 / 刚休眠不算）', async () => {
+    const { hr, calls } = boot(snapshot([{ name: 'demo', stale: true, ageMs: 5_000 }]), ['demo'])
+    hr.setAutoUninstallOnStale(true)
+    await tick(20)
+    expect(calls).toEqual([])
   })
 })
 

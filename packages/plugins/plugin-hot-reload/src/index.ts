@@ -62,11 +62,22 @@ export const Config = {
       'watch 上报用的后台地址（如 http://127.0.0.1:8865）。留空 = 用打开画布的这个地址。' +
       '它只用于读取/清理调试上报记录，不影响插件管理那边的清单地址。',
   },
+  autoUninstallOnStale: {
+    type: 'boolean' as const,
+    default: false,
+    label: '失联后自动卸载',
+    group: HOT_RELOAD_NAV_ID,
+    description:
+      '打开后：watch 停止上报（心跳超时）的插件会自动从画布上卸掉，并删除它的调试记录。' +
+      '构建中 / 休眠几十秒不会误删（要连续失联超过后台的心跳超时时间才动手）。默认关。',
+  },
 }
 
 export interface HotReloadConfig {
   /** 调试这一侧的后台地址（空 = 同源）；只影响调试页读/清上报记录 */
   watchBackend?: string
+  /** 失联自动卸载（默认关） */
+  autoUninstallOnStale?: boolean
 }
 
 /**
@@ -101,6 +112,28 @@ export const hotReloadPlugin: PluginModule = {
 
     // 服务上架：别的插件可 ctx.get('hot-reload') 拿同一份
     ctx.inject('hot-reload', manager)
+
+    // 失联自动卸载：经 ctx.settings 能力段订阅（原始 store 拿不到作用域语义，见 style-library 的说明）。
+    // 开关是插件自己的 Config 项，用户改完立即生效，不需要刷新页面。
+    const settings = ctx.tryGet<{
+      get(key: string): string | number | boolean
+      onChange(scope: string, cb: (key: string, value: unknown) => void): { dispose(): void }
+    }>('settings')
+    const applyAutoUninstall = (v: unknown): void => {
+      manager.setAutoUninstallOnStale(v === true)
+    }
+    if (settings) {
+      applyAutoUninstall(settings.get('autoUninstallOnStale'))
+      ctx.effect(() => {
+        const sub = settings.onChange(name, (key, value) => {
+          if (key === 'autoUninstallOnStale') applyAutoUninstall(value)
+        })
+        return () => sub.dispose()
+      })
+    } else {
+      // 没有设置服务（纯内核 / 单测）：退回装配参数
+      applyAutoUninstall(config?.autoUninstallOnStale)
+    }
 
     // KV 变更监听：复用宿主共享通道（零新连接），页面卸载自动断开
     ctx.effect(() => manager.watchPluginChanges())
