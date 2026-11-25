@@ -105,10 +105,16 @@ async function httpError(res: Response, what: string): Promise<Error> {
     /*
      * 403 有两种原因，提示必须分开（用户 2026-11-17 截图：界面已经改成登录面板了，
      * 这里却还在让人「检查管理令牌」，等于把人引到一条已经删掉的路上）。
+     *
+     * 第三种是**没声明脚本**（2026-11-26 真机）：后台说得非常清楚「节点 6 没有声明脚本
+     * pixelize」，可当时这条提示还让人去查登录，用户自然以为登录坏了。
+     * 声明问题就照后台那句话引导，别再提登录。
      */
-    const hint = /登录/.test(detail)
-      ? '请先在 cloud-client 的登录面板输入密码后重试。'
-      : '请检查登录状态（或后台的 x-admin-token 恢复通道）。'
+    const hint = /没有声明脚本/.test(detail)
+      ? '这不是登录问题：界面调用了节点没有声明的脚本。用 canvas_ui_write / canvas_fn_call 会把声明补上，补完再点一次。'
+      : /登录/.test(detail)
+        ? '请先在 cloud-client 的登录面板输入密码后重试。'
+        : '请检查登录状态（或后台的 x-admin-token 恢复通道）。'
     return new Error('后台拒绝（403）' + tail + '。' + hint)
   }
   return new Error(what + '失败（' + res.status + '）' + tail)

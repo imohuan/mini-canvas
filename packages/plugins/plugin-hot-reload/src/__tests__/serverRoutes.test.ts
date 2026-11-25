@@ -86,6 +86,26 @@ describe('热重载插件 · 后台半：按路径装卸', () => {
     expect(installed).toEqual([])
   })
 
+  it('★ 同名已装时是「替换」：先卸旧再装新（真机踩到 Duplicate plugin name）', async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), 'hr-server2-'))
+    const file = path.join(dir, 'server.js')
+    await writeFile(file, `export const name = 'probe'\nexport function apply() {}\n`, 'utf8')
+    try {
+      const { ctx, routes, installed, uninstalled } = fakeCtx()
+      apply(ctx as never)
+      const install = routes.find((r) => r.path === '/api/hot-reload/server/install')!
+      // 带上 id（调用方给的目录名），两个候选都要尝试卸载
+      const res = await install.handler(fakeHono({ file, id: 'node-ui' }) as never)
+      expect(res.status).toBe(200)
+      expect(await res.json()).toEqual({ ok: true, name: 'probe' })
+      // 先按导出的 name、再按 id 各卸一次，最后才装
+      expect(uninstalled).toEqual(['probe', 'node-ui'])
+      expect(installed).toEqual([{ name: 'probe' }])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('卸：按名字卸；内核里没有也算成功（目标状态已达成）', async () => {
     const { ctx, routes, uninstalled } = fakeCtx()
     apply(ctx as never)

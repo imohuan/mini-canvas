@@ -28,6 +28,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useCanvasRender, useUiComponent } from '@plume-canvas/canvas-render'
+import { resourceUrlOfRef } from '@plume-canvas/canvas-data'
 import {
   buildPalette,
   buildSrcdoc,
@@ -156,11 +157,20 @@ const upstream = computed<UpstreamItem[]>(() => {
     const text = typeof d.text === 'string' ? d.text : undefined
     // 既没地址、也没引用、也没文字 = 空素材（例如还没生成的图片节点），别塞给生成物当噪音
     if (!url && !resourceId && !text) continue
+    /*
+     * ★ 只有 resourceId 时**当场换成可显示地址**（2026-11-25 用户实测）。
+     *
+     * 新节点的产物字段只存引用 `<画布id>/<hash>`（地址是它的投影，保存时会被删掉）。
+     * 以前这里只把 resourceId 原样递上线，页面里 `u.url` 是空的 —— 界面自己判
+     * 「没有上游图片」，用户明明连着图却看到「无上游图片」。
+     * 现在两个都给：url 用来**直接显示 / 当素材传**，resourceId 留着给需要引用的地方。
+     */
+    const resolvedUrl = url ?? (resourceId ? resourceUrlOfRef(resourceId) : undefined)
     raw.push({
       id: n.id,
       kind: refKind ?? (n.type ?? 'other'),
       ...(typeof d.label === 'string' ? { name: d.label } : {}),
-      ...(url ? { url } : {}),
+      ...(resolvedUrl ? { url: resolvedUrl } : {}),
       ...(resourceId ? { resourceId } : {}),
       ...(text ? { value: text } : {}),
     })

@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-node-ui",
-  "version": "0.1.7",
+  "version": "0.1.10",
   "type": "module",
   "plume": {
     "title": "可视化节点",
@@ -21,6 +21,7 @@
     "build": "vite build && node scripts/build-server.mjs",
     "build:web": "vite build",
     "build:server": "node scripts/build-server.mjs",
+    "watch": "node scripts/watch.mjs",
     "dev": "vite",
     "dev:hmr": "vite --config vite.dev.config.ts",
     "test": "vitest run",

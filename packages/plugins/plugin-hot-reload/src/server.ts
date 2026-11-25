@@ -52,10 +52,22 @@ function isValidServerPlugin(v: unknown): v is { name: string; apply: (...a: nev
   return typeof m.name === 'string' && m.name !== '' && typeof m.apply === 'function'
 }
 
-/** 读文件 → import → 校验 → 装进内核。返回内核里的真名。 */
+/**
+ * 读文件 → import → 校验 → 装进内核。返回内核里的真名。
+ *
+ * ## 为什么要先卸旧（2026-11-25 真机踩到）
+ *
+ * 内核按**插件名**索引，已存在同名时 `install()` 会抛
+ * `[core] Duplicate plugin name: "plugin-node-ui"` —— 于是「重装」永远 400，
+ * 后台半一直是第一次装进去的那份（改了代码也不生效，看起来像热重载没起作用）。
+ * 调试语义就是「把现在这份换掉」，所以这里是**替换**：先按同名卸掉，再装新的。
+ * 卸载失败（内核里没有）不算错 —— 那正是「还没装过」的第一次安装。
+ */
 async function installFromFile(
   runtime: NonNullable<ServerCtx['runtime']>,
   file: string,
+  /** 调用方给的插件 id（目录名 / 上报名）；通常不等于产物导出的 name，两个都要试 */
+  id = '',
 ): Promise<{ ok: true; name: string } | { ok: false; error: string }> {
   if (!path.isAbsolute(file)) {
     return { ok: false, error: 'file 必须是绝对路径（相对路径会按服务进程的 cwd 解析，容易装错文件）：' + file }
@@ -75,6 +87,15 @@ async function installFromFile(
     if (!isValidServerPlugin(candidate)) {
       return { ok: false, error: '不是合法后台插件（需导出 name 与 apply）' }
     }
+    // 替换语义：先摘掉同名的旧版本（按导出的 name 与调用方给的 id 都试一遍）
+    for (const key of [candidate.name, id]) {
+      if (!key) continue
+      try {
+        runtime.uninstall(key)
+      } catch {
+        /* 内核里没有这个键，或摘除时有别的插件在跑：交给下面的 install 判重 */
+      }
+    }
     runtime.install(candidate)
     return { ok: true, name: candidate.name }
   } catch (err) {
@@ -88,10 +109,11 @@ export function apply(ctx: ServerCtx): void {
   if (!runtime || typeof runtime.install !== 'function' || typeof runtime.uninstall !== 'function') return
 
   ctx.routes.post('/api/hot-reload/server/install', async (c) => {
-    const body = (await c.req.json().catch(() => undefined)) as { file?: unknown } | undefined
+    const body = (await c.req.json().catch(() => undefined)) as { file?: unknown; id?: unknown } | undefined
     const file = typeof body?.file === 'string' ? body.file.trim() : ''
+    const id = typeof body?.id === 'string' ? body.id.trim() : ''
     if (!file) return c.json({ ok: false, error: '需要 file（后台产物在本机上的绝对路径）' }, 400)
-    const r = await installFromFile(runtime, file)
+    const r = await installFromFile(runtime, file, id)
     return c.json(r, r.ok ? 200 : 400)
   }, 'admin')
 

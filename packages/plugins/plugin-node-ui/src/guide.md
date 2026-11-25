@@ -184,6 +184,8 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
   CanvasUI.task(脚本, 函数, 参数, opts)  ← 叫后台干活（自动带节点信息）
      opts.log / opts.progress 收实时输出；opts.wait: true 直接把结果等回来
      （只要结果、不要过程时写 wait: true；长任务写 log/progress 订阅着看）
+     ⚠️ 这一句会让宿主把「这个脚本」写进节点声明。**脚本名必须与 task-scripts/ 里的文件名一字不差**
+        （`pixelize` 与 `_pixelize` 是两个脚本）。写错了用户点按钮就 403。
   CanvasUI.cancel(runId)           ← 取消一次后台调用
 
 **只有两样东西：上游、参数。没有第三个概念。**

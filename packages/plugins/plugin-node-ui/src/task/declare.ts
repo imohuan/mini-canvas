@@ -22,6 +22,19 @@
 export const SCRIPT_CALL_RE = /(?:^|[{,(\s])["\']?name["\']?\s*:\s*["\']([A-Za-z0-9_-]{1,64})["\']/g
 
 /**
+ * 第二种写法：手册里教的那句 `CanvasUI.task("脚本名", "函数", …)`。
+ *
+ * 为什么必须认它（2026-11-26 真机踩到）：手册第 3.3 节教的就是这个写法，
+ * 但自动补声明只认 `{ type: "call", name: "x" }` —— 于是按手册写的界面
+ * **一条声明都补不上**，界面画好了、用户点「生成」直接 403。
+ * 当时那个节点里只剩一个旧的 `_pixelize`，界面调的 `pixelize` 没人声明。
+ *
+ * 正则要求前面是 `CanvasUI.task` 或独立的 `task(`（不跟在 `.` 或字母后面，
+ * 免得把 `someTask(` 也算进来）；名字仍要过 knownNames 白名单，噪音不会进来。
+ */
+export const TASK_CALL_RE = /(?:CanvasUI\s*\.\s*task|(?<![.\w])task)\s*\(\s*["\']([A-Za-z0-9_-]{1,64})["\']/g
+
+/**
  * 从界面 HTML 里扫出它调用了哪些脚本。
  *
  * **只认这台机器上真实存在的脚本名**（knownNames）：
@@ -33,10 +46,13 @@ export function detectScriptCalls(html: string, knownNames: readonly string[]): 
   const known = new Set(knownNames)
   const out = new Set<string>()
   // 正则带 g（有 lastIndex 状态），所以每次现造一个，避免跨调用串状态
-  const re = new RegExp(SCRIPT_CALL_RE.source, SCRIPT_CALL_RE.flags)
-  for (const m of html.matchAll(re)) {
-    const name = m[1]
-    if (name && known.has(name)) out.add(name)
+  // 两种写法都要扫：`{ name: "x" }` 与 `CanvasUI.task("x", …)`（手册教的是后者）。
+  for (const source of [SCRIPT_CALL_RE.source, TASK_CALL_RE.source]) {
+    const re = new RegExp(source, 'g')
+    for (const m of html.matchAll(re)) {
+      const name = m[1]
+      if (name && known.has(name)) out.add(name)
+    }
   }
   return [...out].sort()
 }

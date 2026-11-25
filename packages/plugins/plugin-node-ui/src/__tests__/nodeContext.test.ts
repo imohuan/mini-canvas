@@ -60,6 +60,11 @@ describe('给 Agent 的上下文（一次拿齐"该画什么"）', () => {
     const c = buildNodeContext(fakeCtx(nodes, edges), 'nope')
     expect(c.nodeId).toBe('nope')
     expect(c.upstream).toEqual([])
+  })
+
+  it('没交过参数时 inputs 是空对象（不是 undefined，界面可以直接读）', () => {
+    const bare = [{ id: 'x', type: 'ui', data: {} }]
+    const c = buildNodeContext(fakeCtx(bare, []), 'x')
     expect(c.inputs).toEqual({})
   })
 
@@ -69,15 +74,16 @@ describe('给 Agent 的上下文（一次拿齐"该画什么"）', () => {
     expect(c.upstream.filter((u) => u.nodeId === '1')).toHaveLength(1)
   })
 
-  it('★ 只有 resourceId 的上游也带上引用（新节点没有 imageUrl 那类地址）', () => {
+  it('★ 只有 resourceId 的上游：引用保留，同时算出可显示地址', () => {
     const refNodes = [
-      { id: 'i', type: 'image', data: { label: '封面', resourceId: 'default/abc.png' } },
+      { id: 'i', type: 'image', data: { label: '封面', resourceId: 'default/0123456789abcdef.png' } },
       { id: 'u', type: 'ui', data: { uiHtml: '<div>x</div>' } },
     ]
     const c = buildNodeContext(fakeCtx(refNodes, [{ source: 'i', target: 'u' }]), 'u')
     expect(c.upstream).toHaveLength(1)
-    expect(c.upstream[0]).toMatchObject({ nodeId: 'i', kind: 'image', resourceId: 'default/abc.png' })
-    expect(c.upstream[0]).not.toHaveProperty('url')
+    expect(c.upstream[0]).toMatchObject({ nodeId: 'i', kind: 'image', resourceId: 'default/0123456789abcdef.png' })
+    // 2026-11-25 修正：只给引用时也要算出地址，否则界面与 Agent 都以为「没连素材」
+    expect(c.upstream[0].url).toBe('/api/canvases/default/resources/0123456789abcdef.png')
   })
 })
 

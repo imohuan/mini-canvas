@@ -27,6 +27,7 @@
  */
 import { Service, type Context, type ConfigSchema, bindTypeDefaultSize, type PluginModule } from '@plume-canvas/plugin-sdk'
 import type { DocService } from '@plume-canvas/canvas-data'
+import { resourceUrlOfRef } from '@plume-canvas/canvas-data'
 import { extractHtml, normalizeInputs, normalizeUpstream, resolveOutputType, type UiInputDecl } from './uiData'
 import DebugBadge from './DebugBadge.vue'
 import { fetchBackendOrigin } from './uiOrigin'
@@ -346,11 +347,14 @@ export function buildNodeContext(ctx: Context, nodeId: string): {
     // 新节点只写 resourceId：没有地址时也要把引用带上，否则 Agent 以为"没连素材"
     const resourceId = typeof d.resourceId === 'string' && d.resourceId ? d.resourceId : undefined
     const text = typeof d.text === 'string' ? d.text : undefined
+    // 只有引用时现算地址：否则 Agent 看到的素材里 url 是空的，会以为「没连素材」
+    // （与 UiContent.vue 的 upstream 计算同一条规则，两边都改才一致）。
+    const resolvedUrl = url ?? (resourceId ? resourceUrlOfRef(resourceId) : undefined)
     raw.push({
       id: src.id,
       kind: src.type,
       ...(typeof d.label === 'string' ? { name: d.label } : {}),
-      ...(url ? { url } : {}),
+      ...(resolvedUrl ? { url: resolvedUrl } : {}),
       ...(resourceId ? { resourceId } : {}),
       ...(text ? { value: text } : {}),
     })

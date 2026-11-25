@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * watch —— bottom-bar 的调试监听（协议见 docs/plugin-dev/10-debug-protocol.md）。
+ * watch —— 插件调试监听（协议见 docs/plugin-dev/10-debug-protocol.md）。
+ *
+ * 这份脚本是**共用模板**：plugin-bottom-bar 与 plugin-node-ui 各放一份，内容保持一致，
+ * 改了一处就同步另一处（两份之间唯一的差别只在 package.json 里的 pluginName）。
  *
  *   pnpm watch
  *
@@ -16,7 +19,9 @@
  *   { t, front: "http://…/plugins/<包目录>/<产物>.js", server?: "D:\\…\\dist\\server.js" }
  */
 import { spawn } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, watch as fsWatch } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, watch as fsWatch } from 'node:fs'
+import { createServer } from 'node:http'
+import { readFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -38,6 +43,19 @@ const SERVER_OVERRIDE = process.argv.includes('--server')
 const pkg = JSON.parse(readFileSync(join(PKG_ROOT, 'package.json'), 'utf8'))
 const PLUGIN_NAME = pkg.plume?.pluginName || String(pkg.name || '').replace(/^@[^/]+\//, '')
 const PKG_DIR = PKG_ROOT.split(/[\\/]/).filter(Boolean).pop() || PLUGIN_NAME
+/**
+ * 本地静态服务端口（`--serve-port` / `PLUME_PLUGIN_SERVE_PORT`，默认 5199）。
+ *
+ * 为什么 watch 要自己发产物（2026-11-26 真机踩到）：
+ * 后台 `/plugins/<id>/<entry>` 读的是**数据根里那份安装副本**，而 watch 构建的是仓库里的
+ * `dist`。两者不是同一个文件 —— 于是「重装成功」装回去的还是旧字节，改代码完全没反应。
+ * 让 watch 把 dist 直接发出来，上报的 `front` 就真的是新产物，不用改动用户装的那份。
+ */
+const SERVE_PORT = Number(
+  process.argv.includes('--serve-port')
+    ? process.argv[process.argv.indexOf('--serve-port') + 1]
+    : process.env.PLUME_PLUGIN_SERVE_PORT || 5199,
+)
 const KV_URL = BACKEND + '/api/kv/config/plugin-watch:' + encodeURIComponent(PLUGIN_NAME)
 const HEARTBEAT_URL = BACKEND + '/api/plugin-presence/heartbeat'
 const LEAVE_URL = BACKEND + '/api/plugin-presence/leave'
@@ -45,15 +63,127 @@ const LEAVE_URL = BACKEND + '/api/plugin-presence/leave'
 const INSTANCE = process.pid + '-' + Math.random().toString(36).slice(2, 8)
 const HEARTBEAT_MS = 10_000
 
-/** dist 里的前端产物（实际扫描，避免 vite fileName 与插件名不一致时拼错） */
-function frontUrlNow() {
-  if (FRONT_OVERRIDE) return FRONT_OVERRIDE
+/**
+ * 从后台的 `plugin-catalog.json` 问出**这个插件实际被服务的地址**。
+ *
+ * 为什么必须问、不能自己拼（2026-11-25 真机踩到的坑）：
+ * 拼地址时有两个假设会同时错掉 ——
+ *   ① 目录名：仓库里是 `plugin-node-ui`，从 NPM 装进来的是 `plume-canvas__plugin-node-ui`；
+ *   ② 产物名：vite 的 `fileName` 是 `plugin-node-ui.js`，而安装副本里可能被复制成 `web.js`。
+ * 结果 watch 上报了一个 404 地址，热重载「重装成功」却装回旧字节。
+ * 清单里那个 `url` 是后台**按插件逐个解析**出来的，直接照抄最稳。
+ */
+async function catalogFrontUrl() {
+  try {
+    const res = await fetch(BACKEND + '/plugin-catalog.json')
+    if (!res.ok) return undefined
+    const body = await res.json()
+    const list = Array.isArray(body?.plugins) ? body.plugins : []
+    // 目录名两种形态都可能是 id；再按 `plume.pluginName` 兜一层
+    const hit = list.find((p) => p && (p.id === PKG_DIR || p.id === 'plume-canvas__' + PKG_DIR || p.name === PLUGIN_NAME))
+    if (hit && typeof hit.url === 'string' && hit.url) return BACKEND.replace(/\/+$/, '') + hit.url
+  } catch {
+    /* 后台没起 / 还没装过这个插件：下面回退到本地扫描 */
+  }
+  return undefined
+}
+
+/**
+ * 前端产物文件名：**实际扫 dist**，不猜。
+ *
+ * 为什么不能只看 `plume.web.entry`：仓库里的 package.json 不一定声明它（发布时才补），
+ * 而 vite 的 `fileName` 与插件名也可能不同。扫出来的才是真的那一个。
+ */
+function entryNow() {
+  const declared = String(pkg.plume?.web?.entry || '').split('/').pop()
   const distDir = join(PKG_ROOT, 'dist')
   if (existsSync(distDir)) {
-    const found = readdirSync(distDir).find((f) => f === PLUGIN_NAME + '.js' || (f.endsWith('.js') && !f.endsWith('.min.js')))
-    if (found) return BACKEND.replace(/\/+$/, '') + '/plugins/' + PKG_DIR + '/' + found
+    const files = readdirSync(distDir).filter((f) => f.endsWith('.js'))
+    const pick =
+      (declared && files.includes(declared) ? declared : undefined) ??
+      ([PLUGIN_NAME + '.js'].find((f) => files.includes(f))) ??
+      files.find((f) => f !== 'server.js' && f !== 'plugin-server.js')
+    if (pick) return pick
   }
-  return BACKEND.replace(/\/+$/, '') + '/plugins/' + PKG_DIR + '/' + PLUGIN_NAME + '.js'
+  return declared || PLUGIN_NAME + '.js'
+}
+
+/** dist 里的入口文件在不在（构建过一次才有） */
+function distEntryPath() {
+  const p = join(PKG_ROOT, 'dist', entryNow())
+  return existsSync(p) ? p : undefined
+}
+
+/** 后台自己发的地址（读的是**安装副本**，可能比 dist 旧）—— 只在本地还没构建时兜底 */
+function backendFrontUrl() {
+  return BACKEND.replace(/\/+$/, '') + '/plugins/' + PKG_DIR + '/' + entryNow()
+}
+
+const MIME = {
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+}
+
+/**
+ * 把 `dist/` 发出来（只读、只认本机、不缓存）。
+ *
+ * 为什么必须自己发：后台的 `/plugins/...` 读的是数据根里那份**安装副本**，
+ * 而这里构建的是仓库里的 `dist` —— 两者不是同一个文件。只上报后台地址的话，
+ * 「重装成功」装回去的还是旧字节，改代码一点反应都没有（2026-11-26 真机踩到）。
+ */
+function startStaticServer() {
+  const server = createServer((req, res) => {
+    const pathname = decodeURIComponent((req.url || '/').split('?')[0] || '/')
+    const name = pathname.replace(/^\/+/, '')
+    // 只发 dist 下的直接子文件：不允许 ../，也不发别的目录
+    if (!name || name.includes('/') || name.includes('\\') || name.includes('..')) {
+      res.writeHead(404).end('not found')
+      return
+    }
+    const file = join(PKG_ROOT, 'dist', name)
+    void readFile(file)
+      .then((bytes) => {
+        const ext = name.slice(name.lastIndexOf('.')).toLowerCase()
+        res.writeHead(200, {
+          'content-type': MIME[ext] || 'application/octet-stream',
+          // 每次构建都要立即可见：这里绝不能缓存
+          'cache-control': 'no-store',
+          'access-control-allow-origin': '*',
+        })
+        res.end(bytes)
+      })
+      .catch(() => res.writeHead(404).end('not found'))
+  })
+  server.on('error', (err) => {
+    console.error(
+      '[watch] 静态服务起不来（' + SERVE_PORT + '）：' + (err?.message ?? err) +
+        '\n[watch] 端口被占就换一个：--serve-port 5200（或直接改成 --front <别人的地址>）',
+    )
+  })
+  server.listen(SERVE_PORT, '127.0.0.1', () => {
+    console.log('[watch] 产物地址 http://127.0.0.1:' + SERVE_PORT + '/（发的是仓库里的 dist）')
+  })
+  return server
+}
+
+/**
+ * 上报哪个地址：`--front` 覆盖 > 自己发的 dist（构建过才有）> 后台 `/plugins` > 清单。
+ *
+ * 自己发的排在最前：它是**刚构建出来的那份**，后台那份可能是旧的安装副本。
+ */
+let cachedFrontUrl
+async function frontUrlNow() {
+  if (FRONT_OVERRIDE) return FRONT_OVERRIDE
+  cachedFrontUrl = distEntryPath()
+    ? 'http://127.0.0.1:' + SERVE_PORT + '/' + entryNow()
+    : (await catalogFrontUrl()) ?? backendFrontUrl()
+  return cachedFrontUrl
 }
 
 function serverPathNow() {
@@ -65,20 +195,19 @@ function serverPathNow() {
   return undefined
 }
 
-/** 心跳 / 产物上报共用的属性包（少一处不一致） */
-function presenceProps() {
-  const front = frontUrlNow()
+/** 心跳 / 产物上报共用的属性包（少一处不一致；front 由调用方先算好传进来） */
+function presenceProps(front) {
   const server = serverPathNow()
   return { ...(front ? { front } : {}), ...(server ? { server } : {}) }
 }
 
 /** 心跳。失败静默：后台没起 / 没开在场通道时，构建照样能跑 */
-function beat(state, message) {
+function beat(state, message, front) {
   const body = {
     name: PLUGIN_NAME,
     instance: INSTANCE,
     state,
-    ...presenceProps(),
+    ...presenceProps(front),
     ...(message ? { message } : {}),
   }
   void fetch(HEARTBEAT_URL, {
@@ -115,7 +244,7 @@ function beat(state, message) {
  * dist 还没有产物时也发（只有 t）—— 这样调试页至少能看到这一行，地址在首次构建后补上。
  */
 async function reportArtifacts(reason) {
-  const { front, server } = presenceProps()
+  const { front, server } = presenceProps(await frontUrlNow())
   try {
     const res = await fetch(KV_URL, {
       method: 'PUT',
@@ -164,7 +293,8 @@ async function buildOnce(reason) {
   building = true
   presenceState = 'building'
   presenceMessage = ''
-  beat(presenceState)
+  const frontForBeat = await frontUrlNow()
+  beat(presenceState, '', frontForBeat)
   const t0 = Date.now()
   try {
     await new Promise((resolve, reject) => {
@@ -175,7 +305,9 @@ async function buildOnce(reason) {
       child.stderr.on('data', (d) => { out += d })
       child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error('vite build exit ' + code + '\n' + out.slice(-800)))))
     })
-    const { front, server } = presenceProps()
+    // 构建完再问一次清单：新产物名 / 新目录名都由后台决定，不能沿用构建前的缓存
+    const built = await frontUrlNow()
+    const { front, server } = presenceProps(built)
     const res = await fetch(KV_URL, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
@@ -196,7 +328,7 @@ async function buildOnce(reason) {
     console.error('[watch] build failed:', err?.message ?? err)
   } finally {
     building = false
-    beat(presenceState, presenceMessage)
+    beat(presenceState, presenceMessage, frontForBeat)
     if (pending) {
       pending = false
       scheduleBuild('pending-changes')
@@ -220,16 +352,17 @@ function scheduleBuild(file) {
 const watcher = fsWatch(SRC_DIR, { recursive: true }, (_event, file) => {
   scheduleBuild(file)
 })
+const staticServer = startStaticServer()
 watcher.on('error', (err) => {
   console.error('[watch] 目录监听出错（文件保存可能不再触发构建，请重启本脚本）：', err?.message ?? err)
   presenceState = 'paused'
   presenceMessage = '目录监听出错，请重启 watch'
-  beat(presenceState, presenceMessage)
+  beat(presenceState, presenceMessage, cachedFrontUrl)
 })
 
-console.log('[watch] bottom-bar · 盯着 src/（插件: ' + PLUGIN_NAME + '）')
+console.log('[watch] ' + PLUGIN_NAME + ' · 盯着 src/（插件: ' + PLUGIN_NAME + '）')
 console.log('[watch] 变更 → 自动 build → 通知 ' + KV_URL)
-console.log('[watch] 上报地址：front=' + frontUrlNow() + (serverPathNow() ? ' | server=' + serverPathNow() : ''))
+console.log('[watch] 上报地址：front=' + (cachedFrontUrl ?? await frontUrlNow()) + (serverPathNow() ? ' | server=' + serverPathNow() : ''))
 console.log('[watch] 改地址：--front <浏览器可访问的地址> / --server <后台产物绝对路径> / --backend <后台地址>')
 console.log('[watch] 心跳 ' + HEARTBEAT_URL + '（实例 ' + INSTANCE + '，' + HEARTBEAT_MS / 1000 + 's）')
 console.log('[watch] Ctrl+C 停止')
@@ -237,8 +370,8 @@ console.log('[watch] Ctrl+C 停止')
 // 启动：① 把当前 dist 里的产物先登记一遍（调试页的行由此而来）；② 报在线。
 // 之后定期心跳（构建期间也照发）。心跳打不通会在 beat 里打一行提示。
 void reportArtifacts('启动上报')
-beat(presenceState)
-const heartbeatTimer = setInterval(() => beat(presenceState, presenceMessage), HEARTBEAT_MS)
+beat(presenceState, '', cachedFrontUrl ?? (await frontUrlNow()))
+const heartbeatTimer = setInterval(() => beat(presenceState, presenceMessage, cachedFrontUrl), HEARTBEAT_MS)
 heartbeatTimer.unref?.()
 
 // Ctrl+C / 正常退出：先告别再走（强杀时只能靠 30 秒超时发现）
@@ -249,6 +382,7 @@ for (const sig of ['SIGINT', 'SIGTERM']) {
     stopping = true
     clearInterval(heartbeatTimer)
     watcher.close()
+    staticServer.close()
     void sayGoodbye().finally(() => process.exit(0))
   })
 }

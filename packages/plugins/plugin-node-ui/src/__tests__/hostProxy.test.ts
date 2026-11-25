@@ -116,6 +116,24 @@ describe('宿主代发 · 管理令牌', () => {
     await expect(proxy.save(new Blob(['x']), 'x.png')).rejects.not.toThrow(/管理令牌/)
   })
 
+  /**
+   * 2026-11-26 真机：后台说的是「节点 6 没有声明脚本 pixelize」，
+   * 但提示还让人去查登录 —— 用户自然以为登录坏了。声明问题要照实说。
+   */
+  it('403 是「没声明脚本」时，不许再说登录（指向补声明）', async () => {
+    const calls: Call[] = []
+    const proxy = proxyWith(calls, () =>
+      jsonResponse({ ok: false, error: '节点 6 没有声明脚本 "pixelize"（已声明：_pixelize）。' }, 403),
+    )
+    const err = await proxy.save(new Blob(['x']), 'x.png').then(
+      () => '',
+      (e: Error) => e.message,
+    )
+    expect(err).toContain('不是登录问题')
+    expect(err).toContain('声明')
+    expect(err).not.toContain('登录面板')
+  })
+
   it('404 / 非 JSON 回包也说人话（不会变成 Unexpected token）', async () => {
     const calls: Call[] = []
     const proxy = proxyWith(calls, () => new Response('<html>not found</html>', { status: 404 }))

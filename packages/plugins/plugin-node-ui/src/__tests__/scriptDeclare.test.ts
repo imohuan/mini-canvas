@@ -29,6 +29,25 @@ describe('detectScriptCalls —— 从界面里扫出它调了哪些脚本', () 
     expect(detectScriptCalls('{ filename: "scale" }', ['scale'])).toEqual([])
   })
 
+  /**
+   * 2026-11-26 真机：界面按手册写 `CanvasUI.task("pixelize", "hd", […])`，
+   * 节点里却只有旧的 `_pixelize` —— 自动补声明没认出这一句，用户点「生成」403。
+   * 手册教的写法必须能扫出来，否则这类 403 会反复出现。
+   */
+  it('认 CanvasUI.task("脚本名", …) —— 手册教的就是这个写法', () => {
+    expect(detectScriptCalls('var p = CanvasUI.task("pixelize", "hd", [u, opts], { wait: true })', ['pixelize'])).toEqual([
+      'pixelize',
+    ])
+    // 换行、空格、单引号都要认
+    expect(detectScriptCalls("CanvasUI\n  .task( 'scale' , 'run' )", ['scale'])).toEqual(['scale'])
+  })
+
+  it('裸 task("x") 也认；别的 xxxTask( 不算（避免把无关代码当调用）', () => {
+    expect(detectScriptCalls('task("crop", "run")', ['crop'])).toEqual(['crop'])
+    expect(detectScriptCalls('myTask("crop")', ['crop'])).toEqual([])
+    expect(detectScriptCalls('other.task("crop")', ['crop'])).toEqual([])
+  })
+
   it('空 HTML / 没有已知脚本 → 空（绝不凭空造声明）', () => {
     expect(detectScriptCalls('', ['scale'])).toEqual([])
     expect(detectScriptCalls('{ name: "scale" }', [])).toEqual([])
