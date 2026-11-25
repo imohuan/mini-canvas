@@ -12,6 +12,8 @@ export interface BottomBarEditorHandle {
   replaceResource?(item: ResourceItem): boolean
   replaceResourceThumbByIds?(ids: readonly string[], url: string): boolean
   refreshChips?(): void
+  /** 菜单打开/关闭时通知编辑器「这颗标签暂时不要弹 hover 预览」 */
+  suppressResourcePreview?(chipId?: string): void
   markRefSlots?(): number
   removeRefChips?(ids: readonly string[]): boolean
   exportText?(): string

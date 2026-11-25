@@ -421,6 +421,8 @@ const tagApi = useBottomBarTagMenu({
   replaceChipWith: cardApi.replaceChipWith,
   getAnchorEl: () => tagMenuView.value?.anchorEl ?? null,
   focusSearch: () => tagMenuView.value?.focusSearch(),
+  /** 菜单开着时别让编辑器再弹这颗标签的 hover 预览（用户 2026-11-25：两个浮层不能同时出现） */
+  suppressEditorPreview: (chipId?: string) => editorComponentRef.value?.suppressResourcePreview?.(chipId),
 })
 openTagMenuRef = tagApi.openTagMenu
 const {

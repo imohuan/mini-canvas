@@ -20,6 +20,7 @@ defineProps<{
         top: pos.top + 'px',
         width: box.width + 'px',
         height: box.height + 'px',
+        transform: pos.above ? 'translateY(-100%)' : undefined,
       }"
     >
       <video

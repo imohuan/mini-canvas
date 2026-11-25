@@ -47,3 +47,20 @@ export function placeHoverPreview(
     ? { left, top: Math.round(card.top - GAP), above: true }
     : { left, top: Math.round(card.bottom + GAP), above: false }
 }
+
+/**
+ * 标签下拉里「行 hover 预览」的位置（用户 2026-11-25 截图 2）。
+ *
+ * 为什么单独抽一条：菜单里的行是**普通文档流**的一行，它的矩形可能贴着视口左/右边缘。
+ * 早期实现把预览摆在行的左右两侧、只夹纵向 —— 贴着边缘时横向直接跑到屏幕外，
+ * 用户滚很久才看得到。预览与卡片 hover 用同一套规则（优先上方、水平居中并夹进视口），
+ * 只差一个「上方放不下时是否允许翻到下方」：菜单本身可能很高，翻到下方会盖住整个菜单，
+ * 所以这里在下方也放不下时，仍选空间更大的那一侧。
+ */
+export function placeMenuRowPreview(
+  row: { left: number; right: number; top: number; bottom: number; width: number },
+  viewport: { width: number; height: number },
+  box: { width: number; height: number },
+): PreviewPlacement {
+  return placeHoverPreview(row, viewport, box)
+}
