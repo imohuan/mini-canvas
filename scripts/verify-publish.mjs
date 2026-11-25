@@ -27,11 +27,37 @@ const run = (cmd, args, cwd) => new Promise((resolve, reject) => {
   })
 })
 
+/** 从已打好的 tgz 里读一个文本文件（Windows 自带 tar 就够，不必引第三方包） */
+async function readFileInTar(tgz, member, cwd) {
+  try {
+    const { stdout } = await run('tar', ['-xzf', tgz, '-O', member], cwd)
+    return stdout
+  } catch {
+    return '{}'
+  }
+}
+
 async function checkOne(dir, name, tmp) {
   const pkg = JSON.parse(await fs.readFile(path.join(dir, 'package.json'), 'utf8'))
   const problems = []
   const plume = pkg.plume ?? {}
   if (!plume.pluginName) problems.push('缺 plume.pluginName')
+  /**
+   * 发布形态下 entry 会被改写成 dist/web.js / dist/server.js，但包里的产物文件名是
+   * 作者自己的（plugin-agent.js、plugin-bottom-bar.js…）。两边对不上时，安装端只能靠
+   * 「dist 下唯一候选」兜底，清单里那条 url 就指错了文件（用户 2026-11-25 实测：
+   * plugin-agent 发布包声明 dist/web.js，实际只有 plugin-agent.js）。
+   * 这里直接对着**源码里的声明**核对，发布前就红。
+   */
+  for (const [label, rel] of [['plume.web.entry', plume.web?.entry], ['plume.server.entry', plume.server?.entry]]) {
+    if (typeof rel !== 'string' || !rel) continue
+    const abs = path.join(dir, rel)
+    try {
+      await fs.access(abs)
+    } catch {
+      problems.push(label + ' 指向不存在的文件：' + rel + '（发布后装不上）')
+    }
+  }
   // 只跳过真正的私有包；hot-reload 从 0.1.1 起是可安装件（市场能搜到、要能装），
   // 再按名字跳过等于让它绕过发布闸门（用户 2026-11-25 要求一起发布）。
   const isDevOnly = pkg.private === true
@@ -66,6 +92,19 @@ async function checkOne(dir, name, tmp) {
     // tarball 里必须至少有一个 dist/*.js(安装器靠它回填 entry,否则装出来是空包)
     const distInTar = files.filter(f => f.startsWith('package/dist/') && f.endsWith('.js') && !f.endsWith('.map'))
     if (distInTar.length === 0) problems.push('发布 tarball 里没有 dist/*.js(装出来是空包)')
+    /**
+     * 发布形态下 entry 会被 swap-dev-to-pub 改写成真实产物名 —— 这里把包装出来的
+     * package.json 读回来，逐个核对它在 tarball 里真的存在。
+     * 只查「有 dist/*.js」不够：声明指错文件时照样能通过，装的时候才发现 404
+     * （用户 2026-11-25：plugin-agent 声明 dist/web.js、实际只有 dist/plugin-agent.js）。
+     */
+    const packedPkg = JSON.parse(await readFileInTar(tgz, 'package/package.json', path.dirname(tgz)))
+    for (const [label, rel] of [['plume.web.entry', packedPkg.plume?.web?.entry], ['plume.server.entry', packedPkg.plume?.server?.entry]]) {
+      if (typeof rel !== 'string' || !rel) continue
+      if (!files.includes('package/' + rel.replace(/\\/g, '/'))) {
+        problems.push('发布包里 ' + label + ' 指向不存在的文件：' + rel)
+      }
+    }
   }
   return problems
 }

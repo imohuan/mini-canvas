@@ -14,9 +14,27 @@ if (process.argv.includes('--restore')) {
 const b = fs.readFileSync(p, 'utf8')
 fs.writeFileSync(p + '.pubbak', b)
 const j = JSON.parse(b)
-j.main = './dist/web.js'
-j.exports = { '.': './dist/web.js' }
-if (j.plume) j.plume.web = { ...((j.plume.web) || {}), entry: 'dist/web.js' }
+/**
+ * 前端产物名**按实际文件**取，不写死 dist/web.js。
+ *
+ * 用户 2026-11-25 实测：plugin-agent / plugin-bottom-bar 的 vite lib 输出叫
+ * dist/<包名>.js，这里却统一改成 dist/web.js —— 发布包里声明指着一个不存在的文件，
+ * 安装端只能靠「dist 下唯一候选」兜底；清单里那条 url 一旦不兜底就是 404，
+ * 市场卡片也就装不上。声明与文件必须同名。
+ */
+const distDir = require('node:path').join(require('node:path').dirname(p), 'dist')
+const distJs = fs.existsSync(distDir)
+  ? fs.readdirSync(distDir).filter((f) => f.endsWith('.js') && !f.endsWith('.map'))
+  : []
+const serverLike = /^(server|plugin-server|agent-server)\.js$/
+const declaredWeb = j.plume?.web?.entry?.replace(/^dist\//, '')
+const webFile =
+  (declaredWeb && distJs.includes(declaredWeb) ? declaredWeb : undefined) ??
+  distJs.find((f) => !serverLike.test(f)) ??
+  'web.js'
+j.main = './dist/' + webFile
+j.exports = { '.': './dist/' + webFile }
+if (j.plume) j.plume.web = { ...((j.plume.web) || {}), entry: 'dist/' + webFile }
 // dist/server.js 在而声明不在 → 回填 server.entry（2026-11-23 用户实测：
 // plugin-node-ui 0.1.4 发布包里 server.js 在、声明缺失，装出来的副本没有后台半，
 // canvas_ui_* 等 MCP 工具全部消失）。有后台半的插件发布形态必须带 server 声明。

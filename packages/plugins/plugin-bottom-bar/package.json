@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-bottom-bar",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "type": "module",
   "plume": {
     "title": "底部状态栏",
@@ -8,7 +8,7 @@
     "pluginName": "bottom-bar",
     "builtin": true,
     "web": {
-      "entry": "dist/web.js"
+      "entry": "dist/plugin-bottom-bar.js"
     }
   },
   "main": "./src/index.ts",
