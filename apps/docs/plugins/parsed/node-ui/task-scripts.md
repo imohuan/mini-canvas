@@ -86,7 +86,7 @@ export const docs = {
     what: "把图片缩放到指定宽度",
     args: [{ name: "width", type: "number", required: true, desc: "目标宽度（像素）" }],
     returns: "缩放后的图片地址",
-    example: "canvas_fn_call({ script: 'scale', fn: 'run', argsJson: '[640]' })",
+    example: "canvas_fn_call({ script: 'scale', fn: 'run', canvasId, nodeId, argsJson: '[640]' })",
   },
 }
 export async function run(width, ctx) { /* ... */ }

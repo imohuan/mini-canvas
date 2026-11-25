@@ -31,7 +31,6 @@
  */
 
 export { selfOrigin } from './server/nodeSummary.js'
-export { ensureVirtualCanvas } from './server/virtualCanvas.js'
 export { waitRun } from './server/waitRun.js'
 export type {
   AssetStoreLike,

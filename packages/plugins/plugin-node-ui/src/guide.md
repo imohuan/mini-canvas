@@ -52,7 +52,11 @@
 
        canvas_fn_list()                 看这台机器上有哪些**已通过**的函数
        canvas_fn_info(script, fn)       查它的参数 / 返回 / 示例
-       canvas_fn_call(script, fn, argsJson)  真调一次，拿结果
+       canvas_fn_call(script, fn, canvasId, nodeId, argsJson)  真调一次，拿结果
+
+     ★ canvasId / nodeId **必须给**：脚本的产物（ctx.save）直接落进这个节点的槽位。
+       从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 原样取，别自己编。
+       给错 id 会明确报「画布 X 上没有节点 Y」，不会悄悄写到别处。
 
      调通了（执行成功、结果符合预期）→ 把文件名前面的下划线**去掉**，这个脚本才算"可用"。
      调不通就改脚本重来，别急着写界面。
@@ -417,7 +421,8 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
   后台功能函数（task-scripts 里的那些）：
   canvas_fn_list   (keyword?)               列全部功能函数（做什么 / 参数 / 返回 / 示例）
   canvas_fn_info   (script, fn?)            查某个函数的参数与返回值
-  canvas_fn_call   (script, fn, argsJson?)  直接调它并拿回结果（**不必传 Canvas ID / Node ID**）
+  canvas_fn_call   (script, fn, canvasId, nodeId, argsJson?)  直接调它并拿回结果
+                   ★ 必须给正在操作的画布与节点：产物写进这个节点的槽位，下游读的也是它。
   其余画布操作（建 / 删 / 改节点与连线、读整张、上传资源、调模型）用【内置的】
   canvas_batch_nodes / canvas_batch_edges / canvas_get / canvas_overview /
   resource_upload / generation_* —— 本插件不再造重复工具。

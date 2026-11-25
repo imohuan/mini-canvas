@@ -76,6 +76,21 @@ export async function writeUiHtml(
   nodeId: string,
   data: Record<string, unknown>,
 ): Promise<{ ok: boolean; error?: string }> {
+  return writeNodeData(ctx, canvasId, nodeId, data)
+}
+
+/**
+ * 把一组字段并进某个节点的 `data`（只动这一个节点）。
+ *
+ * 与写界面走**同一条**写路：默认画布用宿主 doc、其它画布用文档池 —— 共用画布那把
+ * 写锁，不会出现「读完再整包写回」把别人的改动覆盖掉。
+ */
+export async function writeNodeData(
+  ctx: ServerCtx,
+  canvasId: string,
+  nodeId: string,
+  data: Record<string, unknown>,
+): Promise<{ ok: boolean; error?: string }> {
   const doc = docFor(ctx, canvasId)
   if (doc && typeof doc.batchNodes === 'function') {
     try {

@@ -3,12 +3,13 @@
  * 从 server.ts 的 apply 原样迁出，注册顺序与 handler 不变。
  */
 import type { ServerCtx } from './shared-types.js'
-import { ensureVirtualCanvas } from './virtualCanvas.js'
 import { waitRun } from './waitRun.js'
+import { nodesOf, writeNodeData } from './canvasAccess.js'
 import { listDraftScripts, listFunctions, runScript, scriptDocs, scriptMethods } from '../task/runs.js'
 import { isDraftScriptName } from '../task/scripts.js'
 import { resolveTaskScriptsDir } from '../task/routes.js'
 import { describeFunction } from '../task/fnDoc.js'
+import { planDeclaredForScripts, UI_SCRIPTS_KEY } from '../task/declarePlan.js'
 
 export function applyFunctions(ctx: ServerCtx): void {
 
@@ -19,15 +20,18 @@ export function applyFunctions(ctx: ServerCtx): void {
   // 「MCP 可直接调用这些后台接口；调用时不需要外部传 Canvas ID / Node ID」；
   // 另要「列出所有功能函数」「调用指定功能函数」「可选：查询参数与返回值 schema」。
   //
-  // 关于「不传 Canvas ID / Node ID」：脚本的 ctx 里本来要这两个（用来回写画布）。
-  // 既然调用方不必提供，就由这里**造一张虚拟画布**顶上（见 virtualContext）——
-  // 虚拟画布的 id 固定带前缀，与用户真实画布不冲突，也不会污染任何真画布。
+  // 关于 Canvas ID / Node ID（2026-11-25 收口）：**必须传**。
   //
-  // 关于「要不要声明依赖」：`/api/task/call` 那道 403 是给**节点界面**设的（防界面乱调机器上的脚本）。
-  // 这里的调用方是 Agent 本人（MCP），它要的是「跑一下看返回什么」，没有节点可声明 ——
-  // 所以直接走 runScript（与路由同一个执行体）而不过那道校验。**这不是绕过权限**：
-  // 能调 MCP 的人本来就能读画布、能建节点、能调生成；脚本清单本来就是给 Agent 发现的
-  // （见 canvas_fn_list）。护栏仍在两处：脚本名白名单 + 跑在虚拟画布上。
+  // 早先版本不传，由工具造一张 `fn-probe-default` 草稿纸顶上。真机后果是：脚本的
+  // `ctx.save` 把产物写进那张草稿纸，用户画布上什么都没有；而那条写路又没拿到
+  // 任务令牌（见下面 ⑪ 的说明），于是每个带保存的脚本都报 403。
+  // 现在改成「在哪个节点上干活，就用哪个节点跑」：ctx 里的画布与节点就是用户
+  // 正在看的那一个，产物直接落到它的槽位，下游节点立刻能拿到。
+  //
+  // 关于「要不要声明依赖」：`/api/task/call` 那道 403 是给**节点界面**设的（防界面乱调
+  // 机器上的脚本）。这里的调用方是 Agent 本人（MCP），它要的是「跑一下、产物落进这个节点」——
+  // 所以不过 authorize，但会在启动前把脚本名**补进节点声明**（界面之后调同一个脚本才不会被挡，
+  // 打包时也才知道要带哪份脚本）。护栏仍是：脚本名白名单 + 节点必须真实存在。
 
   // ⑨ 列出全部功能函数（脚本 × 函数 × 说明书）
   ctx.mcp.tool({
@@ -109,24 +113,43 @@ export function applyFunctions(ctx: ServerCtx): void {
     },
   })
 
-  // ⑪ 调用指定功能函数（**不必传 Canvas ID / Node ID**）
+  // ⑪ 调用指定功能函数（必须给正在操作的画布与节点）
   ctx.mcp.tool({
     name: 'canvas_fn_call',
     description:
       '直接调用一个**后台功能函数**（task-scripts 里的 script.fn），把结果拿回来。' +
       'args 是位置参数数组（按 canvas_fn_info 给的顺序）；wait 缺省为真 = 等它跑完并回结果。' +
-      '**不需要传 Canvas ID / Node ID** —— 这类函数要它们只是为了"回写画布"，' +
-      '而这里由工具自己造一张虚拟画布顶上，专门给你取返回值用。' +
+      '**必须传 canvasId 与 nodeId**：脚本的产物（ctx.save）会直接写进这个节点的槽位，' +
+      '下游节点也读这个节点。两个值从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 取，' +
+      '不要自己编。' +
       '先 canvas_fn_list / canvas_fn_info 看清参数与返回，再来调。' +
       '★ script 允许**下划线打头**：那是在建脚本（还没验证），这样你才能测自己刚写的那份；' +
       '测通过之后把下划线去掉，它才会出现在 canvas_fn_list 里给别人用。',
-    input: { script: 'string', fn: 'string', argsJson: 'string', wait: 'boolean', timeoutMs: 'number' },
-    required: ['script', 'fn'],
+    input: {
+      script: 'string',
+      fn: 'string',
+      canvasId: 'string',
+      nodeId: 'string',
+      argsJson: 'string',
+      wait: 'boolean',
+      timeoutMs: 'number',
+    },
+    required: ['script', 'fn', 'canvasId', 'nodeId'],
     handler: async (args) => {
       const script = typeof args.script === 'string' ? args.script.trim() : ''
       const fn = typeof args.fn === 'string' ? args.fn.trim() : ''
       if (!script) return { ok: false, error: '缺少 script（脚本名，不带 .mjs）' }
       if (!fn) return { ok: false, error: '缺少 fn（要调的函数名）' }
+      const canvasId = typeof args.canvasId === 'string' ? args.canvasId.trim() : ''
+      const nodeId = typeof args.nodeId === 'string' ? args.nodeId.trim() : ''
+      if (!canvasId || !nodeId) {
+        return {
+          ok: false,
+          error:
+            '缺少 canvasId / nodeId：脚本的产物要落到你正在操作的那个节点上。' +
+            '从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 原样取，这两项不能省。',
+        }
+      }
       let callArgs: unknown[] = []
       if (typeof args.argsJson === 'string' && args.argsJson.trim()) {
         try {
@@ -143,26 +166,64 @@ export function applyFunctions(ctx: ServerCtx): void {
       if (!methods.includes(fn)) {
         return { ok: false, error: '脚本 ' + script + ' 里没有导出函数 ' + fn + '（可用的：' + methods.join('、') + '）' }
       }
-      // 虚拟画布上下文：见文件末尾 virtualContext 的说明（不碰任何真画布）
-      const vctx = await ensureVirtualCanvas(ctx)
+      // 节点必须真实存在：否则产物没有槽位可落，ctx.save 只会写进一个不存在的画布。
+      // 读节点走文档池（与画布保存同一个实例）—— 同一把写锁，不会读到旧副本。
+      const nodes = await nodesOf(ctx, canvasId)
+      const node = nodes.find((n) => n.id === nodeId)
+      if (!node) {
+        const hint = nodes.length
+          ? '这张画布上有：' + nodes.slice(0, 20).map((n) => n.id + '（' + n.type + '）').join('、')
+          : '这张画布是空的'
+        return {
+          ok: false,
+          error: '画布 ' + canvasId + ' 上没有节点 ' + nodeId + '。' + hint + '。' +
+            '请核对用户消息里的 <ref>，不要把节点 id 写错。',
+        }
+      }
       const wait = args.wait !== false
       const timeoutMs = typeof args.timeoutMs === 'number' && args.timeoutMs > 0 ? args.timeoutMs : undefined
+      const scriptTimeout = timeoutMs ?? 10 * 60 * 1000
+      // 补声明：跑完这一趟，这个节点就算「用过这个脚本」了。与写界面时扫 HTML 同一个合并规则，
+      // 已有的声明一条都不丢。写失败就停 —— 否则界面之后调同一个脚本仍会被 403，错误还藏起来。
+      const plan = await planDeclaredForScripts([script], node.data?.[UI_SCRIPTS_KEY], dir, Date.now())
+      let declaredScripts: string[] = []
+      if (plan) {
+        const wrote = await writeNodeData(ctx, canvasId, nodeId, { [UI_SCRIPTS_KEY]: plan.next })
+        if (!wrote.ok) return { ok: false, error: '写节点声明失败：' + (wrote.error ?? '未知原因') }
+        declaredScripts = plan.added
+      }
+      // ★ 修复 403 的核心：脚本子进程没有登录 cookie，也没有管理令牌。
+      //   宿主给它签一个**只允许写本画布本节点槽位**的短时令牌（`x-task-token`），
+      //   ctx.save / 写节点字段都靠它过关。以前这里没传 → 令牌是空串 → 必然 403。
+      //   有效期比脚本超时多 60 秒：脚本跑到最后一刻保存也来得及。
+      const taskToken = ctx
+        .tryGet<{ issue(canvasId: string, nodeId: string, ttlMs?: number): string }>('taskTokens')
+        ?.issue(canvasId, nodeId, scriptTimeout + 60_000)
       const started = await runScript({
         dir,
         name: script,
         methods: fn,
         args: callArgs,
-        canvasId: vctx.canvasId,
-        nodeId: vctx.nodeId,
+        canvasId,
+        nodeId,
         baseUrl: ctx.tryGet<string>('selfOrigin') ?? '',
         dataRoot: ctx.tryGet<{ dataRoot?(): string }>('canvasStore')?.dataRoot?.() ?? '',
+        ...(taskToken ? { taskToken } : {}),
         ...(timeoutMs === undefined ? {} : { timeoutMs }),
       })
       if (!started.ok) return { ok: false, error: started.error }
-      if (!wait) return { ok: true, runId: started.run.runId, state: started.run.state, canvasId: vctx.canvasId, nodeId: vctx.nodeId }
+      if (!wait) {
+        return {
+          ok: true,
+          runId: started.run.runId,
+          state: started.run.state,
+          canvasId,
+          nodeId,
+          ...(declaredScripts.length ? { declaredScripts } : {}),
+        }
+      }
       // 等待比脚本自己的超时**多留 5 秒**：脚本超时那一刻会由它的超时器收成 error 并落进运行表，
       // 擦边相等的话我们会先一步判成「还在跑」，把它自己的报错盖掉（报出来的就成了「等超时了」）。
-      const scriptTimeout = timeoutMs ?? 10 * 60 * 1000
       const final = await waitRun(started.run.runId, scriptTimeout + 5000)
       return {
         ok: final.state === 'done',
@@ -180,8 +241,9 @@ export function applyFunctions(ctx: ServerCtx): void {
         ...(final.state === 'error' ? { error: final.error } : { result: final.result }),
         logs: final.tail.slice(-20),
         state: final.state,
-        virtualCanvasId: vctx.canvasId,
-        note: '这次调用跑在一张虚拟画布上（只为取返回值）；产物写在它名下，不碰你的画布。',
+        canvasId,
+        nodeId,
+        ...(declaredScripts.length ? { declaredScripts } : {}),
       }
     },
   })

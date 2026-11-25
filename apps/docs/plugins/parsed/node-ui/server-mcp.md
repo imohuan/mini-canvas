@@ -126,24 +126,31 @@
 | 参数 | `script`（必填，脚本名，不带 `.mjs`）、`fn`（可选；不给就列这个脚本的全部函数） |
 | 返回 | 该函数做什么 / 参数（名字/类型/是否必填/说明）/ 返回什么 / 怎么调 |
 
-#### `canvas_fn_call(script, fn, argsJson?, wait?, timeoutMs?)`
+#### `canvas_fn_call(script, fn, canvasId, nodeId, argsJson?, wait?, timeoutMs?)`
 
 | 项 | 内容 |
 | --- | --- |
-| 参数 | `script`+`fn`（必填）、`argsJson`（**位置参数数组**，如 `"[640, \"x.png\"]"`）、`wait`（缺省 true = 等它跑完并回结果） |
-| 返回 | `{ ok, script, fn, result? , error?, logs, state, virtualCanvasId }` |
+| 参数 | `script`+`fn`+`canvasId`+`nodeId`（必填）、`argsJson`（**位置参数数组**，如 `"[640, \"x.png\"]"`）、`wait`（缺省 true = 等它跑完并回结果） |
+| 返回 | `{ ok, script, fn, result? , error?, logs, state, canvasId, nodeId, declaredScripts? }` |
 | 干什么 | 直接调用一个后台功能函数并把结果拿回来 |
 
-> **不需要传 Canvas ID / Node ID**：这类函数要它们只是为了"回写画布"，
-> 而这里由工具自己造一张**虚拟画布**顶上（id 形如 `fn-probe-default`），专门给你取返回值用。
-> 虚拟画布**不会出现在用户的画布列表里**，脚本即使往里写了产物也只是写进那张临时画布。
+> **必须传 Canvas ID / Node ID**：脚本的产物（`ctx.save`）直接写进这个节点的槽位，
+> 下游节点读的也是它。两个值从用户消息里的 `<ref type="node" canvasId="…" nodeId="…">` 取，
+> 不要自己编。启动前工具会把这个脚本名补进节点的 `data.uiScripts`（返回的 `declaredScripts`
+> 就是这次新补的），已有的声明一条都不丢。
+>
+> 节点不存在时明确报「画布 X 上没有节点 Y」并列出这张画布上真实的节点 id ——
+> 不会再开一张 `fn-probe-*` 草稿画布把产物藏起来。
+>
+> **不要用 shell 里的 `curl` 调 `/api/task/call` 验证**：那条是给节点界面用的，需要登录 cookie；
+> 命令行不带它，必然 403「需要登录」。Agent 走 MCP 这条就够了。
 
 **完整调用顺序**（AI 该怎么用这三个）：
 
 ```text
 1. canvas_fn_list                  → 看看这台机器上有什么能力（带说明书）
 2. canvas_fn_info("scale", "run")  → 查清楚参数与返回
-3. canvas_fn_call("scale", "run", argsJson: "[640]")  → 调它、拿回结果
+3. canvas_fn_call("scale", "run", canvasId, nodeId, argsJson: "[640]")  → 调它、产物落进这个节点
 ```
 
 ## 二、其余画布操作复用**内置**工具

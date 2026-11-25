@@ -14,8 +14,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { promises as fs } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { apply, ensureVirtualCanvas } from '../server'
-import { readFileSync } from 'node:fs'
+import { apply } from '../server'
 
 let dir = ''
 
@@ -78,6 +77,14 @@ function fakeCtx(opts: { nodes?: Array<Record<string, unknown>>; assets?: Array<
       ? new Uint8Array(await fs.readFile(path.join(dir, 'p1.plumenode')))
       : undefined),
   }
+  /** 宿主签发的短时令牌：记录每次签的是谁，并回一个能认出来的值 */
+  const issued: Array<{ canvasId: string; nodeId: string; ttlMs?: number }> = []
+  const taskTokens = {
+    issue: (canvasId: string, nodeId: string, ttlMs?: number) => {
+      issued.push({ canvasId, nodeId, ...(ttlMs === undefined ? {} : { ttlMs }) })
+      return 'tok-' + canvasId + '-' + nodeId
+    },
+  }
   const ctx = {
     routes: {
       get: (p: string, h: (c: unknown) => unknown) => routes.set('GET ' + p, h),
@@ -97,9 +104,11 @@ function fakeCtx(opts: { nodes?: Array<Record<string, unknown>>; assets?: Array<
                 ? { for: (id: string) => (id === 'other' ? otherDoc : doc) }
               : n === 'selfOrigin'
                 ? 'http://127.0.0.1:8865'
+                : n === 'taskTokens'
+                  ? taskTokens
                 : undefined,
   } as never
-  return { ctx, tools, writes, canvasWrites, nodes, otherDocWrites }
+  return { ctx, tools, writes, canvasWrites, nodes, otherDocWrites, issued }
 }
 
 const call = async (tools: ReturnType<typeof fakeCtx>['tools'], name: string, args: Record<string, unknown> = {}) =>
@@ -461,14 +470,18 @@ describe('③ 后台功能函数：列出 / 查 schema', () => {
     const body = 'export async function go(x) { return { got: String(x) } }\n'
     await fs.writeFile(path.join(dir, 'echo2.mjs'), body)
     await fs.writeFile(path.join(dir, '_echo2.mjs'), body)
-    const s = fakeCtx()
+    const s = fakeCtx({ nodes: [{ id: '6', type: 'ui', data: {} }] })
     apply(s.ctx)
-    const r = await call(s.tools, 'canvas_fn_call', { script: '_echo2', fn: 'go', argsJson: '["hi"]' })
-    expect(r.ok).toBe(true)
+    const r = await call(s.tools, 'canvas_fn_call', {
+      script: '_echo2', fn: 'go', canvasId: 'default', nodeId: '6', argsJson: '["hi"]',
+    })
+    expect(r.ok, JSON.stringify(r)).toBe(true)
     expect(r.draft).toBe(true)
     expect(String(r.draftNote)).toContain('_echo2')
     // 已验证的调起来不带那两条
-    const r2 = await call(s.tools, 'canvas_fn_call', { script: 'echo2', fn: 'go', argsJson: '["hi"]' })
+    const r2 = await call(s.tools, 'canvas_fn_call', {
+      script: 'echo2', fn: 'go', canvasId: 'default', nodeId: '6', argsJson: '["hi"]',
+    })
     expect(r2.ok).toBe(true)
     expect(r2.draft).toBeUndefined()
   })
@@ -492,78 +505,140 @@ describe('③ 后台功能函数：列出 / 查 schema', () => {
   })
 })
 
-describe('④ canvas_fn_call：不必传 Canvas ID / Node ID', () => {
+describe('④ canvas_fn_call：在真实画布与节点上跑', () => {
   beforeEach(async () => {
     await fs.writeFile(
       path.join(dir, 'hello.mjs'),
       [
         'export async function echo(text, ctx) {',
-        '  return { text: String(text), canvasId: ctx.canvasId, nodeId: ctx.nodeId }',
+        '  return { text: String(text), canvasId: ctx.canvasId, nodeId: ctx.nodeId, taskToken: ctx.taskToken }',
         '}',
         '',
       ].join('\n'),
     )
   })
 
-  it('★ 不传 canvasId / nodeId 也能调，且用一张虚拟画布', async () => {
+  it('★ 缺 canvasId / nodeId 直接报错（不再自己造草稿画布）', async () => {
     const s = fakeCtx()
     apply(s.ctx)
     const r = await call(s.tools, 'canvas_fn_call', { script: 'hello', fn: 'echo', argsJson: '["hi"]' })
+    expect(r.ok).toBe(false)
+    expect(String(r.error)).toContain('canvasId')
+    expect(String(r.error)).toContain('nodeId')
+    // 关键：连进程都不起、也不写任何画布
+    expect(s.canvasWrites).toHaveLength(0)
+  })
+
+  it('★ 用真实节点跑：ctx 拿到用户画布和节点，产物写进它自己的槽位', async () => {
+    const node = { id: '6', type: 'ui', data: { label: '可视化 1', imageUrl: '/api/canvases/90da8d5cbf06424d/resources/x.png' } }
+    const s = fakeCtx({ nodes: [node] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_fn_call', {
+      script: 'hello',
+      fn: 'echo',
+      canvasId: 'default',
+      nodeId: '6',
+      argsJson: '["hi"]',
+    })
     expect(r.ok).toBe(true)
-    const result = r.result as { text: string; canvasId: string }
+    const result = r.result as { text: string; canvasId: string; nodeId: string; taskToken: string }
     expect(result.text).toBe('hi')
-    // ★ 虚拟画布：id 带前缀，绝不是用户的画布
-    expect(result.canvasId).toContain('fn-probe-')
-    expect(String(r.virtualCanvasId)).toContain('fn-probe-')
-    expect(String(r.note)).toContain('虚拟画布')
+    expect(result.canvasId).toBe('default')
+    expect(result.nodeId).toBe('6')
+    expect(r.canvasId).toBe('default')
+    expect(r.nodeId).toBe('6')
+    expect(r).not.toHaveProperty('virtualCanvasId')
+    // 不再创建任何 fn-probe-* 画布
+    expect(s.canvasWrites.every((w) => !w.id.startsWith('fn-probe-'))).toBe(true)
+    // ★ 403 的根因：脚本拿到的必须是**绑定这个画布 + 节点**的短时令牌，不能是空串
+    expect(result.taskToken).toBe('tok-default-6')
+    expect(s.issued).toEqual([{ canvasId: 'default', nodeId: '6', ttlMs: 10 * 60 * 1000 + 60_000 }])
+  })
+
+  it('★ 节点不存在 → 报错并列出真实节点，不悄悄新建画布', async () => {
+    const s = fakeCtx({ nodes: [{ id: '6', type: 'ui', data: {} }] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_fn_call', {
+      script: 'hello',
+      fn: 'echo',
+      canvasId: 'default',
+      nodeId: 'nope',
+    })
+    expect(r.ok).toBe(false)
+    expect(String(r.error)).toContain('nope')
+    expect(String(r.error)).toContain('6')
+    expect(s.canvasWrites).toHaveLength(0)
+  })
+
+  it('★ 启动前把脚本名补进节点声明，已有声明不丢', async () => {
+    const node = { id: '6', type: 'ui', data: { uiScripts: { other: { at: 7 } } } }
+    const s = fakeCtx({ nodes: [node] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_fn_call', {
+      script: 'hello',
+      fn: 'echo',
+      canvasId: 'default',
+      nodeId: '6',
+      argsJson: '["hi"]',
+    })
+    expect(r.ok).toBe(true)
+    expect(r.declaredScripts).toEqual(['hello'])
+    const sent = JSON.stringify(s.writes[0])
+    expect(sent).toContain('uiScripts')
+    expect(sent).toContain('other')
+    expect(sent).toContain('hello')
+  })
+
+  it('★ 已声明过就不再重复写（顺手补不能变成顺手改）', async () => {
+    const node = { id: '6', type: 'ui', data: { uiScripts: { hello: {} } } }
+    const s = fakeCtx({ nodes: [node] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_fn_call', {
+      script: 'hello',
+      fn: 'echo',
+      canvasId: 'default',
+      nodeId: '6',
+      argsJson: '["hi"]',
+    })
+    expect(r.ok, JSON.stringify(r)).toBe(true)
+    expect(r.declaredScripts).toBeUndefined()
+    expect(s.writes).toHaveLength(0)
+  })
+
+  it('★ 在建脚本（下划线打头）也要补进声明（真机踩到：跑成功但声明是空的）', async () => {
+    await fs.writeFile(path.join(dir, '_draft.mjs'), 'export async function go() { return 1 }\n')
+    const s = fakeCtx({ nodes: [{ id: '6', type: 'ui', data: {} }] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_fn_call', {
+      script: '_draft',
+      fn: 'go',
+      canvasId: 'default',
+      nodeId: '6',
+    })
+    expect(r.ok, JSON.stringify(r)).toBe(true)
+    expect(r.declaredScripts).toEqual(['_draft'])
+    expect(JSON.stringify(s.writes[0])).toContain('_draft')
   })
 
   it('argsJson 不是数组 / 不是 JSON → 明确报错', async () => {
-    const s = fakeCtx()
+    const s = fakeCtx({ nodes: [{ id: '6', type: 'ui', data: {} }] })
     apply(s.ctx)
-    expect((await call(s.tools, 'canvas_fn_call', { script: 'hello', fn: 'echo', argsJson: '{}' })).ok).toBe(false)
-    const r = await call(s.tools, 'canvas_fn_call', { script: 'hello', fn: 'echo', argsJson: '{oops' })
+    const base = { script: 'hello', fn: 'echo', canvasId: 'default', nodeId: '6' }
+    expect((await call(s.tools, 'canvas_fn_call', { ...base, argsJson: '{}' })).ok).toBe(false)
+    const r = await call(s.tools, 'canvas_fn_call', { ...base, argsJson: '{oops' })
     expect(String(r.error)).toContain('JSON')
   })
 
   it('函数不存在 → 报错并列出可用的（连进程都不起）', async () => {
-    const s = fakeCtx()
+    const s = fakeCtx({ nodes: [{ id: '6', type: 'ui', data: {} }] })
     apply(s.ctx)
-    const r = await call(s.tools, 'canvas_fn_call', { script: 'hello', fn: 'nope' })
+    const r = await call(s.tools, 'canvas_fn_call', {
+      script: 'hello',
+      fn: 'nope',
+      canvasId: 'default',
+      nodeId: '6',
+    })
     expect(r.ok).toBe(false)
     expect(String(r.error)).toContain('echo')
-  })
-
-  it('虚拟画布是幂等的：第二次调不会重复建', async () => {
-    const s = fakeCtx()
-    apply(s.ctx)
-    await ensureVirtualCanvas(s.ctx)
-    const before = s.canvasWrites.filter((w) => w.id.startsWith('fn-probe-')).length
-    await ensureVirtualCanvas(s.ctx)
-    const after = s.canvasWrites.filter((w) => w.id.startsWith('fn-probe-')).length
-    expect(after).toBe(before)
-  })
-
-  it('★ 虚拟画布不碰用户的真画布', async () => {
-    const s = fakeCtx()
-    apply(s.ctx)
-    await call(s.tools, 'canvas_fn_call', { script: 'hello', fn: 'echo', argsJson: '["x"]' })
-    const touched = new Set(s.canvasWrites.map((w) => w.id))
-    expect([...touched].every((id) => id.startsWith('fn-probe-'))).toBe(true)
-    expect(touched.has('default')).toBe(false)
-  })
-
-  /**
-    * ★ 前缀在两边各有一份（插件是外挂单文件，不能 import cloud-server），
-    *   漂了的后果是"过滤不干净 → 虚拟画布冒进用户的画布列表"。用后台源码当尺子量一次。
-    */
-  it('★ 虚拟画布前缀与 cloud-server 那份一致（防悄悄漂移）', () => {
-    const src = readFileSync(
-      path.join(__dirname, '../../../../../apps/server/src/store/canvasPaths.ts'),
-      'utf8',
-    )
-    const m = /export const VIRTUAL_CANVAS_PREFIX = '([^']+)'/.exec(src)
-    expect(m, 'cloud-server 的 canvasPaths.ts 里应当有 VIRTUAL_CANVAS_PREFIX').not.toBeNull()
-    expect(m![1]).toBe('fn-probe-')
   })
 })
