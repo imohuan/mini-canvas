@@ -35,6 +35,7 @@ import { loadQueueShowSending } from '../../api/queuePrefs.js'
 import { useAgentAttachments } from './useAgentAttachments.js'
 import { useAgentEarlierTurns } from './useAgentEarlierTurns.js'
 import { useAgentMcpPanel } from './useAgentMcpPanel.js'
+import { useMcpToolHover } from './useMcpToolHover.js'
 import { useAgentMessageEditing } from './useAgentMessageEditing.js'
 import { useAgentMessageViews } from './useAgentMessageViews.js'
 import { useAgentEditing } from './useAgentEditing.js'
@@ -243,6 +244,16 @@ const {
   mcpProbedOnce,
   ensureMcpProbed,
 } = useAgentMcpPanel(agent, s, editorRef)
+
+/**
+ * MCP 工具详情卡（下拉工具行 + 输入框标签共用）。
+ * 放在控制器里而不是某个子组件：标签归编辑器、下拉归输入区，浮层只有一份。
+ */
+const mcpHover = useMcpToolHover({
+  toolsOf: (server) => mcpTools.value[server] ?? [],
+  ensureProbed: () => ensureMcpProbed(),
+})
+watch(mcpTools, () => mcpHover.refreshCard(), { deep: true })
 
 onMounted(() => {
   void agent.refresh()
@@ -700,6 +711,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown, true))
     runMcpProbe,
     mcpProbedOnce,
     ensureMcpProbed,
+    mcpHover,
     onQueuePrefsChanged,
     onComposerPrefsChanged,
     streamSignal,

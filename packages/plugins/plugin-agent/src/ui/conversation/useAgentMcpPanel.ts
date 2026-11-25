@@ -8,8 +8,9 @@ import type { ResourceItem } from '@plume-canvas/editor'
 import type { AgentService } from '../../service/types.js'
 import type { AgentServiceState } from '../../service/types.js'
 import { mcpResources, mcpToolResource } from '../../ui/shared/agentResources.js'
+import { mcpToolMetaOfRow, type McpToolMeta } from '../../ui/shared/mcpToolMeta.js'
 
-type McpToolRow = { name: string; description: string; fullName: string }
+type McpToolRow = McpToolMeta
 
 export function useAgentMcpPanel(
   agent: AgentService,
@@ -29,7 +30,7 @@ const mcpProbeHint = ref('')
 /** 服务名 → 检测结果（好没好 / 一句说明 / 工具数） */
 const mcpStatus = ref<Record<string, { ok: boolean; text: string; tools: number }>>({})
 /** 服务名 → 探测到的工具清单（点「重新检测」后填；面板据此展开工具行） */
-const mcpTools = ref<Record<string, Array<{ name: string; description: string; fullName: string }>>>({})
+const mcpTools = ref<Record<string, McpToolMeta[]>>({})
 
 function mcpStatusOf(name: string): { ok: boolean; text: string; tools: number } | null {
   return mcpStatus.value[name] ?? null
@@ -58,7 +59,7 @@ function mcpToolCount(name: string): number {
 }
 
 /** 某服务展开的工具行（没探测过 / 探测失败时是空数组，卡片就不画展开区） */
-function mcpToolsOf(name: string): Array<{ name: string; description: string; fullName: string }> {
+function mcpToolsOf(name: string): McpToolMeta[] {
   return mcpTools.value[name] ?? []
 }
 
@@ -153,11 +154,11 @@ async function probeMcpServers(reconnect: boolean): Promise<void> {
     if (reconnect) await agent.reconnectMcp()
     const r = await agent.probeMcp()
     const next: Record<string, { ok: boolean; text: string; tools: number }> = {}
-    const tools: Record<string, Array<{ name: string; description: string; fullName: string }>> = {}
+    const tools: Record<string, McpToolMeta[]> = {}
     for (const sv of r.servers) {
       const ok = sv.status === 'completed'
       next[sv.name] = { ok, text: ok ? sv.tools + ' 个工具' : (sv.error || sv.status || '连接失败'), tools: sv.tools }
-      if (ok) tools[sv.name] = r.tools.filter((t) => t.server === sv.name).map((t) => ({ name: t.name, description: t.description, fullName: t.fullName }))
+      if (ok) tools[sv.name] = r.tools.filter((t) => t.server === sv.name).map((t) => mcpToolMetaOfRow(t))
     }
     mcpStatus.value = next
     mcpTools.value = tools

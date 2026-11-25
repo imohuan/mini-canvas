@@ -7,6 +7,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { brandName, brandSvg, detectPlatform } from '../../ui/render/modelBrandIcons.js'
 import { scrollTopForVisibleItem } from '../../ui/shared/selectionScroll.js'
 import { mcpResources, skillResources } from '../../ui/shared/agentResources.js'
+import type { McpToolMeta } from '../../ui/shared/mcpToolMeta.js'
 import type { AgentService } from '../../service/types.js'
 import type { AgentServiceState } from '../../service/types.js'
 
@@ -16,7 +17,7 @@ export function useAgentMenus(
   deps: {
     modelOpen: { value: boolean }
     mcpOpen: { value: boolean }
-    mcpToolsOf: (name: string) => Array<{ name: string; description: string; fullName: string }>
+    mcpToolsOf: (name: string) => McpToolMeta[]
     ensureMcpProbed: () => void
   },
 ) {
@@ -216,7 +217,7 @@ function skillSize(name: string): string {
 const filteredMcpResources = computed(() => {
   const q = mcpQuery.value.trim().toLowerCase()
   const items = mcpResources(s.mcpServers)
-  type McpToolRow = { name: string; description: string; fullName: string }
+  type McpToolRow = McpToolMeta
   if (!q) return items.map((item) => ({ ...item, toolHits: null as null | McpToolRow[] }))
   const hit = (text: string): boolean => text.toLowerCase().includes(q)
   const out: Array<(typeof items)[number] & { toolHits: null | McpToolRow[] }> = []

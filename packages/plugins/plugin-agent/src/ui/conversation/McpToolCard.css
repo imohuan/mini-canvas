@@ -1,0 +1,188 @@
+/*
+ * 工具详情卡：手机宽度下也能完整读。宽度固定 320px，由定位函数负责夹取与翻边。
+ * 颜色全部走 --ui-* token，亮暗主题自动跟随。
+ */
+.ac-toolcard {
+  position: fixed;
+  z-index: var(--ui-layer-tooltip, 100003);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 320px;
+  /* 窗口比卡片还窄时跟着收，避免右侧露出屏幕（定位函数只负责坐标，不改宽度） */
+  max-width: calc(100vw - 24px);
+  padding: 12px 13px;
+  border: 1px solid var(--ui-line, #e2e5ea);
+  border-radius: var(--radius-panel, 16px);
+  background: var(--ui-overlay-solid, var(--ui-panel, #fff));
+  color: var(--ui-ink, #18202b);
+  box-shadow: var(--ui-shadow-e2, 0 20px 40px rgb(0 0 0 / 0.08));
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+  transition: opacity 0.12s ease;
+}
+
+/* 量好位置后再显形，避免卡片从左上角闪一下 */
+.ac-toolcard.is-ready {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ac-toolcard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ac-toolcard-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-toolcard-icon :deep(svg) {
+  width: 15px;
+  height: 15px;
+}
+
+.ac-toolcard-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ac-toolcard-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.ac-toolcard-server {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-toolcard-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ui-ink-dim, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.ac-toolcard-desc.is-muted,
+.ac-toolcard-empty {
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+.ac-toolcard-section {
+  display: flex;
+  /* 不抢剩余高度：参数少时卡片就是内容那么高，不要留一块空白 */
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--ui-line-soft, #eef0f4);
+}
+
+.ac-toolcard-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+.ac-toolcard-empty {
+  margin: 0;
+  font-size: 12px;
+}
+
+/* 参数多时只在列表内部滚，卡片头与说明保持可见 */
+.ac-toolcard-params {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  /* 参数很多时最多占视口一半，超出在列表内部滚 */
+  max-height: 46vh;
+  margin: 0;
+  padding: 0 2px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+
+.ac-toolcard-param {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control, 8px);
+  background: var(--ui-veil, rgb(0 0 0 / 0.04));
+}
+
+.ac-toolcard-param-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ac-toolcard-param-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 11.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink, #18202b);
+}
+
+.ac-toolcard-param-type {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 5px;
+  background: var(--ui-chip, rgb(0 0 0 / 0.07));
+  font: 500 10px/16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink-dim, #6b7280);
+}
+
+.ac-toolcard-required {
+  flex: none;
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--ui-accent, #0891b2);
+}
+
+.ac-toolcard-param-desc,
+.ac-toolcard-param-meta {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ui-ink-dim, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.ac-toolcard-param-meta {
+  color: var(--ui-ink-mute, #8c95a3);
+}
+
+.ac-toolcard-fullname {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 10px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--ui-ink-mute, #8c95a3);
+}

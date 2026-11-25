@@ -82,7 +82,14 @@ export interface AgentMcpView {
 export interface AgentMcpProbe {
   ok: boolean
   servers: Array<{ name: string; transport: string; status: string; tools: number; error?: string; durationMs: number }>
-  tools: Array<{ name: string; server: string; description: string; fullName: string }>
+  tools: Array<{
+    name: string
+    server: string
+    description: string
+    fullName: string
+    /** 工具入参（MCP inputSchema，JSON Schema）。悬停卡片据此列出参数。 */
+    parameters?: Record<string, unknown>
+  }>
   warnings: string[]
 }
 

@@ -24,7 +24,6 @@ import {
   loadAgentState,
   resolveMCPServer,
   McpToolProvider,
-  MCP_TOOL_PREFIX,
 } from '@prismshadow/penguin-core'
 import { GenerativeModel } from '@prismshadow/penguin-core'
 import { userText } from '@prismshadow/penguin-core'
@@ -50,6 +49,7 @@ import {
   writeSystemConfig,
   type SystemConfigLike,
 } from './configTools.js'
+import { probeToolRows } from './probeTools.js'
 
 export class AgentConfigService extends AgentConfigBase {
   /**
@@ -874,17 +874,7 @@ export class AgentConfigService extends AgentConfigBase {
         durationMs: Number(r.duration_ms ?? 0),
       }))
       // 工具名形如 `mcp__smart__canvas_get`；把服务名剥出来，界面按服务分组显示
-      const tools = defs.map((d) => {
-        const full = String(d.name ?? '')
-        const rest = full.startsWith(MCP_TOOL_PREFIX) ? full.slice(MCP_TOOL_PREFIX.length) : full
-        const sep = rest.indexOf('__')
-        return {
-          name: sep >= 0 ? rest.slice(sep + 2) : rest,
-          server: sep >= 0 ? rest.slice(0, sep) : '',
-          description: String((d as { description?: unknown }).description ?? ''),
-          fullName: full,
-        }
-      })
+      const tools = probeToolRows(defs)
       const failed = servers.filter((s) => s.status !== 'completed')
       return { ok: failed.length === 0, servers, tools, warnings }
     } finally {
@@ -927,17 +917,7 @@ export class AgentConfigService extends AgentConfigBase {
         ...(r.error_message ? { error: String(r.error_message) } : {}),
         durationMs: Number(r.duration_ms ?? 0),
       }))
-      const tools = defs.map((d) => {
-        const full = String(d.name ?? '')
-        const rest = full.startsWith(MCP_TOOL_PREFIX) ? full.slice(MCP_TOOL_PREFIX.length) : full
-        const sep = rest.indexOf('__')
-        return {
-          name: sep >= 0 ? rest.slice(sep + 2) : rest,
-          server: sep >= 0 ? rest.slice(0, sep) : '',
-          description: String((d as { description?: unknown }).description ?? ''),
-          fullName: full,
-        }
-      })
+      const tools = probeToolRows(defs)
       const failed = servers.filter((s) => s.status !== 'completed')
       return { ok: failed.length === 0, servers, tools, warnings }
     } finally {

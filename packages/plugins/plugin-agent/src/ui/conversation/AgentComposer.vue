@@ -44,6 +44,7 @@ const {
   toggleMcpExpand, mcpPickedServers, mcpPickedTools, mcpToolKey, toggleMcpServer, toggleMcpTool,
   mcpPickTotal, confirmMcpPicks, mcpProbeHint, mcpStatusOf, mcpServerDesc,
   mcpTransport, mcpToolCount, mcpToolsOf, runMcpProbe, filteredMcpResources,
+  mcpHover,
   sendMode, submit, showPendingOn, COMPOSER_MENU_FLAGS, contextPercent, contextArcOffset, CONTEXT_CIRCUMFERENCE,
   SUGGESTIONS, useSuggestion, dismissHint, hintDismissed, insertRef, brandSvg, skillOpen,
   showScrollToBottom, smoothScrollToBottom, SHOW_PROCESS_NOTICE,
@@ -633,7 +634,8 @@ const HoverCardContent = useUiComponent('HoverCardContent')
           <!-- MCP 暂只有轻卡片一种布局：宽度固定在紧凑档（与卡片视图一致）。
                280 是「居中还能落在屏幕内」的上限：触发器离右边缘约 124px，
                320 宽居中会被 reka 自动往左推 20px，看起来这个菜单没跟其它对齐。 -->
-          <DropdownMenu v-if="s.mcpServers.length" :open="composerMenuOpen('mcp')" @update:open="(v: boolean) => setComposerMenuOpen('mcp', v)">
+          <DropdownMenu v-if="s.mcpServers.length" :open="composerMenuOpen('mcp')"
+            @update:open="(v: boolean) => { setComposerMenuOpen('mcp', v); if (!v) mcpHover.hideNow() }">
             <DropdownMenuTrigger as-child>
               <!-- 同上：MCP 也不做开关态高亮，引用看输入框里的标签 -->
               <Button variant="ghost" size="icon-sm" :aria-expanded="mcpOpen" aria-label="选择 MCP">
@@ -733,7 +735,9 @@ const HoverCardContent = useUiComponent('HoverCardContent')
                               <button v-for="t in (item.toolHits || mcpToolsOf(item.name))" :key="t.fullName"
                                 type="button" class="ac-tool-row" :class="{ 'is-picked': mcpPickedTools.has(mcpToolKey(item.name, t.name)) }"
                                 role="checkbox" :aria-checked="mcpPickedTools.has(mcpToolKey(item.name, t.name))"
-                                :title="t.fullName" @click.stop="toggleMcpTool(item.name, t.name)">
+                                @pointerenter="mcpHover.showTool(t, $event.currentTarget as Element, 'left')"
+                                @pointerleave="mcpHover.scheduleHide()"
+                                @click.stop="toggleMcpTool(item.name, t.name)">
                                 <span class="ac-tool-radio" aria-hidden="true"><Check :size="10" /></span>
                                 <span class="ac-tool-copy">
                                   <span class="ac-tool-name">{{ t.name }}</span>

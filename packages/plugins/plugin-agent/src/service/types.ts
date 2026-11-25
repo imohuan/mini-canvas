@@ -23,7 +23,14 @@ export interface McpRow {
 export interface McpProbeResult {
   ok: boolean
   servers: Array<{ name: string; transport: string; status: string; tools: number; error?: string; durationMs: number }>
-  tools: Array<{ name: string; server: string; description: string; fullName: string }>
+  tools: Array<{
+    name: string
+    server: string
+    description: string
+    fullName: string
+    /** MCP 的 inputSchema：悬停卡片用它列出参数 */
+    parameters?: Record<string, unknown>
+  }>
   warnings: string[]
   /** 传输层的错误（网络失败等），与 servers 里的连接失败区分开 */
   error?: string

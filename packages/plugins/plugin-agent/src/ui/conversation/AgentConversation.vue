@@ -12,13 +12,14 @@ import { useUiComponent } from '@plume-canvas/canvas-render'
 import { useAgentConversation } from './useAgentConversation'
 import AgentMessageList from './AgentMessageList.vue'
 import AgentComposer from './AgentComposer.vue'
+import McpToolCard from './McpToolCard.vue'
 
 defineOptions({ inheritAttrs: false })
 
 const c = useAgentConversation()
 provide('agentConversation', c)
 
-const { agent, s, MediaViewer, previewItem, previewImage } = c
+const { agent, s, MediaViewer, previewItem, previewImage, mcpHover } = c
 const Button = useUiComponent('Button')
 </script>
 
@@ -44,6 +45,12 @@ const Button = useUiComponent('Button')
     <AgentMessageList v-else />
 
     <AgentComposer />
+
+    <!-- MCP 工具详情卡：下拉工具行与输入框标签共用，挂在 body 上避免被面板裁掉 -->
+    <McpToolCard :tool="mcpHover.card.tool" :left="mcpHover.card.left" :top="mcpHover.card.top"
+      :max-height="mcpHover.card.maxHeight" :side="mcpHover.card.side" :ready="mcpHover.card.ready"
+      :pending="mcpHover.card.pending"
+      @pointerenter="mcpHover.keepCard()" />
 
     <!-- 看大图：主题注册的 MediaViewer（Esc / 点遮罩 / 右上角关闭；与全站预览同款交互） -->
     <MediaViewer :item="previewItem" @close="previewImage = null" />
