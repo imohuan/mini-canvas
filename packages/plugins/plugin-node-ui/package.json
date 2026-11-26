@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-node-ui",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "type": "module",
   "plume": {
     "title": "可视化节点",

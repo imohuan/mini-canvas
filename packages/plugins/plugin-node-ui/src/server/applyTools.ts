@@ -6,12 +6,55 @@ import type { AssetStoreLike, ServerCtx } from './shared-types.js'
 import { describeNode, nodesOf, uiNodeOf, writeUiHtml } from './canvasAccess.js'
 import { nodeDocOf, describeNodeDoc } from '../task/nodeDoc.js'
 import { planDeclared, UI_SCRIPTS_KEY } from '../task/declarePlan.js'
+import { lintUiHtml } from '../task/uiLint.js'
+import { listAllScriptNames } from '../task/scripts.js'
 import { formatScriptList, resolveTaskScriptsDir } from '../task/routes.js'
 import { listScripts } from '../task/runs.js'
 import GUIDE from '../guide.md?raw'
 
 /** 手册里最多列多少个节点（防大画布把工具返回撑爆） */
 const MAX_LISTED_NODES = 60
+
+/**
+ * 写完界面**当场按规范检查一遍**（用户 2026-11-26：这部分要用代码检查，不能靠 AI）。
+ *
+ * 检查放在「声明已经算好之后」：这样「调了没声明的脚本」这条会立刻暴露，
+ * 而不是等用户点按钮 403 才发现。机器上的脚本清单现读，读不到就当不知道（不误报）。
+ */
+async function lintAfterWrite(
+  ctx: ServerCtx,
+  html: string,
+  declared: unknown,
+): Promise<{ ok: boolean; errors: string[]; warnings: string[]; text: string }> {
+  const declaredNames =
+    declared && typeof declared === 'object' && !Array.isArray(declared)
+      ? Object.keys(declared as Record<string, unknown>)
+      : []
+  let known: string[] | undefined
+  try {
+    known = await listAllScriptNames(resolveTaskScriptsDir(ctx))
+  } catch {
+    known = undefined
+  }
+  const r = lintUiHtml(html, {
+    declaredScripts: declaredNames,
+    ...(known ? { knownScripts: known } : {}),
+  })
+  return {
+    ok: r.ok,
+    errors: r.errors.map((e) => '[' + e.rule + '] ' + e.message),
+    warnings: r.warnings.map((w) => '[' + w.rule + '] ' + w.message),
+    // 给 AI 的一句结论：有错写「必须改」，只有警告写「建议改」；全干净就是空串
+    text: r.ok
+      ? r.warnings.length
+        ? '界面已写入。规范检查有 ' + r.warnings.length + ' 条建议（不改也能跑）：\n' +
+          r.warnings.map((w) => '  ! ' + w.message).join('\n')
+        : ''
+      : '界面已写入，但规范检查没通过（这些不修会出问题）：\n' +
+        r.errors.map((e) => '  ✗ ' + e.message).join('\n') +
+        (r.warnings.length ? '\n建议：\n' + r.warnings.map((w) => '  ! ' + w.message).join('\n') : ''),
+  }
+}
 
 export function applyTools(ctx: ServerCtx): void {
 
@@ -91,6 +134,8 @@ export function applyTools(ctx: ServerCtx): void {
         ...(plan ? { [UI_SCRIPTS_KEY]: plan.next } : {}),
       })
       if (!res.ok) return { ok: false, error: res.error ?? '写入失败' }
+      // 写完当场按规范检查（不靠 AI 自己记）
+      const lint = await lintAfterWrite(ctx, html, plan ? plan.next : node.data?.[UI_SCRIPTS_KEY])
       return {
         ok: true,
         nodeId,
@@ -98,6 +143,8 @@ export function applyTools(ctx: ServerCtx): void {
         bytes: html.length,
         // 把"我替你补了哪些"回给 AI —— 它下次就知道该自己写上（声明仍是它的责任）
         ...(plan ? { declaredScripts: plan.added } : {}),
+        lint: { ok: lint.ok, errors: lint.errors, warnings: lint.warnings },
+        ...(lint.text ? { lintText: lint.text } : {}),
       }
     },
   })
@@ -149,6 +196,7 @@ export function applyTools(ctx: ServerCtx): void {
         ...(plan ? { [UI_SCRIPTS_KEY]: plan.next } : {}),
       })
       if (!res.ok) return { ok: false, error: res.error ?? '写入失败' }
+      const lint = await lintAfterWrite(ctx, next, plan ? plan.next : node.data?.[UI_SCRIPTS_KEY])
       return {
         ok: true,
         nodeId,
@@ -156,6 +204,8 @@ export function applyTools(ctx: ServerCtx): void {
         replaced: count,
         bytes: next.length,
         ...(plan ? { declaredScripts: plan.added } : {}),
+        lint: { ok: lint.ok, errors: lint.errors, warnings: lint.warnings },
+        ...(lint.text ? { lintText: lint.text } : {}),
       }
     },
   })

@@ -40,6 +40,38 @@ window.__CANVAS_UI__       // { theme, baseUrl, canvasId, nodeId, palette }
 | `save(data, name)` | 交**产物**（图/视频/音频/文本） | 上传槽位 + 写节点字段，**不进撤销栈** |
 | `task(name, methods, args, opts)` | 叫后台脚本干活，自动带 canvasId/nodeId | `/api/task/call` + SSE |
 | `cancel(runId)` | 取消一次调用（杀整棵进程树） | `/api/task/cancel` |
+| `api(path, init)` | 通用转发：读画布 / 改节点 / 下单 | 宿主代发（同源 + 令牌） |
+
+### 每个方法的确切行为
+
+**`setInputs(params)`** —— 交参数，进撤销栈。改配置类界面应当「一次修改完成」调一次，
+不要每帧调；体积保持几 KB 级。
+
+**`onChange(fn)`** —— 上游或参数一变就回调，给 `{ upstream, inputs }`。
+**节点必须注册它**（规范检查会拦没注册的界面）。回调里要按新上游重画，读到空就清空素材。
+
+**`save(data, name)`** —— 交产物，落本节点槽位，不进撤销栈。字符串当文本、Blob/字节当文件。
+返回产物的同源地址。
+
+**`task(name, methods, args, opts)`** —— 叫后台脚本干活。
+
+| 参数 | 含义 |
+| --- | --- |
+| `name` | 脚本名 = `task-scripts/` 里的文件名去掉 `.mjs` |
+| `methods` | 要调的函数名 = 脚本里 `export` 的那个 |
+| `args` | 位置参数数组，后台会把 `ctx` 补在最后 |
+| `opts.wait` | `true` = 等跑完直接给结果（几百毫秒的活用这个） |
+| `opts.log` / `opts.progress` | 收实时日志 / 进度（长任务用，走 SSE） |
+| `opts.signal` | 中止等待（不替你取消后台） |
+
+返回值里 `result` 是脚本的返回值。**没有 `wait` 也没有 `log`/`progress` 时**，后台只会回
+`state: "running"`，此时拿不到结果 —— 要结果就加 `wait: true`。
+
+**`cancel(runId)`** —— 取消。`runId` 是 `task()` 返回值里那个，不写进节点，要自己记。
+
+**`api(path, init)`** —— 只放行 `/api/` 下的**画布那一类**（画布、节点、连线、资源、下单）。
+`/api/task/*`、`/api/kv/*`、`/api/npm-plugins/*` 等**一律拒绝**：那个代理用的是宿主身份，
+不能让沙箱页面随便触发。查任务状态请走 `task()` 的返回值，不要试 `api('/api/task/status')`。
 
 `save` 传字符串就是文本，传 Blob/字节就是文件。它自动落在**本节点自己的槽位**
 （`?slot=<nodeId>`）—— 一个节点永远只有一份产物文件，地址不变、内容被覆盖。

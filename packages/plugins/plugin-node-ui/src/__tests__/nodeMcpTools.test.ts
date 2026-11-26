@@ -132,6 +132,36 @@ describe('① 节点说明书：写 / 读 / 进手册', () => {
     expect(s.canvasWrites).toHaveLength(0)
   })
 
+  /**
+   * 写完界面要**由代码检查规范**，不能靠 AI 自己记（用户 2026-11-26 点名）。
+   * 这两条钉住「检查真的跑了、结论真的回了」。
+   */
+  it('★ canvas_ui_write 写完当场检查：没 onChange 直接报出来', async () => {
+    const s = fakeCtx({ nodes: [uiNode] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_ui_write', {
+      nodeId: '2',
+      html: '<div class="x">hi</div>',
+    })
+    expect(r.ok).toBe(true)
+    const lint = r.lint as { ok: boolean; errors: string[] }
+    expect(lint.ok).toBe(false)
+    expect(lint.errors.join(' ')).toContain('onChange')
+    expect(String(r.lintText)).toContain('必须') // 提示 AI 这是要改的
+  })
+
+  it('★ 合规界面：检查通过、不出现 lintText 噪音', async () => {
+    const s = fakeCtx({ nodes: [uiNode] })
+    apply(s.ctx)
+    const html =
+      '<div>x</div><script>var UI = window.__CANVAS_UI__;' +
+      'CanvasUI.onChange(function(d){ var u = d.upstream || window.__CANVAS_UPSTREAM__; });</script>'
+    const r = await call(s.tools, 'canvas_ui_write', { nodeId: '2', html })
+    const lint = r.lint as { ok: boolean; errors: string[]; warnings: string[] }
+    expect(lint.errors).toEqual([])
+    expect(lint.ok).toBe(true)
+  })
+
   it('canvas_ui_describe 把四件事写进节点 data', async () => {
     const s = fakeCtx({ nodes: [uiNode] })
     apply(s.ctx)
