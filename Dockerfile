@@ -13,7 +13,7 @@ FROM node:22-alpine
 # 发版请用 pnpm publish（不能用 npm publish）：package.json 里有
 # "@plume-canvas/plugin-agent": "workspace:*"，npm 会原样发出去导致装不上，
 # pnpm 才会把它替换成真实版本号。完整流程见 apps/docs/cloud-server/deploy-railway.md。
-ARG PLUME_VERSION=0.1.6
+ARG PLUME_VERSION=0.1.27
 RUN npm install -g @plume-canvas/server@${PLUME_VERSION}
 
 ENV NODE_ENV=production

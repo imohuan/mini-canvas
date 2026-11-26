@@ -1,0 +1,4 @@
+chore(release): 0.1.27（start/stop 子命令上线）
+
+apps/server 版本号 0.1.26 → 0.1.27，Dockerfile 的 PLUME_VERSION 同步。
+已用 pnpm publish 发到 npm；npx 安装后 start / status / stop 实测可用。
