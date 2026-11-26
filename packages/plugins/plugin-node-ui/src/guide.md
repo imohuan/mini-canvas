@@ -5,12 +5,9 @@
 
 ⚠️ **两条边界，先记住**：
 
-1. **别去翻项目源码**。你在对话框里，看的应该是本手册 + 运行时接口。
-   开发期源码可能就摆在用户项目里（`apps/server/src/…`、
-   `packages/plugins/plugin-node-ui/src/…`），看着很诱人，但那是**实现**、随时会变；
-   本手册给的是**稳定契约**。依赖实现，改一次就失效。
-   要问"有哪些脚本 / 有哪些动作"，用运行时接口（`{type:"list"}`、`generation_actions`），
-   或者直接看本手册最后那两节（都会现读）。
+1. **一切以本手册 + 运行时接口为准**。本手册是**稳定契约**；具体实现随时会改，
+   按实现去写的东西过一阵就会失效。要问"有哪些脚本 / 有哪些动作"，
+   用运行时接口（`{type:"list"}`、`generation_actions`），或直接看本手册最后那两节（都会现读）。
 2. **这是可视化节点的说明书**。用户一提"可视化节点 / ui 节点 / 面板 / 预览器 /
    给这个节点画个界面"，第一个动作就是读本手册 —— 不要先去猜、更不要和"生成图片"
    （`generation_*`）混起来：那是**调模型出媒体**，这是**画界面**，两条不同的轨道。
@@ -54,12 +51,16 @@
        canvas_fn_info(script, fn)       查它的参数 / 返回 / 示例
        canvas_fn_call(script, fn, canvasId?, nodeId?, argsJson)  真调一次，拿结果
 
-     ★ **canvasId 和 nodeId 都必须给**（2026-11-25 起取消了草稿画布）：
-       从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 原样取，别自己编。
-       产物写进那个节点的槽位 `slot-<nodeId>.*`，下游节点读的就是它。
-       缺一个 / 给错 id 都会直接报错，不会替你猜、也不会另开一张草稿纸。
-     ★ 只想验脚本本身能不能跑：给一个**你正在操作的真实画布与节点**即可，
-       它会顺手把这个脚本补进节点声明（之后界面调它才不会 403）。
+     ★ **两种用法，按目的选**：
+       · **只验脚本**（还没写界面、只想确认它算得对）→ canvasId / nodeId **都不给**。
+         会自动落到一张 `fn-probe-default` 草稿画布上跑，`ctx.save` 照样能成功，
+         产物在那张草稿画布名下，**碰不到用户的任何画布**。返回值里有
+         `virtualCanvasId`，那就是产物所在。
+       · **在用户的节点上跑**（界面已经写好、要看真实效果）→ canvasId + nodeId 都给，
+         从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 原样取，别自己编。
+         产物写进那个节点的槽位 `slot-<nodeId>.*`，下游节点读的就是它。
+     ★ **只给一个**（只有画布没节点 / 只有节点没画布）= 写错了，会直接报错，不替你猜。
+     ★ 在真实节点上跑会把脚本顺手补进节点声明（之后界面调它才不会被 403）。
 
      调通了（执行成功、结果符合预期）→ 把文件名前面的下划线**去掉**，这个脚本才算"可用"。
      调不通就改脚本重来，别急着写界面。
@@ -71,6 +72,9 @@
        · `lint.ok === false` → **必须改**（外链 / 直接 fetch / 调了没声明的脚本 / 没注册 onChange）；
        · `lint.warnings` 有内容 → 建议补（onChange 里没读上游、从不 setInputs、没读 __CANVAS_UI__）。
        别等用户发现问题：`lint` 不通就地改，再写一次。
+     ★ 收尾再调一次 `canvas_ui_check({ canvasId, nodeId })`：它把这个节点整体验一遍
+       （界面规范 + 声明的脚本在不在机器上 + 说明书写没写 + 产物有没有落进槽位），
+       `ok: true` 才算交付。详见「一、怎么画 / 怎么改」开头那张表。
 
   ⑤ **声明依赖**：在节点上写 data.uiScripts = { "脚本名": {} }。
      不声明，界面调后台会被 403 挡（见 1.2）。canvas_ui_write 会顺手帮你补，但自己写更稳。
@@ -118,6 +122,32 @@
     名字前面带下划线直接调即可。
 
 ## 一、怎么画 / 怎么改
+
+**三个工具，按场景选，别混**：
+
+| 要做的事 | 用哪个 | 它会顺手做什么 |
+| --- | --- | --- |
+| 第一次画 / 整段重画 | `canvas_ui_write` | 扫一遍调了哪些脚本并补进声明 + 立刻做规范检查 |
+| 只改一小块 | `canvas_ui_update` | 同上（局部替换，不必重写整段） |
+| 只看现状 | `canvas_ui_read` | 回 HTML / 说明书 / 已声明脚本 |
+| **验收整个节点** | `canvas_ui_check` | 逐项检查，给 problems / warnings / checks |
+
+**写完界面之后，收尾动作固定是这三步**：
+
+  1. `canvas_ui_write`（或 update）→ 看返回值里的 `lint`
+  2. `lint.ok === false` → 照 `lintText` 里点名的去改，再写一次（别交付红着的）
+  3. `canvas_ui_check({ canvasId, nodeId })` → `ok: true` 才算完成
+
+`canvas_ui_check` 会查这七项（是的、不是的都会列出来）：
+
+| 检查项 | 不合格会怎样 |
+| --- | --- |
+| 界面·非空 | 节点是个白框 |
+| 界面·外链 / 直接 fetch / 缺 onChange / 调了没声明的脚本 | 白屏、请求被拒、用户一点就 403 |
+| 界面·onChange 不理上游 / 从不交参数 / 没读 `__CANVAS_UI__` | 删了连线界面不变、刷新后参数全丢、主题与回写失效 |
+| 脚本·都在机器上 | 声明里有、`task-scripts/` 里没有 → 打包缺文件、调用失败 |
+| 说明书 | 收藏后别人只能靠包名猜它是干什么的 |
+| 产物·已落在节点 | 看得到界面、拿不到结果（纯展示节点可忽略） |
 
 **第一次画**（或整段重画）：
 
@@ -214,6 +244,10 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
       d.upstream   ← 上游素材
   · 收到就**照着重画**。一件事，一个监听，不用记那是哪种变化。
   · 页面**不会因为参数变化而重启**（以前会重开，用户正在输的东西会丢）。
+
+  ★ **这一条是硬要求**：没注册 onChange 的界面，`canvas_ui_write` 会直接判不合格。
+    回调里还必须**真的用上新上游**（读 `d.upstream` 或现读 `window.__CANVAS_UPSTREAM__`），
+    只写个空回调同样会被点名 —— 用户删了连线界面还显示旧素材，就是这么来的。
 
 硬性约束：
   1. 不许外链任何 js / css / 字体 / 图片 CDN —— 沙箱里只有后台一个源可达，外链一律连不上。
@@ -446,6 +480,7 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
   canvas_ui_write   (canvasId, nodeId, html)        整段写界面（顺手补依赖声明）
   canvas_ui_update  (canvasId, nodeId, old, new)    局部替换（不必重写整段）
   canvas_ui_read    (canvasId, nodeId)              看现状
+  canvas_ui_check   (canvasId, nodeId)              **验收**：规范 / 声明 / 说明书 / 产物逐项检查
   canvas_ui_package (canvasId, nodeId, name?, folderId?)  打包进资产库
   canvas_ui_describe(canvasId, nodeId, what, effect?)     给节点写功能说明书（收藏前先写）
   canvas_ui_favorites(keyword?)                          列资产库里收藏的可视化节点（带说明书）
@@ -462,27 +497,49 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
 
 ## 七、最小例子（照抄能跑）
 
+下面这份**能直接过 `canvas_ui_check`**：铺满、无外链、读上下文、注册 onChange 并在回调里
+真的用了新上游、参数会交出去。抄它改内容，比从零写省事，也不容易漏约定。
 
-  <div style="padding:12px;font:13px system-ui">
-    <h3 id="t" style="margin:0 0 8px"></h3>
-    <div id="list"></div>
-  </div>
-  <script>
-    var U = window.__CANVAS_UPSTREAM__ || [];
-    document.getElementById("t").textContent = "素材 " + U.length + " 份";
-    document.getElementById("list").innerHTML = U.map(function (x) {
-      return x.kind === "image"
-        ? "<img src="" + x.url + "" style="width:120px">"
-        : "<p>" + String(x.value || "") + "</p>";
+```html
+<style>
+  html,body{height:100%;margin:0}
+  body{font:13px system-ui;color:var(--t,#111);background:var(--s,#fff);padding:12px}
+  #list img{width:120px;border-radius:6px}
+</style>
+<h3 id="t" style="margin:0 0 8px"></h3>
+<div id="list"></div>
+<script>
+(function () {
+  var UI = window.__CANVAS_UI__ || {};
+  var P = (UI.palette && UI.palette[UI.theme || "light"]) || {};
+  var root = document.documentElement.style;
+  if (P.text) root.setProperty("--t", P.text);
+  if (P.surface) root.setProperty("--s", P.surface);
+
+  function upstream() {
+    var list = window.__CANVAS_UPSTREAM__ || [], out = [];
+    for (var i = 0; i < list.length; i++) if (list[i].kind === "image" && list[i].url) out.push(list[i]);
+    return out;
+  }
+
+  function draw() {
+    var u = upstream();
+    document.getElementById("t").textContent = u.length ? "素材 " + u.length + " 份" : "无上游图片";
+    document.getElementById("list").innerHTML = u.map(function (x) {
+      return '<img src="' + x.url + '" alt="' + (x.refName || "") + '">';
     }).join("");
-  </script>
-## 七·补、写完怎么调（沙箱里没法调试，这是唯一的办法）
+  }
 
-> **先看这一条（用户 2026-11-26 口径）**：页面里没法用代码替你调试，所以**默认别调调试工具**。
-> 写完 `canvas_ui_write`、返回值里 `lint.ok === true`（错误清零）就**直接结束**，让用户去看。
-> 只有在**真卡住**（界面白屏、按钮点了没反应、数据对不上、报错看不懂）时才用本节这套：
+  // 上游或参数一变就重画（这一条是硬要求）
+  CanvasUI.onChange(function (d) { draw(); });
+  draw();
+})();
+</script>
+```
+## 七·补、卡住了怎么查（排障手段，不是流程的一步）
+
+> 这一节只在**真卡住**时用（界面白屏、按钮点了没反应、数据对不上、报错看不懂）：
 > `canvas_ui_build_debug_doc` 出一份可调试的独立页面，或用「调试」按钮开副本。
-> 别把「开调试页」当成收尾步骤 —— 那是排障手段，不是流程的一环。
 
 **先说清楚为什么**：你写的界面住在 `sandbox="allow-scripts"` 的 iframe 里，
 故意不给同源权限（不然它就能读宿主页面的 localStorage —— 那是整张画布）。
@@ -509,4 +566,10 @@ palette.light / palette.dark 各是一组语义色，键一样、值不同：
 **一条实际的闭环**：`canvas_ui_read` 看现状 → 改 → `canvas_ui_write` / `canvas_ui_update` 写回
 → 点「调试」开副本 → 在副本里看变量 / 打断点 / 看控制台报错 → 定位问题 → 再改 → 再写回。
 
+
+## 七·补、卡住了怎么查（排障手段，不是流程的一步）
+
+> **先说流程上的事**：正常情况写完 `canvas_ui_write`、`canvas_ui_check` 说 `ok: true` 就结束。
+> 下面这套是**真卡住时**才用的（白屏、点了没反应、数据对不上、报错看不懂）。
+> 别把它当收尾步骤。
 

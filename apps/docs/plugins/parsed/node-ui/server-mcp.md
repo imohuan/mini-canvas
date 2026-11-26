@@ -33,9 +33,13 @@
 | 项 | 内容 |
 | --- | --- |
 | 参数 | `nodeId`（必填）、`html`（必填，给代码本体，**不用包 markdown 代码块**） |
-| 返回 | `{ ok, nodeId, canvasId, bytes, declaredScripts? }` |
-| 干什么 | 把界面整段写进节点，**当场渲染**；顺手扫一遍 HTML，把调到的脚本补进依赖声明（`declaredScripts` 就是补上的那些） |
+| 返回 | `{ ok, nodeId, canvasId, bytes, declaredScripts?, lint, lintText? }` |
+| 干什么 | 把界面整段写进节点，**当场渲染**；顺手扫一遍 HTML，把调到的脚本补进依赖声明（`declaredScripts` 就是补上的那些）；**并立刻按规范检查一遍**（结论在 `lint`） |
 | 何时用 | 第一次画 / 整段重画 |
+
+> `lint.ok === false` = 必须改（外链 / 直接 fetch / 调了没声明的脚本 / 没注册 `onChange`）；
+> `lint.warnings` 有内容 = 建议补（`onChange` 不理上游 / 有控件却从不 `setInputs` / 没读 `__CANVAS_UI__`）。
+> `lintText` 是给 AI 读的一句结论；合规时它是空的，不占地方。
 
 #### `canvas_ui_update(canvasId?, nodeId, old, new)`
 
@@ -55,6 +59,31 @@
 | 参数 | `nodeId`（必填） |
 | 返回 | `{ html }`（含说明书与声明的脚本） |
 | 何时用 | 改之前先看一眼现状 |
+
+#### `canvas_ui_check(canvasId?, nodeId)` —— 验收
+
+**写完界面之后收尾必调**。它不看源码，只看这个节点现在到底合不合格，逐项给出结论。
+
+| 项 | 内容 |
+| --- | --- |
+| 参数 | `nodeId`（必填）、`canvasId` |
+| 返回 | `{ ok, problems, warnings, checks, declaredScripts, missingScripts?, docText }` |
+| `ok` | `problems` 为空即 true。**`ok: true` 才算交付完成** |
+| `checks` | 逐项结果（`{ name, ok, detail }`），合格与不合格的都列，便于对齐 |
+
+它查七件事：
+
+| 检查项 | 不合格意味着 |
+| --- | --- |
+| 界面·非空 | 节点是个白框 |
+| 界面·规范（外链 / 直接 fetch / 缺 onChange / 调了没声明的脚本） | 白屏、请求被拒、用户一点就 403 |
+| 界面·建议（onChange 不理上游 / 有控件不交参数 / 没读 `__CANVAS_UI__`） | 删了连线界面不变、刷新后参数全丢 |
+| 脚本·都在机器上 | 声明里有、`task-scripts/` 里没有 → 打包缺文件 |
+| 说明书 | 收藏后别人只能靠包名猜 |
+| 产物·已落在节点 | 看得到界面、拿不到结果（纯展示节点可忽略） |
+
+> 产物这一项**认地址也认引用**：节点保存后往往只剩 `resourceId`（地址是它的投影，会被清理），
+> 那不是「没产物」。
 
 ### 收藏 / 复现这条线（4 个）
 

@@ -162,6 +162,63 @@ describe('① 节点说明书：写 / 读 / 进手册', () => {
     expect(lint.ok).toBe(true)
   })
 
+  /**
+   * 验收工具（用户 2026-11-26：写完之后必须代码验证一下，可以单独给一个 MCP）。
+   * 它必须能**单独调**：AI 分几步改的时候，每步之后都该能重验一次。
+   */
+  it('★ canvas_ui_check：逐项点名问题，而不是只给一句 ok:false', async () => {
+    const s = fakeCtx({ nodes: [{ id: '2', type: 'ui', data: { uiHtml: '<div>hi</div>' } }] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_ui_check', { nodeId: '2' })
+    expect(r.ok).toBe(false)
+    const problems = (r.problems as string[]).join(' ')
+    expect(problems).toContain('onChange') // 界面没监听参数
+    const warnings = (r.warnings as string[]).join(' ')
+    expect(warnings).toContain('说明书') // 没写 uiNodeDoc
+    const checks = r.checks as Array<{ name: string; ok: boolean }>
+    expect(checks.some((c) => c.name === '界面·非空' && c.ok)).toBe(true)
+    expect(checks.some((c) => c.name === '说明书' && !c.ok)).toBe(true)
+  })
+
+  it('★ canvas_ui_check：合规节点 + 说明书齐全 → ok:true（修完不能一直红）', async () => {
+    const html =
+      '<div>x</div><script>var UI = window.__CANVAS_UI__;' +
+      'CanvasUI.onChange(function(d){ var u = d.upstream || window.__CANVAS_UPSTREAM__; });' +
+      'CanvasUI.setInputs({});</script>'
+    const node = {
+      id: '2',
+      type: 'ui',
+      data: { uiHtml: html, uiNodeDoc: { what: '显示上游' }, uiOutputUrl: '/api/canvases/c/resources/slot-2.png' },
+    }
+    const s = fakeCtx({ nodes: [node] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_ui_check', { nodeId: '2' })
+    expect(r.problems).toEqual([])
+    expect(r.ok).toBe(true)
+  })
+
+  /**
+   * 2026-11-26 真机核对时发现：节点保存后只剩 `resourceId`（地址被清理），
+   * 首版检查只认 uiOutputUrl / imageUrl，把**已经出过图**的节点误判成「还没产物」。
+   */
+  it('★ 产物只存引用（地址被清理）也算有产物 —— 不误报', async () => {
+    const html =
+      '<div>x</div><script>var UI = window.__CANVAS_UI__;' +
+      'CanvasUI.onChange(function(d){ var u = d.upstream || window.__CANVAS_UPSTREAM__; });</script>'
+    const node = {
+      id: '2',
+      type: 'ui',
+      data: { uiHtml: html, uiNodeDoc: { what: 'x' }, resourceId: 'default/slot-2.png' },
+    }
+    const s = fakeCtx({ nodes: [node] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_ui_check', { nodeId: '2' })
+    const checks = r.checks as Array<{ name: string; ok: boolean; detail: string }>
+    const out = checks.find((c) => c.name === '产物·已落在节点')!
+    expect(out.ok).toBe(true)
+    expect(out.detail).toContain('slot-2.png')
+  })
+
   it('canvas_ui_describe 把四件事写进节点 data', async () => {
     const s = fakeCtx({ nodes: [uiNode] })
     apply(s.ctx)

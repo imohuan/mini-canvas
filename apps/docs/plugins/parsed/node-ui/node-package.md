@@ -57,6 +57,5 @@
 ## 相关
 
 - 想收藏**一整组节点**（分组 + 子节点 + 内部连线）：见[节点组](/plugins/parsed/node-ui/node-group)。
-- 收藏入口由成品应用在画布会话里注册（`apps/web/src/assetUploadPlugin.ts` 的
-  `registerAssetCommands`），所以正式构建里也不会少。
+- 收藏入口由成品应用在画布会话里注册（资源库插件负责），所以正式构建里也不会少。
 

@@ -133,16 +133,20 @@ export function lintUiHtml(html: string, opts: UiLintOptions = {}): UiLintResult
         '照抄这段：CanvasUI.onChange(function (d) { 用 d.upstream / d.inputs 重画 }).',
     )
   } else {
-    /** onChange 那段代码的大致范围（到下一个顶层语句为止）：只在这个窗口里找上游读取 */
-    const at = src.search(/CanvasUI\s*\.\s*onChange\s*\(/)
-    const window = src.slice(at, at + 1200)
-    const readsUpstreamInCallback =
-      /\.upstream\b/.test(window) || /__CANVAS_UPSTREAM__/.test(window)
-    if (!readsUpstreamInCallback) {
+    /*
+     * 「回调里有没有用上游」只能粗判：常见的写法是 onChange 里调一个 draw()，
+     * 而 draw() 自己现读 `window.__CANVAS_UPSTREAM__`（手册的示例就是这样）。
+     * 只盯回调那几十个字符会把这种**正确写法**误判成不合格 —— 那比不检查更糟，
+     * 因为 AI 会照着「改进」把好好的代码改坏。
+     * 所以判据是：注册了 onChange，并且整份界面里确实读了上游（d.upstream 或那个全局）。
+     * 真正要抓的是「一次都没读过上游」—— 那种界面删了连线必然不变。
+     */
+    const readsUpstream = /\.upstream\b/.test(src) || /__CANVAS_UPSTREAM__/.test(src)
+    if (!readsUpstream) {
       add(
         'warn',
         'onchange-ignores-upstream',
-        'onChange 里没用到上游（既没读 d.upstream，也没读 window.__CANVAS_UPSTREAM__）。' +
+        '整份界面都没读上游（既没用 d.upstream，也没读 window.__CANVAS_UPSTREAM__）。' +
           '这样删了连线界面还是老样子 —— 2026-11-26 用户截图就是这个现象。' +
           '回调里要按新上游重画，读到空就清空素材。',
       )
@@ -150,11 +154,15 @@ export function lintUiHtml(html: string, opts: UiLintOptions = {}): UiLintResult
   }
 
   // ⑤ 参数要交出去（不交就进不了节点，刷新后全丢）
-  if (!/CanvasUI\s*\.\s*setInputs\s*\(/.test(src) && !/CanvasUI\s*\.\s*save\s*\(/.test(src)) {
+  //
+  // 只对**有控件**的界面提这一条：纯展示节点（只把上游画出来）本来就没有「用户改的值」，
+  // 对它要求 setInputs 是没事找事，只会让 AI 往界面里塞无意义的空调用。
+  const hasControls = /<(input|select|textarea)\b/i.test(src)
+  if (hasControls && !/CanvasUI\s*\.\s*setInputs\s*\(/.test(src) && !/CanvasUI\s*\.\s*save\s*\(/.test(src)) {
     add(
       'warn',
       'no-persist',
-      '界面从没调 setInputs（也没 save）：用户改的值不会进节点，刷新后全丢。' +
+      '界面有输入控件，但从没调 setInputs（也没 save）：用户改的值不会进节点，刷新后全丢。' +
         '配置类界面应当在一次修改完成时调一次 CanvasUI.setInputs(参数对象)。',
     )
   }

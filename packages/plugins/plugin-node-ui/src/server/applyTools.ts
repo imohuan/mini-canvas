@@ -240,6 +240,116 @@ export function applyTools(ctx: ServerCtx): void {
     },
   })
 
+  /**
+   * ④b **验收工具**：一个节点到底合不合格，用它一次问清。
+   *
+   * 为什么单独开一条（用户 2026-11-26）：「写完之后必须代码验证一下（你可以提供一个单独的
+   * MCP 进行验证）」。canvas_ui_write 的 lint 只管**这一份 HTML**；这里管**整个节点**：
+   * 界面规不规范、依赖声明的脚本在不在机器上、说明书写了没、产物有没有落在槽位。
+   *
+   * 为什么必须能单独调：AI 可能是分几步改的（先写界面、再补声明、再写说明书），
+   * 中间任何一步之后都该能重新验一次，而不必再写一遍界面。
+   */
+  ctx.mcp.tool({
+    name: 'canvas_ui_check',
+    description:
+      '**验收**一个可视化节点：逐项检查它是否符合规范，返回 problems（必须改）/ warnings（建议改）/ checks（逐项结果）。' +
+      '查七件事：① 界面本身（外链、直接 fetch、缺 onChange、onChange 不理上游、从不交参数、没读 __CANVAS_UI__）；' +
+      '② 界面调的脚本有没有声明、机器上有没有那份脚本；③ 声明的脚本里有没有机器上已经不存在的；' +
+      '④ 有没有写功能说明书（uiNodeDoc，用 canvas_ui_describe 补）；⑤ 有没有产物落在本节点槽位；' +
+      '⑥ 节点是不是可视化节点；⑦ 界面是不是空的。' +
+      '写完界面、补完声明、写说明书之后，都该调一次它；`ok: true` 才算交付。',
+    input: { canvasId: 'string', nodeId: 'string' },
+    required: ['nodeId'],
+    handler: async (args) => {
+      const picked = await uiNodeOf(ctx, args)
+      if (!picked.ok) return picked
+      const { canvasId, nodeId, node } = picked
+      const html = typeof node.data?.uiHtml === 'string' ? node.data.uiHtml : ''
+      const declaredRaw = node.data?.[UI_SCRIPTS_KEY]
+      const declared =
+        declaredRaw && typeof declaredRaw === 'object' && !Array.isArray(declaredRaw)
+          ? Object.keys(declaredRaw as Record<string, unknown>)
+          : []
+      let known: string[] | undefined
+      try {
+        known = await listAllScriptNames(resolveTaskScriptsDir(ctx))
+      } catch {
+        known = undefined
+      }
+      const lint = lintUiHtml(html, { declaredScripts: declared, ...(known ? { knownScripts: known } : {}) })
+      const doc = nodeDocOf(node.data)
+      const problems: string[] = []
+      const warnings: string[] = []
+      const checks: Array<{ name: string; ok: boolean; detail: string }> = []
+      const note = (name: string, ok: boolean, detail: string): void => {
+        checks.push({ name, ok, detail })
+        if (ok) return
+        if (name.startsWith('界面·')) problems.push(detail)
+        else warnings.push(detail)
+      }
+
+      note('界面·非空', !!html.trim(), html.trim() ? '有界面内容' : '界面是空的：先用 canvas_ui_write 写一段自包含 HTML')
+      for (const e of lint.errors) note('界面·error', false, '[' + e.rule + '] ' + e.message)
+      for (const w of lint.warnings) note('界面·warn', false, '[' + w.rule + '] ' + w.message)
+      if (!lint.errors.length && !lint.warnings.length) note('界面·规范', true, '规范检查通过')
+
+      // 声明里有、机器上没有：打包会缺脚本，界面调它也会失败
+      if (known) {
+        const missing = declared.filter((n) => !known.includes(n))
+        note(
+          '脚本·都在机器上',
+          missing.length === 0,
+          missing.length ? '节点声明了这些脚本，但 task-scripts/ 里没有：' + missing.join('、') : '声明的脚本都在',
+        )
+      }
+
+      note(
+        '说明书',
+        !!doc,
+        doc
+          ? '说明书已写：' + (doc.what ?? '')
+          : '没写功能说明书（uiNodeDoc）。用 canvas_ui_describe 补一句「做什么 / 效果 / 输入 / 输出」，收藏和复用时别人才能看懂',
+      )
+
+      /*
+       * 产物：**地址或引用都算**。
+       *
+       * 为什么不能只看地址：节点保存时会把「地址」这类投影删掉、只留引用（`resourceId`）——
+       * 那是 2026-11-20 定的规矩，不是没产物。只看 uiOutputUrl / imageUrl 会把
+       * 已经出过图、地址被清理掉的节点误判成「还没有产物」（本工具首版就踩了，真机核对时发现）。
+       */
+      const outUrl = [node.data?.uiOutputUrl, node.data?.imageUrl, node.data?.videoUrl, node.data?.audioUrl].find(
+        (v) => typeof v === 'string' && v,
+      ) as string | undefined
+      const outRef = typeof node.data?.resourceId === 'string' && node.data.resourceId
+        ? (node.data.resourceId as string)
+        : undefined
+      const hasOutput = !!outUrl || !!outRef
+      note(
+        '产物·已落在节点',
+        hasOutput,
+        outUrl
+          ? '产物地址：' + outUrl
+          : outRef
+            ? '产物引用：' + outRef + '（地址是它的投影，保存时会被清掉，所以这里只看引用）'
+            : '这个节点还没有产物（点一次生成、或让界面 save 一次再看；纯展示节点可以忽略这一条）',
+      )
+
+      return {
+        ok: problems.length === 0,
+        canvasId,
+        nodeId,
+        problems,
+        warnings,
+        checks,
+        declaredScripts: declared,
+        ...(known ? { missingScripts: declared.filter((n) => !known.includes(n)) } : {}),
+        docText: describeNodeDoc(doc),
+      }
+    },
+  })
+
   // ⑤ 打包：把「这个节点 + 它依赖的脚本」收成一个包，放进资产库。
   //
   //     为什么要给 AI 这个工具：它写完界面与脚本之后，成品就这样**收进库**，

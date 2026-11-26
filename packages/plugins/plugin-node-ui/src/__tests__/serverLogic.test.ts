@@ -70,6 +70,8 @@ describe('后台半：给 AI 的工具（这是「它怎么画」的答案）', 
       'canvas_ui_add_favorite',
       // 独立调试页面（用户 2026-10-17：后台拼 HTML+数据 JS，给 Chrome MCP 用）
       'canvas_ui_build_debug_doc',
+      // 验收：一个节点到底合不合格，一条工具问清（用户 2026-11-26）
+      'canvas_ui_check',
       // 调试连接（用户 2026-10-15：邀请制，后台只放标记 + 收回执）
       'canvas_ui_connect',
       // 调试连接（在连接里执行脚本 / 断开）
