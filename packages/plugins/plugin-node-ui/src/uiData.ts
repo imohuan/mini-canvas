@@ -581,6 +581,9 @@ export function toCloneableState<T>(state: T): T {
  */
 export function buildUiBridge(): string {
   const S = String.fromCharCode(39)
+  // 两个数据全局的名字（注入时由 bootstrap 赋值；这里要用同一份，别写死字面量）
+  const IN = JSON.stringify(INPUTS_GLOBAL)
+  const UP = JSON.stringify(UPSTREAM_GLOBAL)
   return [
     '<script>',
     '(function(){',
@@ -631,6 +634,16 @@ export function buildUiBridge(): string {
     '      return;',
     '    }',
     '    if(!d.__canvasUiCmd) return;',
+  // ★ 收到新数据先把两个全局变量刷新掉，再通知 onChange。
+  //
+  // 为什么必须刷新（2026-11-26 真机：没有连线却显示「上游 图片 1」）：
+  // 界面的通行写法是**每次现读** `window.__CANVAS_UPSTREAM__`（手册里那个例子就是）。
+  // 而这里以前只回调 onChange，全局变量永远停在文档加载那一刻 ——
+  // 删掉连线后，读全局变量的界面自然还看到旧上游，看着就像写死的假数据。
+  '    if (d.type === ' + S + 'data' + S + ') {',
+  '      if (d.upstream !== undefined) window[' + UP + '] = d.upstream;',
+  '      if (d.inputs !== undefined) window[' + IN + '] = d.inputs;',
+  '    }',
     '    for(var i = 0; i < cmdHandlers.length; i++){',
     '      try { cmdHandlers[i](d); } catch(err) {}',
     '    }',

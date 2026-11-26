@@ -29,6 +29,9 @@
 
 | 坑 | 现象 | 修法 |
 | --- | --- | --- |
+| 上游读的是节点里的旧快照 | 连线全删了，节点右上角还写「上游 图片 1」，看着像写死的假数据 | 上游只认**连线**（2026-11-26 已修：`UiContent.vue` 不再读 `uiUpstream` 快照） |
+| 桥接只回调 onChange、不改全局 | 界面现读 `window.__CANVAS_UPSTREAM__` 的话永远拿到页面加载那一刻的值 | `data` 消息要把这两个全局一起改写（2026-11-26 已修，`buildUiBridge`） |
+| computed 读的是非响应式 store | 删了连线、`getEdges()` 变了，界面却不重算 | 订阅 `doc.subscribe`，用版本号把它唤醒（`UiContent.vue` 的 `docRev`） |
 | 自动补声明只认 `name:` 写法 | 手册教的是 `CanvasUI.task("pixelize", …)`，这个写法扫不出来 → 声明空着 → 用户点「生成」403，而且看上去像登录问题 | 扫描要同时认 `CanvasUI.task("名字", …)`（2026-11-26 已修，`src/task/declare.ts`） |
 | `canvas_fn_call` 不给节点 | 2026-11-25 前由工具自己开 `fn-probe-default` 草稿纸，产物全落在那里，用户画布上什么都没有 | 必须传 `canvasId` / `nodeId`；产物写进这个节点的槽位 |
 | 脚本令牌没签 | `ctx.save` 报「需要登录：请在 cloud-client 的登录面板输入密码」—— 连像素运算都跑通了，只挂在保存 | 脚本子进程没有登录 cookie，**必须**由宿主签 `x-task-token`（绑定画布+节点）并传给 `runScript` |

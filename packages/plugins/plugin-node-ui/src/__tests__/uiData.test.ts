@@ -258,8 +258,9 @@ describe('组装渲染文档', () => {
     expect(doc).toContain('__CANVAS_INPUTS__')
     expect(doc).toContain('<b>keep</b>')
     expect(doc).toContain('<title>t</title>')
-    // 只插一次：不该出现两遍数据引导（这个全局名只在引导脚本里出现一次）
-    expect(doc.split('__CANVAS_INPUTS__').length - 1).toBe(1)
+    // 只插一次引导：注入时写一次，桥接里收到新数据时**再刷新一次**（2026-11-26 加的，
+    // 否则界面现读全局变量永远拿到旧值）。所以这里数的是「脚本块有几段」，不是名字出现几次。
+    expect(doc.split('<script>window["__CANVAS_INPUTS__"]=').length - 1).toBe(1)
   })
 
   it('默认（纯展示）：CSP 把联网彻底关掉', () => {

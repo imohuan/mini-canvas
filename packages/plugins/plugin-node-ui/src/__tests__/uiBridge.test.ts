@@ -77,6 +77,22 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
     expect(js).not.toContain('U.nodeId')
   })
 
+  /**
+   * ★ 收到新数据时要**同时**刷新那两个全局变量（2026-11-26 真机）。
+   *
+   * 用户看到的：画布上一条边都没有，节点右上角还写着「上游 图片 1」。
+   * 根因在桥接：宿主发来的 data 消息只回调了 onChange，没更新
+   * `window.__CANVAS_UPSTREAM__` / `window.__CANVAS_INPUTS__`。
+   * 而界面（包括手册里教的写法）普遍是**每次现读**这两个全局变量的 ——
+   * 于是它们永远停在页面加载那一刻，删了连线还是「有上游」。
+   */
+  it('★ 收到 data 消息时刷新 __CANVAS_UPSTREAM__ 与 __CANVAS_INPUTS__（否则界面永远读旧值）', () => {
+    // 消息处理里必须给这两个全局变量重新赋值，而不只是调 onChange
+    // 名字是编译期拼进去的（真实产物里是 '__CANVAS_UPSTREAM__' 这样的字面量）
+    expect(js).toMatch(/window\[\s*"__CANVAS_UPSTREAM__"\s*\]\s*=\s*d\.upstream/)
+    expect(js).toMatch(/window\[\s*"__CANVAS_INPUTS__"\s*\]\s*=\s*d\.inputs/)
+  })
+
   it('页面一跑起来就主动报到（type:ready）—— 宿主靠它决定什么时候送状态', () => {
     // 没有报到，宿主只能靠 iframe 的 load 猜时机：消息早于页面建好监听发出去就是白发，
     // 表现为「刷新后数据在、笔迹回不来」。报到由页面在同步脚本里发出，必然已能收消息。

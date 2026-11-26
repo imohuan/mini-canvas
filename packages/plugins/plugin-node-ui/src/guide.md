@@ -147,6 +147,9 @@
         · nodeId   : 那条上游节点的 id（要改它就用画布接口）
       没连任何素材就是 []。
 
+      ★ 连线一删，这个数组**立刻变成 []**（宿主会把新值写回来，并触发 onChange）。
+        所以别把上游「抄进变量里再也不看」：要现读这个全局，或在 onChange 里拿 d.upstream。
+
   window.__CANVAS_UI__       → { theme, baseUrl, canvasId, nodeId, palette }
         · theme     : "light" | "dark"，当前画布是亮还是暗
         · baseUrl   : 后台根地址（发请求要用绝对地址，见下）

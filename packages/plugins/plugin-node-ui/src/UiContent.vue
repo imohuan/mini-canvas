@@ -110,12 +110,14 @@ const manual = computed(() => normalizeManualValues(props.data?.uiInputs))
 /**
  * 上游素材：**从连线上现算**。
  *
- * ## 为什么不读节点 data 里那份（踩过的坑）
+ * ## 只认连线，不认节点里那份快照（2026-11-26 用户实测改的）
  *
- * 原来只读 `data.uiUpstream` —— 那是「前端自己调模型生成」那条路写进去的。可 Agent 是经
- * **MCP** 写的，它只写 uiHtml，不会顺手写素材；于是节点上真连着图/视频，页面里
- * `window.__CANVAS_UPSTREAM__` 却是 `[]`（2026-10-12 实测）。
- * 现在两边都认：data 里有就用它（那是生成当时的快照），否则**现算**——只要边在，素材就在。
+ * 原来：`data.uiUpstream` 有值就直接用它。那份是**生成当时的快照**，连线删了它还在 ——
+ * 用户把线全删了，节点右上角仍然写「上游 图片 1」，看着像写死的假数据。
+ * 现在：**连线是唯一事实源**。快照只在调试副本里当历史参考，不参与这里的判断。
+ *
+ * 另一半是响应式：`doc.getEdges()` 是普通 store（没有 ref），computed 读它**不会**
+ * 跟着连线变。所以下面用 `docRev` 订阅 doc 变化，连线一动就让这个 computed 重算。
  */
 const NODE_KIND_FIELDS: Array<[string, string]> = [
   ['imageUrl', 'image'],
@@ -132,9 +134,30 @@ const NODE_KIND_FIELDS: Array<[string, string]> = [
  */
 const TYPE_KINDS: Record<string, string> = { image: 'image', video: 'video', audio: 'audio' }
 
+/**
+ * doc 的变化计数器（连线/节点一变就 +1）。
+ *
+ * 为什么需要它：`doc.getEdges()` 返回的是普通数组（底层 EdgeStore 没有响应式），
+ * computed 读它**不会**被通知。删掉一条连线后，界面会一直显示删之前那份上游 ——
+ * 用户看到的就是「没连线却写着上游 图片 1」（2026-11-26 真机）。
+ * 真宿主上 doc 有 subscribe，这里订上；没有 subscribe 的极简宿主就只算一次（行为同旧版）。
+ */
+const docRev = ref(0)
+let stopDocWatch: (() => void) | undefined
+{
+  const doc = ctx.tryGet<{ subscribe?(fn: (c: { kind: string }) => void): () => void }>('doc')
+  if (doc && typeof doc.subscribe === 'function') {
+    stopDocWatch = doc.subscribe((c) => {
+      if (c.kind === 'edge' || c.kind === 'node') docRev.value += 1
+    })
+  }
+}
+onBeforeUnmount(() => stopDocWatch?.())
+
 const upstream = computed<UpstreamItem[]>(() => {
-  const stored = normalizeUpstream(props.data?.uiUpstream)
-  if (stored.length > 0) return stored
+  // 订阅计数器：doc 里节点/边一变就 +1，让这个 computed 真的重算
+  // （不读它的话，Vue 认为依赖没变，永远返回第一次那份）
+  void docRev.value
   // 真实 doc 的节点一定带 id（要拿它标出这条素材来自哪个节点），
   // 所以这里把 id 也声明上；类型写窄了会在用 n.id 时被 tsc 拦住。
   const doc = ctx.tryGet<{

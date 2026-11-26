@@ -21,6 +21,16 @@ window.__CANVAS_UI__       // { theme, baseUrl, canvasId, nodeId, palette }
 
 > 页面基地址是 `about:srcdoc` —— **发请求必须写绝对地址**（用 `__CANVAS_UI__.baseUrl` 拼）。
 
+### 上游 / 参数会实时改写这两个全局
+
+连线加了一条、删了一条，或者参数变了，宿主会往页面里发一条 `data` 消息，页面**同时**做两件事：
+
+1. 把 `window.__CANVAS_UPSTREAM__` / `window.__CANVAS_INPUTS__` **改成新值**；
+2. 调一次 `CanvasUI.onChange(fn)` 注册的回调，给你 `{ upstream, inputs }`。
+
+所以两种写法都成立：直接现读全局，或者只用 `onChange`。**别把上游抄进变量里就再也不看** ——
+那样连线删了，你的界面还会显示「上游 图片 1」（2026-11-26 真机就是这个现象）。
+
 ## 二、界面往外交东西：`window.CanvasUI`（就 5 个）
 
 | 方法 | 干什么 | 走哪条路 |
@@ -125,6 +135,7 @@ window.__CANVAS_UI__       // { theme, baseUrl, canvasId, nodeId, palette }
 
 1. **别跨源自己 POST**：产物一律走 `CanvasUI.save`，自己发请求当主路会**静默失败**（沙箱是不透明源）。
 2. **`resourceId` 不能直接当 `src`**：新节点只存引用。要么先用 `CanvasUI` 交给你的地址，要么把它交回宿主换地址；把它塞进 `<img src>` 只会是一个打不开的相对路径。
-3. **`setInputs` 保持小**（几 KB 级）：它进撤销栈，太大会让撤销变得很重。
-4. **参数与上游都在一次 `onChange` 里给你**：不用分别监听两件事。
+3. **上游是「连接线」的投影，不是节点里存的快照**：删了线就一定是空的。读到空就别画素材，也别退回旧值。
+4. **`setInputs` 保持小**（几 KB 级）：它进撤销栈，太大会让撤销变得很重。
+5. **参数与上游都在一次 `onChange` 里给你**：不用分别监听两件事。
 
