@@ -1,6 +1,6 @@
 # 图片节点
 
-> `@plume-canvas/plugin-node-image` - v0.1.3
+> `@plume-canvas/plugin-node-image` - v0.1.5
 
 图片节点：上传 / 裁剪 / 旋转 / 生成.
 

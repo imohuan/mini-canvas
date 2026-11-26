@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-node-audio",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "plume": {
     "title": "音频节点",

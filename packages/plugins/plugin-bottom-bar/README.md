@@ -1,6 +1,6 @@
 # 底部状态栏
 
-> `@plume-canvas/plugin-bottom-bar` - v0.1.2
+> `@plume-canvas/plugin-bottom-bar` - v0.1.13
 
 节点底部状态栏：可替换底栏 + 注册式动作 + 任务进度.
 

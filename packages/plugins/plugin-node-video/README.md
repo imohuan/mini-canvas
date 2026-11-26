@@ -1,6 +1,6 @@
 # 视频节点
 
-> `@plume-canvas/plugin-node-video` - v0.1.3
+> `@plume-canvas/plugin-node-video` - v0.1.5
 
 视频节点：播放 / 裁剪 / 剪辑 / 截图 / 下载.
 

@@ -1,6 +1,6 @@
 # 音频节点
 
-> `@plume-canvas/plugin-node-audio` - v0.1.3
+> `@plume-canvas/plugin-node-audio` - v0.1.5
 
 音频节点：波形进度条 + 拖拽 seek + 播放动画.
 

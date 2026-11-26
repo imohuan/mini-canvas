@@ -1,6 +1,6 @@
 {
   "name": "@plume-canvas/plugin-node-video",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "type": "module",
   "plume": {
     "title": "视频节点",
