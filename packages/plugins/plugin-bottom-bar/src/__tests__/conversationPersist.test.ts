@@ -5,7 +5,87 @@
  * 而对话模式没有动作 → 恒为 false → barPrompt 从来没落盘 → 重挂载按空重建。
  */
 import { describe, it, expect } from 'vitest'
-import { useBottomBarPersistence } from '../node-bottom-bar/useBottomBarPersistence'
+import { samePersistPatch, useBottomBarPersistence } from '../node-bottom-bar/useBottomBarPersistence'
+
+/**
+ * 用户 2026-11-26 实测：进画布后请求无限循环，同一个资源几百次。
+ *
+ * 根因是底栏每 400ms 就把 barValues / barPrompt / barPromptDoc 整块写回节点，
+ * 哪怕一个字都没变；内核每次写都换一个全新的 data 对象，于是上游素材、正文标签、
+ * 动作文案全部重算，重算又 emit 一次相同内容 → 再写盘，转成死循环。
+ *
+ * 守门必须是「内容比对」，不能只看有没有标脏：写回的对象每次都是新的引用。
+ */
+describe('samePersistPatch：内容没变就不写盘（用户 2026-11-26 无限请求）', () => {
+  it('同样的参数（键顺序不同）判定为没变', () => {
+    expect(
+      samePersistPatch(
+        { barValues: { actionId: 'a', size: '16:9' }, barPrompt: '你好' },
+        { barValues: { size: '16:9', actionId: 'a' }, barPrompt: '你好' },
+      ),
+    ).toBe(true)
+  })
+
+  it('参数改了任一项就是变了', () => {
+    expect(
+      samePersistPatch({ barValues: { actionId: 'a', size: '16:9' } }, { barValues: { actionId: 'a', size: '1:1' } }),
+    ).toBe(false)
+  })
+
+  it('提示词或富文本快照变了也是变了', () => {
+    const base = { barValues: { actionId: 'a' }, barPrompt: '旧', barPromptDoc: { type: 'doc', content: [] } }
+    expect(samePersistPatch(base, { ...base, barPrompt: '新' })).toBe(false)
+    expect(
+      samePersistPatch(base, { ...base, barPromptDoc: { type: 'doc', content: [{ type: 'paragraph' }] } }),
+    ).toBe(false)
+  })
+
+  it('节点里还没有这个字段时算作变化（第一次要写）', () => {
+    expect(samePersistPatch({}, { barValues: { actionId: 'a' } })).toBe(false)
+    expect(samePersistPatch(undefined, { barPrompt: '你好' })).toBe(false)
+  })
+})
+
+describe('persistValues：内容没变时一次 updateNode 都不发', () => {
+  it('连续两次 persistValues，第二次因为内容相同被挡掉', () => {
+    const writes: Array<Record<string, unknown>> = []
+    // 起点故意和"要写的值"不同（提示词还是旧的）：第一次必须写，之后内容一致就该停。
+    const data: Record<string, unknown> = {
+      barValues: { actionId: 'apimart:image', size: '16:9' },
+      barPrompt: '旧提示词',
+    }
+    const deps = {
+      ctx: {
+        tryGet: (n: string) =>
+          n === 'doc'
+            ? {
+                getNode: () => ({ data }),
+                updateNode: (_id: string, patch: { data: Record<string, unknown> }) => {
+                  writes.push(patch.data)
+                  // 模拟内核：每次写都换一个全新的 data 对象
+                  Object.assign(data, JSON.parse(JSON.stringify(patch.data)))
+                },
+              }
+            : undefined,
+        get: (n: string) => deps.ctx.tryGet(n),
+      },
+      props: { id: 'n1', data: { barValues: { actionId: 'apimart:image', size: '16:9' }, barPrompt: '画一只猫' } },
+      currentId: { value: 'apimart:image' },
+      values: { value: { actionId: 'apimart:image', size: '16:9' } },
+      storedActionId: { value: 'apimart:image' },
+      showEditor: { value: true },
+      promptBinding: { value: 'none' as const },
+      conversation: { value: false },
+      prompt: { value: '画一只猫' },
+      promptDoc: { value: undefined },
+    }
+    const { persistValues } = useBottomBarPersistence(deps as never)
+    persistValues()
+    persistValues()
+    persistValues()
+    expect(writes).toHaveLength(1)
+  })
+})
 
 describe('persistValues：对话模式必须落 barPrompt（用户 2026-11-10 输入框被清空）', () => {
   /**

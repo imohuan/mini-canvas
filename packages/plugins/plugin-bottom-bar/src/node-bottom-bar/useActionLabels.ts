@@ -100,12 +100,23 @@ export function useActionLabels(deps: ActionLabelDeps) {
     void refresh()
   }, { immediate: true, deep: true })
 
-  // 参考图增减也影响花费：素材数量变化时补问一次
+  /**
+   * 参考图增减也影响花费：素材数量变化时补问一次。
+   *
+   * 两个关键点（用户 2026-11-26 无限请求）：
+   * 1. 监听的是**数量签名**而不是对象——resourceCounts 是个每次求值都新建的 computed 对象，
+   *    直接 deep watch 会在每次节点写盘后都触发一次；
+   * 2. 触发后**不能清 lastKey**：键里本来就包含素材数量，真有变化会算出新键；
+   *    清空反而让"内容完全一样"的请求被当成第一次，每轮都重新问一遍后台。
+   */
   if (deps.resourceCounts) {
-    watch(deps.resourceCounts, () => {
-      lastKey = ''
+    const countsKey = computed(() => {
+      const r = deps.resourceCounts!.value
+      return [r.image, r.video, r.audio, r.text].join('|')
+    })
+    watch(countsKey, () => {
       void refresh()
-    }, { deep: true })
+    })
   }
 
   onBeforeUnmount(() => {

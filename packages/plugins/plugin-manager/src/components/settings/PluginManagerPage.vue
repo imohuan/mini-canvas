@@ -7,6 +7,7 @@
 import { usePluginManagerPage } from './plugin-manager-page/usePluginManagerPage'
 import PluginManagerToolbar from './plugin-manager-page/PluginManagerToolbar.vue'
 import PluginManagerTabs from './plugin-manager-page/PluginManagerTabs.vue'
+import PluginDetailPanel from './plugin-manager-page/PluginDetailPanel.vue'
 
 const {
   svc,
@@ -47,6 +48,15 @@ const {
       @refresh="onRefresh"
     />
 
+    <!--
+      详情面板必须和页签**同级**（用户 2026-11-26 实测白屏）。
+
+      以前它住在 PluginManagerTabs 里面，而这里写的是「有详情就整体卸载页签组件」——
+      盒子被拿掉时，住在盒子里的详情面板跟着消失，于是点开插件详情只剩白屏。
+      搬到这一层后：页签按条件隐藏，详情面板由自己这一行的 v-if 负责显隐。
+    -->
+    <PluginDetailPanel v-if="s.detailPkg" :s="s" @close="closeDetail" />
+
     <PluginManagerTabs
       v-if="!s.detailPkg"
       :s="s"
@@ -62,7 +72,6 @@ const {
       :tab-count="tabCount"
       :on-card-action="onCardAction"
       :open-detail="openDetail"
-      :close-detail="closeDetail"
     />
   </div>
 </template>

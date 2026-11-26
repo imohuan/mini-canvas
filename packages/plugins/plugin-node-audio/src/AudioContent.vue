@@ -65,7 +65,15 @@ async function refreshResolvedUrl(): Promise<void> {
   resolvedUrl.value = url || sourceFields.value.legacyUrl
 }
 
-watch(() => [sourceFields.value.resourceId, sourceFields.value.legacyUrl], refreshResolvedUrl, {
+/**
+ * 只在引用/旧地址真的变了时重解析。
+ *
+ * 原来这里返回的是新建数组，父级任何一次 data 写盘都会让它"看起来变了"，
+ * 于是重新 resolve 并给播放器换一次 src —— 底栏存盘循环期间音频也被反复重载。
+ * 用字符串签名把"内容没变"挡掉。
+ */
+const sourceKey = computed(() => sourceFields.value.resourceId + "|" + sourceFields.value.legacyUrl)
+watch(sourceKey, refreshResolvedUrl, {
   immediate: true,
 })
 

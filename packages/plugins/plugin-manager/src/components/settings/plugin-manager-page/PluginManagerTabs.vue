@@ -3,7 +3,6 @@
 import { Loader2, PackageSearch } from 'lucide-vue-next'
 import { useUiComponent } from '@plume-canvas/canvas-render'
 import PluginCard from '../PluginCard.vue'
-import PluginDetailPanel from './PluginDetailPanel.vue'
 import type { PluginManagerCardView } from '../pluginCardTypes'
 import type { PluginManagerService } from '../../../pluginManagerService'
 import type { TabId } from './usePluginManagerPage'
@@ -22,7 +21,6 @@ defineProps<{
   tabCount: (id: string) => number
   onCardAction: (key: string) => void
   openDetail: (pkg: string) => void
-  closeDetail: () => void
 }>()
 
 const Badge = useUiComponent('Badge')
@@ -34,7 +32,6 @@ const TabsTrigger = useUiComponent('TabsTrigger')
 </script>
 
 <template>
-  <PluginDetailPanel v-if="s.detailPkg" :s="s" @close="closeDetail" />
   <Tabs :model-value="activeTabId" class="pmp-tabs" @update:model-value="selectTab(String($event))">
     <div v-if="!showLogView" class="pmp-tabs-row">
       <TabsList variant="line" class="pmp-tab-list" aria-label="插件分类">

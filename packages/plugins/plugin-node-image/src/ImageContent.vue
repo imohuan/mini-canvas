@@ -60,7 +60,17 @@ async function refreshResolvedUrl(): Promise<void> {
   resolvedUrl.value = url || sourceFields.value.legacyUrl
 }
 
-watch(() => [sourceFields.value.resourceId, sourceFields.value.legacyUrl], refreshResolvedUrl, {
+/**
+ * 只在「引用或旧地址真的变了」时重新解析。
+ *
+ * 以前这里返回的是一个**每次求值都新建的数组**：父组件任何一次 data 写盘（哪怕只改了
+ * barValues）都会让 props.data 换新对象 → 这个 watch 被当成"变了" → 重新 resolve、
+ * 给 <img> 换一次 src → 浏览器重新下载原图与缩略图。底栏的存盘循环因此被放大成
+ * 整屏图片的反复请求（用户 2026-11-26 截图：同一批图片几百次）。
+ * 改成字符串签名后，内容没变就不触发。
+ */
+const sourceKey = computed(() => sourceFields.value.resourceId + '|' + sourceFields.value.legacyUrl)
+watch(sourceKey, refreshResolvedUrl, {
   immediate: true,
 })
 
