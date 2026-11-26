@@ -392,55 +392,37 @@ export function serializeForScript(value: unknown): string {
 }
 
 /**
- * 生成页面的内容安全策略。
+ * 生成页面的内容安全策略 —— **只有「纯展示」那一档才写**。
  *
- * **这是本插件唯一的安全边界**，所以每一段都是有意写的：
+ * ## 现在的做法（2026-11-26 用户口径，简化过）
  *
- * - `connect-src` 只放行两个源：页面自己的源与后台的源。生成的界面能调画布接口
- *   （那是它的价值），但连不上别处 —— 数据不外泄、脚本不能拿去当跳板。
- * - `img-src / media-src` 放开（`*`）：素材地址可能是任意站点，拦了就是裂图；
- *   图片/音视频本身不构成"发出数据"。
- * - `script-src` / `style-src`：**允许联网时不再限制来源**（2026-11-26 用户口径，见下）。
- * - `default-src 'none'`：其余一律拒（frame / object / form-action / worker 等）。
+ * 用户原话：「我现在支持任意接口调用，就跟普通浏览器一样操作就行，不需要做任何限制。
+ * 而且你的后台已经放开了所有限制，所以前端做不做限制其实都已经无所谓了」。
  *
- * ## 为什么脚本/样式不限来源
+ * 所以：**允许联网时干脆不写 CSP** —— 像普通页面一样，script / style / font / fetch 都不限。
+ * 保留的那一档是**纯展示**（用户主动在设置里关掉「允许界面调用后台」）：那时页面连不上
+ * 任何地方，CSP 才有意义，用来把「只展示」这件事真正做实。
  *
- * 用户原话：「根本没有必要设置 script-src，因为你的后台脚本都放开了，你这里浏览器加载一些脚本
- * 其实也无无关紧要」。这个判断是对的：
+ * ## 那安全靠什么
  *
- * - 界面本来就允许**内联脚本**（`unsafe-inline`），粘贴一段代码和引用一段代码，能做的事完全一样；
- * - 想靠 `script-src` 挡住恶意代码，前提是「内联被禁」—— 而内联是这个功能的根基，禁不了；
- * - 拦着只会拦住**正经用途**：组件库、图表库、字体、样式表。用户要统一 UI，就必须能引用。
+ * 不是靠 CSP，而是靠 iframe 的 sandbox：**不给 allow-same-origin**。于是这个页面是不透明源，
+ * 拿不到宿主的 localStorage（里面是整张画布）、cookie、DOM。这才是真正那一道门。
  *
- * 真正兜安全的是另外两层（都还在）：iframe 的 sandbox 不给同源（拿不到宿主 localStorage / cookie），
- * 以及下面 `connect-src` 只放行后台那一个源（页面上的数据发不出去）。
+ * 为什么以前写得那么细、现在砍掉：内联脚本本来就允许，粘一段代码和引一段代码能做的事一样；
+ * 拦着只拦住组件库、图表库这些正经用途，属于给自家用户上镣铐。
  *
- * 关掉网络（netEnabled=false）时仍然是**纯展示**这一档：`connect-src 'none'`，脚本/样式也回到只认内联。
- *
- * @param allow 允许联网的源（空数组 / 未传 = 一律不许，等同 'none'）
+ * @param lockDown true = 纯展示档（连不上任何地方）；false / 省略 = 不写 CSP，像普通页面
  */
-export function buildCsp(allow: readonly string[] = []): string {
-  const origins = allow.map((s) => s.trim()).filter(Boolean)
-  // 每个源同时放行它的 WebSocket 形态（http→ws / https→wss）：调试连接的 SDK
-  // 从沙箱里连后台 ws，CSP 不放行的话连接会被静默掐掉（2026-10-15 调试链路新增）。
-  // 没有源 = 一律不许（纯展示，与旧行为一致）。
-  const wsOrigins = origins.map((o) => (o.startsWith('https://') ? o.replace(/^https/, 'wss') : o.replace(/^http/, 'ws')))
-  const connect = origins.length > 0 ? [...origins, ...wsOrigins].join(' ') : "'none'"
-  /** 是否允许联网（= 这一档才放开脚本/样式来源；纯展示仍然只认内联） */
-  const connected = origins.length > 0
-  /** 内联必须一直在：界面本体就是内联脚本 / 内联样式 */
-  const INLINE = "'unsafe-inline'"
+export function buildCsp(lockDown = false): string {
+  if (!lockDown) return ''
   return [
     "default-src 'none'",
     'img-src * data: blob:',
     'media-src * data: blob:',
-    // 允许联网时：样式/脚本不限来源（理由见上面的注释）；纯展示时仍然只认内联。
-    // 'unsafe-eval'：调试 SDK 要在连接里执行 Agent 传来的脚本 —— 这是该功能的全部意义。
-    connected ? 'style-src * ' + INLINE : "style-src 'unsafe-inline'",
-    connected ? 'script-src * ' + INLINE + " 'unsafe-eval'" : "script-src 'unsafe-inline' 'unsafe-eval'",
-    // 字体也放开：组件库往往自带字体文件（之前只允许 data:，等于逼人把字体转 base64）
-    connected ? 'font-src * data:' : 'font-src data:',
-    'connect-src ' + connect,
+    "style-src 'unsafe-inline'",
+    "script-src 'unsafe-inline'",
+    'font-src data:',
+    "connect-src 'none'",
   ].join('; ')
 }
 
@@ -831,14 +813,17 @@ export interface SrcdocOptions {
   theme?: 'light' | 'dark'
   /** 节点 id（生成的界面里可能用它自查时带上） */
   nodeId?: string
-  /** 后台绝对地址（给了它才能发请求；同时决定 CSP 放行谁） */
+  /** 后台绝对地址（写进 __CANVAS_UI__ / <base>，界面拿它拼请求地址） */
   baseUrl?: string
   /** 当前画布 id */
   canvasId?: string
-  /** 允许联网（默认 false = 纯展示，最安全的一档） */
+  /**
+   * 允许联网（默认 false = 纯展示）。
+   *
+   * true 时**不写 CSP**，页面像普通浏览器一样（script / style / fetch 都不限）；
+   * false 时写一份锁死的 CSP，让「只展示」真正成立。
+   */
   allowNetwork?: boolean
-  /** 允许额外的源（一般不用；留给将来别的后台） */
-  extraOrigins?: readonly string[]
   /** 画布主题色板（亮/暗两套）；缺省 = 不给（生成物自己配色） */
   palette?: UiPalette
 }
@@ -899,14 +884,11 @@ export function buildSrcdoc(
     'window[' + JSON.stringify(UPSTREAM_GLOBAL) + ']=' + serializeForScript(upstream) + ';' +
     'window[' + JSON.stringify(UI_GLOBAL) + ']=' + serializeForScript(uiPayload) + ';</script>'
 
-  // CSP：只在允许联网时放行源；否则 connect-src 'none'（纯展示）
-  const allow: string[] = []
-  if (options.allowNetwork && options.baseUrl) {
-    allow.push(options.baseUrl)
-    if (typeof location !== 'undefined' && location.origin) allow.push(location.origin)
-  }
-  if (options.allowNetwork && options.extraOrigins) allow.push(...options.extraOrigins)
-  const csp = buildCsp(allow)
+  /*
+   * CSP：**只有纯展示档才写**（允许联网时像普通浏览器一样，不设限制）。
+   * 这里由宿主注入，不由 AI 生成的 HTML 负责 —— 它写不写、写错都没关系。
+   */
+  const csp = buildCsp(!options.allowNetwork)
 
   /*
    * 滚动条颜色跟着主题走：壳里的 CSS 用的是 --ui-scroll-thumb / --ui-scroll-thumb-hover，
@@ -922,7 +904,8 @@ export function buildSrcdoc(
 
   const head =
     '<meta charset="utf-8">' +
-    '<meta http-equiv="Content-Security-Policy" content="' + csp + '">' +
+    // 只有纯展示档才有 CSP（允许联网时为空串，连 meta 都不写 —— 与普通页面一致）
+    (csp ? '<meta http-equiv="Content-Security-Policy" content="' + csp + '">' : '') +
     (baseUrl ? '<base href="' + baseUrl + '">' : '') +
     '<style>' + SHELL_STYLE + '</style>' +
     scrollVars +

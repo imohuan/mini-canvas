@@ -238,12 +238,10 @@ describe('组装渲染文档', () => {
   const inputs = { sales: [1, 2, 3] }
   const upstream = [{ refName: '图片1', kind: 'image' as const, url: '/a.png' }]
 
-  it('片段被包成完整文档，且带上数据与 CSP', () => {
+  it('片段被包成完整文档，且带上数据', () => {
     const doc = buildSrcdoc('<div>hi</div>', inputs, upstream, { theme: 'dark', nodeId: '3' })
     expect(doc).toContain('<!DOCTYPE html>')
     expect(doc).toContain('data-theme="dark"')
-    expect(doc).toContain('content="default-src')
-    expect(doc).toContain('connect-src')
     expect(doc).toContain('<div>hi</div>')
     // 数据真的在里面，而且是可解析的 JSON 字面量
     expect(doc).toContain('__CANVAS_INPUTS__')
@@ -263,9 +261,10 @@ describe('组装渲染文档', () => {
     expect(doc.split('<script>window["__CANVAS_INPUTS__"]=').length - 1).toBe(1)
   })
 
-  it('默认（纯展示）：CSP 把联网彻底关掉', () => {
+  it('默认（纯展示）：写一份锁死的 CSP，连不上任何地方', () => {
     const doc = buildSrcdoc('<div>x</div>', inputs, upstream)
     expect(doc).toContain('connect-src \'none\'')
+    expect(doc).toContain('Content-Security-Policy')
   })
 
   /**
@@ -293,23 +292,17 @@ describe('组装渲染文档', () => {
     expect(buildSrcdoc('<div>x</div>', inputs, upstream)).not.toContain('--ui-scroll-thumb:')
   })
 
-  it('允许联网时：CSP 只放行后台，别的源仍然连不上', () => {
+  /**
+   * 2026-11-26 用户口径（最简单的一版）：「我现在支持任意接口调用，就跟普通浏览器一样操作」
+   * —— 允许联网时**不写 CSP**。
+   */
+  it('★ 允许联网时：不写 CSP，页面像普通浏览器一样', () => {
     const doc = buildSrcdoc('<div>x</div>', inputs, upstream, {
       baseUrl: 'http://localhost:8865',
       allowNetwork: true,
     })
-    // 放行后台自己的源
-    expect(doc).toContain('connect-src')
-    expect(doc).toContain('http://localhost:8865')
-    // WebSocket 形态也放行（调试 SDK 从沙箱里连后台 ws）
-    expect(doc).toContain('ws://localhost:8865')
-    const docHttps = buildSrcdoc('<div>x</div>', inputs, upstream, {
-      baseUrl: 'https://mc.example.com',
-      allowNetwork: true,
-    })
-    expect(docHttps).toContain('wss://mc.example.com')
-    // 但仍然不是"敞开"：default-src 'none' 还在
-    expect(doc).toContain("default-src 'none'")
+    expect(doc).not.toContain('Content-Security-Policy')
+    expect(doc).not.toContain('connect-src')
   })
 
   it('允许联网时注入 base 标签：相对路径也能落到后台（srcdoc 里相对路径本来解析不出来）', () => {
@@ -320,28 +313,7 @@ describe('组装渲染文档', () => {
     expect(doc).toContain('<base href="http://localhost:8865/">')
   })
 
-  /**
-   * 用户 2026-11-26 口径：允许联网时**不限制脚本/样式来源**，这样界面才能引用组件库。
-   *
-   * 理由（用户原话）：后台脚本都放开了，页面里加载一段脚本无关紧要。
-   * 真正的边界是 sandbox（不给同源）和 connect-src（数据发不出去）。
-   */
-  it('★ 允许联网时：script-src / style-src 不再限制来源（组件库才能引用）', () => {
-    const doc = buildSrcdoc('<div>x</div>', inputs, upstream, {
-      baseUrl: 'http://localhost:8865',
-      allowNetwork: true,
-    })
-    const csp = /content="([^"]*)"/.exec(doc)?.[1] ?? ''
-    expect(csp).toContain('script-src *')
-    expect(csp).toContain('style-src *')
-    expect(csp).toContain('font-src *')
-    // 内联必须还在（界面本体就是内联脚本）
-    expect(csp).toContain("'unsafe-inline'")
-    // 数据出口仍然只认后台：这一条没有放宽
-    expect(csp).toContain('connect-src http://localhost:8865')
-  })
-
-  it('★ 纯展示（不联网）时仍只认内联 —— 放开来源只在「允许联网」这一档', () => {
+  it('★ 纯展示（不联网）时仍锁死 —— 两档只差这一份 CSP', () => {
     const doc = buildSrcdoc('<div>x</div>', inputs, upstream)
     const csp = /content="([^"]*)"/.exec(doc)?.[1] ?? ''
     expect(csp).not.toContain('script-src *')

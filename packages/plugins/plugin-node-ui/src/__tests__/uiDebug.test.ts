@@ -84,14 +84,17 @@ describe('调试副本：**不带** CSP（它是开发工具，不是发布物�
   })
 
   /**
-   * 沙箱那份（buildSrcdoc）是有 CSP 的 —— 那是它唯一的安全边界。
-   * 这条对照测试钉住「两边确实不同」：哪天有人给副本也加了一道网，
-   * 调试手段（看响应 / 打断点）又会失效，而症状只是「调试又不好用了」。
+   * 对照：沙箱那描述的是「两档」——
+   *   · 允许联网（默认）：**不写** CSP，与普通浏览器一致（2026-11-26 用户口径）；
+   *   · 纯展示：写一份锁死的 CSP。
+   * 调试副本两种都不带（它是开发工具）。
    */
-  it('对照：沙箱那份确实有 CSP（安全边界没被这次改动碰坏）', async () => {
+  it('对照：允许联网的沙箱不写 CSP；纯展示的沙箱才写', async () => {
     const { buildSrcdoc } = await import('../uiData')
-    const sd = buildSrcdoc('<div>hi</div>', {}, [], { baseUrl: 'http://x:1', allowNetwork: true })
-    expect(sd).toContain('Content-Security-Policy')
+    const online = buildSrcdoc('<div>hi</div>', {}, [], { baseUrl: 'http://x:1', allowNetwork: true })
+    expect(online).not.toContain('Content-Security-Policy')
+    const lockdown = buildSrcdoc('<div>hi</div>', {}, [], {})
+    expect(lockdown).toContain('Content-Security-Policy')
   })
 })
 
