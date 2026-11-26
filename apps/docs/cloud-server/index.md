@@ -32,6 +32,16 @@ npx plume-canvas serve --port 8865    # 起在 8865
 npx plume-canvas list-tools           # 列出 MCP 暴露的工具
 ```
 
+`serve` 会在前台一直占着终端。想让它跑在后台，换成 `start`：
+
+```bash
+npx plume-canvas start     # 后台启动，命令立刻返回
+npx plume-canvas status    # 服务在不在、画布地址、pid
+npx plume-canvas logs      # 后台启动的输出
+npx plume-canvas stop      # 关掉（serve 起的也能关）
+npx plume-canvas restart   # 先关再后台起，改完配置常用
+```
+
 启动后：
 
 ```
@@ -43,7 +53,7 @@ http://127.0.0.1:8865/mcp     MCP 接口（配置给 AI 客户端）
 
 | 选项 | 缺省 | 干什么 |
 | --- | --- | --- |
-| `-p, --port` | 8865 | 端口；被占用自动往后找 |
+| `-p, --port` | 8865 | 端口；被占用直接报错，并提示用 `stop` 关掉旧服务 |
 | `-d, --dir` | `~/.plume/` | 数据根目录（画布/资源/插件数据都落这）；固定在用户主目录，不跟启动目录走 |
 | `--server-plugins <目录>` | `<数据根>/server-plugins` | **后台插件目录：丢 .js 进去即多一个后台插件** |
 | `--no-mcp` | （默认开 MCP） | 不提供 MCP 接口 |

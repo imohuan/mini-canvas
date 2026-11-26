@@ -51,7 +51,7 @@ npx plume-canvas serve                # ② npm 包形态，一样的效果
 
 | 参数 | 缺省值 | 干什么 |
 | --- | --- | --- |
-| `-p, --port` | `8865` | 监听端口；被占用时自动往后找（你显式写了 `-p` 就不找，直接报错） |
+| `-p, --port` | `8865` | 监听端口；被占用时直接报错，并提示你用 `stop` 关掉旧服务 |
 | `-d, --dir` | `~/.plume/` | 数据根目录，画布 / 资源 / 插件数据都落在它下面；固定在用户主目录，不跟启动目录走 |
 
 比如想换个数据目录：
@@ -133,13 +133,34 @@ npx plume-canvas list-tools
 | `GET /plugin-catalog.json` | 插件管理清单（含后台半的 sha256） |
 | `ALL /mcp` | MCP 接口（给 AI 客户端连） |
 
+## 不想占着终端：后台起服务
+
+```bash
+npx plume-canvas start     # 后台起，命令立刻返回
+npx plume-canvas stop      # 关掉（serve 前台起的也能关）
+npx plume-canvas restart   # 先关再后台起
+npx plume-canvas status    # 服务在不在、画布地址、pid
+npx plume-canvas logs      # 后台运行的输出（默认最后 40 行，-n 改行数）
+```
+
+两个命令跑的是同一个服务，只有「占不占终端」不同：
+
+| 命令 | 终端 | 什么时候用 |
+| --- | --- | --- |
+| `serve` | 一直占着，Ctrl+C 停止 | 想盯着日志、边改边看 |
+| `start` | 命令结束就还给你 | 起好就走，之后 `stop` 关 |
+
+后台模式的状态记在 `<数据根>/server-state.json`，输出写在 `<数据根>/server.log`。
+
 ## 源码出处
 
 | 这篇里的说法 | 真实文件 | 真实行为 |
 | --- | --- | --- |
 | `pnpm serve` 跑 cli.js | `apps/server/package.json` | `"serve": "node ./dist/cli.js serve"` |
 | `npx plume-canvas serve` | 同上 bin 段 | `"bin": { "plume-canvas": "./dist/cli.js" }` |
-| 端口被占用自动后移 | `apps/server/src/cli.ts`（`startWithPortFallback`） | 最多往后试 10 个端口；你显式写了 `-p` 就只试那一个 |
+| 端口被占用直接报错 | `apps/server/src/cli.ts`（`portBusyMessage`） | 报错最后给出 `stop` / `status` / `--force` 三条出路 |
+| `start` 后台启动 / `stop` 关闭 | `apps/server/src/cli.ts` + `serviceControl.ts` | 状态记在 `<数据根>/server-state.json`，日志写 `<数据根>/server.log` |
+| 仓库里后台起、停（npm 包形态的包装） | `apps/server/package.json` | `start:bg` / `stop` / `status` / `logs` 四条脚本，直接转给 `dist/cli.js` |
 | `-d` 数据根、启动日志打印访问地址与数据落点 | `cli.ts` `main()` | 解析参数 → 起 `createCloudServer` → 逐行打印 `info.url` 与 `srv.paths.*` |
 | `list-tools` 子命令 | `cli.ts` `parseArgs()` | 不启服务，直接 `listTools()` 打印 MCP 工具名与描述后退出 |
 | `GET /api/actions` | `apps/server/src/routes/actions.ts` | 返回 `{ ok, version, changed, actions }`，`actions` 来自 ProviderRegistry |
@@ -148,7 +169,7 @@ npx plume-canvas list-tools
 
 ## 常见坑
 
-1. **端口 8865 被占用**：默认会自动往后找 10 个（8866、8867…），启动日志里有「已自动改用 xxxx」一行；你写了 `-p 8865` 就只试这一个，失败直接报错。想避开自动寻端，就换 `-p`。
+1. **端口 8865 被占用**：服务不会换端口，直接报错退出。报错最后写着三条出路：`npx plume-canvas status` 看是谁占着、`npx plume-canvas stop` 关掉自己之前起的服务、`npx plume-canvas stop --force` 强制结束占用端口的别的程序。想换端口就用 `-p 8866`。
 2. **页面打不开画布**：cloud-server 托管的是 `apps/web` 的**构建产物**。没构建过时页面会提示，先跑 `pnpm -C apps/web build`（或直接 `pnpm start`，它会连资源一起构建）再重启服务。
 3. **curl 打插件路由返回 404**：插件还没装（或只装了前端半）。它不是内置路由 —— 装上后台半后立刻能用（热装即时生效，不用重启）。
 4. **Windows 下 curl 报错**：PowerShell 里用 `curl.exe` 指真实 curl（PowerShell 的 `curl` 是 `Invoke-WebRequest` 的别名，参数不兼容）。

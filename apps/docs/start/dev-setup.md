@@ -26,8 +26,28 @@ pnpm -C apps/server serve --trusted-origin http://localhost:5288
 
 ### 端口被占用
 
-CLI 会**自动往后找**下一个可用端口（8866、8867…），以启动时打印的地址为准。
-想钉死端口：`npx plume-canvas serve -p 8865`。
+端口被占用时 CLI **直接报错**，不会偷偷换成 8866（换端口会让页面、代理、脚本全对不上）。
+报错最后会告诉你下一步怎么做：
+
+```bash
+npx plume-canvas status          # 先看是谁占着这个端口
+npx plume-canvas stop            # 关掉之前起的 plume-canvas
+npx plume-canvas stop --force    # 占用者是别的程序时才用（会结束那个进程）
+```
+
+想换端口：`npx plume-canvas serve -p 8866`。
+
+### 不想占着终端：后台起服务
+
+```bash
+npx plume-canvas start     # 后台启动，命令立刻返回，终端可以继续用
+npx plume-canvas status    # 看它在不在、地址是多少
+npx plume-canvas logs      # 看它的输出
+npx plume-canvas stop      # 关掉它
+```
+
+`serve` 和 `start` 跑的是同一个服务，区别只在：`serve` 在前台占用终端（Ctrl+C 停止），
+`start` 在后台运行。两者都能用同一条 `stop` 关掉。
 
 ### 数据落在哪
 
