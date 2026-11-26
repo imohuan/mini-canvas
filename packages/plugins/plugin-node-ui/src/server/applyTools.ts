@@ -8,6 +8,9 @@ import { nodeDocOf, describeNodeDoc } from '../task/nodeDoc.js'
 import { planDeclared, UI_SCRIPTS_KEY } from '../task/declarePlan.js'
 import { lintUiHtml } from '../task/uiLint.js'
 import { listAllScriptNames } from '../task/scripts.js'
+import { isDraftScriptName, resolveScriptPath } from '../task/scripts.js'
+import { inspectScript } from '../task/inspect.js'
+import { normalizeScriptDocs } from '../task/fnDoc.js'
 import { formatScriptList, resolveTaskScriptsDir } from '../task/routes.js'
 import { listScripts } from '../task/runs.js'
 import GUIDE from '../guide.md?raw'
@@ -304,6 +307,76 @@ export function applyTools(ctx: ServerCtx): void {
         )
       }
 
+      /*
+       * 脚本本身也要验（用户 2026-11-26：「我是要对脚本和节点都进行检查」）。
+       *
+       * 只查「文件在不在」是不够的：一个脚本可能 import 就报错、可能一个函数都没导出、
+       * 可能导出了却没写 docs。这三种在界面上都表现为「点了没反应 / 报看不懂的错」，
+       * 所以在这里逐条列清楚。每个脚本都会真起一个短命子进程 import 一次（与
+       * canvas_fn_list 同一条路），所以语法错也能被抓到。
+       */
+      const scriptReports: Array<{
+        name: string
+        draft: boolean
+        ok: boolean
+        methods: string[]
+        undocumented: string[]
+        error?: string
+      }> = []
+      for (const name of declared) {
+        const report: (typeof scriptReports)[number] = {
+          name,
+          draft: isDraftScriptName(name),
+          ok: false,
+          methods: [],
+          undocumented: [],
+        }
+        /*
+         * ⚠️ 一次 import 就要把「函数名 + 说明书」都取回来。
+         *
+         * 这里是 review 抓到的：首版先调 scriptMethods、再调 scriptDocs，那个脚本会被
+         * **import 两遍**（每次 inspect 都是一个子进程）。用户脚本可能有几十毫秒的顶层开销，
+         * 声明里挂 5 个脚本 = 多起 5 个进程、慢一倍；更糟的是「两次结果可能不一致」——
+         * 中间有人改了文件，就会出现「有函数但 docs 是旧的」。
+         * inspectScript 本来就一次带回了 methods 和 docs，这里直接用。
+         */
+        const abs = resolveScriptPath(resolveTaskScriptsDir(ctx), name)
+        const inspected = abs ? await inspectScript(abs) : undefined
+        if (!inspected || !inspected.ok) {
+          report.error = '拿不到这个脚本的导出函数（文件不存在 / 语法错 / 加载失败）'
+          scriptReports.push(report)
+          note('脚本·' + name + ' 能加载', false, '脚本 ' + name + '：' + report.error)
+          continue
+        }
+        const methods = inspected.methods
+        report.ok = true
+        report.methods = methods
+        if (methods.length === 0) {
+          report.error = '一个函数都没导出（脚本里要 export 能调的函数）'
+          scriptReports.push(report)
+          note('脚本·' + name + ' 有可调函数', false, '脚本 ' + name + '：' + report.error)
+          continue
+        }
+        const docs = normalizeScriptDocs(inspected.docs)
+        report.undocumented = methods.filter((fn) => !docs[fn]?.what)
+        scriptReports.push(report)
+        note(
+          '脚本·' + name + ' 有可调函数',
+          true,
+          '脚本 ' + name + ' 导出了：' + methods.join('、') + (report.draft ? '（在建：去掉下划线才算可用）' : ''),
+        )
+
+        note(
+          '脚本·' + name + ' 有说明书',
+          report.undocumented.length === 0,
+          report.undocumented.length
+            ? '脚本 ' + name + ' 里这些函数没写 docs：' + report.undocumented.join('、') +
+              '。在脚本里加 export const docs = { ' + report.undocumented[0] + ': { what, args, returns, example } }，' +
+              'Agent 才知道怎么调。'
+            : '脚本 ' + name + ' 的函数说明书齐全',
+        )
+      }
+
       note(
         '说明书',
         !!doc,
@@ -345,6 +418,7 @@ export function applyTools(ctx: ServerCtx): void {
         checks,
         declaredScripts: declared,
         ...(known ? { missingScripts: declared.filter((n) => !known.includes(n)) } : {}),
+        scripts: scriptReports,
         docText: describeNodeDoc(doc),
       }
     },

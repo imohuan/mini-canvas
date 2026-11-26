@@ -67,7 +67,7 @@
 | 项 | 内容 |
 | --- | --- |
 | 参数 | `nodeId`（必填）、`canvasId` |
-| 返回 | `{ ok, problems, warnings, checks, declaredScripts, missingScripts?, docText }` |
+| 返回 | `{ ok, problems, warnings, checks, scripts, declaredScripts, missingScripts?, docText }` |
 | `ok` | `problems` 为空即 true。**`ok: true` 才算交付完成** |
 | `checks` | 逐项结果（`{ name, ok, detail }`），合格与不合格的都列，便于对齐 |
 
@@ -79,11 +79,22 @@
 | 界面·规范（外链 / 直接 fetch / 缺 onChange / 调了没声明的脚本） | 白屏、请求被拒、用户一点就 403 |
 | 界面·建议（onChange 不理上游 / 有控件不交参数 / 没读 `__CANVAS_UI__`） | 删了连线界面不变、刷新后参数全丢 |
 | 脚本·都在机器上 | 声明里有、`task-scripts/` 里没有 → 打包缺文件 |
+| 脚本·能加载 / 有可调函数 | import 就报错、或一个函数都没导出 → 界面上表现为「点了没反应」 |
+| 脚本·有说明书 | 函数导出了却没写 `export const docs` → Agent 只能猜参数 |
 | 说明书 | 收藏后别人只能靠包名猜 |
 | 产物·已落在节点 | 看得到界面、拿不到结果（纯展示节点可忽略） |
 
 > 产物这一项**认地址也认引用**：节点保存后往往只剩 `resourceId`（地址是它的投影，会被清理），
 > 那不是「没产物」。
+
+脚本那几项是**真的把脚本 import 一遍**看的（每个脚本起一个短命子进程，读完即退），
+所以语法错、加载失败也能抓到；结论汇总在返回值的 `scripts` 里：
+
+```json
+[{ "name": "pixelize", "draft": false, "ok": true, "methods": ["hd", "perfect"], "undocumented": [] }]
+```
+
+`draft: true` 表示名字还带下划线（在建，没验完）；`undocumented` 列出没写 docs 的函数名。
 
 ### 收藏 / 复现这条线（4 个）
 

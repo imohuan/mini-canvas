@@ -219,6 +219,64 @@ describe('① 节点说明书：写 / 读 / 进手册', () => {
     expect(out.detail).toContain('slot-2.png')
   })
 
+  /**
+   * 用户 2026-11-26：「我是要对脚本和节点都进行检查」。
+   * 光查「脚本文件在不在」不够 —— 端到端也要看它到底导出了什么、有没有写说明书。
+   */
+  it('★ canvas_ui_check 也验脚本本身：有函数但没写 docs → 点名', async () => {
+    await fs.writeFile(
+      path.join(dir, 'tool.mjs'),
+      'export async function run(input, ctx) { return input }\n',
+    )
+    const html =
+      '<div>x</div><script>var UI = window.__CANVAS_UI__;' +
+      'CanvasUI.onChange(function(d){ var u = d.upstream || window.__CANVAS_UPSTREAM__; });</script>'
+    const node = {
+      id: '2',
+      type: 'ui',
+      data: {
+        uiHtml: html,
+        uiNodeDoc: { what: 'x' },
+        resourceId: 'default/slot-2.png',
+        uiScripts: { tool: {} },
+      },
+    }
+    const s = fakeCtx({ nodes: [node] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_ui_check', { nodeId: '2' })
+    const warnings = (r.warnings as string[]).join(' ')
+    expect(warnings).toContain('没写 docs')
+    expect(warnings).toContain('run')
+    const scripts = r.scripts as Array<{ name: string; methods: string[]; undocumented: string[] }>
+    expect(scripts[0]).toMatchObject({ name: 'tool', methods: ['run'], undocumented: ['run'] })
+  })
+
+  it('★ canvas_ui_check：脚本写了 docs 就不再报（修完不能一直红）', async () => {
+    await fs.writeFile(
+      path.join(dir, 'tool2.mjs'),
+      'export const docs = { run: { what: "跑一下", args: ["input"], returns: "原样返回" } }\n' +
+        'export async function run(input) { return input }\n',
+    )
+    const html =
+      '<div>x</div><script>var UI = window.__CANVAS_UI__;' +
+      'CanvasUI.onChange(function(d){ var u = d.upstream || window.__CANVAS_UPSTREAM__; });</script>'
+    const node = {
+      id: '2',
+      type: 'ui',
+      data: {
+        uiHtml: html,
+        uiNodeDoc: { what: 'x' },
+        resourceId: 'default/slot-2.png',
+        uiScripts: { tool2: {} },
+      },
+    }
+    const s = fakeCtx({ nodes: [node] })
+    apply(s.ctx)
+    const r = await call(s.tools, 'canvas_ui_check', { nodeId: '2' })
+    expect((r.warnings as string[]).join(' ')).not.toContain('没写 docs')
+    expect(r.ok).toBe(true)
+  })
+
   it('canvas_ui_describe 把四件事写进节点 data', async () => {
     const s = fakeCtx({ nodes: [uiNode] })
     apply(s.ctx)
