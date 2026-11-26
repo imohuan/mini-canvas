@@ -57,14 +57,28 @@ describe('lintUiHtml —— 规范检查', () => {
     expect(rules).not.toContain('onchange-ignores-upstream')
   })
 
-  it('外链 = 错误（沙箱连不上）', () => {
+  /**
+   * 2026-11-26 口径变了：允许联网时脚本来源是放开的，引组件库/图表库是**正常写法**，
+   * 只提醒「要能打开、离线会失效」；纯展示那一档才拦。
+   */
+  it('允许联网时引用外部脚本 = 提醒，不是错误（组件库要靠它）', () => {
+    const html =
+      '<div>x</div><script src="https://cdn.x/kit.js"></script>' +
+      '<script>CanvasUI.onChange(function(d){ d.upstream });</script>'
+    const r = lintUiHtml(html)
+    expect(r.errors).toEqual([])
+    expect(r.warnings.map((w) => w.rule)).toContain('external-asset')
+  })
+
+  it('纯展示档（不允许联网）引用外部脚本 = 错误（CSP 只认内联）', () => {
     for (const bad of [
       '<link href="https://cdn.x/a.css" rel="stylesheet">',
       '<script src="https://cdn.x/vue.js"></script>',
-      '<img src="http://x/a.png">',
       '<style>.a{background:url(https://x/a.png)}</style>',
     ]) {
-      const r = lintUiHtml('<div>x</div><script>CanvasUI.onChange(function(d){ d.upstream });</script>' + bad)
+      const r = lintUiHtml('<div>x</div><script>CanvasUI.onChange(function(d){ d.upstream });</script>' + bad, {
+        allowNetwork: false,
+      })
       expect(r.errors.map((e) => e.rule), bad).toContain('external-link')
     }
   })

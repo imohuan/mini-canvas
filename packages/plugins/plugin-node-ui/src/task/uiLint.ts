@@ -43,6 +43,14 @@ export interface UiLintOptions {
   declaredScripts?: readonly string[]
   /** 这台机器上真实存在的脚本名（判定「调了一个不存在的脚本」） */
   knownScripts?: readonly string[]
+  /**
+   * 这个节点**是否允许联网**（插件配置 `uiNodeAllowNetwork`，默认开）。
+   *
+   * 决定「引用了外部脚本/样式」算不算问题：允许联网时脚本来源是放开的（见 uiData.buildCsp），
+   * 引组件库、图表库都是正常写法；纯展示那一档才拦。缺省按**允许**处理，
+   * 因为默认配置就是允许 —— 判松一点只会少一条提醒，判严会把好界面判死。
+   */
+  allowNetwork?: boolean
 }
 
 /** 外链（沙箱里连不上）：http(s) 地址、协议相对、<link>、带 src 的 script */
@@ -80,17 +88,35 @@ export function lintUiHtml(html: string, opts: UiLintOptions = {}): UiLintResult
     return { ok: false, errors, warnings }
   }
 
-  // ① 外链（沙箱里一律连不上，写了就是白屏/裂图）
+  /*
+   * ① 外部脚本 / 样式 —— **按运行档位判**（2026-11-26 改）。
+   *
+   * 允许联网时（默认）脚本来源是放开的：引组件库、图表库、字体都是正常写法，不再是错误。
+   * 纯展示那一档（关掉联网）才拦 —— 那时 CSP 只认内联，引了就是白屏/裂图。
+   *
+   * 这条以前一律报 error，结果是「界面明明能用组件库，却被检查判成不合格」——
+   * 规则比环境严，AI 就会照着删掉正当的引用。
+   */
+  const netOn = opts.allowNetwork !== false
   for (const p of EXTERNAL_PATTERNS) {
-    if (p.re.test(src)) {
+    if (!p.re.test(src)) continue
+    if (netOn) {
+      add(
+        'warn',
+        'external-asset',
+        '引用了' + p.what + '。允许联网时这是可以用的（组件库/图表库都这么引）；' +
+          '只是要确认那个地址在用户机器上真的能打开，并且**离线会失效**。' +
+          '想完全不依赖网络，就把它内联进来。',
+      )
+    } else {
       add(
         'error',
         'external-link',
-        '用了' + p.what + '。沙箱里只有后台一个源可达，外链一律连不上；' +
-          '样式写 <style>、脚本写 <script>、图标用内联 SVG 或字符。',
+        '用了' + p.what + '，但这个节点是「纯展示」档（不允许联网）：CSP 只认内联，外链一律加载不到。' +
+          '要么把代码内联，要么在插件设置里允许界面调用后台。',
       )
-      break
     }
+    break
   }
 
   // ② 页面自己 fetch 后台（不透明源会被请求边界拒掉）

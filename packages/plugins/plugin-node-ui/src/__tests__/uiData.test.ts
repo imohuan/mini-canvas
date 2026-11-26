@@ -320,6 +320,36 @@ describe('组装渲染文档', () => {
     expect(doc).toContain('<base href="http://localhost:8865/">')
   })
 
+  /**
+   * 用户 2026-11-26 口径：允许联网时**不限制脚本/样式来源**，这样界面才能引用组件库。
+   *
+   * 理由（用户原话）：后台脚本都放开了，页面里加载一段脚本无关紧要。
+   * 真正的边界是 sandbox（不给同源）和 connect-src（数据发不出去）。
+   */
+  it('★ 允许联网时：script-src / style-src 不再限制来源（组件库才能引用）', () => {
+    const doc = buildSrcdoc('<div>x</div>', inputs, upstream, {
+      baseUrl: 'http://localhost:8865',
+      allowNetwork: true,
+    })
+    const csp = /content="([^"]*)"/.exec(doc)?.[1] ?? ''
+    expect(csp).toContain('script-src *')
+    expect(csp).toContain('style-src *')
+    expect(csp).toContain('font-src *')
+    // 内联必须还在（界面本体就是内联脚本）
+    expect(csp).toContain("'unsafe-inline'")
+    // 数据出口仍然只认后台：这一条没有放宽
+    expect(csp).toContain('connect-src http://localhost:8865')
+  })
+
+  it('★ 纯展示（不联网）时仍只认内联 —— 放开来源只在「允许联网」这一档', () => {
+    const doc = buildSrcdoc('<div>x</div>', inputs, upstream)
+    const csp = /content="([^"]*)"/.exec(doc)?.[1] ?? ''
+    expect(csp).not.toContain('script-src *')
+    expect(csp).not.toContain('style-src *')
+    expect(csp).toContain("script-src 'unsafe-inline'")
+    expect(csp).toContain("connect-src 'none'")
+  })
+
   it('base 与联网是两件事：不开联网也会给 base（相对图片地址仍要能解析），但 fetch 仍被 CSP 拦', () => {
     const doc = buildSrcdoc('<div>x</div>', inputs, upstream, { baseUrl: 'http://localhost:8865' })
     // base 管"相对地址解析成什么"，CSP 管"允不允许发出去"——两件事分开

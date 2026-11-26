@@ -7,6 +7,7 @@ import { describeNode, nodesOf, uiNodeOf, writeUiHtml } from './canvasAccess.js'
 import { nodeDocOf, describeNodeDoc } from '../task/nodeDoc.js'
 import { planDeclared, UI_SCRIPTS_KEY } from '../task/declarePlan.js'
 import { lintUiHtml } from '../task/uiLint.js'
+import { readUiConfig } from '../uiConfig.js'
 import { listAllScriptNames } from '../task/scripts.js'
 import { isDraftScriptName, resolveScriptPath } from '../task/scripts.js'
 import { inspectScript } from '../task/inspect.js'
@@ -42,6 +43,8 @@ async function lintAfterWrite(
   const r = lintUiHtml(html, {
     declaredScripts: declaredNames,
     ...(known ? { knownScripts: known } : {}),
+    // 运行档位：允许联网时「引用外部脚本/组件库」只提醒、不判死
+    allowNetwork: readUiConfig(ctx.tryGet<{ get(k: string): unknown }>('settings')).netEnabled,
   })
   return {
     ok: r.ok,
@@ -280,7 +283,11 @@ export function applyTools(ctx: ServerCtx): void {
       } catch {
         known = undefined
       }
-      const lint = lintUiHtml(html, { declaredScripts: declared, ...(known ? { knownScripts: known } : {}) })
+      const lint = lintUiHtml(html, {
+        declaredScripts: declared,
+        ...(known ? { knownScripts: known } : {}),
+        allowNetwork: readUiConfig(ctx.tryGet<{ get(k: string): unknown }>('settings')).netEnabled,
+      })
       const doc = nodeDocOf(node.data)
       const problems: string[] = []
       const warnings: string[] = []

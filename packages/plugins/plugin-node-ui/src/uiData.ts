@@ -400,10 +400,22 @@ export function serializeForScript(value: unknown): string {
  *   （那是它的价值），但连不上别处 —— 数据不外泄、脚本不能拿去当跳板。
  * - `img-src / media-src` 放开（`*`）：素材地址可能是任意站点，拦了就是裂图；
  *   图片/音视频本身不构成"发出数据"。
- * - `script-src` 必须 `unsafe-inline`：生成物就是内联脚本，没有别的形态。
+ * - `script-src` / `style-src`：**允许联网时不再限制来源**（2026-11-26 用户口径，见下）。
  * - `default-src 'none'`：其余一律拒（frame / object / form-action / worker 等）。
  *
- * 关掉网络（netEnabled=false）时 desc 传 `'none'` —— 那才是"纯展示"。
+ * ## 为什么脚本/样式不限来源
+ *
+ * 用户原话：「根本没有必要设置 script-src，因为你的后台脚本都放开了，你这里浏览器加载一些脚本
+ * 其实也无无关紧要」。这个判断是对的：
+ *
+ * - 界面本来就允许**内联脚本**（`unsafe-inline`），粘贴一段代码和引用一段代码，能做的事完全一样；
+ * - 想靠 `script-src` 挡住恶意代码，前提是「内联被禁」—— 而内联是这个功能的根基，禁不了；
+ * - 拦着只会拦住**正经用途**：组件库、图表库、字体、样式表。用户要统一 UI，就必须能引用。
+ *
+ * 真正兜安全的是另外两层（都还在）：iframe 的 sandbox 不给同源（拿不到宿主 localStorage / cookie），
+ * 以及下面 `connect-src` 只放行后台那一个源（页面上的数据发不出去）。
+ *
+ * 关掉网络（netEnabled=false）时仍然是**纯展示**这一档：`connect-src 'none'`，脚本/样式也回到只认内联。
  *
  * @param allow 允许联网的源（空数组 / 未传 = 一律不许，等同 'none'）
  */
@@ -414,15 +426,20 @@ export function buildCsp(allow: readonly string[] = []): string {
   // 没有源 = 一律不许（纯展示，与旧行为一致）。
   const wsOrigins = origins.map((o) => (o.startsWith('https://') ? o.replace(/^https/, 'wss') : o.replace(/^http/, 'ws')))
   const connect = origins.length > 0 ? [...origins, ...wsOrigins].join(' ') : "'none'"
+  /** 是否允许联网（= 这一档才放开脚本/样式来源；纯展示仍然只认内联） */
+  const connected = origins.length > 0
+  /** 内联必须一直在：界面本体就是内联脚本 / 内联样式 */
+  const INLINE = "'unsafe-inline'"
   return [
     "default-src 'none'",
     'img-src * data: blob:',
     'media-src * data: blob:',
-    "style-src 'unsafe-inline'",
-    // 'unsafe-eval'：调试 SDK 要在连接里执行 Agent 传来的脚本 —— 这是本功能的全部意义；
-    // 界面本体是生成物（内联脚本，'unsafe-inline' 覆盖），eval 只在调试会话被注入 SDK 后发生。
-    "script-src 'unsafe-inline' 'unsafe-eval'",
-    'font-src data:',
+    // 允许联网时：样式/脚本不限来源（理由见上面的注释）；纯展示时仍然只认内联。
+    // 'unsafe-eval'：调试 SDK 要在连接里执行 Agent 传来的脚本 —— 这是该功能的全部意义。
+    connected ? 'style-src * ' + INLINE : "style-src 'unsafe-inline'",
+    connected ? 'script-src * ' + INLINE + " 'unsafe-eval'" : "script-src 'unsafe-inline' 'unsafe-eval'",
+    // 字体也放开：组件库往往自带字体文件（之前只允许 data:，等于逼人把字体转 base64）
+    connected ? 'font-src * data:' : 'font-src data:',
     'connect-src ' + connect,
   ].join('; ')
 }
