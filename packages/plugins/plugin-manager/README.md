@@ -1,6 +1,6 @@
 # 插件管理
 
-> `@plume-canvas/plugin-manager` - v0.1.26
+> `@plume-canvas/plugin-manager` - v0.1.27
 
 设置面板「插件」页：安装 / 卸载 / 重装第三方插件（清单来自云端或本地 dev 服务）.
 
