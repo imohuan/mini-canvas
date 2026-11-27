@@ -1,582 +1,585 @@
-【可视化节点（type = "ui"）—— 画界面用】
+【可视化节点（type = "ui"）—— 给 AI 的作业手册】
 
-它是一块**空画布**：节点里会渲染你写的一段 HTML。它自己没有界面、没有设置项 ——
-内容完全由你决定。用户把它放到画布上、连好素材，然后让你画。
+可视化节点 = 画布上的一块空面板，里面显示你写的一段 HTML。
+它本身什么都不会；显示什么、点了干什么，全由这段 HTML 决定。
 
-⚠️ **两条边界，先记住**：
+这份手册是**稳定契约**。要问"有哪些脚本、有哪些动作"，用运行时接口
+（canvas_fn_list / canvas_ui_guide 末尾的实时清单），不要翻源码、不要靠猜。
 
-1. **一切以本手册 + 运行时接口为准**。本手册是**稳定契约**；具体实现随时会改，
-   按实现去写的东西过一阵就会失效。要问"有哪些脚本 / 有哪些动作"，
-   用运行时接口（`{type:"list"}`、`generation_actions`），或直接看本手册最后那两节（都会现读）。
-2. **这是可视化节点的说明书**。用户一提"可视化节点 / ui 节点 / 面板 / 预览器 /
-   给这个节点画个界面"，第一个动作就是读本手册 —— 不要先去猜、更不要和"生成图片"
-   （`generation_*`）混起来：那是**调模型出媒体**，这是**画界面**，两条不同的轨道。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-## 〇、动手之前：先跟用户把需求问清楚（**这一步别省**）
+## 一、先记住三句话（后面全是它们的展开）
 
-这个能力看着简单，但"要不要后台"决定了后面所有工作。所以先问，再动手：
+1. **界面住在隔离的小窗口里（沙箱 iframe，不透明源）。**
+   能显示图、能请求宿主代发、能调后台脚本；
+   **不能读图片像素**、**不能自己 fetch 后台**、看不到外面的登录状态。
 
-  1. **这个界面只是"看"，还是要"干活"？**
-     · 只是看（展示上游的图/视频/文本）→ **纯前端就够**，不用写脚本。
-     · 要干活（转码 / 抽帧 / 批量处理 / 读文件 / 算数据）→ 需要**后台脚本**，
-       脚本是数据根下 task-scripts/ 里的 .mjs 文件，**你也能写**（write_file，需用户批准）。
+2. **"上游"和"产物"是两条不同的路，别混。**
+   · 上游 = 别的节点连进来的素材，**只读**（`__CANVAS_UPSTREAM__`）。
+   · 产物 = 这个节点算出来交给下游的东西，**只走 `save`**
+     （界面里 `CanvasUI.save`、脚本里 `ctx.save`）。
+     产物写进节点之后，下游读到的就是它 —— 见第五节那张表。
 
-  2. **要干活的话，这台机器上已经有能干这个活的脚本吗？**
-     看本手册最后一节（实时脚本清单）。有 → 直接用，别重写；没有 → 自己写一个 `_名字.mjs`，
-     跑通后去掉下划线。脚本名与它做什么先说给用户听。
+3. **不要用 shell 调后台接口。**
+   `curl` / PowerShell 打 `/api/task/call` 一定被拦（它要浏览器的登录 cookie），
+   返回"需要登录"。**这是设计**，不是坏了。
+   要跑脚本就用 MCP 工具 `canvas_fn_call`；要看画布就用 `canvas_get`。
+   你手上本来就没有那把钥匙，绕是绕不过去的。
 
-  3. **要不要收进资源库**（之后能拖到别的画布复用）？要的话最后调 canvas_ui_package。
+### 几个特别容易想错的地方（2026-11-27 复盘，一整天就耗在这些上）
 
-确认完再动手。**别埋头就写** —— 写完才发现"其实需要后台能力、而脚本还没有"，
-那一整轮界面都得推倒重来。
-
-## 〇之二、整个流程长什么样（照这个顺序做）
-
-一件"可视化节点"是这样长出来的。**顺序很重要：要后台就先做后台，后台通了再写界面** ——
-反过来做的话，界面写完了才发现后台对不上，两边都得返工。
-
-  ┌── ① 先判要不要后台（见第〇节）──────────────────────────────┐
-  │   只是"把拿到的东西显示出来" → 跳到 ④，纯前端就完事。            │
-  │   要**真正干活**（转码 / 批处理 / 算数据 / 读写文件）→ 走 ②③。   │
-  └──────────────────────────────────────────────────────┘
-
-  ② **写后台脚本**（一个 .mjs 文件 = 一件事，文件名 = 脚本名）。
-
-     ★ 文件名必须先用下划线打头（`_名字.mjs`）—— 这是"还没验证"的状态标识，见 0.3。
-       带下划线的脚本**不会出现在 canvas_fn_list 里**，别的 Agent 也就不会误用它。
-
-  ③ **用 MCP 把后台调通**（这三步是"后台可用"的判据，全过了才准往下走）：
-
-       canvas_fn_list()                 看这台机器上有哪些**已通过**的函数
-       canvas_fn_info(script, fn)       查它的参数 / 返回 / 示例
-       canvas_fn_call(script, fn, canvasId?, nodeId?, argsJson)  真调一次，拿结果
-
-     ★ **两种用法，按目的选**：
-       · **只验脚本**（还没写界面、只想确认它算得对）→ canvasId / nodeId **都不给**。
-         会自动落到一张 `fn-probe-default` 草稿画布上跑，`ctx.save` 照样能成功，
-         产物在那张草稿画布名下，**碰不到用户的任何画布**。返回值里有
-         `virtualCanvasId`，那就是产物所在。
-       · **在用户的节点上跑**（界面已经写好、要看真实效果）→ canvasId + nodeId 都给，
-         从用户消息里的 <ref type="node" canvasId="…" nodeId="…"> 原样取，别自己编。
-         产物写进那个节点的槽位 `slot-<nodeId>.*`，下游节点读的就是它。
-     ★ **只给一个**（只有画布没节点 / 只有节点没画布）= 写错了，会直接报错，不替你猜。
-     ★ 在真实节点上跑会把脚本顺手补进节点声明（之后界面调它才不会被 403）。
-
-     调通了（执行成功、结果符合预期）→ 把文件名前面的下划线**去掉**，这个脚本才算"可用"。
-     调不通就改脚本重来，别急着写界面。
-
-  ④ **写前端界面**：canvas_ui_read 看现状（可为空）→ canvas_ui_write 写上去。
-     界面里调后台那套（CanvasUI.task / POST /api/task/call）见第五·补节。
-     界面里要放按钮/输入，照第六节那个最小例子抄骨架。
-     ★ **写完系统会自动按规范检查一遍**，结论在返回值 `lint` 里：
-       · `lint.ok === false` → **必须改**（直接 fetch / 调了没声明的脚本 / 没注册 onChange）；
-       · `lint.warnings` 有内容 → 建议补（onChange 里没读上游、从不 setInputs、没读 __CANVAS_UI__）。
-       别等用户发现问题：`lint` 不通就地改，再写一次。
-     ★ 收尾再调一次 `canvas_ui_check({ canvasId, nodeId })`：它把这个节点整体验一遍
-       （界面规范 + 声明的脚本在不在机器上 + 说明书写没写 + 产物有没有落进槽位），
-       `ok: true` 才算交付。详见「一、怎么画 / 怎么改」开头那张表。
-
-  ⑤ **声明依赖**：在节点上写 data.uiScripts = { "脚本名": {} }。
-     不声明，界面调后台会被 403 挡（见 1.2）。canvas_ui_write 会顺手帮你补，但自己写更稳。
-     ★ 这是**节点**的属性（data.uiScripts），不是界面 HTML 的一部分 —— 改它用
-       canvas_batch_nodes 写节点字段，不要指望 canvas_ui_update（那个只替换 HTML 文本）。
-
-  ⑥ **收尾（务必做，别省）—— 把前后端一起打包落到下载目录**：
-
-       canvas_ui_export(canvasId, nodeId, name?)
-
-     它把「这个节点的界面 + 它用到的脚本」打成一个 .plumenode 包，**自动保存到本机下载目录**，
-     返回值里给**绝对路径**。为什么要这一步（用户原话）：
-     「你的这个节点一删，后台就完全没有意义了，还要重新写 HTML 代码」——
-     落了盘，节点删了也能从包里原样恢复（或换个画布用）。
-     想同时收进资产库（之后能从左侧资源库拖出来复用）再调一次 canvas_ui_package。
-
-  ⑦ **给节点写一句话说明书**（收藏 / 复用前必做）：
-
-       canvas_ui_describe(canvasId, nodeId, what, effect?, inputsJson?, outputsJson?)
-
-     它写进节点 data 的 `uiNodeDoc`：做什么 / 效果 / 输入 / 输出。
-     ★ 这是**节点**的说明书；脚本里的 `export const docs` 是**函数**的说明书，两份东西，各写各的。
-
-一条判断准则：**后台管"干什么活"，界面管"长什么样"，节点上的声明把两者绑在一起。**
-**先让后台通过 MCP 调通，再写界面，最后一定打包落盘。**
-
-### 0.3 ★ 脚本的"下划线 = 未验证"约定（生产环境踩过，务必遵守）
-
-线上环境是这么出问题的：Agent 每次要写脚本，先去 canvas_fn_list 看**之前留下**的函数，
-但那些里面**有半成品、还有老 API 版本的脚本** —— 拿起来一调就失败，白费一轮。
-
-所以加一条状态标识，规则就三条：
-
-  1. **初始创建**：第一次写脚本，文件名前面**必须**加一个下划线 —— `_scale.mjs`。
-  2. **测试通过**：只有它**跑通了**（执行成功且结果有效），才把下划线去掉 —— `scale.mjs`。
-  3. **工具过滤**：canvas_fn_list **只列不带下划线的**（= 已验证的）。
-     带下划线的那些是不给别人用的在建品。
-
-配套：
-  · 在建脚本**照样能调**（canvas_fn_call 认得带下划线的名字）—— 否则你没法测它。
-    但调用时会明确提示"这是未验证的在建脚本"。
-  · canvas_fn_info 对带下划线的脚本**照样能查**（你要看自己写的参数）——
-    它只影响"对外可发现的清单"，不影响你调试。
-  · 判断准则：**清单里没有 ≠ 不存在**。清单是"给别人用的"；你要调自己在建的那个，
-    名字前面带下划线直接调即可。
-
-## 一、怎么画 / 怎么改
-
-**三个工具，按场景选，别混**：
-
-| 要做的事 | 用哪个 | 它会顺手做什么 |
-| --- | --- | --- |
-| 第一次画 / 整段重画 | `canvas_ui_write` | 扫一遍调了哪些脚本并补进声明 + 立刻做规范检查 |
-| 只改一小块 | `canvas_ui_update` | 同上（局部替换，不必重写整段） |
-| 只看现状 | `canvas_ui_read` | 回 HTML / 说明书 / 已声明脚本 |
-| **验收整个节点** | `canvas_ui_check` | 逐项检查，给 problems / warnings / checks |
-
-**写完界面之后，收尾动作固定是这三步**：
-
-  1. `canvas_ui_write`（或 update）→ 看返回值里的 `lint`
-  2. `lint.ok === false` → 照 `lintText` 里点名的去改，再写一次（别交付红着的）
-  3. `canvas_ui_check({ canvasId, nodeId })` → `ok: true` 才算完成
-
-`canvas_ui_check` 会查这七项（是的、不是的都会列出来）：
-
-| 检查项 | 不合格会怎样 |
+| 你以为 | 其实是 |
 | --- | --- |
-| 界面·非空 | 节点是个白框 |
-| 界面·直接 fetch / 缺 onChange / 调了没声明的脚本 | 白屏、请求被拒、用户一点就 403 |
-| 界面·onChange 不理上游 / 从不交参数 / 没读 `__CANVAS_UI__` | 删了连线界面不变、刷新后参数全丢、主题与回写失效 |
-| 脚本·都在机器上 | 声明里有、`task-scripts/` 里没有 → 打包缺文件、调用失败 |
-| 脚本·能加载 / 有可调函数 | import 就报错、或一个函数都没导出 → 用户点了没反应 |
-| 脚本·有说明书 | 函数导出了却没写 `export const docs` → 别人只能猜参数 |
-| 说明书 | 收藏后别人只能靠包名猜它是干什么的 |
-| 产物·已落在节点 | 看得到界面、拿不到结果（纯展示节点可忽略） |
-
-**第一次画**（或整段重画）：
-
-  canvas_ui_write({ canvasId, nodeId, html })
-    · html 给一整段自包含的 HTML（不用包 <!DOCTYPE>，也不用包 markdown 代码块）
-    · 写完立刻在节点里渲染出来（用户当场就能看到）
-    · 它只写这一个节点，不碰别的
-
-**改一小块**（写完发现要调一个 class / 一段文字）：**不要整段重写**，用局部替换：
-
-  canvas_ui_update({ canvasId, nodeId, old, new })
-    · old = 现在的代码片段（要原样、能在当前 HTML 里找到）
-    · new = 改后的片段
-    · 例：old: "class=\"card\"" → new: "class=\"card card--big\""
-    · old 找不到时会报错，并把当前内容回一段给你，照着改 old 再试
-    · old 出现多次 = 全换掉（会回报次数）；只想换一处就把 old 写得更长更精确
-
-改之前想先看现状：canvas_ui_read({ canvasId, nodeId }) → { html }
-
-## 二、你的 HTML 跑在哪（**必须遵守，否则白屏**）
-
-它住在一个**沙箱 iframe** 里（不透明源）。文档加载前，宿主已经把下面这些东西注入好了，直接用：
-
-  window.__CANVAS_INPUTS__   → { 键: 值 }
-      节点声明的输入参数（用户/你的旧调用声明的键 → 值；没声明就是 {}）
-
-  window.__CANVAS_UPSTREAM__ → [ { refName, kind, url?, value?, nodeId? } ]
-      画布上**连进这个节点**的上游素材，一条一个：
-        · kind     : image / video / audio / text（按素材实际类型）
-        · refName  : 引用名（图片1 / 视频2 …），用来在界面上标注
-        · url      : 媒体地址（kind 是 image/video/audio 时给；可直接放进 img/video 的 src）
-        · value    : 文本内容（kind 是 text 时给）
-        · nodeId   : 那条上游节点的 id（要改它就用画布接口）
-      没连任何素材就是 []。
-
-      ★ 连线一删，这个数组**立刻变成 []**（宿主会把新值写回来，并触发 onChange）。
-        所以别把上游「抄进变量里再也不看」：要现读这个全局，或在 onChange 里拿 d.upstream。
-
-  window.__CANVAS_UI__       → { theme, baseUrl, canvasId, nodeId, palette }
-        · theme     : "light" | "dark"，当前画布是亮还是暗
-        · baseUrl   : 后台根地址（发请求要用绝对地址，见下）
-        · canvasId  : 当前画布 id
-        · nodeId    : 本节点 id
-        · palette   : { light: {...}, dark: {...} } 画布的**主题色板**（见下）
-
-### 色板 palette（提供给你，用不用随你）
-
-palette.light / palette.dark 各是一组语义色，键一样、值不同：
-
-  accent        强调色（画布的品牌色，主按钮/选中态用它最搭）
-  accentHover   强调色悬停态
-  danger        危险色（删除这类破坏性操作）
-  warn          警示色
-  edgeRail      连线颜色
-  edgeFlow      连线流光色
-  background    背景色
-  surface       卡片/面板底色
-  text          正文色
-  textMuted     次要文字
-  textFaint     最弱文字（placeholder 一级）
-  border        分隔线 / 边框色
-
-**这只是「提供」，不是「必须用」**：想跟画布整体一个调，就取 palette[theme] 里的值；
-想自己配色也完全可以 —— 只要求你看清当前是亮是暗（见下面第 4 条）。
-
-### 3.3 往外输出（画布 → 下游节点）
-
-页面用注入的助手 window.CanvasUI 跟外面打交道。**就五件事**：
-
-  CanvasUI.setInputs(params)       ← 交**参数**（笔迹 / 选项 / 配置，都是参数）
-  CanvasUI.onChange(fn)            ← **这个节点的参数变了** → 照着重画
-  CanvasUI.save(data, "名字.ext")   ← 交**产物**（图 / 视频 / 音频 / 文本）
-  CanvasUI.task(脚本, 函数, 参数, opts)  ← 叫后台干活（自动带节点信息）
-     opts.log / opts.progress 收实时输出；opts.wait: true 直接把结果等回来
-     （只要结果、不要过程时写 wait: true；长任务写 log/progress 订阅着看）
-     ⚠️ 这一句会让宿主把「这个脚本」写进节点声明。**脚本名必须与 task-scripts/ 里的文件名一字不差**
-        （`pixelize` 与 `_pixelize` 是两个脚本）。写错了用户点按钮就 403。
-  CanvasUI.cancel(runId)           ← 取消一次后台调用
-
-**只有两样东西：上游、参数。没有第三个概念。**
-  · **上游** = 连线连进来的素材（window.__CANVAS_UPSTREAM__，你只能读）
-  · **参数** = 这个节点的 data 里给界面的值（window.__CANVAS_INPUTS__）
-  · 你 setInputs 交上去的笔迹 / 选项，**也是参数**（只是你自己写的）。
-    刷新后宿主把它并回 __CANVAS_INPUTS__，你重新读就能恢复画面 —— 不用另学一套。
-
-**交参数：CanvasUI.setInputs({ strokes: strokes })**
-  · 参数随便什么能 JSON 化的东西（数组 / 对象都行）。**保持小**（几 KB 级）。
-  · 它**进撤销栈** —— 交一次，用户按一次撤销就退回那之前。
-  · 建议时机：**一笔松手 / 一次配置改完**调一次（不要每帧调）。
-
-**收变化：CanvasUI.onChange(function (d) { … })**
-  · 参数或上游**变了**就回调，给你最新的：
-      d.inputs     ← 参数（含你自己交上去的那些）
-      d.upstream   ← 上游素材
-  · 收到就**照着重画**。一件事，一个监听，不用记那是哪种变化。
-  · 页面**不会因为参数变化而重启**（以前会重开，用户正在输的东西会丢）。
-
-  ★ **这一条是硬要求**：没注册 onChange 的界面，`canvas_ui_write` 会直接判不合格。
-    回调里还必须**真的用上新上游**（读 `d.upstream` 或现读 `window.__CANVAS_UPSTREAM__`），
-    只写个空回调同样会被点名 —— 用户删了连线界面还显示旧素材，就是这么来的。
-
-硬性约束：
-1. **外部脚本/样式：跟普通浏览器一样**（2026-11-26 起）：
-     · 允许联网（默认）→ 直接引，CDN 的 js / css / 字体都行（组件库、图表库都这么用），
-       没有任何来源限制。
-     · 纯展示（设置里关掉「允许界面调用后台」）→ 那一档锁死，只认内联，外链加载不到。
-     ★ 即便如此，界面仍然**应当自包含**：核心结构与样式写 <style>，逻辑写内联 <script>，
-       外部库当加成。别写成「库没加载出来就白屏」—— 用户断网时就只剩白屏。
-  2. 样式写 <style>、脚本写 <script>，图标用内联 SVG 或字符。
-  3. 铺满整块（html, body 宽高 100%，body margin 0），字号 12–14px。
-  4. 深浅色都要能看清：读 __CANVAS_UI__.theme，或用 html[data-theme="dark"] 写分支。
-  5. 发请求必须写**绝对地址**（页面基地址是 about:srcdoc，相对路径解析不出来）。
-     baseUrl 与 canvasId 都从 __CANVAS_UI__ 取。
-
-## 三、读画布：看规模 / 读一个节点 / 读整张
-
-  canvas_get({ canvasId, nodeId })   ← **只读那一个节点**（还附带它的连线与邻居节点）
-  canvas_get({ canvasId })           ← 读整张全量（节点多的时候别这么用）
-  canvas_overview({ canvasId })      ← 只读规模与类型分布
-  canvas_list_canvases()             ← 这台服务器上有哪些画布
-
-要**磁盘绝对路径**（喂 ffmpeg、自己读文件）——节点里存的是同源地址，不是路径：
-
-  resource_local_path({ url })        或 { canvasId, nodeId }  → { localPath, exists }
-  canvas_resource_fetch({ url }) 或 { canvasId, nodeId }       → base64 + agentLocalPath
-
-  ★ 你在脚本里可以直接用 `ctx.file(地址)` 现算路径；那是「Agent 手上」没有的东西，
-    所以对 Agent 另给了上面这几个工具。
-  ★ `canvas_resource_fetch` 会把字节另存到你的工作目录（`_resources/`），
-    因为你的文件类工具出不去工作目录，读不到兄弟目录 `resources/`。
-
-要引用别的节点、或想看看某个节点连了什么，就用第一条（省一次全量搬运）。
-
-## 四、要改画布上的东西，用内置的 canvas_batch_nodes
-
-**改字段是「替换」语义**：你给的那个键覆盖原值，该节点 data 里别的键保留。
-所以只写要改的键，不要整份 data 抄一遍。
-
-  canvas_batch_nodes({ canvasId, update: [{ id, data: { 只写要改的键 } }] })   ← 改
-  canvas_batch_nodes({ canvasId, delete: ["3"] })                              ← 删（连带它的连线）
-  canvas_batch_nodes({ canvasId, add: [{ type, position, data? }] })            ← 新建
-
-这三条都是增量的：只动你点名的节点，不会碰别的、也不搬整张画布。
-读整张画布用 canvas_get；只看规模用 canvas_overview。
-
-## 五、沙箱里（你自己写的 HTML 里）能调什么
-
-注意：上面三条是**你**（Agent）通过 MCP 调的工具。而**你写出来的那个界面**在浏览器里跑，
-它走的是 HTTP，不是 MCP。
-
-> ⚠️ **2026-10-20 起，界面里不要直接 `fetch` 后台**。界面住在 `sandbox="allow-scripts"`
-> 的 iframe 里（不透明源，`Origin: null`），后台的请求边界会拒绝它；而令牌也不能交给它。
-> 一律改用 **`CanvasUI.api(path, init)`**：它把请求交给宿主（同源、带管理令牌）代发，
-> 回包形状接近 `fetch`（`{ ok, status, headers.get(), text(), json(), arrayBuffer() }`）。
-
-  读整张画布   CanvasUI.api('/api/canvases/' + __CANVAS_UI__.canvasId)      → { ok, nodes, edges, view }
-  增量改节点   CanvasUI.api('/api/canvas/nodes', { method:'POST', headers:{'content-type':'application/json'},
-                                              body: JSON.stringify({ add?, delete?, update? }) })
-               ⚠️ **改一个节点就用这条**（只动点名那个，不搬整张画布）
-  增量改连线   CanvasUI.api('/api/canvas/edges', { method:'POST', ... })      body { add?, delete?, update? }
-  整体写回     CanvasUI.api('/api/canvases/' + __CANVAS_UI__.canvasId, { method:'PUT', ... })
-               ⚠️ 整体替换：少一个节点它就没了。只有真要换掉整张画布时才用。
-  画布清单     CanvasUI.api('/api/canvases')                                 → { canvases: [{id,name}] }
-  下单生成     CanvasUI.api('/api/jobs', { method:'POST', headers:{'content-type':'application/json'},
-                                         body: JSON.stringify({ canvasId, nodeId, actionId, prompts?, values?, resources? }) }) 
-               （先 CanvasUI.api('/api/actions') 看有哪些 actionId 与参数）
-
-`path` 必须以 `/api/` 开头（宿主只转发这一类，防止被当成任意地址的代理）。
-不想自己拼 JSON 也行：`CanvasUI.api` 透传 `body`，字符串 / Blob 都收。
-
-## 五·补、让界面能叫后台干活（任务脚本）
-
-界面上要是需要一个"后台去跑点东西"的按钮（转码、批处理、算点数据…），不要写死逻辑，
-用**任务脚本**：后台有个目录 `task-scripts/`，里面一个 `.mjs` 文件就是一件事，
-文件名 = 脚本名，文件里 export 的函数就是能调的动作。
-
-  列脚本      POST {base}/api/task/call   body { type: "list" }
-              → { ok, scripts: [{ name, methods: [...] }] }
-  问一个脚本 GET  {base}/api/task/info?name=scale  → { ok, methods: [...] }
-  跑           POST {base}/api/task/call   body {
-                 type: "call", name: "scale", methods: "run",
-                 args: [640],          // 位置参数数组，最后一个参数由后台补 ctx
-                 nodeId: "3",          // 建议带上：脚本用 ctx.nodeId 知道是谁在问
-                 wait: true }          // 可选：true = 直接把结果给你（几百毫秒的活就这么用）
-              → { ok, runId, state, result? }   或 { ok, runId, state: "running" }
-  实时输出     GET  {base}/api/task/events?runId=r…    （SSE：log / progress / done / error）
-              → data: {"type":"log","line":"…"}、data: {"type":"progress","value":0.4}
-  查状态       GET  {base}/api/task/status?runId=r…    （刷新后回来就靠它）
-  取消         POST {base}/api/task/cancel  body { runId }
-
-规矩：
-  1. runId 是**唯一凭证**：拿到它才能订阅/取消。跑起来之后建议把 runId 写进节点字段
-     （页面刷新后状态还在，能接着订阅）。
-  0.8 ★ **要给节点加一个"后台能力"，就三步**：
-     (a) **脚本**：看本手册最后那份实时清单，已经有就用，别重复写；没有就自己往
-         task-scripts/ 放一个 .mjs（你有 write_file，写文件要用户点「允许」）。
-         新建的脚本名先用下划线打头（`_名字.mjs`），跑通了再去掉。脚本形如：
-             export async function run(width, ctx) { … }
-         ctx 里有什么、能不能开子进程（能开 ffmpeg），见本节的「4. 脚本能查到的东西」。
-     (b) **声明**：在节点上写 data.uiScripts = { "脚本名": {} }（见下面 1.2，不写会被 403 挡）。
-     (c) **界面里调它**：POST {base}/api/task/call，body 形如
-             { type: "call", name: "脚本名", methods: "run", args: [...],
-               nodeId: __CANVAS_UI__.nodeId, canvasId: __CANVAS_UI__.canvasId }
-         快活（几百毫秒）加 wait: true 直接拿结果；长活（转码）用 events 订阅日志、
-         并且**把 runId 写进节点字段**（刷新后才找得回来）。
-     —— 这三步做完，节点就从"只能看"变成"真能干活"。
-  1.2 ★ **调用后台脚本前，必须在节点上声明依赖**（这是硬规定，不是建议）：
-     节点 data.uiScripts 写成 { "脚本名": {} }，把界面要调的脚本都列上。
-     后台 /api/task/call 会**按声明核对**：没声明的脚本直接 403（连进程都不起）。
-     为什么要有这一关：nodeId 是调用方自己填的，不核对就等于谁都能调机器上任何脚本。
-     · 你调 canvas_ui_write / canvas_ui_update 时后台会**顺手帮你补**（返回值里
-       declaredScripts 就是补上的那些）；但别指望它 —— 自己写上更稳。
-     · 声明只写脚本名即可（"scale": {}）；哈希是打包时才用得到的东西，后台会补。
-  1.5 **这台机器上现在有什么脚本，看本手册最后那一节**（后台每次现读目录，是实时清单）——
-     不要去猜脚本名；清单里没有的，就在界面里先调 { type: "list" } 拿到再决定调哪个。
-  2. 脚本就是普通的 .mjs 文件，**你能写也能改**（走 write_file / edit_file，需要用户批准）。
-     动手前先 POST { type: "list" } 或 canvas_fn_list 看这台机器上已经有什么 ——
-     已经能用的就别重写一份。
-  3. 长任务（转码那种）用 events 订阅着看日志；短任务用 wait: true 一步拿到结果。
-  4. 脚本能查到的东西写在它的 ctx 里：workspace（临时目录）、dir（脚本自己所在目录）、
-     baseUrl（**后台自己的地址**）、canvasId / nodeId / name、log()、signal（取消信号）、progress()。
-
-  5. ★ **脚本算出来的文件怎么交回节点**（这条最常问）：
-     脚本产出的是**字节**，塞不进 SSE 日志。所以走节点的**槽位**：
-         await fetch(ctx.baseUrl + "/api/canvases/" + ctx.canvasId + "/resources?slot=" +
-                     encodeURIComponent(ctx.nodeId) + "&name=out.png",
-                     { method: "POST", headers: { "content-type": "image/png" }, body: bytes })
-     落完这个节点自己那格就是那张图；界面里再把返回的地址写进节点字段（或直接 <img> 显示），
-     下游节点也会跟着更新。
-
-  ★ **但更好的做法是用 ctx.save**（同一个助手，见上面第 4 条）：
-         return await ctx.save(pngBytes, "out.png")
-     它替你拼好 slot 地址、取扩展名、写 content-type —— 以前这三件事每个脚本各写一遍、必漏一个。
-     （ctx.baseUrl 还在，真出问题时可以自己拼上面那条。）
-
-  6. ★ **展示端的一条规矩：产物地址带 ?v= 时间戳**。
-     同一个槽位地址是固定的，后台为了让下游重新取，会在后面加 ?v=<毫秒>。
-     界面里**去重要用干净 URL**（去掉 ? 与 # 之后再比），否则同一个文件会被算成好几份
-     （用户实测过：预览重复出现）。判类型也**按地址扩展名**，别按字段名 ——
-     叫 imageUrl 的字段里可能装着 .mp3。
-
-  7. ★ **产物落哪个字段：后台按扩展名自动判，你不用管**。
-     ctx.save(…, "a.png") → imageUrl ｜ "a.mp4" → videoUrl ｜ "a.mp3" → audioUrl ｜
-     "a.txt" → **text（写正文，不是地址）**。
-     下游（底栏的素材区、图片对比、图片生成）就是**按这四个字段名认类型**的，
-     所以别自己去写 imageUrl —— 音频写进 imageUrl，下游就当图读（裂图）。
-     ⚠️ 只有**落在本节点自己的槽位**（不传 opts.slot）才会写这些字段；
-        显式存到别人的槽位不算本节点的产物，后台不动那个节点。
-
-## 六、一个能跑的最小例子
-
-  下面这段是一个**完整可跑**的界面：读注入的上游素材（__CANVAS_UPSTREAM__），
-  把有几份、每份是什么显示出来。抄这个骨架改内容，比从零写快也不容易漏约定：
-  样式写 <style>（这里从简没写）、脚本写 <script>、铺满整块、不依赖外部库。
-  （审查发现的断链：这段例子原先孤悬在 7.4 工具清单后面，没有引言 —— 已挪回本节名下。）
-
-## 六·补、完整的接口清单（前后端各有哪些，照这张表写就行）
-
-### 7.1 界面（沙箱里的 HTML）能调的 HTTP 口
-
-  // 叫后台干活
-  //   （更省事的写法：CanvasUI.task(...) / CanvasUI.cancel(runId) —— 见 3.3 节）
-  POST {base}/api/task/call   { type:"call", name, methods, args, canvasId, nodeId, wait? }
-  POST {base}/api/task/call   { type:"list" }        // 列脚本名与它们的函数
-  GET  {base}/api/task/info?name=xxx                 // 某个脚本有哪些函数
-  GET  {base}/api/task/events?runId=xxx              // SSE：log / progress / done / error
-  GET  {base}/api/task/status?runId=xxx              // 查状态（刷新回来靠它）
-  POST {base}/api/task/cancel { runId }              // 取消（杀整棵进程树）
-
-  // 读画布 / 改画布
-  GET  {base}/api/canvases                              → { canvases: [{id,name}] }
-  GET  {base}/api/canvases/{canvasId}                    → { ok, nodes, edges, view }
-  POST {base}/api/canvas/nodes   { add?, delete?, update? }        ← 改【默认画布】
-  POST {base}/api/canvases/{canvasId}/nodes  { add?, delete?, update? }  ← 改【指定画布】
-       ⚠️ 非默认画布必须用带画布 id 的那条；老路径只认默认画布（写错会静默无效）
-  POST {base}/api/canvas/edges   { add?, delete?, update? }
-  PUT  {base}/api/canvases/{canvasId}  { nodes, edges }   // 整体替换（慎用）
-
-  // 资源
-  POST {base}/api/canvases/{canvasId}/resources?slot={节点id}&name=out.png   // 交产物到槽位
-  POST {base}/api/canvases/{canvasId}/resources  (body=字节)                 // 只新增、不覆盖
-  GET  {base}/api/assets                              // 资产库清单
-  POST {base}/api/assets?name=&folderId=  (body=字节) // 上传到资产库
-
-  // 调模型出媒体（与「画界面」是两条轨道，别混）
-  GET  {base}/api/actions                              // 有哪些动作、要什么参数
-  POST {base}/api/jobs  { canvasId, nodeId, actionId, prompts?, values?, resources? }
-  prompts 是分段数组：[{type:"tag",value:"资源id"},{type:"prompt",value:"文字"}]；
-  resources 里每一项都有 id / name / kind，标签的 value 就是那个 id。
-
-### 7.2 脚本（task-scripts/*.mjs）能用的 ctx
-
-  ⚠️ **文件名状态**：新脚本先用 `_名字.mjs`（未验证），跑通了再去掉下划线。见 0.3。
-
-  export async function run(你的参数..., ctx) { ... }
-    · 参数由界面里的 args 依次传入；ctx 永远在【最后一个】
-    · 信息：workspace / dir / baseUrl / dataRoot / canvasId / nodeId / name
-    · 方法：ctx.log(msg) / ctx.progress(0..1) / ctx.signal.aborted
-    · 助手：await ctx.save(字节或字符串, "名字.ext"[, { slot, mime }])
-            ctx.file(地址或文件名) → 本地路径（认不出就原样返回）
-            ctx.temp("名字") → 工作目录里的路径
-    · 干活用 Node 自带（spawn / fs / fetch），没有任何封装命令 —— 这就是自定义脚本
-    · 返回值原样作为 result 回到调用方（要能 JSON 化）
-
-### 7.3 节点包（导出 / 导入）
-
-  POST {base}/api/node-packages/build    { canvasId, nodeId }        → .plumenode 字节
-  POST {base}/api/node-packages/save     { canvasId, nodeId, name?, folderId? }  // 打包并存库
-  POST {base}/api/node-packages/export   { canvasId, nodeId, name? }   // 打包 + **写到本机下载目录**
-  POST {base}/api/node-packages/inspect  (body=包字节)              // 先体检：会不会升版本
-  POST {base}/api/node-packages/import   (body=包字节)              // 真落地
-  GET  {base}/api/node-packages/read?assetUrl=…                   // 从库里取包
-
-
-### 7.5 界面里要问 AI：走任务脚本，别直接调 `/api/agent/*`
-
-**界面里调不到 `/api/agent/chat/completion`**：`CanvasUI.api` 是给「界面画布操作」用的，
-`/api/agent/*` 一律不在它的允许范围里（那等于把「花你的模型额度」的能力交给页面）。
-这是有意的，不是漏配。
-
-要「让 AI 总结 / 分类 / 改写」，让**任务脚本**去问，界面只调脚本：
-
-  1. 脚本（`scripts/<名>.mjs`）里 `fetch` 后台的 `/api/agent/chat/completion`，带上
-     脚本自己那份 `process.env` / 参数里的 key —— 这属于后台代码，不在沙箱里；
-  2. 界面 `await CanvasUI.task('脚本名', 'run', [文本])` 拿结果；
-  3. 节点的 `data.uiScripts` 里声明脚本名（不声明会 403）。
-
-后台那条接口本身（OpenAI 兼容形状、`stream: true` 走 SSE）没变，只是**不该由页面直接调**。
-   5. 这条是**单轮**。要带工具、能自己干活的对话，那是 Agent 多轮那套
-      （/api/agent/canvases/<画布>/sessions/…），不在本手册范围。
-
-### 7.4 你（Agent）自己的 MCP 工具
-
-  canvas_ui_guide   (canvasId)                      读本手册（含实时脚本 / 节点清单）
-  canvas_ui_write   (canvasId, nodeId, html)        整段写界面（顺手补依赖声明）
-  canvas_ui_update  (canvasId, nodeId, old, new)    局部替换（不必重写整段）
-  canvas_ui_read    (canvasId, nodeId)              看现状
-  canvas_ui_check   (canvasId, nodeId)              **验收**：规范 / 声明 / 说明书 / 产物逐项检查
-  canvas_ui_package (canvasId, nodeId, name?, folderId?)  打包进资产库
-  canvas_ui_describe(canvasId, nodeId, what, effect?)     给节点写功能说明书（收藏前先写）
-  canvas_ui_favorites(keyword?)                          列资产库里收藏的可视化节点（带说明书）
-  canvas_ui_add_favorite(url?|name?, canvasId?)          把收藏的节点建成到画布上
-
-  后台功能函数（task-scripts 里的那些）：
-  canvas_fn_list   (keyword?)               列全部功能函数（做什么 / 参数 / 返回 / 示例）
-  canvas_fn_info   (script, fn?)            查某个函数的参数与返回值
-  canvas_fn_call   (script, fn, canvasId, nodeId, argsJson?)  直接调它并拿回结果
-                   ★ 必须给正在操作的画布与节点：产物写进这个节点的槽位，下游读的也是它。
-  其余画布操作（建 / 删 / 改节点与连线、读整张、上传资源、调模型）用【内置的】
-  canvas_batch_nodes / canvas_batch_edges / canvas_get / canvas_overview /
-  resource_upload / generation_* —— 本插件不再造重复工具。
-
-## 七、最小例子（照抄能跑）
-
-下面这份**能直接过 `canvas_ui_check`**：铺满、无外链、读上下文、注册 onChange 并在回调里
-真的用了新上游、参数会交出去。抄它改内容，比从零写省事，也不容易漏约定。
+| "沙箱里用 crossOrigin 就能读像素" | 读不了。加不加都一样，画布被污染。像素活全归后台脚本。 |
+| "403 是登录没配好" | 界面侧 403 通常只有两件事：脚本没声明、脚本名写错。shell 侧 403 是设计如此。 |
+| "产物落盘了，节点自然就有输出" | 还要有 `uiOutputType` 才有右边那个口，否则接不出去。 |
+| "我手写节点字段也能让下游读到" | 会缺类型、缺引用，下次保存还被清掉。只有 `save` 那条路是完整的。 |
+| "读一下脚本源码就知道怎么调" | 源码是实现，今天对明天就错。看 `canvas_fn_info` 的说明书。 |
+| "先把 base64 拼进参数传给脚本" | 几万字符必然出错。让脚本自己读上游，或先落成文件。 |
+| "调不通就多试几个接口" | 每个接口的边界是固定的（见第十节），试不出来。看手册里那张"做不到"的表。 |
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 二、数据是怎么流的（先看懂这张图）
+
+    上游节点（图片 / 视频 / 音频 / 文本）
+         │  用户拉的那根连线
+         ▼
+    ┌────────────────────────────────────────────┐
+    │  可视化节点（iframe，沙箱）                  │
+    │                                            │
+    │  读上游：__CANVAS_UPSTREAM__  ← 只读        │
+    │  读参数：__CANVAS_INPUTS__    ← 用户填的     │
+    │  交参数：CanvasUI.setInputs()  → 变参数     │
+    │  交产物：CanvasUI.save()       → 落盘       │
+    └───────────────────────┬────────────────────┘
+                            │  save
+                            ▼
+        槽位文件  slot-<本节点id>.<后缀>   （固定名字，覆盖）
+        ＋ 节点字段：uiOutputUrl / uiOutputType / resourceId / imageUrl…
+                            │
+                            ▼
+                    下游节点（读到的还是"上游素材"那个形状）
+
+一句话：**上游从连线来，产物往节点里写，下游读的还是上游素材。**
+同一个形状，全程只有一套。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 三、输入：上游素材
+
+`window.__CANVAS_UPSTREAM__` 是一个数组，一条一个：
+
+| 字段 | 有没有 | 是什么 |
+| --- | --- | --- |
+| `refName` | 有 | 引用名（图片1 / 文本2…），用来在界面上标注 |
+| `kind` | 有 | image / video / audio / text |
+| `url` | 通常有 | 能直接放进 src 的地址，形如 `/api/canvases/<画布id>/resources/<名字>` |
+| `resourceId` | 通常有 | 长期引用 `<画布id>/<名字>`（保存时只留它，地址是它的投影） |
+| `value` | 文本才有 | 正文内容 |
+| `nodeId` | 有 | 这条素材来自哪个节点 |
+
+`CanvasUI.onChange(function (d) { … })` 的 `d.upstream` 是同一份东西。
+
+**三条必须做到的事：**
+
+1. **上游只认连线。** 线一删，数组立刻变成 `[]`，宿主会推送并触发 onChange。
+   所以不要把它拷进变量后再也不看 —— 现读全局，或在 onChange 里按新值重画。
+   （曾经出过"一根线都没连，界面还写着上游 图片 1"：那是旧快照，已修。
+     你自己也别再造一份快照。）
+
+2. **`url` 可以直接显示，但读不了像素。**
+   `<img src="…">` 没问题；
+   `canvas.drawImage` + `getImageData`，或 `toDataURL` / `toBlob` 会失败 ——
+   图来自另一个源，画布被"污染"（真机报 SecurityError）。
+   **加 `crossOrigin="anonymous"` 也没用**，只会换一个更难懂的错。
+   要像素 → 交给后台脚本（见第六节）。
+
+3. **没有上游是正常状态，不是错误。** 先把"无上游"画出来，别白屏。
+
+## 四、输入：参数
+
+`window.__CANVAS_INPUTS__` 是"这个节点的参数"的合并结果：
+用户填的、以及你在界面里交上去的，都在这里。
+
+- 交参数：`CanvasUI.setInputs({ 键: 值 })`
+  什么时候交：**一次操作完成时**（一笔画完、一个配置改完），别每帧交，也别交大数组。
+  它进撤销栈 —— 交一次，用户按一次撤销就退回那之前。
+- 刷新恢复：页面重开时读 `__CANVAS_INPUTS__` 把界面画回去，不用另存一套。
+- 参数要**小**（几 KB 级）。笔迹那种，存点、别存整张图的像素。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 五、输出：产物怎么落、下游怎么拿（最容易错的一段）
+
+### 5.1 只有两个入口
+
+| 谁算出来的 | 用哪个 | 长相 |
+| --- | --- | --- |
+| 界面里算出来的（用户画的、canvas 导出的） | `CanvasUI.save(字节或 Blob, "名字.png")` | 返回地址；宿主负责落盘 |
+| 后台脚本算出来的（转码、解码、批处理） | `await ctx.save(字节, "名字.png")` | 返回 `{ ok, url, bytes }` |
+
+`save` 的第二个参数决定**类型**（按后缀认）：`a.png` / `a.mp4` / `a.mp3` / `a.txt`。
+不传后缀默认当图片。
+
+### 5.2 落一次，会一起写这些东西（别再自己补）
+
+| 写什么 | 变成什么 |
+| --- | --- |
+| 槽位文件 | `/api/canvases/<画布id>/resources/slot-<本节点id>.<后缀>`（固定名字，覆盖旧的） |
+| `uiOutputUrl` | 产物地址（不带 ?v=） |
+| `uiOutputType` | image / video / audio / text —— **右边有没有输出口，就看它** |
+| `resourceId` | `<画布id>/slot-<本节点id>.<后缀>`（长期引用） |
+| `imageUrl` / `videoUrl` / `audioUrl` | 按后缀写其中一个，带 ?v= 版本号 |
+| `text` | 文本产物写**正文**，不是地址 |
+
+这六样是**一次写的**。你手动补一半，就会出现"文件在、下游读不到"。
+
+### 5.3 输出端口是怎么来的
+
+`data.uiOutputType` 是**节点自己的配置**，不是按类型写死的：
+image 有图片口、video 有视频口…；**空串 / 不认识的词 = 没有输出口**，
+右边不画口、也不许连出。
+
+- 产物一落地会**自动补**上（按后缀）。
+- 也可以主动声明：`CanvasUI.setOutputType("image")`。
+- 没端口就接不到下游 —— 这是最常见的"下游收不到东西"。
+
+### 5.4 下游到底读到什么
+
+下游界面看到的 `__CANVAS_UPSTREAM__` 里，那一条就是你这次产物的
+`url` + `resourceId`，形状跟"连进来一张图"完全一样。
+下游不需要知道它来自哪个节点。
+
+### 5.5 产物在、下游却读不到：先按这三条查
+
+1. **节点字段写全了吗？**（最常见）
+   槽位文件有了，但节点上只有地址、没有 `uiOutputType`；或者你手写了一个
+   `imageUrl` 却没写 `uiOutputUrl` / `resourceId`。
+   → **修法：再跑一次那个产出**（界面点一次生成，或 `canvas_fn_call` 再调一次，
+   让脚本走 `ctx.save`）。它会按 5.2 那张表一次写全。
+   **不要自己往节点里拼这些字段**：手写的没有类型、没有引用，右边没端口，
+   下游照样接不上，而且下次保存会被清理掉。（2026-11-27 真机就是这么绕了一百多轮。）
+
+2. **右边有输出口吗？** 没有 `uiOutputType` 就不画口，也就连不出线。
+   有口但**类型对不上**（比如你产出的是视频，下游只收图片），连线会被自动断开。
+
+3. **下游读的是同一个全局吗？** 下游要读 `__CANVAS_UPSTREAM__` 或 `d.upstream`，
+   不能自己编一份假数据。
+
+### 5.6 一个节点一份产物
+
+槽位是固定的：再产一次就覆盖旧的。下游要同时留多份，就让上游多来几个节点。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 六、沙箱里做不到的事（都是真机踩出来的，别再试）
+
+| 你可能想这么干 | 实际结果 | 正确的做法 |
+| --- | --- | --- |
+| `getImageData` 读上游图 | SecurityError（画布被污染） | 后台脚本：`ctx.file(url)` 拿本地路径，用 node 解码 |
+| 给 img 加 `crossOrigin="anonymous"` 再读 | 后台不认 `Origin: null`，加载失败或照样污染 | 同上。**别加 crossOrigin** |
+| 界面里 `fetch("/api/…")` | 被请求边界拒（不透明源） | `CanvasUI.api(path, init)` 读画布，`CanvasUI.task(...)` 跑脚本 |
+| `CanvasUI.api("/api/task/call", …)` | 被拒：那个代理只放行画布类接口 | 跑脚本就用 `CanvasUI.task`，它才是那条路 |
+| 界面里 `fetch` 一个外站读字节 | 大概率被 CORS 挡 | 交给后台脚本去 fetch |
+| `curl` / PowerShell 调 `/api/task/call` | 403「需要登录」 | 用 MCP 的 `canvas_fn_call` |
+| 把几万字符的 base64 塞进 `argsJson` | 极易截断/写错，报"长度不对" | 让脚本自己读上游算；或先存成文件再 `resource_upload` |
+| 读 `task-scripts/` 里的 .mjs 源码看它怎么实现 | 白费时间，而且看到的会过期 | `canvas_fn_list` / `canvas_fn_info` 看它**能做什么** |
+| 翻插件源码、仓库源码、调试产物 | 同上：那是实现，今天对了明天就错 | 本手册 + 运行时接口 |
+| 自己写 Python/PowerShell 解 PNG、算像素 | 一堆环境问题，还会写错字节 | 后台脚本里用 node 现成的库 |
+| 在界面上跑几秒钟的循环算大图 | 界面卡死、用户以为坏了 | 长活交给后台脚本，界面只显示结果 |
+
+**一条判断准则：**
+**"看一眼、转个样式" → 界面能做。**
+**"读像素、转码、批图、读文件、算数据" → 一定是后台脚本的活。**
+
+### 为什么界面里读不了像素（想不通时看一眼）
+界面住在一个不给同源权限的 iframe 里，它的源是"不透明"的。
+图是从后台取的，对界面来说就是"别的源"。浏览器规定：
+别的源的图画进 canvas 之后，就不许再把它读出来（防偷图）。
+这条规则在浏览器里，改不了。所以像素运算必须在后台做。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 七、动手前先问清楚（这一步别省）
+
+1. **只是看，还是要干活？**
+   · 只是看（把连进来的图/视频/文字显示出来）→ 纯前端就够，不写脚本。
+   · 要干活（转码 / 抽帧 / 读像素 / 批处理 / 读文件 / 算数据）→ 需要后台脚本。
+2. **要干活的话，这台机器上有没有现成的？**
+   先 `canvas_fn_list`（看清单）→ `canvas_fn_info`（看参数、返回、示例）。
+   有能用的就**别重写**；一模一样再写一份，是纯浪费。
+3. **要不要收进资源库**？要的话最后 `canvas_ui_package`。
+
+别埋头就写。写完才发现"其实要后台、而脚本还没有"，整轮界面都得推倒。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 八、流程（照这个顺序做，别跳步）
+
+    ┌─ ① 判要不要后台（见第七节）────────────────────────┐
+    │   只展示 → 跳到 ④。要干活 → 走 ②③。                 │
+    └──────────────────────────────────────────────────┘
+
+   ② 写后台脚本（一个 .mjs = 一件事，文件名 = 脚本名）
+      · 新脚本先用下划线开头：`_名字.mjs`（"还没验证"的标记，见 8.1）
+      · 每个要给别人调的导出函数，都要有说明书（见 8.2）
+
+   ③ 用 MCP 把脚本调通（不通就别写界面）
+
+        canvas_fn_list()                     这台机器上有哪些**已验证**的脚本
+        canvas_fn_info(script, fn)           它的参数 / 返回 / 示例
+        canvas_fn_call(script, fn, …)        真调一次
+
+      ★ 两种用法，按目的选：
+        · **只验脚本**（还没写界面，只想确认算得对）→ canvasId / nodeId **都不给**。
+          会落到一张 `fn-probe-default` 草稿画布上跑，`ctx.save` 照样能成功，
+          产物在那张草稿画布名下，**碰不到用户的画布**。返回里有 `virtualCanvasId`。
+        · **在用户的节点上跑**（看真实效果）→ canvasId + nodeId **都给**，
+          从用户消息里的 `<ref type="node" canvasId="…" nodeId="…" />` 原样取。
+          产物写进这个节点的槽位，下游读的就是它。
+      ★ 只给一个 = 写错了，会直接报错，不替你猜。
+      ★ 在真实节点上跑，会顺手把这个脚本补进节点声明（界面之后调它才不会被 403）。
+
+      调通了（结果符合预期）→ 去掉文件名前的下划线，它才算"可用"。
+
+   ④ 写界面：`canvas_ui_write`（或 `canvas_ui_update` 改一小块）
+      ★ 写完系统会自动跑一遍规范检查，结论在返回值的 `lint` 里：
+        `lint.ok === false` → **必须改**（直接 fetch / 调了没声明的脚本 / 没注册 onChange）
+        `lint.warnings` 有内容 → 建议补（onChange 不理上游 / 有控件不交参数 / 没读 __CANVAS_UI__）
+        别等用户发现；红着的界面不要交付。
+
+   ⑤ 声明依赖：节点 data.uiScripts = { "脚本名": {} }
+      不声明，界面调后台就 403。`canvas_ui_write` / `canvas_fn_call` 会顺手补，
+      但自己写更稳。★ 这是**节点**的字段，不是 HTML 的一部分；
+      改它用 `canvas_batch_nodes`（`canvas_ui_update` 只替换 HTML 文本）。
+
+   ⑥ 验收：`canvas_ui_check({ canvasId, nodeId })` → `ok: true` 才算交付。
+      它一次把界面规范、脚本在不在、函数说明书、节点说明书、产物落没落全查一遍。
+
+   ⑦ 收尾三件：`canvas_ui_export` 打包到下载目录；
+      `canvas_ui_describe` 写节点说明书；要复用再加 `canvas_ui_package`。
+
+### 8.1 下划线 = 未验证
+
+线上出过这个事：Agent 打开 canvas_fn_list，看到一堆**半成品、老 API 的脚本**，
+拿起来一调就失败，白费一轮。于是加了这个标记：
+
+1. 新建脚本，文件名前面**必须**加一个下划线 —— `_scale.mjs`。
+2. 跑通（结果符合预期）之后，把下划线去掉 —— `scale.mjs`，这时才算可用。
+3. `canvas_fn_list` **只列没下划线的**。带下划线的照样能调（你要测它），
+   调用时会标一句"这是在建脚本"。
+
+**清单里没有 ≠ 不存在**：你在建的那个，直接带下划线调就行。
+
+### 8.2 脚本里的说明书
+
+`export const docs = { 函数名: { what, args, returns, example } }`
+没写的话 `canvas_ui_check` 会提醒，别人（包括以后的你）只能猜参数。
+
+★ 这是**函数**的说明书。节点还有一份**节点**说明书（`uiNodeDoc`，用 `canvas_ui_describe` 写）。
+两份东西，各写各的：节点说明书讲"这个面板是干什么的"，函数说明书讲"这个函数怎么调"。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 九、MCP 工具表
+
+| 工具 | 干什么 |
+| --- | --- |
+| `canvas_ui_guide` | 读本手册（末尾附这张画布的节点 + 这台机器的脚本清单） |
+| `canvas_ui_write` | 整段写界面（顺手补依赖声明 + 跑规范检查） |
+| `canvas_ui_update` | 局部替换一段（old → new），不整段重写 |
+| `canvas_ui_read` | 看现在写了什么 |
+| `canvas_ui_check` | **验收**整个节点，`ok: true` 才算交付 |
+| `canvas_ui_describe` | 写节点说明书（做什么 / 效果 / 输入 / 输出） |
+| `canvas_ui_export` | 打包到本机下载目录（节点删了能恢复） |
+| `canvas_ui_package` | 打包进资产库（以后能拖出来复用） |
+| `canvas_fn_list` / `canvas_fn_info` / `canvas_fn_call` | 列 / 查 / 调后台函数 |
+
+画布本身的操作不在这里造第二套，用内置的：
+`canvas_get`（读一个节点或整张）、`canvas_overview`（只看规模）、
+`canvas_batch_nodes`（增删改节点）、`canvas_batch_edges`（连线）、
+`resource_upload`（本地上传）、`generation_*`（调模型出媒体，跟画界面是两条轨道）。
+
+## 十、接口：界面侧（HTTP）与脚本侧（ctx）
+
+### 10.1 界面里能用的（都经宿主代发，别自己 fetch）
+
+    CanvasUI.setInputs(参数对象)         交参数
+    CanvasUI.setOutputType("image")      声明输出类型（不调也行，产物落地会自动补）
+    CanvasUI.onChange(fn)               上游/参数变了 → fn({ upstream, inputs })
+    CanvasUI.save(字节或Blob, "a.png")  交产物
+    CanvasUI.task(脚本名, 函数名, 参数数组, opts)   叫后台干活
+    CanvasUI.cancel(runId)              取消
+    CanvasUI.api(path, init)            读画布 / 改画布（path 必须以 /api/ 开头）
+
+`CanvasUI.task` 的 opts：`{ wait: true }` 直接等结果；`{ log, progress }` 订阅过程。
+只等结果、不要过程时用 `wait: true`；长任务订阅着看，并且把 `runId` 存进节点字段
+（刷新后还能接上）。
+**脚本名必须与 `task-scripts/` 里的文件名一字不差**（`pixelize` 和 `_pixelize` 是两个脚本）。
+写错了用户一点就 403。
+
+### 10.2 界面里能调的画布接口（走 CanvasUI.api）
+
+    GET  {base}/api/canvases                             画布清单
+    GET  {base}/api/canvases/{canvasId}                  整张画布
+    POST {base}/api/canvas/nodes      { add?, delete?, update? }   改【默认画布】
+    POST {base}/api/canvases/{canvasId}/nodes { add?, delete?, update? }  改【指定画布】
+    POST {base}/api/canvas/edges      { add?, delete?, update? }   连线
+    PUT  {base}/api/canvases/{canvasId}  { nodes, edges }          整体替换（慎用）
+    GET  {base}/api/canvases/{canvasId}/resources/{名字}           取资源
+    GET  {base}/api/actions  ·  POST {base}/api/jobs          下单生成（两条轨道里"出媒体"那条）
+
+**跑脚本不要走这条路：** `CanvasUI.api` 明确拒绝 `/api/task/*`。
+跑脚本只有 `CanvasUI.task(脚本名, 函数名, 参数)` 这一个入口 —— 它替你带上
+画布 id、节点 id、声明校验和实时日志。别绕。
+
+**绝对地址**：页面基地址是 `about:srcdoc`，相对路径解析不出来。
+`baseUrl` 和 `canvasId` 从 `__CANVAS_UI__` 取。
+（同源相对路径以 `/` 开头的那种可以直接用，比如上游的 `url`。）
+
+### 10.3 后台那几个 HTTP 长什么样（参考；给界面用，你别用 shell 打）
+
+界面里的 `CanvasUI.task` 背后调的就是这条。写在这里是为了你**看得懂返回**，
+不是为了让你去 curl 它。
+
+    POST {base}/api/task/call  { name, methods, args, canvasId, nodeId, wait? }
+                          →    { ok, runId, state, result? }
+    GET  {base}/api/task/events?runId=xxx    SSE：log / progress / done / error
+    GET  {base}/api/task/status?runId=xxx    查状态（刷新回来靠它）
+    POST {base}/api/task/cancel { runId }
+
+### 10.4 脚本里能用的 ctx
+
+    export async function 名字(你的参数..., ctx) { … }   // ctx 永远在最后一个
+
+    信息：workspace（本次专属空目录）/ dir（脚本所在目录）/ baseUrl（后台地址）
+          dataRoot / canvasId / nodeId / name
+    方法：ctx.log(msg) / ctx.progress(0..1) / ctx.signal.aborted
+    助手：await ctx.save(字节或字符串, "名字.ext"[, { slot, mime }])
+          ctx.file(地址或文件名) → 本地磁盘路径（喂 ffmpeg 用）
+          ctx.temp("名字") → 工作目录里的路径
+
+干活就用 Node 自带的（`node:fs` / `node:child_process` / `fetch`），没有别的封装。
+返回值原样作为 result 回到调用方（要能 JSON 化）。
+
+### 10.5 你自己要"看"一个资源时
+
+节点里存的是**同源地址**，不是磁盘路径。你要把图喂给 ffmpeg、或者想读字节，用这两个：
+
+    resource_local_path({ url })  或 { canvasId, nodeId }  →  { localPath, exists }
+    canvas_resource_fetch({ url }) 或 { canvasId, nodeId }  →  base64 + agentLocalPath
+
+`canvas_resource_fetch` 会把字节另存到你工作目录的 `_resources/` 下 ——
+因为你的文件类工具出不去工作目录，读不到兄弟目录 `resources/`。
+
+**这是你（Agent）的工具，不是界面的。** 界面里拿不到磁盘路径，也不需要：
+它直接 `<img src="上游的 url">` 就行。
+
+### 10.6 界面本身的几条硬规矩（写之前过一遍）
+
+1. **铺满整块**：`html, body { width:100%; height:100%; margin:0 }`。
+   不铺满就是一个小白块挂在中间。
+2. **样式写 `<style>`，脚本写 `<script>`，图标用内联 SVG 或字符**。
+3. **字号 12–14px**，跟画布其它地方一个观感。
+4. **深浅色都要能看清**：读 `__CANVAS_UI__.theme`
+   （`palette.light` / `palette.dark` 给的是当前主题的一套语义色，
+   用不用随你；想自己配色也行，但两条主题下都得读得出来）。
+5. **外部脚本 / 样式 / 字体都能引**（CDN 的组件库、图表库都行，没有来源限制）。
+   但**核心结构与样式仍要写在页面里**：外部库是加成，别写成"库没加载就白屏"。
+6. **不要在界面里跑几秒钟的重活**：界面卡住，用户会以为坏了。重活交给后台脚本。
+7. **出错要显示出来**，别静默 `catch {}`。用户看到"跑了但什么都没变"，
+   比看到一句错误更难查。
+
+## 十一、排障：现象 → 原因 → 做法
+
+| 现象 | 原因 | 做法 |
+| --- | --- | --- |
+| 界面一片空白 | 没铺满 / HTML 写坏了 / 页面报错 | `canvas_ui_read` 看代码；点节点上的"调试"开副本看控制台 |
+| 右上角写着"无上游图片"，但线连着 | 界面自己缓存了旧数据 | 现读 `__CANVAS_UPSTREAM__`，或在 onChange 里重画 |
+| 一根线都没连，却显示有上游 | 旧快照 / 写死的假数据 | 上游只认连线和 `d.upstream`，别写死 |
+| 界面显示上游，但读不到像素 | 沙箱不透明源，画布被污染 | 交给后台脚本（`ctx.file` + node 解码） |
+| 点按钮 403 | 脚本没声明 / 脚本名写错 / 用了 shell | 声明 `uiScripts`；名字对文件全名；走 MCP 不用 curl |
+| 403 写着"需要登录" | 你在 shell 里调后台 | 用 `canvas_fn_call`；这不是登录问题 |
+| 下游接不到 / 右边没输出口 | 没有 `uiOutputType` | 让产物落一次（save），或 `CanvasUI.setOutputType("image")` |
+| 产物文件在，下游还是没有 | 只写了槽位，节点字段没写全 | 再跑一次产出，让它走 `save` 完整写一遍 |
+| 点了没反应，也不报错 | 脚本名对不上 / 函数没导出 / 界面没接住异常 | `canvas_ui_check` 看脚本报告；界面里 catch 住并显示原因 |
+| 报"长度不对：期望 X，收到 Y" | 手打 base64 传进 argsJson 被截断 | 别传大字节；让脚本自己读上游算 |
+| 刷新后参数全丢 | 没 `setInputs` | 一次操作完成时交一次；开场读 `__CANVAS_INPUTS__` 恢复 |
+
+## 十二、三个能直接抄的例子
+
+### 12.1 只展示（读上游 + 监听变化）
 
 ```html
 <style>
-  html,body{height:100%;margin:0}
-  body{font:13px system-ui;color:var(--t,#111);background:var(--s,#fff);padding:12px}
-  #list img{width:120px;border-radius:6px}
+  html, body { margin: 0; height: 100%; }
+  body { font: 13px system-ui, sans-serif; color: var(--t, #111); background: transparent; padding: 10px; }
+  .item { display: inline-block; margin: 0 8px 8px 0; }
+  .item img { max-width: 160px; max-height: 160px; border-radius: 6px; display: block; }
+  .item span { font-size: 11px; opacity: .7; }
 </style>
-<h3 id="t" style="margin:0 0 8px"></h3>
+<h3 id="title" style="margin:0 0 8px"></h3>
 <div id="list"></div>
 <script>
 (function () {
   var UI = window.__CANVAS_UI__ || {};
   var P = (UI.palette && UI.palette[UI.theme || "light"]) || {};
-  var root = document.documentElement.style;
-  if (P.text) root.setProperty("--t", P.text);
-  if (P.surface) root.setProperty("--s", P.surface);
+  if (P.text) document.documentElement.style.setProperty("--t", P.text);
 
   function upstream() {
-    var list = window.__CANVAS_UPSTREAM__ || [], out = [];
-    for (var i = 0; i < list.length; i++) if (list[i].kind === "image" && list[i].url) out.push(list[i]);
+    var list = window.__CANVAS_UPSTREAM__ || [];
+    var out = [];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].url) out.push(list[i]);
+    }
     return out;
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
   }
 
   function draw() {
     var u = upstream();
-    document.getElementById("t").textContent = u.length ? "素材 " + u.length + " 份" : "无上游图片";
+    document.getElementById("title").textContent = u.length ? "上游素材 " + u.length + " 份" : "无上游素材";
     document.getElementById("list").innerHTML = u.map(function (x) {
-      return '<img src="' + x.url + '" alt="' + (x.refName || "") + '">';
+      if (x.kind === "image") {
+        return '<div class="item"><img src="' + esc(x.url) + '" alt=""><span>' + esc(x.refName) + '</span></div>';
+      }
+      if (x.kind === "video") {
+        return '<div class="item"><video src="' + esc(x.url) + '" controls style="max-width:160px"></video><span>' + esc(x.refName) + '</span></div>';
+      }
+      if (x.kind === "audio") {
+        return '<div class="item"><audio src="' + esc(x.url) + '" controls></audio><span>' + esc(x.refName) + '</span></div>';
+      }
+      return '<div class="item"><pre>' + esc(x.value || "") + "</pre><span>" + esc(x.refName) + "</span></div>";
     }).join("");
   }
 
-  // 上游或参数一变就重画（这一条是硬要求）
   CanvasUI.onChange(function (d) { draw(); });
   draw();
 })();
 </script>
 ```
-## 七·补、卡住了怎么查（排障手段，不是流程的一步）
 
-> 这一节只在**真卡住**时用（界面白屏、按钮点了没反应、数据对不上、报错看不懂）：
-> `canvas_ui_build_debug_doc` 出一份可调试的独立页面，或用「调试」按钮开副本。
+### 12.2 带控件 + 交参数（参数能存活到刷新）
 
-**先说清楚为什么**：你写的界面住在 `sandbox="allow-scripts"` 的 iframe 里，
-故意不给同源权限（不然它就能读宿主页面的 localStorage —— 那是整张画布）。
-所以父页面**伸不进去**：读不到它的 DOM、看不到它的变量、DevTools 也点不进那一帧。
-**这不是 bug，是安全设计**，改不了。
+```html
+<style>
+  html, body { margin: 0; height: 100%; }
+  body { font: 13px system-ui, sans-serif; color: var(--t, #111); background: transparent; padding: 10px; }
+  label { display: block; margin: 6px 0; }
+  output { font-variant-numeric: tabular-nums; }
+</style>
+<div id="head" style="margin-bottom:6px"></div>
+<label>尺寸 <input id="size" type="range" min="8" max="256" step="8"> <output id="sizeOut"></output></label>
+<label>颜色数 <input id="colors" type="range" min="2" max="64" step="1"> <output id="colorsOut"></output></label>
+<script>
+(function () {
+  var UI = window.__CANVAS_UI__ || {};
+  var P = (UI.palette && UI.palette[UI.theme || "light"]) || {};
+  if (P.text) document.documentElement.style.setProperty("--t", P.text);
 
-**解法是「另开一份副本」**：节点遮罩层左下角有个「调试」按钮（鼠标停到节点上才露出），
-点它会把这份界面**原样复制**到一个独立窗口里。那份副本是同源的普通页面，于是：
+  var size = document.getElementById("size");
+  var colors = document.getElementById("colors");
 
-- 浏览器 DevTools 能点进那个窗口：控制台 / 断点 / 单步 / 看网络请求，全都有；
-- 能直接读它的变量 —— 包括 `<script>` 顶层写的 `var` / `let` / `const`（不只是 window 属性）；
-- 副本里照样能调后台（手册第 3 条要求写绝对地址，副本照旧连得上）。
+  function upstreamCount() {
+    var list = window.__CANVAS_UPSTREAM__ || [];
+    var n = 0;
+    for (var i = 0; i < list.length; i++) if (list[i].url) n++;
+    return n;
+  }
 
-**你要记住的三条**：
+  function show() {
+    document.getElementById("sizeOut").textContent = size.value;
+    document.getElementById("colorsOut").textContent = colors.value;
+    var n = upstreamCount();
+    document.getElementById("head").textContent = n ? "上游素材 " + n + " 份" : "无上游素材";
+  }
 
-1. **副本是副本，不是画布上那个**。在副本里点的效果不会自动出现在画布上。
-   想让画布上那个节点真的出图，就在副本里调 `CanvasUI.save(...)` —— 宿主会把它落进节点
-   （走的是与沙箱同一条链，只落一次）。`CanvasUI.setInputs(...)` 同理。
-2. **别在副本里改完就以为完事了**。副本是临时的，关掉就没了。改好了要用
-   `canvas_ui_update` 把改动写回节点里的 HTML，那才是持久的那份。
-3. **副本不带 CSP**（沙箱那份带）。副本是给你调试的，不是发布物 —— 所以别把
-   「只在副本里能跑」的写法当成能上线（比如它可能依赖了外链）。
+  function restore(inputs) {
+    var v = inputs || {};
+    if (v.size) size.value = v.size;
+    if (v.colors) colors.value = v.colors;
+  }
 
-**一条实际的闭环**：`canvas_ui_read` 看现状 → 改 → `canvas_ui_write` / `canvas_ui_update` 写回
-→ 点「调试」开副本 → 在副本里看变量 / 打断点 / 看控制台报错 → 定位问题 → 再改 → 再写回。
+  function push() {
+    show();
+    CanvasUI.setInputs({ size: Number(size.value), colors: Number(colors.value) });
+  }
 
+  size.addEventListener("change", push);
+  colors.addEventListener("change", push);
 
-## 七·补、卡住了怎么查（排障手段，不是流程的一步）
+  CanvasUI.onChange(function (d) {
+    if (d && d.inputs) restore(d.inputs);
+    show();
+  });
 
-> **先说流程上的事**：正常情况写完 `canvas_ui_write`、`canvas_ui_check` 说 `ok: true` 就结束。
-> 下面这套是**真卡住时**才用的（白屏、点了没反应、数据对不上、报错看不懂）。
-> 别把它当收尾步骤。
+  restore(window.__CANVAS_INPUTS__);
+  show();
+})();
+</script>
+```
+
+### 12.3 这个界面上多一个"调后台"的按钮
+
+`save` 与 `task` 都在宿主那边拼好地址和令牌，你只管说名字。
+（下面这段别单独当 HTML 贴，要并进上面的页面里。）
+
+```js
+// 注意：脚本名必须与 task-scripts/ 里的文件名一字不差
+CanvasUI.task("pixelize", "hd", [upstreamUrl, { width: 64, colors: 24 }], { wait: true })
+  .then(function (r) {
+    // 脚本里用 ctx.save(...) 存过产物的话，节点字段已经自动写好了，
+    // 下游马上就能读到；这里只需要把结果显示出来。
+    if (r && r.result && r.result.url) showResult(r.result.url);
+  })
+  .catch(function (err) {
+    status.textContent = "跑失败：" + err.message;
+  });
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 十三、硬性禁止清单
+
+1. ❌ 用 `curl` / PowerShell / 自己写的 node 脚本去调后台的 `/api/*`。→ 用 MCP 工具。
+2. ❌ 在界面里 `fetch` 后台。→ `CanvasUI.api` / `CanvasUI.task`。
+3. ❌ 界面里读像素、`toDataURL`、`toBlob` 外源图。→ 后台脚本。
+4. ❌ 手写 `imageUrl` / `uiOutputUrl` / `uiOutputType` 当产物。→ 让 `save` 写。
+5. ❌ 把大段 base64 塞进工具参数。→ 让脚本自己算，或先落成文件。
+6. ❌ 读别人的脚本源码、翻插件源码、翻调试产物。→ `canvas_fn_info` + 本手册。
+7. ❌ 写完不跑 `canvas_ui_check` 就交付。
+8. ❌ 界面没铺满、没读 `__CANVAS_UI__`、没注册 `onChange` 就交付。
+9. ❌ 忘了导出节点包（`canvas_ui_export`）—— 节点一删，界面就没了。
+10. ❌ 静默 `catch {}` 把失败吞掉。界面要能把"为什么没反应"说出来。
+11. ❌ 在 `onChange` 里重新 `canvas_ui_write` / 重挂页面来做刷新 —— 页面不会重启，
+    重画靠 JS 改 DOM，不靠换 HTML。
+
+## 十四、真卡住了怎么查（排障手段，不是流程的一步）
+
+正常情况：`canvas_ui_write` → `canvas_ui_check` 说 `ok: true` → 结束。
+只有真卡住（白屏、点了没反应、数据对不上、报错看不懂）才用下面这些。
+
+**为什么父页面伸不进那个 iframe**：界面住在 `sandbox="allow-scripts"` 的 iframe 里，
+故意不给同源权限（否则它就能读你整个画布的登录态）。所以父页面读不到它的 DOM、
+变量，DevTools 也点不进那一帧。**这是安全设计，改不了。**
+
+**做法是开副本**：鼠标停在节点上，左下角有个「调试」按钮，点它会把这份界面原样复制到
+一个独立窗口 —— 那份是同源的普通页面，DevTools 能进去、能打断点、能看变量。
+
+三条要记住：
+1. 副本是副本，不是画布上那个。改完要用 `canvas_ui_update` 写回节点。
+2. 副本里照样能调后台（`CanvasUI.save` / `task` 走的还是同一条链）。
+3. 副本不带 CSP，沙箱那份才带。别把"只在副本里能跑"的写法当成能上线。
+
+另一件常被误用的是 `canvas_ui_build_debug_doc`：它生成一份可独立打开的调试页。
+这份页要用**浏览器**打开，别用 `curl` 去读它的地址（后台接口对 shell 一律要登录）。
+
+**一条实际的闭环**：`canvas_ui_read` 看现状 → 改 → `canvas_ui_write` 写回
+→ 开副本看控制台 → 定位 → 再改 → `canvas_ui_check` 验收。
 

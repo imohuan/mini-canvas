@@ -6,7 +6,7 @@
 
 ## 给 AI 的七条
 
-1. **别去翻项目源码**。手册给的是**稳定契约**，源码是**实现**、随时会变。
+1. **别去翻项目源码。** 手册给的是**稳定契约**，源码是**实现**、随时会变。
    要"有哪些脚本 / 动作"用运行时接口（`{type:"list"}`、`generation_actions`），或直接看手册尾部那两节（都现读）。
 2. **看到"可视化节点 / ui 节点 / 面板"第一个动作是 `canvas_ui_guide`**，
    别和"生成图片"（`generation_*`）混起来：那是调模型出媒体，这是画界面，**两条轨道**。
@@ -33,7 +33,9 @@
 | 桥接只回调 onChange、不改全局 | 界面现读 `window.__CANVAS_UPSTREAM__` 的话永远拿到页面加载那一刻的值 | `data` 消息要把这两个全局一起改写（2026-11-26 已修，`buildUiBridge`） |
 | computed 读的是非响应式 store | 删了连线、`getEdges()` 变了，界面却不重算 | 订阅 `doc.subscribe`，用版本号把它唤醒（`UiContent.vue` 的 `docRev`） |
 | 自动补声明只认 `name:` 写法 | 手册教的是 `CanvasUI.task("pixelize", …)`，这个写法扫不出来 → 声明空着 → 用户点「生成」403，而且看上去像登录问题 | 扫描要同时认 `CanvasUI.task("名字", …)`（2026-11-26 已修） |
-| `canvas_fn_call` 不给节点 | 2026-11-25 前由工具自己开 `fn-probe-default` 草稿纸，产物全落在那里，用户画布上什么都没有 | 必须传 `canvasId` / `nodeId`；产物写进这个节点的槽位 |
+| `canvas_fn_call` 只给一个 id | 只给画布没节点 / 只给节点没画布 = 写错了，直接报错 | 两个都不给（落到 `fn-probe-default` 草稿画布只验脚本）或两个都给（产物写进那个节点的槽位） |
+| 界面里读上游图的像素 | `getImageData` 抛 SecurityError：沙箱是不透明源，图算跨源，画布被污染；加 `crossOrigin="anonymous"` 只会换成 CORS 失败 | 像素运算交给后台脚本（`ctx.file(url)` + node 解码）；界面只负责显示 |
+| 手写 `imageUrl` / `uiOutputUrl` 当产物 | 文件在、右边没端口、下游读不到；下次保存还会被清理 | 让产物走一次 `save`（界面 `CanvasUI.save` / 脚本 `ctx.save`），它会把槽位 + 五个字段一次写全 |
 | 脚本令牌没签 | `ctx.save` 报「需要登录：请在 cloud-client 的登录面板输入密码」—— 连像素运算都跑通了，只挂在保存 | 脚本子进程没有登录 cookie，**必须**由宿主签 `x-task-token`（绑定画布+节点）并传给 `runScript` |
 | 依赖声明没并进同一次写盘 | 界面照写、返回值正常，但**声明空着**（之后一点就 403） | 声明必须与 `uiHtml` **同一次写盘**交上去 |
 | `canvas_ui_write` 第一版不带 `extra` | 带数据建节点（导入包）**静默丢字段**，节点建出来是空的 | `create(position, extra)` 必须带上 `extra` |
