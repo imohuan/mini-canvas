@@ -639,9 +639,33 @@ export function buildUiBridge(): string {
   // 界面的通行写法是**每次现读** `window.__CANVAS_UPSTREAM__`（手册里那个例子就是）。
   // 而这里以前只回调 onChange，全局变量永远停在文档加载那一刻 ——
   // 删掉连线后，读全局变量的界面自然还看到旧上游，看着就像写死的假数据。
-  '    if (d.type === ' + S + 'data' + S + ') {',
+    '    if (d.type === ' + S + 'data' + S + ') {',
   '      if (d.upstream !== undefined) window[' + UP + '] = d.upstream;',
   '      if (d.inputs !== undefined) window[' + IN + '] = d.inputs;',
+  /*
+   * 主题跟着同一条消息走（2026-11-27 用户实测：切主题色整个节点被重构/重载）。
+   *
+   * 以前 theme 是 srcdoc 的依赖 —— 一换主题，srcdoc 字符串变了，浏览器重建整份文档：
+   * 用户正在输的内容全丢、脚本从头再跑。这跟"上游/参数变化不重挂"是同一类问题。
+   * 现在主题只做两件事，都不碰文档生命周期：
+   *   ① 更新 __CANVAS_UI__.theme（界面现读它做深浅分支的写法继续有效）；
+   *   ② 给 <html data-theme> 打上新值（CSS 里 html[data-theme="dark"] 那类写法也继续有效）。
+   * 老界面两种写法都能吃到，不需要自己监听任何新东西。
+   */
+  '      if (d.ui !== undefined) {',
+  '        var ui = window[' + JSON.stringify(UI_GLOBAL) + '];',
+  '        var next = {};',
+  '        for (var k in ui) if (Object.prototype.hasOwnProperty.call(ui, k)) next[k] = ui[k];',
+  '        for (var k2 in d.ui) if (Object.prototype.hasOwnProperty.call(d.ui, k2)) next[k2] = d.ui[k2];',
+  '        window[' + JSON.stringify(UI_GLOBAL) + '] = next;',
+  '        var root = document.documentElement;',
+  '        if (next.theme) root.setAttribute(' + S + 'data-theme' + S + ', next.theme);',
+  // 滚动条那两格颜色是按主题算好的值，随消息一起送（壳里的 CSS 用 var() 读它们）。
+  '        if (d.scrollThumb) {',
+  '          root.style.setProperty(' + S + '--ui-scroll-thumb' + S + ', d.scrollThumb);',
+  '          root.style.setProperty(' + S + '--ui-scroll-thumb-hover' + S + ', d.scrollThumbHover || d.scrollThumb);',
+  '        }',
+  '      }',
   '    }',
     '    for(var i = 0; i < cmdHandlers.length; i++){',
     '      try { cmdHandlers[i](d); } catch(err) {}',

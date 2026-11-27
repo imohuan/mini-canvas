@@ -47,6 +47,7 @@ import { useUiBridge } from './ui-content/useUiBridge'
 import { useUiDebugWindow } from './ui-content/useUiDebugWindow'
 import UiDebugPrompt from './ui-content/UiDebugPrompt.vue'
 import UiInteractionGate from './ui-content/UiInteractionGate.vue'
+import { fullscreenToken } from './nodeUiSession'
 
 const props = defineProps<{ id: string; data: Record<string, unknown> }>()
 
@@ -235,27 +236,21 @@ onBeforeUnmount(() => observer?.disconnect())
  * 而上游变化**非常常见**（连线、上游重新生成都会触发）。
  *
  * 所以现在分两类：
- *   · **必须重建**：界面代码（uiHtml）、深浅色、后台地址、画布 id —— 这些要么在文档里，要么影响整页；
- *   · **不再重建**：上游素材、输入参数 → 挂载时给一份**初值**，之后变了发**消息**（见 pushDataToFrame）。
+ *   · **必须重建**：只有界面代码（uiHtml）与后台地址 / 画布 id 这类"文档级"的东西；
+ *   · **不再重建**：上游素材、输入参数、**深浅色** → 挂载时给一份**初值**，
+ *     之后变了发**消息**（见 pushDataToFrame）。
  *
  * 为什么初值还照旧注入：老界面是靠"文档里有 __CANVAS_UPSTREAM__"拿数据的，
  * 去掉它会让老界面**彻底读不到**。给初值 + 发消息，新老都活。
+ *
+ * ## 主题为什么必须走消息（2026-11-27 用户实测）
+ *
+ * 用户原话：「切换主题色的时候，你的可视化节点被重构了（内部强制刷新重载了）」。
+ * 根因就是 theme / palette 曾经是这个 computed 的依赖 —— 换主题 = srcdoc 换字符串
+ * = 浏览器重建整份文档，用户正在填的东西全丢，看着像节点自己重启。
+ * 主题只是**注入参数**，跟上游、输入参数同一类，没有理由重建文档。
+ * 现在它由 useUiBridge 在文档"出生"时取一份快照注入，之后主题变化走 data 消息。
  */
-const srcdoc = computed(() => {
-  if (!hasHtml.value) return ''
-  const seed = frameSeed.value
-  return buildSrcdoc(html.value, seed.inputs, seed.upstream, {
-    theme: theme.value,
-    nodeId: props.id,
-    baseUrl: baseUrl.value,
-    canvasId,
-    // 允许联网 = 生成的界面可以调画布接口（这个节点的价值所在）。
-    // 关掉它就是「纯展示」，连不上任何地方 —— 见 uiData.buildCsp 的说明。
-    allowNetwork: pluginConfig.netEnabled,
-    palette: palette.value,
-  })
-})
-
 /**
  * iframe 的 key：换了 HTML 要**重挂**（改 srcdoc 属性在部分浏览器里不会重跑脚本，
  * 表现就是「重新生成后界面纹丝不动」）。
@@ -267,15 +262,17 @@ watch(html, () => { gen.value += 1 })
  * frameDoc 在 activeDebug 翻转时追加了 SDK 脚本，但只改 srcdoc 属性浏览器**不会重跑脚本**
  * —— 表现就是「点了同意调试，SDK 还是连不上」（真机自动化测试抓到：srcdoc 里 SDK 在、
  * session 是新的，可 iframe 里的脚本从未执行，后台 debugSse 一直没人拨）。
- * frameDoc 只在「界面重建级」的变化（html / 主题 / 调试态）时才变 —— 上游与参数走
+ * frameDoc 只在「界面重建级」的变化（html / 调试态）时才变 —— 上游、参数、主题都走
  * postMessage 不经过它，这里重挂不会误伤用户正在输入的内容。
  */
-const { frameSeed, pushDataToFrame, onBridgeMessage } = useUiBridge({
+const { frameSeed, themeSeed, paletteSeed, pushDataToFrame, onBridgeMessage } = useUiBridge({
   iframeEl,
   html,
   gen,
   upstream,
   inputValues,
+  theme,
+  palette,
   nodeData: () => props.data,
   nodeId: props.id,
   doc: () =>
@@ -284,6 +281,28 @@ const { frameSeed, pushDataToFrame, onBridgeMessage } = useUiBridge({
       updateNodeRuntime(id: string, patch: { data: Record<string, unknown> }): void
     }>('doc'),
   handleProxyRequest: (win, reqId, m) => void handleProxyRequest(win, reqId, m),
+})
+
+/**
+ * 交给 iframe 的那份文档。
+ *
+ * 依赖只有：界面代码、后台地址、画布 id、以及**主题 / 色板的出生快照**
+ * （themeSeed / paletteSeed 由 useUiBridge 管：重挂时同步成当时的主题）。
+ * 上游、参数、主题的后续变化都不在这里 —— 它们走 postMessage，页面不重启。
+ */
+const srcdoc = computed(() => {
+  if (!hasHtml.value) return ''
+  const seed = frameSeed.value
+  return buildSrcdoc(html.value, seed.inputs, seed.upstream, {
+    theme: themeSeed.value,
+    nodeId: props.id,
+    baseUrl: baseUrl.value,
+    canvasId,
+    // 允许联网 = 生成的界面可以调画布接口（这个节点的价值所在）。
+    // 关掉它就是「纯展示」，连不上任何地方 —— 见 uiData.buildCsp 的说明。
+    allowNetwork: pluginConfig.netEnabled,
+    palette: paletteSeed.value,
+  })
 })
 
 // ======================================================================
@@ -431,6 +450,43 @@ function exitInteractive(): void {
  */
 const rootEl = ref<HTMLElement | null>(null)
 
+/**
+ * 全屏查看（k 命令 → 会话计数器 +1 → 这里真去开/关）
+ *
+ * 用**浏览器原生全屏**（不是自绘浮层）：iframe 原地不动、文档不重建（用户正在输入/播放的东西不丢），
+ * Esc 退出由浏览器接管，不需要自己再监听键盘。全屏的是**节点内容这块**（.ui-node），
+ * 所以节点壳的上下控制栏不会被带进去。
+ *
+ * requestFullscreen 要求「用户手势」：命令是在 keydown 里跑的，满足。
+ * 失败（浏览器拒绝 / 不支持）就静默放过 —— 不该因为全屏失败把画布搞出异常。
+ */
+async function enterFullscreen(): Promise<void> {
+  const el = rootEl.value as (HTMLElement & { webkitRequestFullscreen?(): Promise<void> | void }) | null
+  if (!el) return
+  if (document.fullscreenElement) {
+    await document.exitFullscreen?.()
+    return
+  }
+  try {
+    if (el.requestFullscreen) await el.requestFullscreen()
+    else await el.webkitRequestFullscreen?.()
+  } catch {
+    /* 浏览器拒绝：保持现状 */
+  }
+}
+
+watch(
+  () => fullscreenToken(props.id),
+  () => void enterFullscreen(),
+)
+
+/** 节点被卸载时退出全屏（否则画面被一个已经不存在的节点占着） */
+onBeforeUnmount(() => {
+  if (document.fullscreenElement && rootEl.value?.contains(document.fullscreenElement)) {
+    void document.exitFullscreen?.()
+  }
+})
+
 /** ① 全局 pointerdown：点在组件之外就退出 */
 function onGlobalPointerDown(e: PointerEvent): void {
   if (!interactive.value) return
@@ -567,6 +623,16 @@ const hint = computed(() => {
    * 这里只留 1 倍时的兜底尺寸。注意它**只由配置决定、与画布缩放无关**：
    * 缩放过程中这个 iframe 一个像素都不会变，不会闪。
    */
+}
+
+/*
+ * 原生全屏（k 键）时这块内容铺满屏幕：给个实底，否则 iframe 透明区会露出浏览器默认黑底。
+ * 用与卡片内容同一套变量，亮/暗主题都跟得上（不自造颜色）。
+ */
+.ui-node:fullscreen,
+.ui-node:-webkit-full-screen {
+  background: var(--card-content-surface, #ffffff);
+  border-radius: 0;
 }
 
 /*

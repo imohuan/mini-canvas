@@ -1,5 +1,5 @@
 import { ref, watch, type Ref } from 'vue'
-import type { UpstreamItem } from '../uiData'
+import type { UiPalette, UpstreamItem } from '../uiData'
 import { outputTypeForName, toCloneableState } from '../uiData'
 import type { UiOutputField } from './useUiOutput'
 import { outputFieldForName, resourceRefFromUiUrl } from './useUiOutput'
@@ -11,6 +11,10 @@ export interface UseUiBridgeOptions {
   gen: Ref<number>
   upstream: Ref<UpstreamItem[]>
   inputValues: Ref<Record<string, unknown>>
+  /** 当前深浅色（只在**消息**里送，不进 srcdoc —— 否则切主题会重建整个文档） */
+  theme: Ref<'light' | 'dark'>
+  /** 画布色板（亮/暗两套）；用来算滚动条那两格颜色 */
+  palette: Ref<UiPalette>
   nodeData: () => Record<string, unknown>
   nodeId: string
   doc: () => {
@@ -49,17 +53,40 @@ function stripVersion(v: unknown): unknown {
  */
 export function useUiBridge(options: UseUiBridgeOptions) {
   const frameSeed = ref({ inputs: options.inputValues.value, upstream: options.upstream.value })
+  /**
+   * 挂载时的主题 / 色板快照。
+   *
+   * 为什么要快照：srcdoc 里注入的是"这份文档出生时"的主题。如果读实时值，
+   * 主题一变 srcdoc 就变 → 文档重建（就是用户报的那个 bug）。快照 + 消息，两头都稳。
+   */
+  const themeSeed = ref<'light' | 'dark'>(options.theme.value)
+  const paletteSeed = ref<UiPalette>(options.palette.value)
 
   // 重挂（换 HTML）时把初值刷成最新 —— 否则新文档里注入的还是上一次挂载时的旧数据，
   // 而"数据变了"那条消息是在页面还没建好时发的，会丢。
   watch(options.gen, () => {
     frameSeed.value = { inputs: options.inputValues.value, upstream: options.upstream.value }
+    // 重挂出来的新文档，出生主题要跟着当时的主题走（否则换主题后一改 HTML 就回旧色）
+    themeSeed.value = options.theme.value
+    paletteSeed.value = options.palette.value
   })
+
+  /** 滚动条那两格颜色（跟着主题走；壳里的 CSS 用 var() 读它们） */
+  function scrollColorsOf(
+    palette: UiPalette,
+    theme: 'light' | 'dark',
+  ): { thumb: string; hover: string } | undefined {
+    const one = palette?.[theme] as Record<string, string> | undefined
+    const thumb = one?.scrollThumb
+    if (!thumb) return undefined
+    return { thumb, hover: one?.scrollThumbHover || thumb }
+  }
 
   /** 把**这个节点的全部数据**发给页面（**不重挂**）。 */
   function pushDataToFrame(): void {
     const win = options.iframeEl.value?.contentWindow
     if (!win) return
+    const scroll = scrollColorsOf(options.palette.value, options.theme.value)
     try {
       win.postMessage(
         {
@@ -67,6 +94,13 @@ export function useUiBridge(options: UseUiBridgeOptions) {
           type: 'data',
           upstream: toCloneableState(options.upstream.value),
           inputs: toCloneableState(options.inputValues.value),
+          /*
+           * 主题跟着这条消息走（2026-11-27 用户实测：切主题色整个节点被重载）。
+           * 页面收到它会改两处：__CANVAS_UI__.theme 与 <html data-theme>。
+           * 于是"读全局变量"和"写 CSS 属性选择器"两种老写法都继续有效。
+           */
+          ui: { theme: options.theme.value },
+          ...(scroll ? { scrollThumb: scroll.thumb, scrollThumbHover: scroll.hover } : {}),
         },
         '*',
       )
@@ -75,8 +109,13 @@ export function useUiBridge(options: UseUiBridgeOptions) {
     }
   }
 
-  // 上游素材 / 输入参数变了 → 发消息（**不碰 srcdoc**，所以页面不重启）
-  watch([options.upstream, options.inputValues], () => pushDataToFrame())
+  /*
+   * 上游素材 / 输入参数 / 深浅色 / 色板变了 → 发消息（**不碰 srcdoc**，所以页面不重启）。
+   *
+   * 色板也要盯着（2026-11-27）：用户改"主题色"时，亮/暗之外还有强调色等一整套值会变，
+   * 滚动条那两格颜色就是从这里算的。它同样不该触发文档重建。
+   */
+  watch([options.upstream, options.inputValues, options.theme, options.palette], () => pushDataToFrame())
 
   /**
    * 收生成页面「往外报」的两件事。
@@ -141,5 +180,5 @@ export function useUiBridge(options: UseUiBridgeOptions) {
     }
   }
 
-  return { frameSeed, pushDataToFrame, onBridgeMessage }
+  return { frameSeed, themeSeed, paletteSeed, pushDataToFrame, onBridgeMessage }
 }

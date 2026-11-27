@@ -31,6 +31,23 @@ describe('注入给页面的助手（window.CanvasUI）', () => {
   })
 
   /**
+   * ★ 主题只走消息，不重建文档（2026-11-27 用户实测）。
+   *
+   * 用户原话：「切换主题色的时候，你的可视化节点被重构了（内部强制刷新重载了）」。
+   * 根因是 theme / palette 曾是 srcdoc 的依赖 —— 换主题 = 换 srcdoc 字符串 = 整份文档重建。
+   * 主题本来就只是注入参数，跟上游、输入参数同一类。所以它必须由这条 data 消息送达：
+   *   ① 改 __CANVAS_UI__.theme（"现读全局变量"的写法继续有效）；
+   *   ② 改 <html data-theme>（"CSS 属性选择器"的写法继续有效）。
+   * 两种老写法都留在原地不动，界面作者不用改代码。
+   */
+  it('★ 主题随 data 消息下发：改全局 + 改 <html data-theme>', () => {
+    expect(js).toContain('d.ui !== undefined')
+    expect(js).toContain('setAttribute(' + "'" + 'data-theme' + "'")
+    // 滚动条那两格颜色也一起送（它们按主题算好，壳的 CSS 用 var() 读）
+    expect(js).toContain('--ui-scroll-thumb')
+  })
+
+  /**
    * ★ 沙箱 iframe 不再自己请求后台（2026-10-20 commit 1）。
    *
    * 不透明源的请求全是 `Origin: null`，后台的请求边界没法把它和恶意网页区分开；
