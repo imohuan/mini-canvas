@@ -115,6 +115,30 @@ export function pathOf(url: string): string {
   return s.startsWith('/') ? s : '/' + s
 }
 
+/**
+ * 由插件名推导 UMD 全局名的候选（按优先级）。
+ *
+ * 约定是 `PlumePlugin + PascalCase(名)`，但调用方给的「名」有两种写法学：
+ * - 运行名：`manager` / `hot-reload` → PlumePluginManager / PlumePluginHotReload
+ * - 目录名：`plugin-manager`（watch 上报的 key 常是目录名）→ 仍是 PlumePluginManager
+ *
+ * 为什么不能直接拼（2026-11-27 实测）：按目录名直接拼得到 PlumePluginPluginManager，
+ * 取不到件，加载器退回「扫 window 猜」，结果挑到 auto-layout —— 重装插件管理反而
+ * 报 Duplicate plugin name: "auto-layout"。所以先去掉 plugin- 前缀再拼。
+ */
+export function globalNameCandidates(name: string): string[] {
+  const pascal = (value: string): string =>
+    value
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join('')
+  const stripped = name.replace(/^plugin[-_]/i, '')
+  const out = ['PlumePlugin' + pascal(stripped)]
+  if (stripped !== name) out.push('PlumePlugin' + pascal(name))
+  return out.filter((n) => n !== 'PlumePlugin' && !out.slice(0, out.indexOf(n)).includes(n))
+}
+
 export interface PluginReloader {
   /**
    * 重装一个插件：卸旧 → 拉最新产物 → 装新。
@@ -157,8 +181,13 @@ export interface PluginWatchEvent {
 export interface ReloaderDeps {
   /** 拉清单（缺省 fetch /plugin-catalog.json，带缓存） */
   fetchCatalog?: (force: boolean) => Promise<CatalogEntryLike[]>
-  /** 按 URL 加载 UMD 产物成插件模块（缺省用「插件管理」的 UMD 加载器） */
-  loadUmd?: (url: string, globalName?: string) => Promise<LoadedPluginLike>
+  /**
+   * 按 URL 加载 UMD 产物成插件模块（缺省用「插件管理」的 UMD 加载器）。
+   *
+   * expectedName：期望取到的插件名。给了它，加载器必须命中同名模块，
+   * 不许退回「扫 window 猜」（否则可能装成别的插件）。
+   */
+  loadUmd?: (url: string, globalName?: string, expectedName?: string) => Promise<LoadedPluginLike>
   /** 取宿主插件门面（缺省读 window[windowKey]，调用时现取，兼容"挂函数时宿主还没就绪"） */
   facade?: () => PluginFacadeLike | undefined
 }
@@ -256,46 +285,20 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
     // 上报方给出，最权威）推导。有提示时加载器按名取件，绝不会扫 window 挑错
     // （实测踩过：重装 bottom-bar 时扫到 align-guide → 卸旧装新 → Duplicate plugin name）。
     if (!globalName && opts.name) {
-      globalName =
-        'PlumePlugin' +
-        opts.name
-          .split(/[-_]/)
-          .filter(Boolean)
-          .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-          .join('')
+      globalName = globalNameCandidates(opts.name)[0]
     }
 
     // ② 加载最新产物（破缓存由加载器内部加 ?t= 完成）
     const loadUmd = deps.loadUmd ?? defaultLoadUmd
-    const mod = await loadUmd(url, globalName)
-
     /**
-     * 纠错兜底（无清单提示的路径）：加载器没拿到全局名时会扫 window 猜，
-     * 多个插件并存时可能挑到别的那个（实测踩过：重装 bottom-bar 挑到 align-guide，
-     * 卸旧装新 → "[core] Duplicate plugin name: align-guide"）。
-     * UMD 全局名有稳定约定 PlumePlugin<PascalCase(插件名)> —— 按加载出的 mod.name
-     * 推导真名再 load 一次，对得上才替换，对不上保留首次结果。
+     * 名字期望：从上报 key 带来的插件名优先（它就是要卸的那一份）。
+     * 加载器据此校验取到的模块，名字不符就报错，绝不退回去扫 window 猜 ——
+     * 2026-11-27 实测：重装 plugin-manager 时猜到了 auto-layout，装了错插件。
      */
-    if (!globalName && mod?.name) {
-      const pascal = mod.name
-        .split(/[-_]/)
-        .filter(Boolean)
-        .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-        .join('')
-      const guessed = 'PlumePlugin' + pascal
-      if (guessed !== 'PlumePlugin') {
-        try {
-          const retry = await loadUmd(url, guessed)
-          if (retry && retry.name === mod.name) {
-            mod.name = retry.name
-            if (typeof retry.apply === 'function') mod.apply = retry.apply
-            if (typeof retry.setup === 'function') mod.setup = retry.setup
-          }
-        } catch {
-          /* 重加载失败：保留首次结果 */
-        }
-      }
-    }
+    const expectedName = opts.name || matched?.name
+    const mod = expectedName
+      ? await loadUmd(url, globalName, expectedName)
+      : await loadUmd(url, globalName)
 
     // 纠错兜底：加载器在**没有全局名提示**时会扫 window 猜，可能挑到别的插件。
     // 若对上的清单项说这个地址的插件名是 A、而实际加载出来的是 B，说明挑错了 ——
@@ -399,13 +402,13 @@ export function createPluginReloader(deps: ReloaderDeps = {}): PluginReloader {
  * 为什么延迟 import：这个模块可能被 Node（单测）直接加载，而 UMD 加载器要 document/window。
  * 真正调 reload 时才取，避免顶层 import 就把浏览器依赖拉进来。
  */
-async function defaultLoadUmd(url: string, globalName?: string): Promise<LoadedPluginLike> {
+async function defaultLoadUmd(url: string, globalName?: string, expectedName?: string): Promise<LoadedPluginLike> {
   const { createUmdLoader, bustCache } = await import('@plume-canvas/plugin-manager')
   const loader = createUmdLoader({
     document,
     win: globalThis as unknown as Record<string, unknown>,
   })
-  const mod = await loader(bustCache(url, Date.now()), globalName)
+  const mod = await loader(bustCache(url, Date.now()), globalName, expectedName)
   return mod as unknown as LoadedPluginLike
 }
 

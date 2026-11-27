@@ -50,7 +50,12 @@ describe('createPluginReloader', () => {
     const res = await r.reload('style-library', { then: 'style-library:open' })
     expect(res).toEqual({ name: 'style-library', url: '/plugins/plugin-style-library/plugin-style-library.js' })
     // 用了清单里声明的全局名（取件更稳）
-    expect(loadUmd).toHaveBeenCalledWith('/plugins/plugin-style-library/plugin-style-library.js', 'PlumePluginStyleLibrary')
+    // 第三个参数是「期望名」：加载器必须命中同名模块，不许退回扫 window 猜
+    expect(loadUmd).toHaveBeenCalledWith(
+      '/plugins/plugin-style-library/plugin-style-library.js',
+      'PlumePluginStyleLibrary',
+      'style-library',
+    )
     // 先卸后装交给 reloadPlugin（它内部做这两步）
     expect(reloadPlugin).toHaveBeenCalledWith('style-library', expect.objectContaining({ name: 'style-library' }))
     expect(runCommand).toHaveBeenCalledWith('style-library:open')
@@ -84,6 +89,7 @@ describe('createPluginReloader', () => {
     expect(loadUmd).toHaveBeenCalledWith(
       '/plugins/plugin-style-library/plugin-style-library.js',
       'PlumePluginStyleLibrary', // 反查清单拿到的全局名
+      'style-library', // 反查清单拿到的期望名
     )
     expect(reloadPlugin).toHaveBeenCalled()
   })
@@ -118,27 +124,37 @@ describe('createPluginReloader', () => {
     expect(reloadPlugin).toHaveBeenCalledWith('style-library', expect.anything())
   })
 
-  it('万一加载器挑错了插件名 → 用清单里的全局名重加载纠错', async () => {
-    let calls = 0
-    const loadUmd = vi.fn(async (_url: string, globalName?: string) => {
-      calls++
-      // 第一次（无提示）挑错；只有按对齐的全局名才返回正确插件
-      if (globalName === 'PlumePluginStyleLibrary') return { name: 'style-library', apply() {} }
-      return { name: 'wrong-plugin', apply() {} }
+  it('清单里没有全局名也能按期望名取件（禁止退回"扫 window 猜"）', async () => {
+    const loadUmd = vi.fn(async (_url: string, _globalName?: string, expectedName?: string) => {
+      // 加载器行为：只有期望名才返回同名模块，否则报错
+      if (expectedName === 'style-library') return { name: 'style-library', apply() {} }
+      throw new Error('没找到名为「' + expectedName + '」的插件模块')
     })
     const reloadPlugin = vi.fn()
     const r = createPluginReloader({
-      // 故意让反查拿不到全局名：清单里的 globalName 为空
-      fetchCatalog: async () => [{ id: 'plugin-style-library', name: 'style-library', url: '/plugins/plugin-style-library/plugin-style-library.js', globalName: '' }],
+      fetchCatalog: async () => [
+        { id: 'plugin-style-library', name: 'style-library', url: '/plugins/plugin-style-library/plugin-style-library.js', globalName: '' },
+      ],
       loadUmd,
       facade: () => ({ reloadPlugin, getContext: () => ({ get: () => undefined }) }),
     })
-    // 没有全局名可纠（清单里也是空）→ 只能接受首次结果，但至少不应崩
     const res = await r.reload('/plugins/plugin-style-library/plugin-style-library.js')
-    // 旧约定兜底：mod.name='wrong-plugin' 推导 PlumePluginWrongPlugin ≠ 对齐名，
-    // 加载器第二次仍返回 wrong-plugin → 保留首次结果，共 2 次调用
-    expect(res.name).toBe('wrong-plugin')
-    expect(calls).toBe(2)
+    expect(res.name).toBe('style-library')
+    expect(loadUmd).toHaveBeenCalledWith(expect.any(String), undefined, 'style-library')
+    expect(reloadPlugin).toHaveBeenCalled()
+  })
+
+  it('目录名当名字传入（watch 的 key 常是 plugin-manager 这种）→ 推导 PlumePluginManager', async () => {
+    const loadUmd = vi.fn(async () => ({ name: 'plugin-manager', apply() {} }))
+    const reloadPlugin = vi.fn()
+    const r = createPluginReloader({
+      fetchCatalog: async () => [],
+      loadUmd,
+      facade: () => ({ reloadPlugin, getContext: () => ({ get: () => undefined }) }),
+    })
+    await r.reload('http://127.0.0.1:5199/web.js', { url: 'http://127.0.0.1:5199/web.js', name: 'plugin-manager' })
+    // 直接拼会得到 PlumePluginPluginManager（取不到 → 退化成扫 window 猜 → 装错插件）
+    expect(loadUmd).toHaveBeenCalledWith(expect.any(String), 'PlumePluginManager', 'plugin-manager')
   })
 
   it('清单里没有该插件 → 抛清晰错误', async () => {

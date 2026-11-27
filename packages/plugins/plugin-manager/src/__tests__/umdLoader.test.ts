@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bustCache, createUmdLoader, pickPluginModule, PLUGIN_GLOBAL_PREFIX } from '../umdLoader'
+import { bustCache, createUmdLoader, normalizeGlobalName, pickPluginModule, PLUGIN_GLOBAL_PREFIX } from '../umdLoader'
 
 describe('pickPluginModule —— 从 UMD 命名空间里挑出插件本体', () => {
   it('全局值自己就是插件', () => {
@@ -75,11 +75,67 @@ describe('createUmdLoader —— <script> 加载 + 从新增全局取模块', ()
     scripts[0]!.fire()
     await expect(p).rejects.toThrow(/没找到插件模块/)
   })
+
+  it('给了期望名但窗口里只有别的插件 → 报错，不装错（热重载踩过：装成 auto-layout）', async () => {
+    const { document, scripts } = fakeDocument()
+    const win: Record<string, unknown> = {
+      [PLUGIN_GLOBAL_PREFIX + 'AutoLayout']: { name: 'auto-layout', apply() {} },
+    }
+    const load = createUmdLoader({ document, win })
+    const p = load('http://h/plugins/plugin-manager/web.js', undefined, 'plugin-manager')
+    win[PLUGIN_GLOBAL_PREFIX + 'Manager'] = { name: 'plugin-manager', apply() {} }
+    scripts[0]!.fire()
+    await expect(p).resolves.toMatchObject({ name: 'plugin-manager' })
+  })
+
+  it('只有期望名时按约定拼全局名（plugin-manager → PlumePluginManager）', async () => {
+    const { document, scripts } = fakeDocument()
+    const win: Record<string, unknown> = {
+      [PLUGIN_GLOBAL_PREFIX + 'Manager']: { name: 'plugin-manager', apply() {} },
+    }
+    const load = createUmdLoader({ document, win })
+    const p = load('http://h/x/web.js', undefined, 'plugin-manager')
+    scripts[0]!.fire()
+    await expect(p).resolves.toMatchObject({ name: 'plugin-manager' })
+  })
+
+  it('期望名对不上时明确失败（不允许退回扫 window 猜）', async () => {
+    const { document, scripts } = fakeDocument()
+    const win: Record<string, unknown> = {
+      [PLUGIN_GLOBAL_PREFIX + 'AutoLayout']: { name: 'auto-layout', apply() {} },
+    }
+    const load = createUmdLoader({ document, win })
+    const p = load('http://h/x/web.js', undefined, 'plugin-manager')
+    scripts[0]!.fire()
+    await expect(p).rejects.toThrow(/没找到名为「plugin-manager」/)
+  })
 })
 
 describe('bustCache', () => {
   it('追加 ?t=；已有 query 用 &', () => {
     expect(bustCache('http://h/a.js', 123)).toBe('http://h/a.js?t=123')
     expect(bustCache('http://h/a.js?v=1', 123)).toBe('http://h/a.js?v=1&t=123')
+  })
+})
+
+describe('normalizeGlobalName —— 纠正写重的 Plugin 前缀', () => {
+  it('PlumePluginPluginManager → PlumePluginManager', () => {
+    expect(normalizeGlobalName('PlumePluginPluginManager')).toBe('PlumePluginManager')
+  })
+  it('本来就对的名字不动', () => {
+    expect(normalizeGlobalName('PlumePluginManager')).toBe('PlumePluginManager')
+    expect(normalizeGlobalName('PlumePluginHotReload')).toBe('PlumePluginHotReload')
+  })
+  it('调用方按目录名拼出 PlumePluginPluginManager 时，加载器能取到正确的插件', async () => {
+    const { document, scripts } = fakeDocument()
+    const win: Record<string, unknown> = {
+      [PLUGIN_GLOBAL_PREFIX + 'AutoLayout']: { name: 'auto-layout', apply() {} },
+      [PLUGIN_GLOBAL_PREFIX + 'Manager']: { name: 'plugin-manager', apply() {} },
+    }
+    const load = createUmdLoader({ document, win })
+    // 热重载旧版本（未修 UI）就是这么传的
+    const p = load('http://h/x/web.js', PLUGIN_GLOBAL_PREFIX + 'PluginManager', 'plugin-manager')
+    scripts[0]!.fire()
+    await expect(p).resolves.toMatchObject({ name: 'plugin-manager' })
   })
 })

@@ -25,6 +25,19 @@ export interface LoadedPluginModule {
 export const PLUGIN_GLOBAL_PREFIX = 'PlumePlugin'
 
 /**
+ * 把「缺省前缀写重了」的全局名纠正回来（PlumePluginPluginManager → PlumePluginManager）。
+ *
+ * 为什么需要：热重载上报的插件名常是目录名（plugin-manager），调用方按
+ * `PlumePlugin + PascalCase(名)` 拼出来就成了 PlumePluginPluginManager，永远取不到。
+ * 2026-11-27 实测：取不到后加载器退回「扫全部全局」，挑到了 auto-layout，装错插件。
+ * 这里在包内纠正，已发布的界面也能修好，不必等界面重新构建。
+ */
+export function normalizeGlobalName(name: string): string {
+  if (!name.startsWith(PLUGIN_GLOBAL_PREFIX + 'Plugin')) return name
+  return PLUGIN_GLOBAL_PREFIX + name.slice((PLUGIN_GLOBAL_PREFIX + 'Plugin').length)
+}
+
+/**
  * 从一个全局值（UMD 导出对象）里挑出插件模块。
  *
  * UMD 产物是一个「命名空间对象」（`{ name, nodeImageComparePlugin, IMAGE_COMPARE_NODE_TYPE, … }`），
@@ -54,8 +67,8 @@ export function pickPluginModule(globalValue: unknown): LoadedPluginModule | und
 export function createUmdLoader(opts: {
   document: Document
   win: GlobalBag
-}): (url: string, globalNameHint?: string) => Promise<LoadedPluginModule> {
-  return (url: string, globalNameHint?: string) =>
+}): (url: string, globalNameHint?: string | string[], expectedName?: string) => Promise<LoadedPluginModule> {
+  return (url: string, globalNameHint?: string | string[], expectedName?: string) =>
     new Promise<LoadedPluginModule>((resolve, reject) => {
       const before = new Set(Object.keys(opts.win))
       const el = opts.document.createElement('script')
@@ -63,13 +76,54 @@ export function createUmdLoader(opts: {
       el.src = url
       el.async = true
       el.onload = () => {
-        // ① 清单给了全局名 → 直接按名取（最稳，重装/多插件并存时不会挑错）
-        if (globalNameHint) {
-          const mod = pickPluginModule(opts.win[globalNameHint])
-          if (mod) {
-            resolve(mod)
-            return
+        const hints = globalNameHint === undefined
+          ? []
+          : Array.isArray(globalNameHint)
+            ? globalNameHint
+            : [globalNameHint]
+        /**
+         * 取件的统一出口：给了名字期望时必须名字一致。
+         *
+         * 为什么不能"取到就用"（2026-11-27 实测）：热重载传 names 时可能只给到了目录名，
+         * 推导出的全局名取不到，随后退回③扫 window 猜 —— 挑到 auto-layout，
+         * 结果把插件管理重装成了自动布局，报 Duplicate plugin name: auto-layout。
+         * 名字对不上就当这次没取到，继续按顺序尝试；全都对不上就明确报错。
+         */
+        const accept = (mod: LoadedPluginModule | undefined): boolean => {
+          if (!mod) return false
+          if (expectedName && mod.name !== expectedName) return false
+          resolve(mod)
+          return true
+        }
+        // ① 清单 / 调用方给了全局名 → 直接按名取（最稳，重装/多插件并存时不会挑错）
+        for (const hint of hints) {
+          if (!hint) continue
+          if (accept(pickPluginModule(opts.win[hint]))) return
+          const normalized = normalizeGlobalName(hint)
+          if (normalized !== hint && accept(pickPluginModule(opts.win[normalized]))) return
+        }
+        /**
+         * ①.5 只给了期望名、没给全局名 → 按 UMD 命名约定拼候选（PlumePlugin<Pascal>）。
+         * 先去掉目录名前缀 plugin-（plugin-manager → PlumePluginManager），再试原名。
+         */
+        if (expectedName && hints.length === 0) {
+          const pascal = (value: string): string =>
+            value
+              .split(/[-_]/)
+              .filter(Boolean)
+              .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+              .join('')
+          const stripped = expectedName.replace(/^plugin[-_]/i, '')
+          for (const guess of ['PlumePlugin' + pascal(stripped), 'PlumePlugin' + pascal(expectedName)]) {
+            if (accept(pickPluginModule(opts.win[guess]))) return
           }
+        }
+        // 给了名字期望时，后面的"猜"全部不做：宁可直接失败，也不能装错插件
+        if (expectedName) {
+          reject(new Error(
+            '[plugin-manager] 脚本已加载，但没找到名为「' + expectedName + '」的插件模块：' + url,
+          ))
+          return
         }
         // ② 没给提示（或提示名取不到）→ 用脚本新挂上的全局
         const added = Object.keys(opts.win).filter((k) => !before.has(k) && k.startsWith(PLUGIN_GLOBAL_PREFIX))
